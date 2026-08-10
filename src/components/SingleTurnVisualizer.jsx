@@ -156,17 +156,32 @@ export default function SingleTurnVisualizer({
                 {formatTokens(promptTokens)} tokens
               </span>
             </div>
-            <input
-              type="range"
-              min="128"
-              max="32768"
-              step="128"
-              value={promptTokens}
-              onChange={(e) => {
-                setPromptTokens(Number(e.target.value));
-                handleReset();
-              }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="range"
+                min="128"
+                max="32768"
+                step="128"
+                value={promptTokens}
+                onChange={(e) => {
+                  setPromptTokens(Number(e.target.value));
+                  handleReset();
+                }}
+                style={{ flex: 1 }}
+              />
+              <input
+                type="number"
+                min="128"
+                max="32768"
+                step="128"
+                value={promptTokens}
+                onChange={(e) => {
+                  setPromptTokens(Math.max(128, Math.min(32768, Number(e.target.value) || 128)));
+                  handleReset();
+                }}
+                style={{ width: '80px', textAlign: 'right' }}
+              />
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#94A3B8', marginTop: '6px' }}>
               <span>128 tok (Short)</span>
               <span>4,096 tok (RAG)</span>
@@ -184,17 +199,32 @@ export default function SingleTurnVisualizer({
                 {formatTokens(outputTokens)} tokens
               </span>
             </div>
-            <input
-              type="range"
-              min="32"
-              max="4096"
-              step="32"
-              value={outputTokens}
-              onChange={(e) => {
-                setOutputTokens(Number(e.target.value));
-                handleReset();
-              }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="range"
+                min="32"
+                max="4096"
+                step="32"
+                value={outputTokens}
+                onChange={(e) => {
+                  setOutputTokens(Number(e.target.value));
+                  handleReset();
+                }}
+                style={{ flex: 1 }}
+              />
+              <input
+                type="number"
+                min="32"
+                max="4096"
+                step="32"
+                value={outputTokens}
+                onChange={(e) => {
+                  setOutputTokens(Math.max(32, Math.min(4096, Number(e.target.value) || 32)));
+                  handleReset();
+                }}
+                style={{ width: '80px', textAlign: 'right' }}
+              />
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#94A3B8', marginTop: '6px' }}>
               <span>32 tok (Concise)</span>
               <span>512 tok (Standard)</span>

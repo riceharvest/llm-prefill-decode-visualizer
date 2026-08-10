@@ -39,14 +39,26 @@ export default function HardwareComparison() {
               <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Test Prompt Length</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#2563EB' }}>{formatTokens(testPromptTokens)} tok</span>
             </div>
-            <input
-              type="range"
-              min="512"
-              max="32768"
-              step="512"
-              value={testPromptTokens}
-              onChange={(e) => setTestPromptTokens(Number(e.target.value))}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="range"
+                min="512"
+                max="32768"
+                step="512"
+                value={testPromptTokens}
+                onChange={(e) => setTestPromptTokens(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <input
+                type="number"
+                min="512"
+                max="32768"
+                step="512"
+                value={testPromptTokens}
+                onChange={(e) => setTestPromptTokens(Math.max(512, Math.min(32768, Number(e.target.value) || 512)))}
+                style={{ width: '80px', textAlign: 'right' }}
+              />
+            </div>
           </div>
 
           <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
@@ -54,14 +66,26 @@ export default function HardwareComparison() {
               <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Test Output Generation</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#059669' }}>{formatTokens(testOutputTokens)} tok</span>
             </div>
-            <input
-              type="range"
-              min="64"
-              max="4096"
-              step="64"
-              value={testOutputTokens}
-              onChange={(e) => setTestOutputTokens(Number(e.target.value))}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="range"
+                min="64"
+                max="4096"
+                step="64"
+                value={testOutputTokens}
+                onChange={(e) => setTestOutputTokens(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <input
+                type="number"
+                min="64"
+                max="4096"
+                step="64"
+                value={testOutputTokens}
+                onChange={(e) => setTestOutputTokens(Math.max(64, Math.min(4096, Number(e.target.value) || 64)))}
+                style={{ width: '80px', textAlign: 'right' }}
+              />
+            </div>
           </div>
         </div>
 

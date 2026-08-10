@@ -19,6 +19,26 @@ export default function AgenticVisualizer({
   // Simulation execution state
   const [activeTurn, setActiveTurn] = useState(0); // 1-indexed when active, 0 when idle
   const [currentPhase, setCurrentPhase] = useState('idle'); // 'idle' | 'prefilling' | 'decoding' | 'completed'
+  const [prefillProgress, setPrefillProgress] = useState(0); // tokens ingested in current turn prefill
+  const [decodeProgress, setDecodeProgress] = useState(0); // tokens decoded in current turn
+
+  // Sample token streams for the live prefill/decode visualization
+  const SAMPLE_PROMPT_WORDS = [
+    "Analyze", "the", "user", "request", "and", "retrieve", "relevant", "context", "from", "the",
+    "conversation", "history", "system", "instructions", "tool", "definitions", "knowledge", "base",
+    "search", "query", "documents", "embedding", "index", "vector", "database", "results", "ranked",
+    "by", "relevance", "score", "including", "metadata", "timestamps", "source", "annotations",
+    "task", "constraints", "priorities", "deadline", "budget", "architecture", "design", "requirements",
+    "specification", "acceptance", "criteria", "edge", "cases", "fallback", "strategy", "final", "answer"
+  ];
+  const SAMPLE_DECODE_WORDS = [
+    "Understood.", "Let", "me", "query", "the", "vector", "database", "for", "matching", "documents",
+    "Processing", "the", "search", "results", "now", "—", "found", "several", "relevant", "sources.",
+    "Running", "analysis", "on", "the", "retrieved", "data", "and", "cross-referencing", "with",
+    "previous", "tool", "outputs", "from", "this", "session", "to", "ensure", "consistency.", "The",
+    "findings", "suggest", "the", "optimal", "approach", "is", "to", "combine", "both", "strategies",
+    "and", "validate", "against", "the", "acceptance", "criteria", "before", "finalizing", "the", "report."
+  ];
 
   // Calculate mathematical timeline per turn
   const calculateTurnBreakdown = () => {
@@ -74,6 +94,7 @@ export default function AgenticVisualizer({
 
   const turnBreakdown = calculateTurnBreakdown();
   const totalAgentWalltime = turnBreakdown.reduce((acc, t) => acc + t.turnWalltime, 0);
+  const activeTurnItem = activeTurn ? turnBreakdown.find(t => t.turn === activeTurn) : null;
 
   // Compare walltime if caching was turned off
   const turnBreakdownNoCache = (() => {
@@ -99,6 +120,8 @@ export default function AgenticVisualizer({
   const handleReset = () => {
     setActiveTurn(0);
     setCurrentPhase('idle');
+    setPrefillProgress(0);
+    setDecodeProgress(0);
     simTimeRef.current = 0;
     setIsPlaying(false);
   };
@@ -128,8 +151,11 @@ export default function AgenticVisualizer({
       lastTickRef.current = now;
 
       if (simSpeedMultiplier === 'instant') {
+        const last = turnBreakdown[turnBreakdown.length - 1];
         setActiveTurn(numTurns);
         setCurrentPhase('completed');
+        setPrefillProgress(last.newTokensPrefilled);
+        setDecodeProgress(last.decodeTokens);
         setIsPlaying(false);
         return;
       }
@@ -142,6 +168,8 @@ export default function AgenticVisualizer({
       let accumulated = 0;
       let foundTurn = numTurns;
       let foundPhase = 'completed';
+      let foundTurnStart = 0;
+      let foundPrefillEnd = 0;
 
       for (let t = 0; t < turnBreakdown.length; t++) {
         const item = turnBreakdown[t];
@@ -152,23 +180,44 @@ export default function AgenticVisualizer({
         if (nextTime < prefillEnd) {
           foundTurn = item.turn;
           foundPhase = 'prefilling';
+          foundTurnStart = turnStart;
+          foundPrefillEnd = prefillEnd;
           break;
         } else if (nextTime < turnEnd) {
           foundTurn = item.turn;
           foundPhase = 'decoding';
+          foundTurnStart = turnStart;
+          foundPrefillEnd = prefillEnd;
           break;
         }
         accumulated = turnEnd;
       }
 
       if (nextTime >= totalAgentWalltime) {
+        const last = turnBreakdown[turnBreakdown.length - 1];
         setActiveTurn(numTurns);
         setCurrentPhase('completed');
+        setPrefillProgress(last.newTokensPrefilled);
+        setDecodeProgress(last.decodeTokens);
         setIsPlaying(false);
         return;
       } else {
         setActiveTurn(foundTurn);
         setCurrentPhase(foundPhase);
+
+        // Update live prefill/decode token progress for the current turn
+        const item = turnBreakdown.find(t => t.turn === foundTurn);
+        if (item) {
+          if (foundPhase === 'prefilling') {
+            const frac = (nextTime - foundTurnStart) / item.prefillTime;
+            setPrefillProgress(Math.min(item.newTokensPrefilled, Math.floor(frac * item.newTokensPrefilled)));
+            setDecodeProgress(0);
+          } else if (foundPhase === 'decoding') {
+            const frac = (nextTime - foundPrefillEnd) / item.decodeTime;
+            setPrefillProgress(item.newTokensPrefilled);
+            setDecodeProgress(Math.min(item.decodeTokens, Math.floor(frac * item.decodeTokens)));
+          }
+        }
       }
 
       animFrameRef.current = requestAnimationFrame(tick);
@@ -218,7 +267,7 @@ export default function AgenticVisualizer({
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
           
           {/* Number of Turns */}
           <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
@@ -226,62 +275,110 @@ export default function AgenticVisualizer({
               <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Agent Turns</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#D97706' }}>{numTurns} turns</span>
             </div>
-            <input
-              type="range"
-              min="2"
-              max="10"
-              step="1"
-              value={numTurns}
-              onChange={(e) => { setNumTurns(Number(e.target.value)); handleReset(); }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="range"
+                min="1"
+                max="200"
+                step="1"
+                value={numTurns}
+                onChange={(e) => { setNumTurns(Number(e.target.value)); handleReset(); }}
+                style={{ flex: 1 }}
+              />
+              <input
+                type="number"
+                min="1"
+                max="200"
+                step="1"
+                value={numTurns}
+                onChange={(e) => { setNumTurns(Math.max(1, Math.min(200, Number(e.target.value) || 1))); handleReset(); }}
+                style={{ width: '64px', textAlign: 'right' }}
+              />
+            </div>
           </div>
 
           {/* Base System Prompt Tokens */}
           <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
               <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Initial System Prompt</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#2563EB' }}>{basePromptTokens} tok</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#2563EB' }}>{formatTokens(basePromptTokens)} tok</span>
             </div>
-            <input
-              type="range"
-              min="500"
-              max="10000"
-              step="250"
-              value={basePromptTokens}
-              onChange={(e) => { setBasePromptTokens(Number(e.target.value)); handleReset(); }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="range"
+                min="500"
+                max="262144"
+                step="250"
+                value={basePromptTokens}
+                onChange={(e) => { setBasePromptTokens(Number(e.target.value)); handleReset(); }}
+                style={{ flex: 1 }}
+              />
+              <input
+                type="number"
+                min="500"
+                max="262144"
+                step="250"
+                value={basePromptTokens}
+                onChange={(e) => { setBasePromptTokens(Math.max(500, Math.min(262144, Number(e.target.value) || 500))); handleReset(); }}
+                style={{ width: '80px', textAlign: 'right' }}
+              />
+            </div>
           </div>
 
           {/* Tool Output Tokens per Turn */}
           <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
               <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Tool Result / Turn</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#7C3AED' }}>+{toolOutputTokensPerTurn} tok</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#7C3AED' }}>+{formatTokens(toolOutputTokensPerTurn)} tok</span>
             </div>
-            <input
-              type="range"
-              min="100"
-              max="3000"
-              step="100"
-              value={toolOutputTokensPerTurn}
-              onChange={(e) => { setToolOutputTokensPerTurn(Number(e.target.value)); handleReset(); }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="range"
+                min="100"
+                max="50000"
+                step="100"
+                value={toolOutputTokensPerTurn}
+                onChange={(e) => { setToolOutputTokensPerTurn(Number(e.target.value)); handleReset(); }}
+                style={{ flex: 1 }}
+              />
+              <input
+                type="number"
+                min="100"
+                max="50000"
+                step="100"
+                value={toolOutputTokensPerTurn}
+                onChange={(e) => { setToolOutputTokensPerTurn(Math.max(100, Math.min(50000, Number(e.target.value) || 100))); handleReset(); }}
+                style={{ width: '80px', textAlign: 'right' }}
+              />
+            </div>
           </div>
 
           {/* Decode Tokens per Turn */}
           <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
               <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Agent Thought / Turn</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#059669' }}>{decodeTokensPerTurn} tok</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#059669' }}>{formatTokens(decodeTokensPerTurn)} tok</span>
             </div>
-            <input
-              type="range"
-              min="50"
-              max="1000"
-              step="50"
-              value={decodeTokensPerTurn}
-              onChange={(e) => { setDecodeTokensPerTurn(Number(e.target.value)); handleReset(); }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="range"
+                min="50"
+                max="20000"
+                step="50"
+                value={decodeTokensPerTurn}
+                onChange={(e) => { setDecodeTokensPerTurn(Number(e.target.value)); handleReset(); }}
+                style={{ flex: 1 }}
+              />
+              <input
+                type="number"
+                min="50"
+                max="20000"
+                step="50"
+                value={decodeTokensPerTurn}
+                onChange={(e) => { setDecodeTokensPerTurn(Math.max(50, Math.min(20000, Number(e.target.value) || 50))); handleReset(); }}
+                style={{ width: '80px', textAlign: 'right' }}
+              />
+            </div>
           </div>
 
         </div>
@@ -468,6 +565,166 @@ export default function AgenticVisualizer({
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Live Side-by-Side Prefill vs Decode Stream */}
+        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>
+              Live Turn {activeTurn || '—'} Stream: Prefill Ingestion vs Decode Generation
+            </span>
+            <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+              {currentPhase === 'prefilling' ? '⏳ Prefilling (ingesting prompt tokens...)' : currentPhase === 'decoding' ? '⚡ Decoding (generating tokens...)' : currentPhase === 'completed' ? '✅ Turn Complete' : 'Run the simulation to see both phases side by side'}
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            {/* Prefill Panel */}
+            <div style={{
+              padding: '14px',
+              borderRadius: '12px',
+              background: currentPhase === 'prefilling' ? '#EFF6FF' : '#F8FAFC',
+              border: `2px solid ${currentPhase === 'prefilling' ? '#2563EB' : '#E2E8F0'}`,
+              transition: 'all 0.2s ease'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#1E40AF' }}>
+                  Prefill — Prompt Ingestion
+                </span>
+                <span className="badge badge-prefill" style={{ fontSize: '0.68rem' }}>
+                  {formatTokens(activeTurnItem ? activeTurnItem.newTokensPrefilled : 0)} tok
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ height: '8px', background: '#DBEAFE', borderRadius: '4px', overflow: 'hidden', margin: '8px 0' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${activeTurnItem ? Math.min(100, (prefillProgress / activeTurnItem.newTokensPrefilled) * 100) : 0}%`,
+                  background: 'linear-gradient(90deg, #3B82F6 0%, #1D4ED8 100%)',
+                  borderRadius: '4px',
+                  transition: 'width 0.1s linear'
+                }} />
+              </div>
+
+              {/* Token stream */}
+              <div style={{
+                background: '#FFFFFF',
+                border: '1px solid #BFDBFE',
+                borderRadius: '8px',
+                padding: '10px',
+                minHeight: '72px',
+                maxHeight: '120px',
+                overflowY: 'auto',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.82rem',
+                color: '#1E3A8A',
+                lineHeight: 1.6,
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '3px',
+                alignContent: 'flex-start'
+              }}>
+                {activeTurnItem && prefillProgress > 0 ? (
+                  Array.from({ length: Math.min(40, Math.max(1, Math.round((prefillProgress / activeTurnItem.newTokensPrefilled) * 40))) }, (_, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        background: i === Math.min(40, Math.max(1, Math.round((prefillProgress / activeTurnItem.newTokensPrefilled) * 40))) - 1 ? '#DBEAFE' : 'transparent',
+                        color: '#1E3A8A',
+                        borderRadius: '3px',
+                        padding: '0 2px'
+                      }}
+                    >
+                      {SAMPLE_PROMPT_WORDS[i % SAMPLE_PROMPT_WORDS.length]}
+                    </span>
+                  ))
+                ) : (
+                  <span style={{ color: '#94A3B8', fontStyle: 'italic', fontSize: '0.78rem' }}>
+                    {currentPhase === 'prefilling' ? '⏳ Ingesting prompt context...' : 'Waiting for prefill phase...'}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: '#1E3A8A' }}>
+                <span>Tokens Ingested: <strong>{formatTokens(prefillProgress)}</strong> / {formatTokens(activeTurnItem ? activeTurnItem.newTokensPrefilled : 0)}</span>
+                <span>{activeTurnItem ? formatTime(activeTurnItem.prefillTime) : '—'}</span>
+              </div>
+            </div>
+
+            {/* Decode Panel */}
+            <div style={{
+              padding: '14px',
+              borderRadius: '12px',
+              background: currentPhase === 'decoding' ? '#ECFDF5' : '#F8FAFC',
+              border: `2px solid ${currentPhase === 'decoding' ? '#059669' : '#E2E8F0'}`,
+              transition: 'all 0.2s ease'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#065F46' }}>
+                  Decode — Token Generation
+                </span>
+                <span className="badge badge-decode" style={{ fontSize: '0.68rem' }}>
+                  {formatTokens(activeTurnItem ? activeTurnItem.decodeTokens : 0)} tok
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ height: '8px', background: '#D1FAE5', borderRadius: '4px', overflow: 'hidden', margin: '8px 0' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${activeTurnItem ? Math.min(100, (decodeProgress / activeTurnItem.decodeTokens) * 100) : 0}%`,
+                  background: 'linear-gradient(90deg, #10B981 0%, #047857 100%)',
+                  borderRadius: '4px',
+                  transition: 'width 0.1s linear'
+                }} />
+              </div>
+
+              {/* Token stream */}
+              <div style={{
+                background: '#FFFFFF',
+                border: '1px solid #A7F3D0',
+                borderRadius: '8px',
+                padding: '10px',
+                minHeight: '72px',
+                maxHeight: '120px',
+                overflowY: 'auto',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.82rem',
+                color: '#064E3B',
+                lineHeight: 1.6,
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '3px',
+                alignContent: 'flex-start'
+              }}>
+                {activeTurnItem && decodeProgress > 0 ? (
+                  Array.from({ length: Math.min(40, Math.max(1, Math.round((decodeProgress / activeTurnItem.decodeTokens) * 40))) }, (_, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        background: i === Math.min(40, Math.max(1, Math.round((decodeProgress / activeTurnItem.decodeTokens) * 40))) - 1 ? '#D1FAE5' : 'transparent',
+                        color: '#064E3B',
+                        borderRadius: '3px',
+                        padding: '0 2px'
+                      }}
+                    >
+                      {SAMPLE_DECODE_WORDS[i % SAMPLE_DECODE_WORDS.length]}
+                    </span>
+                  ))
+                ) : (
+                  <span style={{ color: '#94A3B8', fontStyle: 'italic', fontSize: '0.78rem' }}>
+                    {currentPhase === 'decoding' ? '⚡ Generating tokens...' : 'Waiting for decode phase...'}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: '#064E3B' }}>
+                <span>Tokens Generated: <strong>{formatTokens(decodeProgress)}</strong> / {formatTokens(activeTurnItem ? activeTurnItem.decodeTokens : 0)}</span>
+                <span>{activeTurnItem ? formatTime(activeTurnItem.decodeTime) : '—'}</span>
+              </div>
+            </div>
           </div>
         </div>
 
