@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import SpeedControls from './components/SpeedControls';
 import SingleTurnVisualizer from './components/SingleTurnVisualizer';
@@ -6,14 +6,26 @@ import AgenticVisualizer from './components/AgenticVisualizer';
 import HardwareComparison from './components/HardwareComparison';
 import KVCacheCalculator from './components/KVCacheCalculator';
 import TheoryGuide from './components/TheoryGuide';
+import { readParam, writeParams } from './utils/urlState';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('single');
-  const [selectedPreset, setSelectedPreset] = useState('rtx4090_exl2');
-  const [prefillSpeed, setPrefillSpeed] = useState(3800);
-  const [decodeSpeed, setDecodeSpeed] = useState(105);
-  const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(1);
+  const [activeTab, setActiveTab] = useState(() => readParam('tab') || 'single');
+  const [selectedPreset, setSelectedPreset] = useState(() => readParam('preset') || 'rtx4090_exl2');
+  const [prefillSpeed, setPrefillSpeed] = useState(() => Number(readParam('prefill')) || 3800);
+  const [decodeSpeed, setDecodeSpeed] = useState(() => Number(readParam('decode')) || 105);
+  const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => readParam('sim') || 1);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // Keep shareable settings in the URL
+  useEffect(() => {
+    writeParams({
+      tab: activeTab,
+      preset: selectedPreset,
+      prefill: prefillSpeed,
+      decode: decodeSpeed,
+      sim: simSpeedMultiplier === 'instant' ? 'instant' : simSpeedMultiplier
+    });
+  }, [activeTab, selectedPreset, prefillSpeed, decodeSpeed, simSpeedMultiplier]);
 
   const handleApplyPreset = (preset) => {
     setPrefillSpeed(preset.prefillSpeed);
@@ -23,6 +35,14 @@ export default function App() {
 
   const handleReset = () => {
     setIsPlaying(false);
+  };
+
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+    } catch (e) {
+      // clipboard may be unavailable; no-op
+    }
   };
 
   return (
@@ -35,6 +55,7 @@ export default function App() {
         selectedPreset={selectedPreset}
         setSelectedPreset={setSelectedPreset}
         onApplyPreset={handleApplyPreset}
+        onShare={handleShare}
       />
 
       {/* Speed & Control Panel */}

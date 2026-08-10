@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Zap, Gauge, FileText } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
+import { readParamNum, writeParams } from '../utils/urlState';
 
 export default function SingleTurnVisualizer({
   prefillSpeed,
@@ -9,8 +10,13 @@ export default function SingleTurnVisualizer({
   isPlaying,
   setIsPlaying
 }) {
-  const [promptTokens, setPromptTokens] = useState(2048);
-  const [outputTokens, setOutputTokens] = useState(512);
+  const [promptTokens, setPromptTokens] = useState(() => readParamNum('prompt', 2048));
+  const [outputTokens, setOutputTokens] = useState(() => readParamNum('output', 512));
+
+  // Shareable per-tab settings
+  useEffect(() => {
+    writeParams({ prompt: promptTokens, output: outputTokens });
+  }, [promptTokens, outputTokens]);
 
   // Simulation state
   const [phase, setPhase] = useState('idle'); // 'idle' | 'prefilling' | 'decoding' | 'completed'

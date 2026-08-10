@@ -1,5 +1,5 @@
-import React from 'react';
-import { Cpu, Zap, Bot, MessageSquare, HelpCircle, BarChart3, HardDrive } from 'lucide-react';
+import React, { useState } from 'react';
+import { Cpu, Zap, Bot, MessageSquare, HelpCircle, BarChart3, HardDrive, Link2, Check } from 'lucide-react';
 import { HARDWARE_PRESETS } from '../utils/presets';
 
 export default function Header({ 
@@ -7,8 +7,17 @@ export default function Header({
   setActiveTab, 
   selectedPreset, 
   setSelectedPreset,
-  onApplyPreset 
+  onApplyPreset,
+  onShare
 }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = async () => {
+    await onShare();
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <header className="material-card-elevated" style={{ margin: '16px 16px 0 16px', padding: '16px 24px', background: '#FFFFFF' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
@@ -73,6 +82,29 @@ export default function Header({
               </option>
             ))}
           </select>
+
+          {/* Share exact settings */}
+          <button
+            onClick={handleShare}
+            title="Copy share link with current settings"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              border: copied ? '1px solid #10B981' : '1px solid #CBD5E1',
+              background: copied ? '#ECFDF5' : '#FFFFFF',
+              color: copied ? '#065F46' : '#475569',
+              fontSize: '0.8rem',
+              fontWeight: '700',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            {copied ? <Check size={16} color="#10B981" /> : <Link2 size={16} color="#4F46E5" />}
+            {copied ? 'Copied!' : 'Share'}
+          </button>
         </div>
 
       </div>

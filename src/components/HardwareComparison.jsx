@@ -1,12 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HARDWARE_PRESETS, formatTime, formatTokens } from '../utils/presets';
 import { BarChart3 } from 'lucide-react';
+import { readParam, readParamNum, writeParams } from '../utils/urlState';
 
 export default function HardwareComparison() {
-  const [hardwareA, setHardwareA] = useState('groq');
-  const [hardwareB, setHardwareB] = useState('rtx4090_exl2');
-  const [testPromptTokens, setTestPromptTokens] = useState(4096);
-  const [testOutputTokens, setTestOutputTokens] = useState(512);
+  const [hardwareA, setHardwareA] = useState(() => readParam('hwA') || 'groq');
+  const [hardwareB, setHardwareB] = useState(() => readParam('hwB') || 'rtx4090_exl2');
+  const [testPromptTokens, setTestPromptTokens] = useState(() => readParamNum('cp', 4096));
+  const [testOutputTokens, setTestOutputTokens] = useState(() => readParamNum('co', 512));
+
+  // Shareable per-tab settings
+  useEffect(() => {
+    writeParams({ hwA: hardwareA, hwB: hardwareB, cp: testPromptTokens, co: testOutputTokens });
+  }, [hardwareA, hardwareB, testPromptTokens, testOutputTokens]);
 
   const presetA = HARDWARE_PRESETS.find(p => p.id === hardwareA) || HARDWARE_PRESETS[0];
   const presetB = HARDWARE_PRESETS.find(p => p.id === hardwareB) || HARDWARE_PRESETS[2];

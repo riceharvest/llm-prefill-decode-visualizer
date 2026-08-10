@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HardDrive } from 'lucide-react';
 import { formatTokens } from '../utils/presets';
+import { readParam, readParamNum, writeParams } from '../utils/urlState';
 
 export default function KVCacheCalculator() {
-  const [modelPreset, setModelPreset] = useState('llama70b');
+  const [modelPreset, setModelPreset] = useState(() => readParam('model') || 'llama70b');
   const [numLayers, setNumLayers] = useState(80);
   const [kvHeads, setKvHeads] = useState(8); // Grouped-Query Attention (GQA) kv heads
   const [headDim, setHeadDim] = useState(128);
-  const [contextLength, setContextLength] = useState(32768);
-  const [precision, setPrecision] = useState(2); // 2 bytes = FP16/BF16, 1 byte = FP8/INT8, 0.5 = INT4
-  const [batchSize, setBatchSize] = useState(1);
+  const [contextLength, setContextLength] = useState(() => readParamNum('ctx', 32768));
+  const [precision, setPrecision] = useState(() => readParamNum('prec', 2)); // 2 bytes = FP16/BF16, 1 byte = FP8/INT8, 0.5 = INT4
+  const [batchSize, setBatchSize] = useState(() => readParamNum('batch', 1));
+
+  // Shareable per-tab settings
+  useEffect(() => {
+    writeParams({ model: modelPreset, ctx: contextLength, prec: precision, batch: batchSize });
+  }, [modelPreset, contextLength, precision, batchSize]);
 
   const applyModelPreset = (presetKey) => {
     setModelPreset(presetKey);

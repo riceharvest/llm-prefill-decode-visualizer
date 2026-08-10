@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
+import { readParamNum, readParamBool, writeParams } from '../utils/urlState';
 
 export default function AgenticVisualizer({
   prefillSpeed,
@@ -10,11 +11,22 @@ export default function AgenticVisualizer({
   setIsPlaying
 }) {
   // Agent configuration parameters
-  const [numTurns, setNumTurns] = useState(4);
-  const [basePromptTokens, setBasePromptTokens] = useState(1500);
-  const [toolOutputTokensPerTurn, setToolOutputTokensPerTurn] = useState(800);
-  const [decodeTokensPerTurn, setDecodeTokensPerTurn] = useState(250);
-  const [enablePrefixCaching, setEnablePrefixCaching] = useState(true);
+  const [numTurns, setNumTurns] = useState(() => readParamNum('turns', 4));
+  const [basePromptTokens, setBasePromptTokens] = useState(() => readParamNum('sprompt', 1500));
+  const [toolOutputTokensPerTurn, setToolOutputTokensPerTurn] = useState(() => readParamNum('tool', 800));
+  const [decodeTokensPerTurn, setDecodeTokensPerTurn] = useState(() => readParamNum('thought', 250));
+  const [enablePrefixCaching, setEnablePrefixCaching] = useState(() => readParamBool('cache', true));
+
+  // Shareable per-tab settings
+  useEffect(() => {
+    writeParams({
+      turns: numTurns,
+      sprompt: basePromptTokens,
+      tool: toolOutputTokensPerTurn,
+      thought: decodeTokensPerTurn,
+      cache: enablePrefixCaching ? '1' : '0'
+    });
+  }, [numTurns, basePromptTokens, toolOutputTokensPerTurn, decodeTokensPerTurn, enablePrefixCaching]);
 
   // Simulation execution state
   const [activeTurn, setActiveTurn] = useState(0); // 1-indexed when active, 0 when idle
@@ -39,6 +51,24 @@ export default function AgenticVisualizer({
     "findings", "suggest", "the", "optimal", "approach", "is", "to", "combine", "both", "strategies",
     "and", "validate", "against", "the", "acceptance", "criteria", "before", "finalizing", "the", "report."
   ];
+
+  // Token stream windowing: ~2.5 tokens per displayed word, rendered in a
+  // fixed-size window that clears and refills so the visible words track the
+  // real token throughput without rendering thousands of DOM nodes.
+  const TOKENS_PER_WORD = 2.5;
+  const WORD_WINDOW = 150;
+  const wordWindowFor = (tokens) => {
+    const totalWords = Math.floor(tokens / TOKENS_PER_WORD);
+    const lap = Math.floor(totalWords / WORD_WINDOW);
+    const visible = totalWords % WORD_WINDOW;
+    return { totalWords, lap, visible };
+  };
+  const streamWords = (tokens, corpus) => {
+    const { totalWords, lap, visible } = wordWindowFor(tokens);
+    if (totalWords === 0) return [];
+    if (visible === 0) return []; // window just cleared — refilling next tick
+    return Array.from({ length: visible }, (_, i) => corpus[(lap * 7 + i) % corpus.length]);
+  };
 
   // Calculate mathematical timeline per turn
   const calculateTurnBreakdown = () => {
@@ -462,6 +492,190 @@ export default function AgenticVisualizer({
           </div>
         )}
 
+        {/* Live Side-by-Side Prefill vs Decode Stream */}
+        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>
+              Live Turn {activeTurn || '—'} Stream: Prefill Ingestion vs Decode Generation
+            </span>
+            <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+              {currentPhase === 'prefilling' ? '⏳ Prefilling (ingesting prompt tokens...)' : currentPhase === 'decoding' ? '⚡ Decoding (generating tokens...)' : currentPhase === 'completed' ? '✅ Turn Complete' : 'Run the simulation to see both phases side by side'}
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            {/* Prefill Panel */}
+            <div style={{
+              padding: '14px',
+              borderRadius: '12px',
+              background: currentPhase === 'prefilling' ? '#EFF6FF' : '#F8FAFC',
+              border: `2px solid ${currentPhase === 'prefilling' ? '#2563EB' : '#E2E8F0'}`,
+              transition: 'all 0.2s ease'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#1E40AF' }}>
+                  Prefill — Prompt Ingestion
+                </span>
+                <span className="badge badge-prefill" style={{ fontSize: '0.68rem' }}>
+                  {formatTokens(activeTurnItem ? activeTurnItem.newTokensPrefilled : 0)} tok
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ height: '8px', background: '#DBEAFE', borderRadius: '4px', overflow: 'hidden', margin: '8px 0' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${activeTurnItem ? Math.min(100, (prefillProgress / activeTurnItem.newTokensPrefilled) * 100) : 0}%`,
+                  background: 'linear-gradient(90deg, #3B82F6 0%, #1D4ED8 100%)',
+                  borderRadius: '4px',
+                  transition: 'width 0.1s linear'
+                }} />
+              </div>
+
+              {/* Token stream — windowed to match real token count */}
+              <div style={{
+                background: '#FFFFFF',
+                border: '1px solid #BFDBFE',
+                borderRadius: '8px',
+                padding: '10px',
+                minHeight: '96px',
+                maxHeight: '200px',
+                overflowY: 'auto',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.82rem',
+                color: '#1E3A8A',
+                lineHeight: 1.6,
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '3px',
+                alignContent: 'flex-start'
+              }}>
+                {(() => {
+                  const words = streamWords(prefillProgress, SAMPLE_PROMPT_WORDS);
+                  const { totalWords, lap, visible } = wordWindowFor(prefillProgress);
+                  if (!activeTurnItem || totalWords === 0) {
+                    return (
+                      <span style={{ color: '#94A3B8', fontStyle: 'italic', fontSize: '0.78rem' }}>
+                        {currentPhase === 'prefilling' ? '⏳ Ingesting prompt context...' : 'Waiting for prefill phase...'}
+                      </span>
+                    );
+                  }
+                  if (visible === 0) {
+                    return (
+                      <span style={{ color: '#64748B', fontStyle: 'italic', fontSize: '0.78rem' }}>
+                        ↻ Window {lap} complete — {formatTokens(totalWords * TOKENS_PER_WORD)} tokens ingested, clearing & continuing...
+                      </span>
+                    );
+                  }
+                  return words.map((word, i) => (
+                    <span
+                      key={`${lap}-${i}`}
+                      style={{
+                        background: i === words.length - 1 ? '#DBEAFE' : 'transparent',
+                        color: '#1E3A8A',
+                        borderRadius: '3px',
+                        padding: '0 2px'
+                      }}
+                    >
+                      {word}
+                    </span>
+                  ));
+                })()}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: '#1E3A8A' }}>
+                <span>Tokens Ingested: <strong>{formatTokens(prefillProgress)}</strong> / {formatTokens(activeTurnItem ? activeTurnItem.newTokensPrefilled : 0)}</span>
+                <span>≈{TOKENS_PER_WORD} tok/word · {WORD_WINDOW}-word window</span>
+              </div>
+            </div>
+
+            {/* Decode Panel */}
+            <div style={{
+              padding: '14px',
+              borderRadius: '12px',
+              background: currentPhase === 'decoding' ? '#ECFDF5' : '#F8FAFC',
+              border: `2px solid ${currentPhase === 'decoding' ? '#059669' : '#E2E8F0'}`,
+              transition: 'all 0.2s ease'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#065F46' }}>
+                  Decode — Token Generation
+                </span>
+                <span className="badge badge-decode" style={{ fontSize: '0.68rem' }}>
+                  {formatTokens(activeTurnItem ? activeTurnItem.decodeTokens : 0)} tok
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ height: '8px', background: '#D1FAE5', borderRadius: '4px', overflow: 'hidden', margin: '8px 0' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${activeTurnItem ? Math.min(100, (decodeProgress / activeTurnItem.decodeTokens) * 100) : 0}%`,
+                  background: 'linear-gradient(90deg, #10B981 0%, #047857 100%)',
+                  borderRadius: '4px',
+                  transition: 'width 0.1s linear'
+                }} />
+              </div>
+
+              {/* Token stream — windowed to match real token count */}
+              <div style={{
+                background: '#FFFFFF',
+                border: '1px solid #A7F3D0',
+                borderRadius: '8px',
+                padding: '10px',
+                minHeight: '96px',
+                maxHeight: '200px',
+                overflowY: 'auto',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.82rem',
+                color: '#064E3B',
+                lineHeight: 1.6,
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '3px',
+                alignContent: 'flex-start'
+              }}>
+                {(() => {
+                  const words = streamWords(decodeProgress, SAMPLE_DECODE_WORDS);
+                  const { totalWords, lap, visible } = wordWindowFor(decodeProgress);
+                  if (!activeTurnItem || totalWords === 0) {
+                    return (
+                      <span style={{ color: '#94A3B8', fontStyle: 'italic', fontSize: '0.78rem' }}>
+                        {currentPhase === 'decoding' ? '⚡ Generating tokens...' : 'Waiting for decode phase...'}
+                      </span>
+                    );
+                  }
+                  if (visible === 0) {
+                    return (
+                      <span style={{ color: '#64748B', fontStyle: 'italic', fontSize: '0.78rem' }}>
+                        ↻ Window {lap} complete — {formatTokens(totalWords * TOKENS_PER_WORD)} tokens generated, clearing & continuing...
+                      </span>
+                    );
+                  }
+                  return words.map((word, i) => (
+                    <span
+                      key={`${lap}-${i}`}
+                      style={{
+                        background: i === words.length - 1 ? '#D1FAE5' : 'transparent',
+                        color: '#064E3B',
+                        borderRadius: '3px',
+                        padding: '0 2px'
+                      }}
+                    >
+                      {word}
+                    </span>
+                  ));
+                })()}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: '#064E3B' }}>
+                <span>Tokens Generated: <strong>{formatTokens(decodeProgress)}</strong> / {formatTokens(activeTurnItem ? activeTurnItem.decodeTokens : 0)}</span>
+                <span>≈{TOKENS_PER_WORD} tok/word · {WORD_WINDOW}-word window</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Gantt / Waterfall Timeline Chart */}
         <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
@@ -565,166 +779,6 @@ export default function AgenticVisualizer({
                 </div>
               );
             })}
-          </div>
-        </div>
-
-        {/* Live Side-by-Side Prefill vs Decode Stream */}
-        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>
-              Live Turn {activeTurn || '—'} Stream: Prefill Ingestion vs Decode Generation
-            </span>
-            <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
-              {currentPhase === 'prefilling' ? '⏳ Prefilling (ingesting prompt tokens...)' : currentPhase === 'decoding' ? '⚡ Decoding (generating tokens...)' : currentPhase === 'completed' ? '✅ Turn Complete' : 'Run the simulation to see both phases side by side'}
-            </span>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-            {/* Prefill Panel */}
-            <div style={{
-              padding: '14px',
-              borderRadius: '12px',
-              background: currentPhase === 'prefilling' ? '#EFF6FF' : '#F8FAFC',
-              border: `2px solid ${currentPhase === 'prefilling' ? '#2563EB' : '#E2E8F0'}`,
-              transition: 'all 0.2s ease'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#1E40AF' }}>
-                  Prefill — Prompt Ingestion
-                </span>
-                <span className="badge badge-prefill" style={{ fontSize: '0.68rem' }}>
-                  {formatTokens(activeTurnItem ? activeTurnItem.newTokensPrefilled : 0)} tok
-                </span>
-              </div>
-
-              {/* Progress bar */}
-              <div style={{ height: '8px', background: '#DBEAFE', borderRadius: '4px', overflow: 'hidden', margin: '8px 0' }}>
-                <div style={{
-                  height: '100%',
-                  width: `${activeTurnItem ? Math.min(100, (prefillProgress / activeTurnItem.newTokensPrefilled) * 100) : 0}%`,
-                  background: 'linear-gradient(90deg, #3B82F6 0%, #1D4ED8 100%)',
-                  borderRadius: '4px',
-                  transition: 'width 0.1s linear'
-                }} />
-              </div>
-
-              {/* Token stream */}
-              <div style={{
-                background: '#FFFFFF',
-                border: '1px solid #BFDBFE',
-                borderRadius: '8px',
-                padding: '10px',
-                minHeight: '72px',
-                maxHeight: '120px',
-                overflowY: 'auto',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.82rem',
-                color: '#1E3A8A',
-                lineHeight: 1.6,
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '3px',
-                alignContent: 'flex-start'
-              }}>
-                {activeTurnItem && prefillProgress > 0 ? (
-                  Array.from({ length: Math.min(40, Math.max(1, Math.round((prefillProgress / activeTurnItem.newTokensPrefilled) * 40))) }, (_, i) => (
-                    <span
-                      key={i}
-                      style={{
-                        background: i === Math.min(40, Math.max(1, Math.round((prefillProgress / activeTurnItem.newTokensPrefilled) * 40))) - 1 ? '#DBEAFE' : 'transparent',
-                        color: '#1E3A8A',
-                        borderRadius: '3px',
-                        padding: '0 2px'
-                      }}
-                    >
-                      {SAMPLE_PROMPT_WORDS[i % SAMPLE_PROMPT_WORDS.length]}
-                    </span>
-                  ))
-                ) : (
-                  <span style={{ color: '#94A3B8', fontStyle: 'italic', fontSize: '0.78rem' }}>
-                    {currentPhase === 'prefilling' ? '⏳ Ingesting prompt context...' : 'Waiting for prefill phase...'}
-                  </span>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: '#1E3A8A' }}>
-                <span>Tokens Ingested: <strong>{formatTokens(prefillProgress)}</strong> / {formatTokens(activeTurnItem ? activeTurnItem.newTokensPrefilled : 0)}</span>
-                <span>{activeTurnItem ? formatTime(activeTurnItem.prefillTime) : '—'}</span>
-              </div>
-            </div>
-
-            {/* Decode Panel */}
-            <div style={{
-              padding: '14px',
-              borderRadius: '12px',
-              background: currentPhase === 'decoding' ? '#ECFDF5' : '#F8FAFC',
-              border: `2px solid ${currentPhase === 'decoding' ? '#059669' : '#E2E8F0'}`,
-              transition: 'all 0.2s ease'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#065F46' }}>
-                  Decode — Token Generation
-                </span>
-                <span className="badge badge-decode" style={{ fontSize: '0.68rem' }}>
-                  {formatTokens(activeTurnItem ? activeTurnItem.decodeTokens : 0)} tok
-                </span>
-              </div>
-
-              {/* Progress bar */}
-              <div style={{ height: '8px', background: '#D1FAE5', borderRadius: '4px', overflow: 'hidden', margin: '8px 0' }}>
-                <div style={{
-                  height: '100%',
-                  width: `${activeTurnItem ? Math.min(100, (decodeProgress / activeTurnItem.decodeTokens) * 100) : 0}%`,
-                  background: 'linear-gradient(90deg, #10B981 0%, #047857 100%)',
-                  borderRadius: '4px',
-                  transition: 'width 0.1s linear'
-                }} />
-              </div>
-
-              {/* Token stream */}
-              <div style={{
-                background: '#FFFFFF',
-                border: '1px solid #A7F3D0',
-                borderRadius: '8px',
-                padding: '10px',
-                minHeight: '72px',
-                maxHeight: '120px',
-                overflowY: 'auto',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.82rem',
-                color: '#064E3B',
-                lineHeight: 1.6,
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '3px',
-                alignContent: 'flex-start'
-              }}>
-                {activeTurnItem && decodeProgress > 0 ? (
-                  Array.from({ length: Math.min(40, Math.max(1, Math.round((decodeProgress / activeTurnItem.decodeTokens) * 40))) }, (_, i) => (
-                    <span
-                      key={i}
-                      style={{
-                        background: i === Math.min(40, Math.max(1, Math.round((decodeProgress / activeTurnItem.decodeTokens) * 40))) - 1 ? '#D1FAE5' : 'transparent',
-                        color: '#064E3B',
-                        borderRadius: '3px',
-                        padding: '0 2px'
-                      }}
-                    >
-                      {SAMPLE_DECODE_WORDS[i % SAMPLE_DECODE_WORDS.length]}
-                    </span>
-                  ))
-                ) : (
-                  <span style={{ color: '#94A3B8', fontStyle: 'italic', fontSize: '0.78rem' }}>
-                    {currentPhase === 'decoding' ? '⚡ Generating tokens...' : 'Waiting for decode phase...'}
-                  </span>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: '#064E3B' }}>
-                <span>Tokens Generated: <strong>{formatTokens(decodeProgress)}</strong> / {formatTokens(activeTurnItem ? activeTurnItem.decodeTokens : 0)}</span>
-                <span>{activeTurnItem ? formatTime(activeTurnItem.decodeTime) : '—'}</span>
-              </div>
-            </div>
           </div>
         </div>
 
