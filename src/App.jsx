@@ -10,9 +10,9 @@ import { HARDWARE_PRESETS } from './utils/presets';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('single');
-  const [selectedPreset, setSelectedPreset] = useState('h100');
-  const [prefillSpeed, setPrefillSpeed] = useState(9500);
-  const [decodeSpeed, setDecodeSpeed] = useState(130);
+  const [selectedPreset, setSelectedPreset] = useState('rtx4090_exl2');
+  const [prefillSpeed, setPrefillSpeed] = useState(3800);
+  const [decodeSpeed, setDecodeSpeed] = useState(105);
   const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
 
