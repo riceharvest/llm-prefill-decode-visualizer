@@ -1,6 +1,5 @@
 import React from 'react';
-import { Play, Pause, RotateCcw, FastForward, Activity, Gauge, Flame } from 'lucide-react';
-import { formatTime } from '../utils/presets';
+import { Play, Pause, RotateCcw, FastForward, Gauge, Zap } from 'lucide-react';
 
 export default function SpeedControls({
   prefillSpeed,
@@ -11,8 +10,7 @@ export default function SpeedControls({
   setSimSpeedMultiplier,
   isPlaying,
   setIsPlaying,
-  onReset,
-  activePhase = 'idle'
+  onReset
 }) {
   return (
     <div className="material-card" style={{ padding: '20px', margin: '16px 16px 0 16px', background: '#FFFFFF' }}>
@@ -86,7 +84,7 @@ export default function SpeedControls({
               type="range"
               min="2"
               max="1000"
-              step="2"
+              step="1"
               value={decodeSpeed}
               onChange={(e) => setDecodeSpeed(Number(e.target.value))}
               style={{ flex: 1 }}

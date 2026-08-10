@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, Zap, Gauge, Clock, ToggleLeft, ToggleRight, Layers, ArrowRight, Play, Pause, RefreshCw, BarChart2, CheckCircle } from 'lucide-react';
+import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 
 export default function AgenticVisualizer({
@@ -19,8 +19,6 @@ export default function AgenticVisualizer({
   // Simulation execution state
   const [activeTurn, setActiveTurn] = useState(0); // 1-indexed when active, 0 when idle
   const [currentPhase, setCurrentPhase] = useState('idle'); // 'idle' | 'prefilling' | 'decoding' | 'completed'
-  const [elapsedSimTime, setElapsedSimTime] = useState(0);
-  const [turnLogs, setTurnLogs] = useState([]);
 
   // Calculate mathematical timeline per turn
   const calculateTurnBreakdown = () => {
@@ -76,7 +74,6 @@ export default function AgenticVisualizer({
 
   const turnBreakdown = calculateTurnBreakdown();
   const totalAgentWalltime = turnBreakdown.reduce((acc, t) => acc + t.turnWalltime, 0);
-  const totalTokensProcessed = turnBreakdown.reduce((acc, t) => acc + t.totalPromptTokens + t.decodeTokens, 0);
 
   // Compare walltime if caching was turned off
   const turnBreakdownNoCache = (() => {
@@ -97,12 +94,12 @@ export default function AgenticVisualizer({
   // Ref for timer
   const animFrameRef = useRef(null);
   const lastTickRef = useRef(null);
+  const simTimeRef = useRef(0);
 
   const handleReset = () => {
     setActiveTurn(0);
     setCurrentPhase('idle');
-    setElapsedSimTime(0);
-    setTurnLogs([]);
+    simTimeRef.current = 0;
     setIsPlaying(false);
   };
 
@@ -117,8 +114,7 @@ export default function AgenticVisualizer({
     if (currentPhase === 'idle' || currentPhase === 'completed') {
       setActiveTurn(1);
       setCurrentPhase('prefilling');
-      setElapsedSimTime(0);
-      setTurnLogs([]);
+      simTimeRef.current = 0;
     }
 
     const tick = (now) => {
@@ -134,52 +130,46 @@ export default function AgenticVisualizer({
       if (simSpeedMultiplier === 'instant') {
         setActiveTurn(numTurns);
         setCurrentPhase('completed');
-        setElapsedSimTime(totalAgentWalltime);
-        setTurnLogs(turnBreakdown.map(t => `Turn ${t.turn}: ${t.label} completed in ${formatTime(t.turnWalltime)}`));
         setIsPlaying(false);
         return;
       }
 
       const simDelta = realDelta * simSpeedMultiplier;
+      simTimeRef.current += simDelta;
+      const nextTime = simTimeRef.current;
 
-      setElapsedSimTime(prev => {
-        const nextTime = prev + simDelta;
+      // Find which turn and phase we are currently in
+      let accumulated = 0;
+      let foundTurn = numTurns;
+      let foundPhase = 'completed';
 
-        // Find which turn and phase we are currently in
-        let accumulated = 0;
-        let foundTurn = numTurns;
-        let foundPhase = 'completed';
+      for (let t = 0; t < turnBreakdown.length; t++) {
+        const item = turnBreakdown[t];
+        const turnStart = accumulated;
+        const prefillEnd = turnStart + item.prefillTime;
+        const turnEnd = turnStart + item.turnWalltime;
 
-        for (let t = 0; t < turnBreakdown.length; t++) {
-          const item = turnBreakdown[t];
-          const turnStart = accumulated;
-          const prefillEnd = turnStart + item.prefillTime;
-          const turnEnd = turnStart + item.turnWalltime;
-
-          if (nextTime < prefillEnd) {
-            foundTurn = item.turn;
-            foundPhase = 'prefilling';
-            break;
-          } else if (nextTime < turnEnd) {
-            foundTurn = item.turn;
-            foundPhase = 'decoding';
-            break;
-          }
-          accumulated = turnEnd;
+        if (nextTime < prefillEnd) {
+          foundTurn = item.turn;
+          foundPhase = 'prefilling';
+          break;
+        } else if (nextTime < turnEnd) {
+          foundTurn = item.turn;
+          foundPhase = 'decoding';
+          break;
         }
+        accumulated = turnEnd;
+      }
 
-        if (nextTime >= totalAgentWalltime) {
-          setActiveTurn(numTurns);
-          setCurrentPhase('completed');
-          setIsPlaying(false);
-          return totalAgentWalltime;
-        } else {
-          setActiveTurn(foundTurn);
-          setCurrentPhase(foundPhase);
-        }
-
-        return nextTime;
-      });
+      if (nextTime >= totalAgentWalltime) {
+        setActiveTurn(numTurns);
+        setCurrentPhase('completed');
+        setIsPlaying(false);
+        return;
+      } else {
+        setActiveTurn(foundTurn);
+        setCurrentPhase(foundPhase);
+      }
 
       animFrameRef.current = requestAnimationFrame(tick);
     };
@@ -394,8 +384,6 @@ export default function AgenticVisualizer({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {turnBreakdown.map((turnItem) => {
               const isCurrentTurn = activeTurn === turnItem.turn;
-              const turnPrefillPctOfTotal = (turnItem.prefillTime / totalAgentWalltime) * 100;
-              const turnDecodePctOfTotal = (turnItem.decodeTime / totalAgentWalltime) * 100;
               const prefillRatio = (turnItem.prefillTime / turnItem.turnWalltime) * 100;
 
               return (

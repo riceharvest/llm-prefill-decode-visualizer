@@ -6,7 +6,6 @@ import AgenticVisualizer from './components/AgenticVisualizer';
 import HardwareComparison from './components/HardwareComparison';
 import KVCacheCalculator from './components/KVCacheCalculator';
 import TheoryGuide from './components/TheoryGuide';
-import { HARDWARE_PRESETS } from './utils/presets';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('single');

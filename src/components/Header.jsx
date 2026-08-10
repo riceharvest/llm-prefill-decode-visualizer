@@ -1,5 +1,5 @@
 import React from 'react';
-import { Cpu, Zap, Bot, MessageSquare, Layers, HelpCircle, BarChart3, HardDrive } from 'lucide-react';
+import { Cpu, Zap, Bot, MessageSquare, HelpCircle, BarChart3, HardDrive } from 'lucide-react';
 import { HARDWARE_PRESETS } from '../utils/presets';
 
 export default function Header({ 

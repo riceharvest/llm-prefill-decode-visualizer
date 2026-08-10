@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { HARDWARE_PRESETS, formatTime, formatTokens } from '../utils/presets';
-import { BarChart3, Zap, Gauge, ArrowRight } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
 
 export default function HardwareComparison() {
   const [hardwareA, setHardwareA] = useState('groq');
-  const [hardwareB, setHardwareB] = useState('rtx4090');
+  const [hardwareB, setHardwareB] = useState('rtx4090_exl2');
   const [testPromptTokens, setTestPromptTokens] = useState(4096);
   const [testOutputTokens, setTestOutputTokens] = useState(512);
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Zap, Gauge, Clock, Layers, CheckCircle2, ArrowRight, Activity, FileText } from 'lucide-react';
+import { Play, Pause, Zap, Gauge, FileText } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 
 export default function SingleTurnVisualizer({

@@ -1,5 +1,5 @@
 import React from 'react';
-import { HelpCircle, Cpu, Gauge, Layers, Zap, HardDrive, ArrowRight } from 'lucide-react';
+import { HelpCircle, Gauge, Zap } from 'lucide-react';
 
 export default function TheoryGuide() {
   return (
@@ -78,13 +78,13 @@ export default function TheoryGuide() {
             <div style={{ background: '#FFFFFF', padding: '12px', borderRadius: '8px', border: '1px solid #FCD34D' }}>
               <strong style={{ fontSize: '0.82rem', color: '#92400E' }}>Without Prefix Caching:</strong>
               <p style={{ fontSize: '0.78rem', color: '#78350F', marginTop: '4px' }}>
-                On turn $k$, the inference server must re-prefill the entire accumulated history $P_k$. Prefill latency increases linearly/quadratically per turn, causing high turn walltime!
+                On turn k, the inference server must re-prefill the entire accumulated history P<sub>k</sub>. Prefill latency increases linearly/quadratically per turn, causing high turn walltime!
               </p>
             </div>
             <div style={{ background: '#FFFFFF', padding: '12px', borderRadius: '8px', border: '1px solid #FCD34D' }}>
               <strong style={{ fontSize: '0.82rem', color: '#92400E' }}>With Prefix Caching (RadixAttention):</strong>
               <p style={{ fontSize: '0.78rem', color: '#78350F', marginTop: '4px' }}>
-                The server reuses existing KV cache blocks for turns $1..k-1$. It only prefills the NEW tool response tokens $\Delta P_k$, keeping turn walltimes consistently low!
+                The server reuses existing KV cache blocks for turns 1..k-1. It only prefills the NEW tool response tokens ΔP<sub>k</sub>, keeping turn walltimes consistently low!
               </p>
             </div>
           </div>

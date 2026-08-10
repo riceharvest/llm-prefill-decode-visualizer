@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import { HardDrive, Cpu, Layers, Info } from 'lucide-react';
+import { HardDrive } from 'lucide-react';
 import { formatTokens } from '../utils/presets';
 
 export default function KVCacheCalculator() {
   const [modelPreset, setModelPreset] = useState('llama70b');
   const [numLayers, setNumLayers] = useState(80);
-  const [hiddenSize, setHiddenSize] = useState(8192);
   const [kvHeads, setKvHeads] = useState(8); // Grouped-Query Attention (GQA) kv heads
-  const [numHeads, setNumHeads] = useState(64);
   const [headDim, setHeadDim] = useState(128);
   const [contextLength, setContextLength] = useState(32768);
   const [precision, setPrecision] = useState(2); // 2 bytes = FP16/BF16, 1 byte = FP8/INT8, 0.5 = INT4
@@ -17,27 +15,19 @@ export default function KVCacheCalculator() {
     setModelPreset(presetKey);
     if (presetKey === 'llama8b') {
       setNumLayers(32);
-      setHiddenSize(4096);
       setKvHeads(8);
-      setNumHeads(32);
       setHeadDim(128);
     } else if (presetKey === 'llama70b') {
       setNumLayers(80);
-      setHiddenSize(8192);
       setKvHeads(8);
-      setNumHeads(64);
       setHeadDim(128);
     } else if (presetKey === 'qwen72b') {
       setNumLayers(80);
-      setHiddenSize(8192);
       setKvHeads(8);
-      setNumHeads(64);
       setHeadDim(128);
     } else if (presetKey === 'mistral7b') {
       setNumLayers(32);
-      setHiddenSize(4096);
       setKvHeads(8);
-      setNumHeads(32);
       setHeadDim(128);
     }
   };
