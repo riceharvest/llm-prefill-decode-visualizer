@@ -60,27 +60,31 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   const speedupPrefill = ttftA > 0 ? ttftB / ttftA : 0;
   const speedupDecode = decodeTimeA > 0 ? decodeTimeB / decodeTimeA : 0;
 
+  const rowStyle = { display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '0.82rem' };
+  const rowDivider = { paddingTop: '8px', borderTop: '1px solid var(--border)' };
+  const numStyle = { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '16px' }}>
-      
-      <div className="material-card" style={{ padding: '20px', background: '#FFFFFF' }}>
-        <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0F172A', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <BarChart3 size={22} color="#4F46E5" />
-          <span>Side-by-Side Hardware Speed Benchmark</span>
+    <div className="stack">
+
+      <section className="panel" aria-label="Hardware comparison">
+        <h2 className="panel-title" style={{ marginBottom: '14px' }}>
+          <BarChart3 size={16} />
+          <span>Side-by-Side Hardware Benchmark</span>
         </h2>
 
         {localMaxxingContext?.runs?.length > 0 && (
-          <div style={{ marginBottom: '16px', padding: '10px 12px', borderRadius: '9px', background: '#EEF2FF', border: '1px solid #C7D2FE', color: '#3730A3', fontSize: '0.78rem', fontWeight: '700' }}>
+          <div className="panel-inset" style={{ marginBottom: '14px', borderColor: 'var(--prefill-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: '0.76rem', fontWeight: 600 }}>
             Comparing {localMaxxingContext.modelId} at {localMaxxingContext.quantization} across {localMaxxingContext.runs.length} measured single-stream runs. Select either system below to change hardware.
           </div>
         )}
 
         {/* Benchmark Test Parameters */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '20px' }}>
-          <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Test Prompt Length</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#2563EB' }}>{formatTokens(testPromptTokens)} tok</span>
+        <div className="grid-auto" style={{ '--grid-min': '240px', marginBottom: '16px' }}>
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Test Prompt Length</span>
+              <span className="field-value" style={{ color: 'var(--prefill)' }}>{formatTokens(testPromptTokens)} tok</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input
@@ -89,22 +93,24 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 max="32768"
                 step="512"
                 value={testPromptTokens}
+                aria-label="Test prompt length in tokens"
                 onChange={(e) => setTestPromptTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={testPromptTokens}
+                aria-label="Test prompt length value"
                 onChange={(e) => setTestPromptTokens(Number(e.target.value))}
-                style={{ width: '80px', textAlign: 'right' }}
+                style={{ width: '80px' }}
               />
             </div>
           </div>
 
-          <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Test Output Generation</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#059669' }}>{formatTokens(testOutputTokens)} tok</span>
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Test Output Generation</span>
+              <span className="field-value" style={{ color: 'var(--decode)' }}>{formatTokens(testOutputTokens)} tok</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input
@@ -113,160 +119,137 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 max="4096"
                 step="64"
                 value={testOutputTokens}
+                aria-label="Test output generation length in tokens"
                 onChange={(e) => setTestOutputTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={testOutputTokens}
+                aria-label="Test output generation length value"
                 onChange={(e) => setTestOutputTokens(Number(e.target.value))}
-                style={{ width: '80px', textAlign: 'right' }}
+                style={{ width: '80px' }}
               />
             </div>
           </div>
         </div>
 
         {/* Hardware Selectors */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
-          
+        <div className="grid-auto" style={{ '--grid-min': '300px' }}>
+
           {/* Hardware Config A */}
-          <div style={{ padding: '20px', borderRadius: '14px', background: '#EEF2FF', border: '2px solid #6366F1' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4F46E5', textTransform: 'uppercase', marginBottom: '8px' }}>
-              System A (Primary Benchmark)
+          <div className="panel-inset" style={{ borderColor: 'var(--prefill-border)', borderLeft: '2px solid var(--accent)' }}>
+            <div className="section-label" style={{ color: 'var(--accent)', marginBottom: '8px' }}>
+              System A · primary
             </div>
             <select
               value={hardwareA}
               onChange={(e) => setHardwareA(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                border: '1px solid #A5B4FC',
-                background: '#FFFFFF',
-                fontWeight: '700',
-                fontSize: '0.95rem',
-                color: '#0F172A',
-                marginBottom: '16px'
-              }}
+              aria-label="System A hardware profile"
+              style={{ width: '100%', marginBottom: '14px' }}
             >
               {presets.map(p => (
                 <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
               ))}
             </select>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Prefill Speed:</span>
-                <strong style={{ fontFamily: 'var(--font-mono)', color: '#2563EB' }}>{presetA.prefillSpeed.toLocaleString()} tok/s</strong>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', color: 'var(--text-muted)' }}>
+              <div style={rowStyle}>
+                <span>Prefill speed</span>
+                <span style={{ ...numStyle, color: 'var(--prefill)' }}>{presetA.prefillSpeed.toLocaleString()} tok/s</span>
               </div>
-              {presetA.sourceUrl && <a href={presetA.sourceUrl} target="_blank" rel="noreferrer" style={{ color: '#4F46E5', fontSize: '0.72rem', fontWeight: '700' }}>View LocalMaxxing source run ↗</a>}
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Decode Speed:</span>
-                <strong style={{ fontFamily: 'var(--font-mono)', color: '#059669' }}>{presetA.decodeSpeed.toLocaleString()} tok/s</strong>
+              {presetA.sourceUrl && <a href={presetA.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600 }}>View LocalMaxxing source run ↗</a>}
+              <div style={rowStyle}>
+                <span>Decode speed</span>
+                <span style={{ ...numStyle, color: 'var(--decode)' }}>{presetA.decodeSpeed.toLocaleString()} tok/s</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #C7D2FE' }}>
-                <span>TTFT (Prompt):</span>
-                <strong style={{ fontFamily: 'var(--font-mono)', color: '#2563EB' }}>{formatTime(ttftA)}</strong>
+              <div style={{ ...rowStyle, ...rowDivider }}>
+                <span>TTFT (prompt)</span>
+                <span style={{ ...numStyle, color: 'var(--prefill)' }}>{formatTime(ttftA)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Decode Time:</span>
-                <strong style={{ fontFamily: 'var(--font-mono)', color: '#059669' }}>{formatTime(decodeTimeA)}</strong>
+              <div style={rowStyle}>
+                <span>Decode time</span>
+                <span style={{ ...numStyle, color: 'var(--decode)' }}>{formatTime(decodeTimeA)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: '800', paddingTop: '8px', borderTop: '1px solid #C7D2FE', color: '#0F172A' }}>
-                <span>Total Walltime:</span>
-                <span style={{ fontFamily: 'var(--font-mono)', color: '#4F46E5' }}>{formatTime(totalTimeA)}</span>
+              <div style={{ ...rowStyle, ...rowDivider, fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                <span>Total walltime</span>
+                <span style={{ ...numStyle, color: 'var(--accent)' }}>{formatTime(totalTimeA)}</span>
               </div>
             </div>
           </div>
 
           {/* Hardware Config B */}
-          <div style={{ padding: '20px', borderRadius: '14px', background: '#F8FAFC', border: '2px solid #CBD5E1' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: '8px' }}>
-              System B (Comparison Benchmark)
+          <div className="panel-inset" style={{ borderLeft: '2px solid var(--border-strong)' }}>
+            <div className="section-label" style={{ marginBottom: '8px' }}>
+              System B · comparison
             </div>
             <select
               value={hardwareB}
               onChange={(e) => setHardwareB(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                border: '1px solid #CBD5E1',
-                background: '#FFFFFF',
-                fontWeight: '700',
-                fontSize: '0.95rem',
-                color: '#0F172A',
-                marginBottom: '16px'
-              }}
+              aria-label="System B hardware profile"
+              style={{ width: '100%', marginBottom: '14px' }}
             >
               {presets.map(p => (
                 <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
               ))}
             </select>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Prefill Speed:</span>
-                <strong style={{ fontFamily: 'var(--font-mono)', color: '#2563EB' }}>{presetB.prefillSpeed.toLocaleString()} tok/s</strong>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', color: 'var(--text-muted)' }}>
+              <div style={rowStyle}>
+                <span>Prefill speed</span>
+                <span style={{ ...numStyle, color: 'var(--prefill)' }}>{presetB.prefillSpeed.toLocaleString()} tok/s</span>
               </div>
-              {presetB.sourceUrl && <a href={presetB.sourceUrl} target="_blank" rel="noreferrer" style={{ color: '#4F46E5', fontSize: '0.72rem', fontWeight: '700' }}>View LocalMaxxing source run ↗</a>}
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Decode Speed:</span>
-                <strong style={{ fontFamily: 'var(--font-mono)', color: '#059669' }}>{presetB.decodeSpeed.toLocaleString()} tok/s</strong>
+              {presetB.sourceUrl && <a href={presetB.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600 }}>View LocalMaxxing source run ↗</a>}
+              <div style={rowStyle}>
+                <span>Decode speed</span>
+                <span style={{ ...numStyle, color: 'var(--decode)' }}>{presetB.decodeSpeed.toLocaleString()} tok/s</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
-                <span>TTFT (Prompt):</span>
-                <strong style={{ fontFamily: 'var(--font-mono)', color: '#2563EB' }}>{formatTime(ttftB)}</strong>
+              <div style={{ ...rowStyle, ...rowDivider }}>
+                <span>TTFT (prompt)</span>
+                <span style={{ ...numStyle, color: 'var(--prefill)' }}>{formatTime(ttftB)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Decode Time:</span>
-                <strong style={{ fontFamily: 'var(--font-mono)', color: '#059669' }}>{formatTime(decodeTimeB)}</strong>
+              <div style={rowStyle}>
+                <span>Decode time</span>
+                <span style={{ ...numStyle, color: 'var(--decode)' }}>{formatTime(decodeTimeB)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: '800', paddingTop: '8px', borderTop: '1px solid #E2E8F0', color: '#0F172A' }}>
-                <span>Total Walltime:</span>
-                <span style={{ fontFamily: 'var(--font-mono)' }}>{formatTime(totalTimeB)}</span>
+              <div style={{ ...rowStyle, ...rowDivider, fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                <span>Total walltime</span>
+                <span style={numStyle}>{formatTime(totalTimeB)}</span>
               </div>
             </div>
           </div>
 
         </div>
 
-        {/* Speedup Ratio Summary Banner */}
-        <div style={{
-          marginTop: '24px',
-          padding: '16px',
-          borderRadius: '12px',
-          background: speedupTotal >= 1 ? '#ECFDF5' : '#FEF2F2',
-          border: `1px solid ${speedupTotal >= 1 ? '#A7F3D0' : '#FECACA'}`,
-          display: 'flex',
-          justifyContent: 'space-around',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '16px'
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>Overall Walltime Speedup</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.5rem', fontWeight: '800', color: speedupTotal >= 1 ? '#059669' : '#DC2626' }}>
-              {speedupTotal > 0 ? (speedupTotal >= 1 ? `${speedupTotal.toFixed(2)}x Faster` : `${(1 / speedupTotal).toFixed(2)}x Slower`) : '—'}
+        {/* Speedup Ratio Summary */}
+        <div className="metric-grid" style={{ marginTop: '16px' }}>
+          <div
+            className="metric"
+            style={{ borderLeftColor: speedupTotal >= 1 ? 'var(--decode)' : 'var(--danger)', textAlign: 'center' }}
+          >
+            <div className="metric-label">Overall walltime</div>
+            <div className="metric-value" style={{ color: speedupTotal >= 1 ? 'var(--decode)' : 'var(--danger)', fontSize: '1.5rem' }}>
+              {speedupTotal > 0 ? (speedupTotal >= 1 ? `${speedupTotal.toFixed(2)}x faster` : `${(1 / speedupTotal).toFixed(2)}x slower`) : '—'}
             </div>
+            <div className="metric-sub">System A vs System B</div>
           </div>
 
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>Prefill TTFT Advantage</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.3rem', fontWeight: '800', color: '#2563EB' }}>
+          <div className="metric" style={{ borderLeftColor: 'var(--prefill)', textAlign: 'center' }}>
+            <div className="metric-label">Prefill TTFT advantage</div>
+            <div className="metric-value" style={{ color: 'var(--prefill)' }}>
               {speedupPrefill.toFixed(2)}x
             </div>
           </div>
 
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>Decode Generation Advantage</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.3rem', fontWeight: '800', color: '#059669' }}>
+          <div className="metric" style={{ borderLeftColor: 'var(--decode)', textAlign: 'center' }}>
+            <div className="metric-label">Decode generation advantage</div>
+            <div className="metric-value" style={{ color: 'var(--decode)' }}>
               {speedupDecode.toFixed(2)}x
             </div>
           </div>
         </div>
 
-      </div>
+      </section>
 
     </div>
   );

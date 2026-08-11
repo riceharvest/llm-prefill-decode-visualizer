@@ -2,7 +2,6 @@
 
 An interactive, high-performance web application and benchmark tool designed to visualize, measure, and analyze **LLM (Large Language Model) Prefill** and **Decode** speeds for single-turn chat and multi-turn agentic workflows.
 
-![Material White Theme](https://img.shields.io/badge/Theme-Material%20White-6366F1)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![React](https://img.shields.io/badge/React-19-059669)
 ![Vite](https://img.shields.io/badge/Vite-6-2563EB)
@@ -11,8 +10,8 @@ An interactive, high-performance web application and benchmark tool designed to 
 
 ## 🌟 Key Features
 
-1. **Material White Design System**:
-   - Clean, elevated light UI with Material Design 3 tokens, smooth progress animations, and responsive metrics breakdown.
+1. **Dark Inference-Lab UI**:
+   - High-density dark instrument design with tabular numerals, phase-colored metrics, smooth progress animations, and responsive metrics breakdown.
 
 2. **Independent Prefill & Decode Speed Controls**:
    - User-configurable **Prefill Speed** (`tokens/sec`) for prompt ingestion.

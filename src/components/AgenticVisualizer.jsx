@@ -252,14 +252,19 @@ export default function AgenticVisualizer({
     };
   }, [isPlaying, simSpeedMultiplier, numTurns, totalAgentWalltime]);
 
+  const phaseStatusText = currentPhase === 'prefilling' ? 'Prefilling — ingesting prompt tokens'
+    : currentPhase === 'decoding' ? 'Decoding — generating tokens'
+    : currentPhase === 'completed' ? 'Loop complete'
+    : 'Run the simulation to see both phases side by side';
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '16px' }}>
-      
+    <div className="stack">
+
       {/* Top Configuration Card */}
-      <div className="material-card" style={{ padding: '20px', background: '#FFFFFF' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Bot size={22} color="#D97706" />
+      <section className="panel" aria-label="Agentic loop parameters">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
+          <h2 className="panel-title">
+            <Bot size={16} style={{ color: 'var(--agent)' }} />
             <span>Agentic Tool-Loop Parameters</span>
           </h2>
 
@@ -269,33 +274,24 @@ export default function AgenticVisualizer({
               setEnablePrefixCaching(!enablePrefixCaching);
               handleReset();
             }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '8px 16px',
-              borderRadius: '10px',
-              border: enablePrefixCaching ? '1px solid #10B981' : '1px solid #CBD5E1',
-              background: enablePrefixCaching ? '#ECFDF5' : '#F8FAFC',
-              color: enablePrefixCaching ? '#065F46' : '#475569',
-              fontWeight: '700',
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
-            }}
+            className="btn"
+            aria-pressed={enablePrefixCaching}
+            style={enablePrefixCaching
+              ? { borderColor: 'var(--decode-border)', color: 'var(--decode)', background: 'var(--decode-dim)' }
+              : undefined}
           >
-            {enablePrefixCaching ? <ToggleRight size={22} color="#10B981" /> : <ToggleLeft size={22} color="#64748B" />}
-            <span>Prefix Caching (KV Cache Reuse): <strong>{enablePrefixCaching ? 'ENABLED (Fast)' : 'DISABLED (Full Reprefill)'}</strong></span>
+            {enablePrefixCaching ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+            <span>Prefix caching: <strong>{enablePrefixCaching ? 'ON (KV reuse)' : 'OFF (full re-prefill)'}</strong></span>
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
-          
+        <div className="grid-auto" style={{ '--grid-min': '240px' }}>
+
           {/* Number of Turns */}
-          <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Agent Turns</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#D97706' }}>{numTurns} turns</span>
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Agent Turns</span>
+              <span className="field-value" style={{ color: 'var(--agent)' }}>{numTurns} turns</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input
@@ -304,23 +300,25 @@ export default function AgenticVisualizer({
                 max="200"
                 step="1"
                 value={numTurns}
+                aria-label="Number of agent turns"
                 onChange={(e) => { setNumTurns(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={numTurns}
+                aria-label="Number of agent turns value"
                 onChange={(e) => { setNumTurns(Number(e.target.value)); handleReset(); }}
-                style={{ width: '64px', textAlign: 'right' }}
+                style={{ width: '64px' }}
               />
             </div>
           </div>
 
           {/* Base System Prompt Tokens */}
-          <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Initial System Prompt</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#2563EB' }}>{formatTokens(basePromptTokens)} tok</span>
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Initial System Prompt</span>
+              <span className="field-value" style={{ color: 'var(--prefill)' }}>{formatTokens(basePromptTokens)} tok</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input
@@ -329,23 +327,25 @@ export default function AgenticVisualizer({
                 max="262144"
                 step="250"
                 value={basePromptTokens}
+                aria-label="Initial system prompt tokens"
                 onChange={(e) => { setBasePromptTokens(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={basePromptTokens}
+                aria-label="Initial system prompt tokens value"
                 onChange={(e) => { setBasePromptTokens(Number(e.target.value)); handleReset(); }}
-                style={{ width: '80px', textAlign: 'right' }}
+                style={{ width: '80px' }}
               />
             </div>
           </div>
 
           {/* Tool Output Tokens per Turn */}
-          <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Tool Result / Turn</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#7C3AED' }}>+{formatTokens(toolOutputTokensPerTurn)} tok</span>
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Tool Result / Turn</span>
+              <span className="field-value" style={{ color: 'var(--accent)' }}>+{formatTokens(toolOutputTokensPerTurn)} tok</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input
@@ -354,23 +354,25 @@ export default function AgenticVisualizer({
                 max="50000"
                 step="100"
                 value={toolOutputTokensPerTurn}
+                aria-label="Tool output tokens per turn"
                 onChange={(e) => { setToolOutputTokensPerTurn(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={toolOutputTokensPerTurn}
+                aria-label="Tool output tokens per turn value"
                 onChange={(e) => { setToolOutputTokensPerTurn(Number(e.target.value)); handleReset(); }}
-                style={{ width: '80px', textAlign: 'right' }}
+                style={{ width: '80px' }}
               />
             </div>
           </div>
 
           {/* Decode Tokens per Turn */}
-          <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Agent Thought / Turn</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#059669' }}>{formatTokens(decodeTokensPerTurn)} tok</span>
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Agent Thought / Turn</span>
+              <span className="field-value" style={{ color: 'var(--decode)' }}>{formatTokens(decodeTokensPerTurn)} tok</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input
@@ -379,78 +381,51 @@ export default function AgenticVisualizer({
                 max="20000"
                 step="50"
                 value={decodeTokensPerTurn}
+                aria-label="Decode tokens per turn"
                 onChange={(e) => { setDecodeTokensPerTurn(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={decodeTokensPerTurn}
+                aria-label="Decode tokens per turn value"
                 onChange={(e) => { setDecodeTokensPerTurn(Number(e.target.value)); handleReset(); }}
-                style={{ width: '80px', textAlign: 'right' }}
+                style={{ width: '80px' }}
               />
             </div>
           </div>
 
         </div>
-      </div>
+      </section>
 
       {/* Main Agent Loop Simulation Stage */}
-      <div className="material-card-elevated" style={{ padding: '24px', background: '#FFFFFF' }}>
-        
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <span className="badge badge-agent" style={{ marginBottom: '6px' }}>
-              Multi-Turn Agentic Loop
+      <section className="panel" aria-label="Agent loop simulation">
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="tag tag-agent" style={{ fontSize: '0.72rem', padding: '3px 9px' }}>
+              MULTI-TURN LOOP
             </span>
-            <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0F172A' }}>
-              Walltime Measurement Per Turn
-            </h3>
+            <span className="hint-text" style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
+              Total walltime <strong style={{ color: 'var(--text-main)', fontSize: '1rem' }}>{formatTime(totalAgentWalltime)}</strong>
+            </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ fontSize: '0.9rem', color: '#334155' }}>
-              Total Agent Walltime: <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '1.2rem', color: '#0F172A' }}>{formatTime(totalAgentWalltime)}</strong>
-            </div>
-
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               onClick={() => setIsPlaying(!isPlaying)}
-              style={{
-                padding: '8px 18px',
-                borderRadius: '8px',
-                border: 'none',
-                background: isPlaying ? '#F59E0B' : '#D97706',
-                color: '#FFFFFF',
-                fontWeight: '700',
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
+              className={`btn ${isPlaying ? 'btn-warn' : 'btn-accent'}`}
             >
-              {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+              {isPlaying ? <Pause size={15} /> : <Play size={15} />}
               {isPlaying ? 'Pause' : 'Simulate Agent Loop'}
             </button>
 
             <button
               onClick={handleReset}
               title="Reset turn state (active turn, phase, token progress)"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                background: '#FFFFFF',
-                color: '#475569',
-                fontWeight: '700',
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
+              className="btn"
             >
-              <RotateCcw size={16} />
+              <RotateCcw size={15} />
               Reset Loop
             </button>
           </div>
@@ -458,132 +433,120 @@ export default function AgenticVisualizer({
 
         {/* Prefix Caching Time Savings Banner */}
         {enablePrefixCaching ? (
-          <div style={{
-            background: '#ECFDF5',
-            border: '1px solid #A7F3D0',
-            borderRadius: '10px',
-            padding: '12px 16px',
-            marginBottom: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: '0.85rem',
-            color: '#065F46'
-          }}>
+          <div
+            className="panel-inset"
+            style={{
+              borderColor: 'var(--decode-border)',
+              background: 'var(--decode-dim)',
+              marginBottom: '18px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '10px',
+              flexWrap: 'wrap',
+              fontSize: '0.82rem',
+              color: 'var(--decode)'
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <CheckCircle size={18} color="#10B981" />
+              <CheckCircle size={16} />
               <span>
-                <strong>Prefix Caching Savings:</strong> Reduced total walltime from <strong>{formatTime(turnBreakdownNoCache)}</strong> to <strong>{formatTime(totalAgentWalltime)}</strong>!
+                <strong>Prefix caching savings:</strong> walltime reduced from {formatTime(turnBreakdownNoCache)} to {formatTime(totalAgentWalltime)}
               </span>
             </div>
-            <span style={{ fontWeight: '800', background: '#10B981', color: '#FFFFFF', padding: '2px 8px', borderRadius: '6px', fontSize: '0.78rem' }}>
-              Saved {formatTime(cachingTimeSaved)} ({cachingPercentSaved.toFixed(0)}%)
+            <span className="tag tag-decode">
+              saved {formatTime(cachingTimeSaved)} ({cachingPercentSaved.toFixed(0)}%)
             </span>
           </div>
         ) : (
-          <div style={{
-            background: '#FFFBEB',
-            border: '1px solid #FDE68A',
-            borderRadius: '10px',
-            padding: '12px 16px',
-            marginBottom: '20px',
-            fontSize: '0.85rem',
-            color: '#92400E'
-          }}>
-            ⚠️ <strong>Prefix Caching Disabled:</strong> Every turn re-prefills the ENTIRE accumulated context history! Turn walltimes grow larger as history expands.
+          <div
+            className="panel-inset"
+            style={{
+              borderColor: 'var(--agent-border)',
+              background: 'var(--agent-dim)',
+              marginBottom: '18px',
+              fontSize: '0.82rem',
+              color: 'var(--agent)'
+            }}
+          >
+            <strong>Prefix caching disabled:</strong> every turn re-prefills the entire accumulated context history. Turn walltimes grow as history expands.
           </div>
         )}
 
         {/* Live Side-by-Side Prefill vs Decode Stream */}
-        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>
-              Live Turn {activeTurn || '—'} Stream: Prefill Ingestion vs Decode Generation
+        <div className="panel-inset" style={{ marginBottom: '20px' }}>
+          <div className="field-head" style={{ marginBottom: '12px', flexWrap: 'wrap' }}>
+            <span className="section-label">
+              Turn {activeTurn || '—'} stream · prefill ingestion vs decode generation
             </span>
-            <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
-              {currentPhase === 'prefilling' ? '⏳ Prefilling (ingesting prompt tokens...)' : currentPhase === 'decoding' ? '⚡ Decoding (generating tokens...)' : currentPhase === 'completed' ? '✅ Turn Complete' : 'Run the simulation to see both phases side by side'}
-            </span>
+            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{phaseStatusText}</span>
           </div>
 
-          {/* Overall agent loop progress bar */}
+          {/* Overall agent loop progress: elapsed / total (rAF-driven — no transition) */}
           <div style={{ marginBottom: '14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#334155' }}>
-                Overall Agent Loop Progress
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', fontWeight: '800', color: '#D97706' }}>
+            <div className="field-head" style={{ marginBottom: '5px' }}>
+              <span className="field-label">Overall loop progress</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', fontWeight: 700, color: 'var(--agent)', fontVariantNumeric: 'tabular-nums' }}>
                 {formatTime(elapsedSim)} / {formatTime(totalAgentWalltime)}
               </span>
             </div>
-            <div style={{ height: '10px', background: '#F1F5F9', borderRadius: '5px', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%',
-                width: `${totalAgentWalltime > 0 ? Math.min(100, (elapsedSim / totalAgentWalltime) * 100) : 0}%`,
-                background: 'linear-gradient(90deg, #F59E0B 0%, #D97706 100%)',
-                borderRadius: '5px'
-              }} />
+            <div className="progress-track">
+              <div
+                className="progress-fill"
+                style={{
+                  width: `${totalAgentWalltime > 0 ? Math.min(100, (elapsedSim / totalAgentWalltime) * 100) : 0}%`,
+                  background: 'var(--agent)'
+                }}
+              />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+          <div className="grid-auto" style={{ '--grid-min': '280px' }}>
             {/* Prefill Panel */}
-            <div style={{
-              padding: '14px',
-              borderRadius: '12px',
-              background: currentPhase === 'prefilling' ? '#EFF6FF' : '#F8FAFC',
-              border: `2px solid ${currentPhase === 'prefilling' ? '#2563EB' : '#E2E8F0'}`,
-              transition: 'all 0.2s ease'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#1E40AF' }}>
-                  Prefill — Prompt Ingestion
+            <div
+              className="panel-inset"
+              style={{
+                borderColor: currentPhase === 'prefilling' ? 'var(--prefill-border)' : 'var(--border)',
+                background: currentPhase === 'prefilling' ? 'var(--prefill-dim)' : 'var(--bg-inset)',
+                transition: 'background 0.2s ease, border-color 0.2s ease'
+              }}
+            >
+              <div className="field-head" style={{ marginBottom: '6px' }}>
+                <span className="panel-title" style={{ color: 'var(--prefill)', fontSize: '0.74rem' }}>
+                  Prefill · prompt ingestion
                 </span>
-                <span className="badge badge-prefill" style={{ fontSize: '0.68rem' }}>
+                <span className="tag tag-prefill">
                   {formatTokens(activeTurnItem ? activeTurnItem.newTokensPrefilled : 0)} tok
                 </span>
               </div>
 
-              {/* Progress bar */}
-              <div style={{ height: '8px', background: '#DBEAFE', borderRadius: '4px', overflow: 'hidden', margin: '8px 0' }}>
-                <div style={{
-                  height: '100%',
-                  width: `${activeTurnItem && activeTurnItem.newTokensPrefilled > 0 ? Math.min(100, (prefillProgress / activeTurnItem.newTokensPrefilled) * 100) : 0}%`,
-                  background: 'linear-gradient(90deg, #3B82F6 0%, #1D4ED8 100%)',
-                  borderRadius: '4px'
-                }} />
+              {/* Progress bar: processed / assigned tokens (rAF-driven — no transition) */}
+              <div className="progress-track" style={{ margin: '8px 0' }}>
+                <div
+                  className="progress-fill"
+                  style={{
+                    width: `${activeTurnItem && activeTurnItem.newTokensPrefilled > 0 ? Math.min(100, (prefillProgress / activeTurnItem.newTokensPrefilled) * 100) : 0}%`,
+                    background: 'var(--prefill)'
+                  }}
+                />
               </div>
 
               {/* Token stream — windowed to match real token count */}
-              <div style={{
-                background: '#FFFFFF',
-                border: '1px solid #BFDBFE',
-                borderRadius: '8px',
-                padding: '10px',
-                height: '160px',
-                overflowY: 'auto',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.82rem',
-                color: '#1E3A8A',
-                lineHeight: 1.6,
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '3px',
-                alignContent: 'flex-start'
-              }}>
+              <div className="stream-box" style={{ height: '150px', fontSize: '0.8rem' }}>
                 {(() => {
                   const words = streamWords(prefillProgress, SAMPLE_PROMPT_WORDS);
                   const { totalWords, lap, visible } = wordWindowFor(prefillProgress);
                   if (!activeTurnItem || totalWords === 0) {
                     return (
-                      <span style={{ color: '#94A3B8', fontStyle: 'italic', fontSize: '0.78rem' }}>
-                        {currentPhase === 'prefilling' ? '⏳ Ingesting prompt context...' : 'Waiting for prefill phase...'}
+                      <span className="stream-placeholder">
+                        {currentPhase === 'prefilling' ? 'Ingesting prompt context…' : 'Waiting for prefill phase…'}
                       </span>
                     );
                   }
                   if (visible === 0) {
                     return (
-                      <span style={{ color: '#64748B', fontStyle: 'italic', fontSize: '0.78rem' }}>
-                        ↻ Window {lap} complete — {formatTokens(totalWords * TOKENS_PER_WORD)} tokens ingested, clearing & continuing...
+                      <span className="stream-placeholder">
+                        Window {lap} complete — {formatTokens(totalWords * TOKENS_PER_WORD)} tokens ingested, clearing & continuing…
                       </span>
                     );
                   }
@@ -591,8 +554,8 @@ export default function AgenticVisualizer({
                     <span
                       key={`${lap}-${i}`}
                       style={{
-                        background: i === words.length - 1 ? '#DBEAFE' : 'transparent',
-                        color: '#1E3A8A',
+                        background: i === words.length - 1 ? 'var(--prefill-dim)' : 'transparent',
+                        color: i === words.length - 1 ? 'var(--prefill)' : 'var(--text-main)',
                         borderRadius: '3px',
                         padding: '0 2px'
                       }}
@@ -603,70 +566,57 @@ export default function AgenticVisualizer({
                 })()}
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: '#1E3A8A' }}>
-                <span>Tokens Ingested: <strong>{prefillProgress.toLocaleString()}</strong> / {activeTurnItem ? activeTurnItem.newTokensPrefilled.toLocaleString() : '0'}</span>
-                <span>≈{TOKENS_PER_WORD} tok/word · {WORD_WINDOW}-word window</span>
+              <div className="field-head" style={{ marginTop: '8px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                <span>Ingested <strong style={{ color: 'var(--text-main)' }}>{prefillProgress.toLocaleString()}</strong> / {activeTurnItem ? activeTurnItem.newTokensPrefilled.toLocaleString() : '0'}</span>
+                <span>≈{TOKENS_PER_WORD} tok/word</span>
               </div>
             </div>
 
             {/* Decode Panel */}
-            <div style={{
-              padding: '14px',
-              borderRadius: '12px',
-              background: currentPhase === 'decoding' ? '#ECFDF5' : '#F8FAFC',
-              border: `2px solid ${currentPhase === 'decoding' ? '#059669' : '#E2E8F0'}`,
-              transition: 'all 0.2s ease'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#065F46' }}>
-                  Decode — Token Generation
+            <div
+              className="panel-inset"
+              style={{
+                borderColor: currentPhase === 'decoding' ? 'var(--decode-border)' : 'var(--border)',
+                background: currentPhase === 'decoding' ? 'var(--decode-dim)' : 'var(--bg-inset)',
+                transition: 'background 0.2s ease, border-color 0.2s ease'
+              }}
+            >
+              <div className="field-head" style={{ marginBottom: '6px' }}>
+                <span className="panel-title" style={{ color: 'var(--decode)', fontSize: '0.74rem' }}>
+                  Decode · token generation
                 </span>
-                <span className="badge badge-decode" style={{ fontSize: '0.68rem' }}>
+                <span className="tag tag-decode">
                   {formatTokens(activeTurnItem ? activeTurnItem.decodeTokens : 0)} tok
                 </span>
               </div>
 
-              {/* Progress bar */}
-              <div style={{ height: '8px', background: '#D1FAE5', borderRadius: '4px', overflow: 'hidden', margin: '8px 0' }}>
-                <div style={{
-                  height: '100%',
-                  width: `${activeTurnItem && activeTurnItem.decodeTokens > 0 ? Math.min(100, (decodeProgress / activeTurnItem.decodeTokens) * 100) : 0}%`,
-                  background: 'linear-gradient(90deg, #10B981 0%, #047857 100%)',
-                  borderRadius: '4px'
-                }} />
+              {/* Progress bar: processed / assigned tokens (rAF-driven — no transition) */}
+              <div className="progress-track" style={{ margin: '8px 0' }}>
+                <div
+                  className="progress-fill"
+                  style={{
+                    width: `${activeTurnItem && activeTurnItem.decodeTokens > 0 ? Math.min(100, (decodeProgress / activeTurnItem.decodeTokens) * 100) : 0}%`,
+                    background: 'var(--decode)'
+                  }}
+                />
               </div>
 
               {/* Token stream — windowed to match real token count */}
-              <div style={{
-                background: '#FFFFFF',
-                border: '1px solid #A7F3D0',
-                borderRadius: '8px',
-                padding: '10px',
-                height: '160px',
-                overflowY: 'auto',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.82rem',
-                color: '#064E3B',
-                lineHeight: 1.6,
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '3px',
-                alignContent: 'flex-start'
-              }}>
+              <div className="stream-box" style={{ height: '150px', fontSize: '0.8rem' }}>
                 {(() => {
                   const words = streamWords(decodeProgress, SAMPLE_DECODE_WORDS);
                   const { totalWords, lap, visible } = wordWindowFor(decodeProgress);
                   if (!activeTurnItem || totalWords === 0) {
                     return (
-                      <span style={{ color: '#94A3B8', fontStyle: 'italic', fontSize: '0.78rem' }}>
-                        {currentPhase === 'decoding' ? '⚡ Generating tokens...' : 'Waiting for decode phase...'}
+                      <span className="stream-placeholder">
+                        {currentPhase === 'decoding' ? 'Generating tokens…' : 'Waiting for decode phase…'}
                       </span>
                     );
                   }
                   if (visible === 0) {
                     return (
-                      <span style={{ color: '#64748B', fontStyle: 'italic', fontSize: '0.78rem' }}>
-                        ↻ Window {lap} complete — {formatTokens(totalWords * TOKENS_PER_WORD)} tokens generated, clearing & continuing...
+                      <span className="stream-placeholder">
+                        Window {lap} complete — {formatTokens(totalWords * TOKENS_PER_WORD)} tokens generated, clearing & continuing…
                       </span>
                     );
                   }
@@ -674,8 +624,8 @@ export default function AgenticVisualizer({
                     <span
                       key={`${lap}-${i}`}
                       style={{
-                        background: i === words.length - 1 ? '#D1FAE5' : 'transparent',
-                        color: '#064E3B',
+                        background: i === words.length - 1 ? 'var(--decode-dim)' : 'transparent',
+                        color: i === words.length - 1 ? 'var(--decode)' : 'var(--text-main)',
                         borderRadius: '3px',
                         padding: '0 2px'
                       }}
@@ -686,31 +636,29 @@ export default function AgenticVisualizer({
                 })()}
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: '#064E3B' }}>
-                <span>Tokens Generated: <strong>{decodeProgress.toLocaleString()}</strong> / {activeTurnItem ? activeTurnItem.decodeTokens.toLocaleString() : '0'}</span>
-                <span>≈{TOKENS_PER_WORD} tok/word · {WORD_WINDOW}-word window</span>
+              <div className="field-head" style={{ marginTop: '8px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                <span>Generated <strong style={{ color: 'var(--text-main)' }}>{decodeProgress.toLocaleString()}</strong> / {activeTurnItem ? activeTurnItem.decodeTokens.toLocaleString() : '0'}</span>
+                <span>≈{TOKENS_PER_WORD} tok/word</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Gantt / Waterfall Timeline Chart */}
-        <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>
-              Turn-by-Turn Walltime Waterfall Chart (Prefill vs Decode)
-            </span>
-            <div style={{ display: 'flex', gap: '14px', fontSize: '0.75rem', fontWeight: '700' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#2563EB' }}>
-                <span style={{ width: '10px', height: '10px', background: '#2563EB', borderRadius: '2px' }} /> Prefill Phase
+        <div className="panel-inset" style={{ marginBottom: '20px' }}>
+          <div className="field-head" style={{ marginBottom: '14px', flexWrap: 'wrap' }}>
+            <span className="section-label">Turn-by-turn walltime waterfall</span>
+            <div style={{ display: 'flex', gap: '14px', fontSize: '0.72rem', fontWeight: 600 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--prefill)' }}>
+                <span style={{ width: '10px', height: '10px', background: 'var(--prefill)', borderRadius: '2px' }} /> Prefill
               </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#059669' }}>
-                <span style={{ width: '10px', height: '10px', background: '#059669', borderRadius: '2px' }} /> Decode Phase
+              <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--decode)' }}>
+                <span style={{ width: '10px', height: '10px', background: 'var(--decode)', borderRadius: '2px' }} /> Decode
               </span>
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {turnBreakdown.map((turnItem, turnIndex) => {
               const isCurrentTurn = activeTurn === turnItem.turn;
               const {
@@ -726,24 +674,24 @@ export default function AgenticVisualizer({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '12px',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    background: isCurrentTurn ? '#FEF3C7' : '#FFFFFF',
-                    border: `1px solid ${isCurrentTurn ? '#F59E0B' : '#E2E8F0'}`,
-                    transition: 'all 0.15s ease'
+                    padding: '7px 10px',
+                    borderRadius: 'var(--radius-md)',
+                    background: isCurrentTurn ? 'var(--agent-dim)' : 'var(--bg-panel)',
+                    border: `1px solid ${isCurrentTurn ? 'var(--agent-border)' : 'var(--border)'}`,
+                    transition: 'background 0.15s ease, border-color 0.15s ease'
                   }}
                 >
-                  <div style={{ width: '80px', flexShrink: 0 }}>
-                    <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0F172A' }}>
-                      Turn {turnItem.turn}
+                  <div style={{ width: '76px', flexShrink: 0 }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>
+                      T{turnItem.turn}
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: '#64748B' }}>
-                      {formatTokens(turnItem.totalPromptTokens)} tok prompt
+                    <div style={{ fontSize: '0.66rem', color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>
+                      {formatTokens(turnItem.totalPromptTokens)} tok
                     </div>
                   </div>
 
-                  {/* Waterfall Bar */}
-                  <div style={{ flex: 1, height: '26px', background: '#F1F5F9', borderRadius: '6px', display: 'flex', overflow: 'hidden', position: 'relative' }}>
+                  {/* Waterfall Bar — rows use cumulative left offsets */}
+                  <div style={{ flex: 1, height: '22px', background: 'var(--bg-raised)', borderRadius: 'var(--radius-sm)', position: 'relative', overflow: 'hidden', minWidth: 0 }}>
                     <div
                       style={{
                         width: `${barWidth}%`,
@@ -757,14 +705,15 @@ export default function AgenticVisualizer({
                       <div
                         style={{
                           width: `${prefillRatio}%`,
-                          background: turnItem.isCached ? '#3B82F6' : '#1D4ED8',
+                          background: turnItem.isCached ? 'var(--prefill)' : '#1D6FA8',
                           height: '100%',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: '#FFFFFF',
-                          fontSize: '0.68rem',
-                          fontWeight: '700'
+                          color: '#04131C',
+                          fontSize: '0.64rem',
+                          fontWeight: 700,
+                          fontFamily: 'var(--font-mono)'
                         }}
                         title={`Turn ${turnItem.turn} Prefill: ${formatTime(turnItem.prefillTime)} (${turnItem.newTokensPrefilled} tok)`}
                       >
@@ -775,14 +724,15 @@ export default function AgenticVisualizer({
                       <div
                         style={{
                           width: `${100 - prefillRatio}%`,
-                          background: '#059669',
+                          background: 'var(--decode)',
                           height: '100%',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: '#FFFFFF',
-                          fontSize: '0.68rem',
-                          fontWeight: '700'
+                          color: '#04170F',
+                          fontSize: '0.64rem',
+                          fontWeight: 700,
+                          fontFamily: 'var(--font-mono)'
                         }}
                         title={`Turn ${turnItem.turn} Decode: ${formatTime(turnItem.decodeTime)} (${turnItem.decodeTokens} tok)`}
                       >
@@ -792,12 +742,12 @@ export default function AgenticVisualizer({
                   </div>
 
                   {/* Turn Walltime Total */}
-                  <div style={{ width: '90px', textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', fontWeight: '800', color: '#0F172A' }}>
+                  <div style={{ width: '86px', textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>
                       {formatTime(turnItem.turnWalltime)}
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: '#64748B' }}>
-                      {turnItem.isCached ? '⚡ Cached' : 'Full Ingest'}
+                    <div style={{ fontSize: '0.64rem', color: turnItem.isCached ? 'var(--prefill)' : 'var(--text-subtle)' }}>
+                      {turnItem.isCached ? 'cached' : 'full ingest'}
                     </div>
                   </div>
                 </div>
@@ -807,51 +757,48 @@ export default function AgenticVisualizer({
         </div>
 
         {/* Detailed Per-Turn Metrics Table */}
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', textAlign: 'left' }}>
+        <div className="table-wrap">
+          <table className="data-table">
             <thead>
-              <tr style={{ background: '#F1F5F9', borderBottom: '2px solid #CBD5E1', color: '#475569' }}>
-                <th style={{ padding: '10px 12px' }}>Turn #</th>
-                <th style={{ padding: '10px 12px' }}>Agent Tool Phase</th>
-                <th style={{ padding: '10px 12px' }}>Total History Context</th>
-                <th style={{ padding: '10px 12px' }}>Prefilled Tokens</th>
-                <th style={{ padding: '10px 12px' }}>Prefill Time</th>
-                <th style={{ padding: '10px 12px' }}>Decode Time</th>
-                <th style={{ padding: '10px 12px' }}>Turn Walltime</th>
-                <th style={{ padding: '10px 12px' }}>Cumulative Walltime</th>
+              <tr>
+                <th>Turn</th>
+                <th>Agent Tool Phase</th>
+                <th>History Context</th>
+                <th>Prefilled Tokens</th>
+                <th>Prefill Time</th>
+                <th>Decode Time</th>
+                <th>Turn Walltime</th>
+                <th>Cumulative</th>
               </tr>
             </thead>
             <tbody>
               {turnBreakdown.map((t) => (
                 <tr
                   key={t.turn}
-                  style={{
-                    borderBottom: '1px solid #E2E8F0',
-                    background: activeTurn === t.turn ? '#FEF3C7' : 'transparent'
-                  }}
+                  className={activeTurn === t.turn ? 'row-active' : undefined}
                 >
-                  <td style={{ padding: '10px 12px', fontWeight: '800', color: '#0F172A' }}>
-                    Turn {t.turn}
+                  <td style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                    T{t.turn}
                   </td>
-                  <td style={{ padding: '10px 12px', color: '#334155', fontWeight: '600' }}>
+                  <td style={{ color: 'var(--text-muted)' }}>
                     {t.label}
                   </td>
-                  <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)' }}>
+                  <td className="num">
                     {formatTokens(t.totalPromptTokens)} tok
                   </td>
-                  <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', color: t.isCached ? '#2563EB' : '#1E40AF', fontWeight: '700' }}>
-                    {formatTokens(t.newTokensPrefilled)} tok {t.isCached && '⚡'}
+                  <td className="num" style={{ color: 'var(--prefill)', fontWeight: 600 }}>
+                    {formatTokens(t.newTokensPrefilled)} tok{t.isCached ? ' ⚡' : ''}
                   </td>
-                  <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', color: '#2563EB' }}>
+                  <td className="num" style={{ color: 'var(--prefill)' }}>
                     {formatTime(t.prefillTime)}
                   </td>
-                  <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', color: '#059669' }}>
+                  <td className="num" style={{ color: 'var(--decode)' }}>
                     {formatTime(t.decodeTime)}
                   </td>
-                  <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#D97706' }}>
+                  <td className="num" style={{ fontWeight: 700, color: 'var(--agent)' }}>
                     {formatTime(t.turnWalltime)}
                   </td>
-                  <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#0F172A' }}>
+                  <td className="num" style={{ fontWeight: 700 }}>
                     {formatTime(t.cumulativeWalltime)}
                   </td>
                 </tr>
@@ -860,7 +807,7 @@ export default function AgenticVisualizer({
           </table>
         </div>
 
-      </div>
+      </section>
 
     </div>
   );

@@ -1,63 +1,75 @@
 import React from 'react';
-import { HelpCircle, Gauge, Zap, Play } from 'lucide-react';
+import { HelpCircle, Gauge, Zap, Play, Bot } from 'lucide-react';
 import { demoUrl } from '../utils/urlState';
 
 export default function TheoryGuide() {
+  const bulletStyle = { fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '18px', lineHeight: 1.55 };
+  const formulaStyle = {
+    fontFamily: 'var(--font-mono)',
+    background: 'var(--bg-inset)',
+    padding: '6px 10px',
+    borderRadius: 'var(--radius-sm)',
+    border: '1px solid var(--border-strong)',
+    margin: '6px 0',
+    fontWeight: 600,
+    fontSize: '0.8rem'
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '16px' }}>
-      
-      <div className="material-card" style={{ padding: '24px', background: '#FFFFFF' }}>
-        <h2 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#0F172A', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <HelpCircle size={24} color="#4F46E5" />
-          <span>LLM Inference Mechanics: Prefill vs. Decode Explained</span>
+    <div className="stack">
+
+      <section className="panel" aria-label="Theory and equations">
+        <h2 className="panel-title" style={{ marginBottom: '16px' }}>
+          <HelpCircle size={16} />
+          <span>LLM Inference Mechanics · Prefill vs Decode</span>
         </h2>
 
         {/* Comparative Dual Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', marginBottom: '28px' }}>
-          
+        <div className="grid-auto" style={{ '--grid-min': '320px', marginBottom: '16px' }}>
+
           {/* Prefill Explanation */}
-          <div style={{ padding: '20px', borderRadius: '14px', background: '#EFF6FF', border: '1px solid #BFDBFE' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <Zap size={20} color="#2563EB" />
-              <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#1E40AF' }}>
-                1. Prefill Phase (Prompt Ingestion)
+          <div className="panel-inset" style={{ borderLeft: '2px solid var(--prefill)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+              <Zap size={16} style={{ color: 'var(--prefill)' }} />
+              <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--prefill)' }}>
+                1 · Prefill — prompt ingestion
               </h3>
             </div>
-            
-            <p style={{ fontSize: '0.85rem', color: '#1E3A8A', lineHeight: 1.6, marginBottom: '14px' }}>
+
+            <p className="hint-text" style={{ marginBottom: '12px' }}>
               During prefill, the LLM processes the entire input prompt (all N<sub>prompt</sub> tokens) at once. The attention mechanism builds the initial Key-Value (KV) cache for every prompt token.
             </p>
 
-            <ul style={{ fontSize: '0.82rem', color: '#1E3A8A', display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '18px' }}>
-              <li><strong>Bottleneck:</strong> Compute-bound (Tensor Cores / FLOPs).</li>
-              <li><strong>Operation:</strong> Matrix-Matrix Multiplication (GEMM). High arithmetic intensity.</li>
-              <li><strong>User Metric:</strong> <strong>TTFT (Time-To-First-Token)</strong>:
-                <div style={{ fontFamily: 'var(--font-mono)', background: '#FFFFFF', padding: '6px 10px', borderRadius: '6px', border: '1px solid #93C5FD', margin: '6px 0', color: '#1D4ED8', fontWeight: '700' }}>
-                  TTFT = Prompt Tokens / Prefill Speed
+            <ul style={bulletStyle}>
+              <li><strong style={{ color: 'var(--text-main)' }}>Bottleneck:</strong> compute-bound (tensor cores / FLOPs).</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Operation:</strong> matrix-matrix multiplication (GEMM). High arithmetic intensity.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>User metric — TTFT (time to first token):</strong>
+                <div style={{ ...formulaStyle, color: 'var(--prefill)' }}>
+                  TTFT = prompt tokens / prefill speed
                 </div>
               </li>
             </ul>
           </div>
 
           {/* Decode Explanation */}
-          <div style={{ padding: '20px', borderRadius: '14px', background: '#ECFDF5', border: '1px solid #A7F3D0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <Gauge size={20} color="#059669" />
-              <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#065F46' }}>
-                2. Decode Phase (Autoregressive Generation)
+          <div className="panel-inset" style={{ borderLeft: '2px solid var(--decode)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+              <Gauge size={16} style={{ color: 'var(--decode)' }} />
+              <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--decode)' }}>
+                2 · Decode — autoregressive generation
               </h3>
             </div>
-            
-            <p style={{ fontSize: '0.85rem', color: '#064E3B', lineHeight: 1.6, marginBottom: '14px' }}>
-              During decode, tokens are generated strictly one-by-one. For every single generated token, the GPU must read all model parameters and previous KV cache vectors from VRAM into compute registers.
+
+            <p className="hint-text" style={{ marginBottom: '12px' }}>
+              During decode, tokens are generated strictly one by one. For every generated token, the GPU must read all model parameters and previous KV cache vectors from VRAM into compute registers.
             </p>
 
-            <ul style={{ fontSize: '0.82rem', color: '#064E3B', display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '18px' }}>
-              <li><strong>Bottleneck:</strong> Memory Bandwidth-bound (VRAM Memory Transfer rate).</li>
-              <li><strong>Operation:</strong> Matrix-Vector Multiplication (GEMV). Low arithmetic intensity.</li>
-              <li><strong>User Metric:</strong> <strong>TPOT (Time-Per-Output-Token)</strong>:
-                <div style={{ fontFamily: 'var(--font-mono)', background: '#FFFFFF', padding: '6px 10px', borderRadius: '6px', border: '1px solid #6EE7B7', margin: '6px 0', color: '#047857', fontWeight: '700' }}>
-                  TPOT = 1000 / Decode Speed (ms/token)
+            <ul style={bulletStyle}>
+              <li><strong style={{ color: 'var(--text-main)' }}>Bottleneck:</strong> memory bandwidth-bound (VRAM transfer rate).</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Operation:</strong> matrix-vector multiplication (GEMV). Low arithmetic intensity.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>User metric — TPOT (time per output token):</strong>
+                <div style={{ ...formulaStyle, color: 'var(--decode)' }}>
+                  TPOT = 1000 / decode speed (ms/token)
                 </div>
               </li>
             </ul>
@@ -66,41 +78,42 @@ export default function TheoryGuide() {
         </div>
 
         {/* Agentic Loop Theory Section */}
-        <div style={{ background: '#FFFBEB', padding: '20px', borderRadius: '14px', border: '1px solid #FDE68A', marginBottom: '24px' }}>
-          <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#92400E', marginBottom: '10px' }}>
-            🤖 Why Agentic Loops Require Walltime Measurement Per Turn
+        <div className="panel-inset" style={{ borderLeft: '2px solid var(--agent)', marginBottom: '16px' }}>
+          <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--agent)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Bot size={16} />
+            Why agentic loops require per-turn walltime measurement
           </h3>
-          <p style={{ fontSize: '0.85rem', color: '#78350F', lineHeight: 1.6, marginBottom: '12px' }}>
-            An AI Agent operates in a loop: <strong>Plan → Tool Call → Tool Execution → Process Result → Next Action</strong>.
-            With each turn, the conversation context grows larger because previous tool inputs and outputs are appended to the system prompt.
+          <p className="hint-text" style={{ marginBottom: '12px' }}>
+            An AI agent operates in a loop: <strong style={{ color: 'var(--text-main)' }}>Plan → Tool Call → Tool Execution → Process Result → Next Action</strong>.
+            With each turn, the conversation context grows because previous tool inputs and outputs are appended to the prompt.
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
-            <div style={{ background: '#FFFFFF', padding: '12px', borderRadius: '8px', border: '1px solid #FCD34D' }}>
-              <strong style={{ fontSize: '0.82rem', color: '#92400E' }}>Without Prefix Caching:</strong>
-              <p style={{ fontSize: '0.78rem', color: '#78350F', marginTop: '4px' }}>
-                On turn k, the inference server must re-prefill the entire accumulated history P<sub>k</sub>. Prefill latency increases linearly/quadratically per turn, causing high turn walltime!
+          <div className="grid-auto" style={{ '--grid-min': '260px' }}>
+            <div className="panel-inset">
+              <strong style={{ fontSize: '0.8rem', color: 'var(--text-main)' }}>Without prefix caching</strong>
+              <p className="hint-text" style={{ marginTop: '4px' }}>
+                On turn k, the inference server must re-prefill the entire accumulated history P<sub>k</sub>. Prefill latency increases linearly/quadratically per turn, causing high turn walltime.
               </p>
             </div>
-            <div style={{ background: '#FFFFFF', padding: '12px', borderRadius: '8px', border: '1px solid #FCD34D' }}>
-              <strong style={{ fontSize: '0.82rem', color: '#92400E' }}>With Prefix Caching (RadixAttention):</strong>
-              <p style={{ fontSize: '0.78rem', color: '#78350F', marginTop: '4px' }}>
-                The server reuses existing KV cache blocks for turns 1..k-1. It only prefills the NEW tool response tokens ΔP<sub>k</sub>, keeping turn walltimes consistently low!
+            <div className="panel-inset">
+              <strong style={{ fontSize: '0.8rem', color: 'var(--text-main)' }}>With prefix caching (RadixAttention)</strong>
+              <p className="hint-text" style={{ marginTop: '4px' }}>
+                The server reuses existing KV cache blocks for turns 1..k-1. It only prefills the new tool response tokens ΔP<sub>k</sub>, keeping turn walltimes consistently low.
               </p>
             </div>
           </div>
         </div>
 
         {/* Community FAQ — sourced from recurring questions on X */}
-        <div style={{ background: '#F8FAFC', padding: '20px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
-          <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#334155', marginBottom: '6px' }}>
-            ❓ Community FAQ — Speed Setups
+        <div className="panel-inset">
+          <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '4px' }}>
+            Community FAQ — speed setups
           </h3>
-          <p style={{ fontSize: '0.78rem', color: '#64748B', marginBottom: '16px' }}>
+          <p className="hint-text" style={{ marginBottom: '14px' }}>
             Compiled from the questions local-LLM users most often ask on X. Use the tabs above to reproduce each scenario.
           </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {[
               {
                 q: 'Why is my first token so slow, then the rest are fast?',
@@ -146,37 +159,25 @@ export default function TheoryGuide() {
               <details
                 key={i}
                 style={{
-                  background: '#FFFFFF',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '10px',
-                  padding: '12px 16px'
+                  background: 'var(--bg-panel)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '10px 14px'
                 }}
               >
-                <summary style={{ fontWeight: '700', fontSize: '0.88rem', color: '#0F172A', cursor: 'pointer' }}>
+                <summary style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-main)', cursor: 'pointer' }}>
                   {item.q}
                 </summary>
-                <p style={{ fontSize: '0.82rem', color: '#475569', marginTop: '8px', lineHeight: 1.6 }}>
+                <p className="hint-text" style={{ marginTop: '8px' }}>
                   {item.a}
                 </p>
                 {item.demo && (
                   <button
                     onClick={() => { window.location.href = demoUrl(item.demo); }}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      marginTop: '10px',
-                      padding: '6px 12px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      background: 'linear-gradient(135deg, #4F46E5 0%, #3B82F6 100%)',
-                      color: '#FFFFFF',
-                      fontWeight: '700',
-                      fontSize: '0.78rem',
-                      cursor: 'pointer'
-                    }}
+                    className="btn"
+                    style={{ marginTop: '10px', minHeight: '30px', padding: '5px 12px', fontSize: '0.76rem' }}
                   >
-                    <Play size={13} />
+                    <Play size={12} />
                     Try it in the visualizer
                   </button>
                 )}
@@ -185,7 +186,7 @@ export default function TheoryGuide() {
           </div>
         </div>
 
-      </div>
+      </section>
 
     </div>
   );

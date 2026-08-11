@@ -87,8 +87,8 @@ export default function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F8FAFC', paddingBottom: '40px' }}>
-      
+    <div className="app-shell">
+
       {/* Navigation Header */}
       <Header
         activeTab={activeTab}
@@ -99,14 +99,15 @@ export default function App() {
         onShare={handleShare}
       />
 
-      <LocalMaxxingPresetPicker
-        selectedPreset={selectedPreset}
-        onApplyRun={handleApplyLocalMaxxingRun}
-        onContextChange={handleLocalMaxxingContext}
-      />
+      <main className="app-frame stack">
+        <LocalMaxxingPresetPicker
+          selectedPreset={selectedPreset}
+          onApplyRun={handleApplyLocalMaxxingRun}
+          onContextChange={handleLocalMaxxingContext}
+        />
 
-      {/* Speed & Control Panel */}
-      <SpeedControls
+        {/* Speed & Control Panel */}
+        <SpeedControls
         prefillSpeed={prefillSpeed}
         setPrefillSpeed={setPrefillSpeed}
         decodeSpeed={decodeSpeed}
@@ -116,10 +117,9 @@ export default function App() {
         isPlaying={isPlaying}
         setIsPlaying={setIsPlaying}
         onReset={handleReset}
-      />
+        />
 
       {/* Tab Content */}
-      <main style={{ maxWidth: '1400px', margin: '0 auto' }}>
         {activeTab === 'single' && (
           <SingleTurnVisualizer
             prefillSpeed={prefillSpeed}
@@ -158,17 +158,10 @@ export default function App() {
         )}
       </main>
 
-      {/* Material Footer */}
-      <footer style={{
-        textAlign: 'center',
-        padding: '24px 16px',
-        marginTop: '40px',
-        borderTop: '1px solid #E2E8F0',
-        color: '#64748B',
-        fontSize: '0.82rem'
-      }}>
+      {/* Footer */}
+      <footer className="site-footer">
         <p>
-          <strong>LLM Prefill & Decode Speed Visualizer</strong> • Material White Design • Open Source Benchmark Tool
+          <strong>LLM Prefill &amp; Decode Speed Visualizer</strong> · Open source inference benchmark instrument
         </p>
       </footer>
 

@@ -10,14 +10,7 @@ import {
 } from '../utils/localMaxxing';
 
 const selectStyle = {
-  width: '100%',
-  padding: '9px 11px',
-  borderRadius: '8px',
-  border: '1px solid #CBD5E1',
-  background: '#FFFFFF',
-  color: '#0F172A',
-  fontSize: '0.82rem',
-  fontWeight: '600'
+  width: '100%'
 };
 
 export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, onContextChange }) {
@@ -112,28 +105,29 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
   };
 
   return (
-    <section className="material-card" style={{ margin: '16px 16px 0', padding: '16px 20px', background: '#FFFFFF' }}>
+    <section className="panel" aria-label="LocalMaxxing measured presets">
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Database size={19} color="#4F46E5" />
-            <strong style={{ color: '#0F172A', fontSize: '0.95rem' }}>LocalMaxxing measured presets</strong>
-            <span className="badge badge-neutral">Live community runs</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <Database size={16} style={{ color: 'var(--accent)' }} />
+            <strong style={{ color: 'var(--text-main)', fontSize: '0.9rem' }}>LocalMaxxing measured presets</strong>
+            <span className="tag tag-accent">live community runs</span>
           </div>
-          <p style={{ margin: '4px 0 0', color: '#64748B', fontSize: '0.76rem' }}>
+          <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
             Pick one model and quant. Only single-stream runs with measured prefill and decode speeds are shown.
           </p>
         </div>
-        <a href="https://localmaxxing.com/en/leaderboard" target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#4F46E5', fontSize: '0.76rem', fontWeight: '700' }}>
+        <a href="https://localmaxxing.com/en/leaderboard" target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.76rem', fontWeight: 600 }}>
           Open leaderboard <ExternalLink size={13} />
         </a>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 1.2fr) minmax(160px, 0.55fr) minmax(300px, 1.7fr)', gap: '12px', marginTop: '14px' }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', color: '#475569', fontSize: '0.72rem', fontWeight: '700' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginTop: '14px' }}>
+        <label className="field-label" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
           Model repository
           <div style={{ display: 'flex', gap: '6px' }}>
             <input
+              type="text"
               list="localmaxxing-models"
               value={modelInput}
               onChange={event => setModelInput(event.target.value)}
@@ -141,8 +135,8 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
               placeholder={loadingModels ? 'Loading models…' : 'Search or enter Hugging Face model ID'}
               style={{ ...selectStyle, minWidth: 0 }}
             />
-            <button onClick={loadModel} title="Load LocalMaxxing runs for this model" style={{ width: '38px', border: '1px solid #CBD5E1', borderRadius: '8px', background: '#EEF2FF', color: '#4F46E5', cursor: 'pointer' }}>
-              {loadingRuns ? <LoaderCircle size={17} className="spin" /> : <Search size={17} />}
+            <button onClick={loadModel} title="Load LocalMaxxing runs for this model" aria-label="Load runs for model" className="btn btn-icon" style={{ minHeight: '34px', flexShrink: 0 }}>
+              {loadingRuns ? <LoaderCircle size={16} className="spin" /> : <Search size={16} />}
             </button>
           </div>
           <datalist id="localmaxxing-models">
@@ -150,7 +144,7 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
           </datalist>
         </label>
 
-        <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', color: '#475569', fontSize: '0.72rem', fontWeight: '700' }}>
+        <label className="field-label" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
           Quantization
           <select
             value={quantization}
@@ -166,7 +160,7 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
           </select>
         </label>
 
-        <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', color: '#475569', fontSize: '0.72rem', fontWeight: '700' }}>
+        <label className="field-label" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
           Hardware run ({eligibleRuns.length} comparable)
           <select value={selectedRunId} onChange={handleRunChange} disabled={!eligibleRuns.length} style={selectStyle}>
             <option value="">Select hardware to prefill speeds</option>
@@ -175,16 +169,16 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
         </label>
       </div>
 
-      {error && <p style={{ margin: '10px 0 0', color: '#B91C1C', fontSize: '0.76rem', fontWeight: '600' }}>{error}</p>}
+      {error && <p style={{ margin: '10px 0 0', color: 'var(--danger)', fontSize: '0.76rem', fontWeight: 600 }}>{error}</p>}
       {modelId && !loadingRuns && runs.length === 0 && !error && (
-        <p style={{ margin: '10px 0 0', color: '#92400E', fontSize: '0.76rem' }}>No single-stream runs contain both prefill and decode measurements for this model.</p>
+        <p style={{ margin: '10px 0 0', color: 'var(--agent)', fontSize: '0.76rem' }}>No single-stream runs contain both prefill and decode measurements for this model.</p>
       )}
       {selectedRun && (
-        <div style={{ marginTop: '10px', padding: '9px 11px', borderRadius: '8px', background: active ? '#ECFDF5' : '#F8FAFC', border: `1px solid ${active ? '#A7F3D0' : '#E2E8F0'}`, display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap', fontSize: '0.76rem' }}>
-          <span style={{ color: active ? '#065F46' : '#475569', fontWeight: '700' }}>
+        <div className="panel-inset" style={{ marginTop: '10px', borderColor: active ? 'var(--decode-border)' : 'var(--border)', background: active ? 'var(--decode-dim)' : 'var(--bg-inset)', display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap', fontSize: '0.76rem' }}>
+          <span style={{ color: active ? 'var(--decode)' : 'var(--text-muted)', fontWeight: 600 }}>
             {active ? 'Applied' : 'Selected'}: {toLocalPreset(selectedRun).description}
           </span>
-          <a href={`https://localmaxxing.com/en/runs/${selectedRun.id}`} target="_blank" rel="noreferrer" style={{ color: '#4F46E5', fontWeight: '700' }}>View source run</a>
+          <a href={`https://localmaxxing.com/en/runs/${selectedRun.id}`} target="_blank" rel="noreferrer" style={{ fontWeight: 600 }}>View source run</a>
         </div>
       )}
     </section>

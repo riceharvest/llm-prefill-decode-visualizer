@@ -178,25 +178,30 @@ export default function SingleTurnVisualizer({
     ? []
     : Array.from({ length: streamVisible }, (_, i) => sampleWords[(streamLap * 7 + i) % sampleWords.length]);
 
+  const phaseLabel = phase === 'idle' ? 'READY'
+    : phase === 'prefilling' ? 'PHASE 1 · PREFILL'
+    : phase === 'decoding' ? 'PHASE 2 · DECODE'
+    : 'COMPLETED';
+  const phaseTagClass = phase === 'prefilling' ? 'tag-prefill'
+    : phase === 'decoding' || phase === 'completed' ? 'tag-decode' : '';
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '16px' }}>
-      
+    <div className="stack">
+
       {/* Top Parameter Cards */}
-      <div className="material-card" style={{ padding: '20px', background: '#FFFFFF' }}>
-        <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0F172A', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <FileText size={20} color="#4F46E5" />
+      <section className="panel" aria-label="Single-turn chat parameters">
+        <h2 className="panel-title" style={{ marginBottom: '14px' }}>
+          <FileText size={16} />
           <span>Single-Turn Chat Parameters</span>
         </h2>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '280px' }}>
           {/* Prompt Tokens Slider */}
-          <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontWeight: '700', fontSize: '0.85rem', color: '#334155' }}>
-                Input Prompt Length
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#2563EB', fontSize: '1rem' }}>
-                {formatTokens(promptTokens)} tokens
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Input Prompt Length</span>
+              <span className="field-value" style={{ color: 'var(--prefill)' }}>
+                {formatTokens(promptTokens)} tok
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -206,6 +211,7 @@ export default function SingleTurnVisualizer({
                 max="32768"
                 step="128"
                 value={promptTokens}
+                aria-label="Input prompt length in tokens"
                 onChange={(e) => {
                   setPromptTokens(Number(e.target.value));
                   handleReset();
@@ -215,28 +221,27 @@ export default function SingleTurnVisualizer({
               <input
                 type="number"
                 value={promptTokens}
+                aria-label="Input prompt length value"
                 onChange={(e) => {
                   setPromptTokens(Number(e.target.value));
                   handleReset();
                 }}
-                style={{ width: '80px', textAlign: 'right' }}
+                style={{ width: '80px' }}
               />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#94A3B8', marginTop: '6px' }}>
-              <span>128 tok (Short)</span>
-              <span>4,096 tok (RAG)</span>
-              <span>32,768 tok (Long Doc)</span>
+            <div className="field-scale">
+              <span>128 · short</span>
+              <span>4,096 · RAG</span>
+              <span>32,768 · long doc</span>
             </div>
           </div>
 
           {/* Target Output Tokens Slider */}
-          <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontWeight: '700', fontSize: '0.85rem', color: '#334155' }}>
-                Target Output Generation Length
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#059669', fontSize: '1rem' }}>
-                {formatTokens(outputTokens)} tokens
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Target Output Length</span>
+              <span className="field-value" style={{ color: 'var(--decode)' }}>
+                {formatTokens(outputTokens)} tok
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -246,6 +251,7 @@ export default function SingleTurnVisualizer({
                 max="4096"
                 step="32"
                 value={outputTokens}
+                aria-label="Target output generation length in tokens"
                 onChange={(e) => {
                   setOutputTokens(Number(e.target.value));
                   handleReset();
@@ -255,210 +261,159 @@ export default function SingleTurnVisualizer({
               <input
                 type="number"
                 value={outputTokens}
+                aria-label="Target output generation length value"
                 onChange={(e) => {
                   setOutputTokens(Number(e.target.value));
                   handleReset();
                 }}
-                style={{ width: '80px', textAlign: 'right' }}
+                style={{ width: '80px' }}
               />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#94A3B8', marginTop: '6px' }}>
-              <span>32 tok (Concise)</span>
-              <span>512 tok (Standard)</span>
-              <span>4,096 tok (Code / Report)</span>
+            <div className="field-scale">
+              <span>32 · concise</span>
+              <span>512 · standard</span>
+              <span>4,096 · code / report</span>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Main Visualizer Stage */}
-      <div className="material-card-elevated" style={{ padding: '24px', background: '#FFFFFF' }}>
-        
+      <section className="panel" aria-label="Simulation stage">
+
         {/* Status Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: '12px',
-              height: '12px',
-              borderRadius: '50%',
-              background: phase === 'prefilling' ? '#2563EB' : phase === 'decoding' ? '#059669' : phase === 'completed' ? '#10B981' : '#94A3B8',
-              boxShadow: phase !== 'idle' ? `0 0 10px ${phase === 'prefilling' ? '#2563EB' : '#059669'}` : 'none'
-            }} />
-            <span style={{ fontWeight: '800', fontSize: '1.05rem', color: '#0F172A' }}>
-              Execution Phase: {phase === 'idle' ? 'Ready to Simulate' : phase === 'prefilling' ? '1. Prefill (Prompt Ingestion)' : phase === 'decoding' ? '2. Decode (Autoregressive Generation)' : 'Completed'}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className={`tag ${phaseTagClass}`} style={{ fontSize: '0.72rem', padding: '3px 9px' }}>
+              {phaseLabel}
+            </span>
+            <span className="hint-text" style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
+              {formatTime(elapsedTime)} <span style={{ color: 'var(--text-subtle)' }}>/ {formatTime(expectedTotalTime)}</span>
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ fontSize: '0.85rem', color: '#475569' }}>
-              Simulated Walltime: <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '1.1rem', color: '#0F172A' }}>{formatTime(elapsedTime)}</strong> / {formatTime(expectedTotalTime)}
-            </div>
-
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               onClick={() => setIsPlaying(!isPlaying)}
-              style={{
-                padding: '8px 18px',
-                borderRadius: '8px',
-                border: 'none',
-                background: isPlaying ? '#F59E0B' : '#4F46E5',
-                color: '#FFFFFF',
-                fontWeight: '700',
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
+              className={`btn ${isPlaying ? 'btn-warn' : 'btn-accent'}`}
             >
-              {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+              {isPlaying ? <Pause size={15} /> : <Play size={15} />}
               {isPlaying ? 'Pause' : 'Simulate Run'}
             </button>
 
             <button
               onClick={handleReset}
               title="Reset simulation (phase, token progress, stream, elapsed time)"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                background: '#FFFFFF',
-                color: '#475569',
-                fontWeight: '700',
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
+              className="btn"
             >
-              <RotateCcw size={16} />
+              <RotateCcw size={15} />
               Reset
             </button>
           </div>
         </div>
 
         {/* Phase Split Dual Progress Bars */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-          
+        <div className="grid-auto" style={{ '--grid-min': '300px', marginBottom: '20px' }}>
+
           {/* Prefill Block Visualizer */}
-          <div style={{
-            padding: '16px',
-            borderRadius: '12px',
-            background: phase === 'prefilling' ? '#EFF6FF' : '#F8FAFC',
-            border: `2px solid ${phase === 'prefilling' ? '#2563EB' : '#E2E8F0'}`,
-            transition: 'all 0.2s ease'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Zap size={18} color="#2563EB" />
-                <span style={{ fontWeight: '800', fontSize: '0.9rem', color: '#1E40AF' }}>
-                  Phase 1: Prefill (TTFT)
-                </span>
-              </div>
-              <span className="badge badge-prefill" style={{ fontSize: '0.72rem' }}>
-                {prefillSpeed.toLocaleString()} tok/s
+          <div
+            className="panel-inset"
+            style={{
+              borderColor: phase === 'prefilling' ? 'var(--prefill-border)' : 'var(--border)',
+              background: phase === 'prefilling' ? 'var(--prefill-dim)' : 'var(--bg-inset)',
+              transition: 'background 0.2s ease, border-color 0.2s ease'
+            }}
+          >
+            <div className="field-head" style={{ marginBottom: '4px' }}>
+              <span className="panel-title" style={{ color: 'var(--prefill)' }}>
+                <Zap size={15} style={{ color: 'var(--prefill)' }} />
+                Phase 1 · Prefill (TTFT)
               </span>
+              <span className="tag tag-prefill">{prefillSpeed.toLocaleString()} tok/s</span>
             </div>
 
-            {/* Progress indicator */}
-            <div style={{ height: '10px', background: '#DBEAFE', borderRadius: '5px', overflow: 'hidden', margin: '12px 0 8px 0' }}>
-              <div style={{
-                height: '100%',
-                width: `${promptTokens > 0 ? Math.min(100, (currentPrefillProgress / promptTokens) * 100) : 0}%`,
-                background: 'linear-gradient(90deg, #3B82F6 0%, #1D4ED8 100%)',
-                borderRadius: '5px',
-                transition: simSpeedMultiplier === 'instant' ? 'none' : 'width 0.1s linear'
-              }} />
+            {/* Progress indicator (rAF-driven width — no transition) */}
+            <div className="progress-track" style={{ margin: '10px 0 8px' }}>
+              <div
+                className="progress-fill"
+                style={{
+                  width: `${promptTokens > 0 ? Math.min(100, (currentPrefillProgress / promptTokens) * 100) : 0}%`,
+                  background: 'var(--prefill)'
+                }}
+              />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#1E3A8A' }}>
-              <span>Tokens Processed: <strong>{currentPrefillProgress.toLocaleString()}</strong> / {promptTokens.toLocaleString()}</span>
-              <span>TTFT: <strong>{formatTime(expectedTTFT)}</strong></span>
+            <div className="field-head" style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+              <span>Ingested <strong style={{ color: 'var(--text-main)' }}>{currentPrefillProgress.toLocaleString()}</strong> / {promptTokens.toLocaleString()} tok</span>
+              <span>TTFT <strong style={{ color: 'var(--prefill)' }}>{formatTime(expectedTTFT)}</strong></span>
             </div>
-            
-            <p style={{ fontSize: '0.73rem', color: '#3B82F6', marginTop: '8px' }}>
-              💡 Compute-bound parallel matrix multiplication. Builds Key-Value (KV) cache for all {promptTokens.toLocaleString()} prompt tokens.
+
+            <p className="hint-text" style={{ marginTop: '8px' }}>
+              Compute-bound parallel matrix multiplication. Builds the KV cache for all {promptTokens.toLocaleString()} prompt tokens.
             </p>
           </div>
 
           {/* Decode Block Visualizer */}
-          <div style={{
-            padding: '16px',
-            borderRadius: '12px',
-            background: phase === 'decoding' ? '#ECFDF5' : '#F8FAFC',
-            border: `2px solid ${phase === 'decoding' ? '#059669' : '#E2E8F0'}`,
-            transition: 'all 0.2s ease'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Gauge size={18} color="#059669" />
-                <span style={{ fontWeight: '800', fontSize: '0.9rem', color: '#065F46' }}>
-                  Phase 2: Decode (Generation)
-                </span>
-              </div>
-              <span className="badge badge-decode" style={{ fontSize: '0.72rem' }}>
-                {decodeSpeed.toLocaleString()} tok/s ({Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms/tok` : '∞ ms/tok'})
+          <div
+            className="panel-inset"
+            style={{
+              borderColor: phase === 'decoding' ? 'var(--decode-border)' : 'var(--border)',
+              background: phase === 'decoding' ? 'var(--decode-dim)' : 'var(--bg-inset)',
+              transition: 'background 0.2s ease, border-color 0.2s ease'
+            }}
+          >
+            <div className="field-head" style={{ marginBottom: '4px' }}>
+              <span className="panel-title" style={{ color: 'var(--decode)' }}>
+                <Gauge size={15} style={{ color: 'var(--decode)' }} />
+                Phase 2 · Decode (Generation)
+              </span>
+              <span className="tag tag-decode">
+                {decodeSpeed.toLocaleString()} tok/s · {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms/tok` : '∞ ms/tok'}
               </span>
             </div>
 
-            {/* Progress indicator */}
-            <div style={{ height: '10px', background: '#D1FAE5', borderRadius: '5px', overflow: 'hidden', margin: '12px 0 8px 0' }}>
-              <div style={{
-                height: '100%',
-                width: `${outputTokens > 0 ? Math.min(100, (currentDecodeTokens / outputTokens) * 100) : 0}%`,
-                background: 'linear-gradient(90deg, #10B981 0%, #047857 100%)',
-                borderRadius: '5px',
-                transition: simSpeedMultiplier === 'instant' ? 'none' : 'width 0.1s linear'
-              }} />
+            {/* Progress indicator (rAF-driven width — no transition) */}
+            <div className="progress-track" style={{ margin: '10px 0 8px' }}>
+              <div
+                className="progress-fill"
+                style={{
+                  width: `${outputTokens > 0 ? Math.min(100, (currentDecodeTokens / outputTokens) * 100) : 0}%`,
+                  background: 'var(--decode)'
+                }}
+              />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#064E3B' }}>
-              <span>Tokens Generated: <strong>{currentDecodeTokens.toLocaleString()}</strong> / {outputTokens.toLocaleString()}</span>
-              <span>Decode Walltime: <strong>{formatTime(expectedDecodeTime)}</strong></span>
+            <div className="field-head" style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+              <span>Generated <strong style={{ color: 'var(--text-main)' }}>{currentDecodeTokens.toLocaleString()}</strong> / {outputTokens.toLocaleString()} tok</span>
+              <span>Decode <strong style={{ color: 'var(--decode)' }}>{formatTime(expectedDecodeTime)}</strong></span>
             </div>
 
-            <p style={{ fontSize: '0.73rem', color: '#059669', marginTop: '8px' }}>
-              💡 Memory-bandwidth bound autoregressive loop. Fetches all model weights & KV cache per token generated.
+            <p className="hint-text" style={{ marginTop: '8px' }}>
+              Memory-bandwidth bound autoregressive loop. Reads all model weights &amp; KV cache per generated token.
             </p>
           </div>
 
         </div>
 
         {/* Dynamic Token Stream & Simulated Output */}
-        <div style={{ background: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '16px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Live Simulated Autoregressive Decode Stream ({currentDecodeTokens} tokens)
+        <div className="panel-inset" style={{ marginBottom: '20px' }}>
+          <div className="field-head" style={{ marginBottom: '10px' }}>
+            <span className="section-label">
+              Decode stream · {currentDecodeTokens} tokens
             </span>
-            <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: '#059669', fontWeight: '700' }}>
-              TPOT: {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms / token` : '∞ ms / token'}
+            <span style={{ fontSize: '0.74rem', fontFamily: 'var(--font-mono)', color: 'var(--decode)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+              TPOT {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms'}
             </span>
           </div>
 
-          <div style={{
-            background: '#FFFFFF',
-            border: '1px solid #CBD5E1',
-            borderRadius: '8px',
-            padding: '14px',
-            height: '160px',
-            overflowY: 'auto',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.88rem',
-            color: '#0F172A',
-            lineHeight: 1.6,
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '4px',
-            alignContent: 'flex-start'
-          }}>
+          <div className="stream-box">
             {streamWordsVisible.length === 0 ? (
-              <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>
+              <span className="stream-placeholder">
                 {phase === 'prefilling'
-                  ? '⏳ Ingesting prompt (Prefill phase active)...'
+                  ? 'Ingesting prompt — prefill phase active…'
                   : totalStreamWords > 0
-                    ? `↻ Window ${streamLap} complete — clearing & continuing...`
-                    : 'Click "Simulate Run" to watch token streaming visualizer.'}
+                    ? `Window ${streamLap} complete — clearing & continuing…`
+                    : 'Press "Simulate Run" to watch the token stream.'}
               </span>
             ) : (
               streamWordsVisible.map((word, idx) => (
@@ -466,8 +421,8 @@ export default function SingleTurnVisualizer({
                   key={`${streamLap}-${idx}`}
                   className="animate-token"
                   style={{
-                    background: idx === streamWordsVisible.length - 1 ? '#D1FAE5' : 'transparent',
-                    color: idx === streamWordsVisible.length - 1 ? '#047857' : '#0F172A',
+                    background: idx === streamWordsVisible.length - 1 ? 'var(--decode-dim)' : 'transparent',
+                    color: idx === streamWordsVisible.length - 1 ? 'var(--decode)' : 'var(--text-main)',
                     padding: '0 2px',
                     borderRadius: '3px',
                     fontWeight: idx === streamWordsVisible.length - 1 ? '700' : '400'
@@ -477,116 +432,99 @@ export default function SingleTurnVisualizer({
                 </span>
               ))
             )}
-            {phase === 'decoding' && (
-              <span style={{ display: 'inline-block', width: '8px', height: '16px', background: '#059669', marginLeft: '2px', animation: 'pulse-subtle 0.8s infinite' }} />
-            )}
+            {phase === 'decoding' && <span className="stream-cursor" />}
           </div>
         </div>
 
         {/* Walltime & Performance Breakdown Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-          
-          <div style={{ background: '#F1F5F9', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
-              TTFT (Time To First Token)
-            </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.4rem', fontWeight: '800', color: '#2563EB', marginTop: '4px' }}>
+        <div className="metric-grid">
+
+          <div className="metric" style={{ borderLeftColor: 'var(--prefill)' }}>
+            <div className="metric-label">TTFT · time to first token</div>
+            <div className="metric-value" style={{ color: 'var(--prefill)' }}>
               {formatTime(expectedTTFT)}
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: '4px' }}>
-              Prompt prefill latency
-            </div>
+            <div className="metric-sub">Prompt prefill latency</div>
           </div>
 
-          <div style={{ background: '#F1F5F9', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
-              TPOT (Time Per Output Token)
-            </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.4rem', fontWeight: '800', color: '#059669', marginTop: '4px' }}>
+          <div className="metric" style={{ borderLeftColor: 'var(--decode)' }}>
+            <div className="metric-label">TPOT · time per output token</div>
+            <div className="metric-value" style={{ color: 'var(--decode)' }}>
               {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms'}
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: '4px' }}>
-              {decodeSpeed} tokens / sec
-            </div>
+            <div className="metric-sub">{decodeSpeed} tokens / sec</div>
           </div>
 
-          <div style={{ background: '#F1F5F9', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
-              Total Chat Walltime
-            </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.4rem', fontWeight: '800', color: '#0F172A', marginTop: '4px' }}>
+          <div className="metric" style={{ borderLeftColor: 'var(--accent)' }}>
+            <div className="metric-label">Total chat walltime</div>
+            <div className="metric-value">
               {formatTime(expectedTotalTime)}
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: '4px' }}>
-              Prefill + Decode combined
-            </div>
+            <div className="metric-sub">Prefill + decode combined</div>
           </div>
 
-          <div style={{ background: '#F1F5F9', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
-              Effective Walltime Throughput
-            </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.4rem', fontWeight: '800', color: '#4F46E5', marginTop: '4px' }}>
+          <div className="metric" style={{ borderLeftColor: 'var(--agent)' }}>
+            <div className="metric-label">Effective throughput</div>
+            <div className="metric-value">
               {!Number.isFinite(expectedTotalTime)
                 ? '0.0 '
                 : expectedTotalTime > 0
                   ? `${((promptTokens + outputTokens) / expectedTotalTime).toFixed(1)} `
                   : '— '}
-              <span style={{ fontSize: '0.8rem' }}>tok/s</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>tok/s</span>
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: '4px' }}>
-              Total Tokens ÷ Walltime
-            </div>
+            <div className="metric-sub">Total tokens ÷ walltime</div>
           </div>
 
         </div>
 
         {/* Stacked Walltime Percentage Bar */}
-        <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#334155' }}>
-              Walltime Distribution Breakdown
-            </span>
-            <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
-              Prefill: <strong>{prefillPct.toFixed(1)}%</strong> | Decode: <strong>{decodePct.toFixed(1)}%</strong>
+        <div style={{ marginTop: '20px', paddingTop: '14px', borderTop: '1px solid var(--border)' }}>
+          <div className="field-head" style={{ marginBottom: '8px' }}>
+            <span className="section-label">Walltime distribution</span>
+            <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+              Prefill <strong style={{ color: 'var(--prefill)' }}>{prefillPct.toFixed(1)}%</strong>
+              {' · '}Decode <strong style={{ color: 'var(--decode)' }}>{decodePct.toFixed(1)}%</strong>
             </span>
           </div>
 
-          <div style={{ display: 'flex', height: '22px', borderRadius: '8px', overflow: 'hidden', background: '#E2E8F0' }}>
+          <div style={{ display: 'flex', height: '20px', borderRadius: 'var(--radius-sm)', overflow: 'hidden', background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
             <div
               style={{
                 width: `${prefillPct}%`,
-                background: '#2563EB',
+                background: 'var(--prefill)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#FFFFFF',
-                fontSize: '0.7rem',
-                fontWeight: '800'
+                color: '#04131C',
+                fontSize: '0.68rem',
+                fontWeight: '700',
+                fontFamily: 'var(--font-mono)'
               }}
               title={`Prefill Time: ${formatTime(expectedTTFT)} (${prefillPct.toFixed(1)}%)`}
             >
-              {prefillPct > 8 && `Prefill (${prefillPct.toFixed(0)}%)`}
+              {prefillPct > 8 && `PREFILL ${prefillPct.toFixed(0)}%`}
             </div>
             <div
               style={{
                 width: `${decodePct}%`,
-                background: '#059669',
+                background: 'var(--decode)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#FFFFFF',
-                fontSize: '0.7rem',
-                fontWeight: '800'
+                color: '#04170F',
+                fontSize: '0.68rem',
+                fontWeight: '700',
+                fontFamily: 'var(--font-mono)'
               }}
               title={`Decode Time: ${formatTime(expectedDecodeTime)} (${decodePct.toFixed(1)}%)`}
             >
-              {decodePct > 8 && `Decode (${decodePct.toFixed(0)}%)`}
+              {decodePct > 8 && `DECODE ${decodePct.toFixed(0)}%`}
             </div>
           </div>
         </div>
 
-      </div>
+      </section>
 
     </div>
   );
