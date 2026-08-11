@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle } from 'lucide-react';
+import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, readParamBool, writeParams } from '../utils/urlState';
 
@@ -444,6 +444,28 @@ export default function AgenticVisualizer({
             >
               {isPlaying ? <Pause size={16} /> : <Play size={16} />}
               {isPlaying ? 'Pause' : 'Simulate Agent Loop'}
+            </button>
+
+            <button
+              onClick={handleReset}
+              title="Reset turn state (active turn, phase, token progress)"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid #CBD5E1',
+                background: '#FFFFFF',
+                color: '#475569',
+                fontWeight: '700',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <RotateCcw size={16} />
+              Reset Loop
             </button>
           </div>
         </div>
