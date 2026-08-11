@@ -58,6 +58,32 @@ const MODEL_PRESETS = [
     source: 'config.json'
   },
   {
+    id: 'qwen3627b',
+    name: 'Qwen3.6-27B',
+    params: '27B',
+    layers: 64,
+    kvHeads: 4,
+    headDim: 256,
+    kvMode: 'gqa',
+    kvLayers: 16, // only 16 full-attention layers cache KV (48 linear layers are recurrent)
+    maxContext: 262144,
+    desc: 'Hybrid · 16 full-attn + 48 linear × 4 KV heads × 256',
+    source: 'config.json'
+  },
+  {
+    id: 'qwen3635ba3b',
+    name: 'Qwen3.6-35B-A3B',
+    params: '36B',
+    layers: 40,
+    kvHeads: 2,
+    headDim: 256,
+    kvMode: 'gqa',
+    kvLayers: 10, // only 10 full-attention layers cache KV (30 linear layers are recurrent)
+    maxContext: 262144,
+    desc: 'Hybrid MoE · 10 full-attn + 30 linear × 2 KV heads × 256',
+    source: 'config.json'
+  },
+  {
     id: 'dsv4flash',
     name: 'DeepSeek-V4-Flash-0731',
     params: '284B',
