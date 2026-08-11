@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { HARDWARE_PRESETS, formatTime, formatTokens } from '../utils/presets';
 import { BarChart3 } from 'lucide-react';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
 
-export default function HardwareComparison() {
+export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMaxxingContext }) {
   const [hardwareA, setHardwareA] = useState(() => readParam('hwA') || 'groq');
   const [hardwareB, setHardwareB] = useState(() => readParam('hwB') || 'rtx4090_exl2');
+  const sharedPair = useRef({
+    hardwareA,
+    hardwareB,
+    preserve: hardwareA.startsWith('lmx:') && hardwareB.startsWith('lmx:')
+  });
   const [testPromptTokens, setTestPromptTokens] = useState(() => readParamNum('cp', 4096));
   const [testOutputTokens, setTestOutputTokens] = useState(() => readParamNum('co', 512));
 
@@ -14,8 +19,31 @@ export default function HardwareComparison() {
     writeParams({ hwA: hardwareA, hwB: hardwareB, cp: testPromptTokens, co: testOutputTokens });
   }, [hardwareA, hardwareB, testPromptTokens, testOutputTokens]);
 
-  const presetA = HARDWARE_PRESETS.find(p => p.id === hardwareA) || HARDWARE_PRESETS[0];
-  const presetB = HARDWARE_PRESETS.find(p => p.id === hardwareB) || HARDWARE_PRESETS[2];
+  useEffect(() => {
+    const localPresets = presets.filter(preset => preset.localMaxxing);
+    if (!localPresets.length) return;
+
+    if (sharedPair.current.preserve) {
+      const sharedPairIsAvailable = localPresets.some(preset => preset.id === sharedPair.current.hardwareA)
+        && localPresets.some(preset => preset.id === sharedPair.current.hardwareB);
+      sharedPair.current.preserve = false;
+      if (sharedPairIsAvailable) return;
+    }
+
+    const preferredId = localMaxxingContext?.selectedRunId
+      ? `lmx:${localMaxxingContext.selectedRunId}`
+      : localPresets[0].id;
+    const primary = localPresets.find(preset => preset.id === preferredId) || localPresets[0];
+    const comparison = localPresets.find(preset => preset.hardwareKey !== primary.hardwareKey)
+      || localPresets.find(preset => preset.id !== primary.id)
+      || primary;
+
+    setHardwareA(primary.id);
+    setHardwareB(comparison.id);
+  }, [localMaxxingContext?.modelId, localMaxxingContext?.quantization, localMaxxingContext?.selectedRunId, presets]);
+
+  const presetA = presets.find(p => p.id === hardwareA) || presets[0] || HARDWARE_PRESETS[0];
+  const presetB = presets.find(p => p.id === hardwareB) || presets[1] || HARDWARE_PRESETS[2];
 
   const safeCp = Math.max(0, testPromptTokens || 0);
   const safeCo = Math.max(0, testOutputTokens || 0);
@@ -40,6 +68,12 @@ export default function HardwareComparison() {
           <BarChart3 size={22} color="#4F46E5" />
           <span>Side-by-Side Hardware Speed Benchmark</span>
         </h2>
+
+        {localMaxxingContext?.runs?.length > 0 && (
+          <div style={{ marginBottom: '16px', padding: '10px 12px', borderRadius: '9px', background: '#EEF2FF', border: '1px solid #C7D2FE', color: '#3730A3', fontSize: '0.78rem', fontWeight: '700' }}>
+            Comparing {localMaxxingContext.modelId} at {localMaxxingContext.quantization} across {localMaxxingContext.runs.length} measured single-stream runs. Select either system below to change hardware.
+          </div>
+        )}
 
         {/* Benchmark Test Parameters */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '20px' }}>
@@ -115,7 +149,7 @@ export default function HardwareComparison() {
                 marginBottom: '16px'
               }}
             >
-              {HARDWARE_PRESETS.map(p => (
+              {presets.map(p => (
                 <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
               ))}
             </select>
@@ -125,6 +159,7 @@ export default function HardwareComparison() {
                 <span>Prefill Speed:</span>
                 <strong style={{ fontFamily: 'var(--font-mono)', color: '#2563EB' }}>{presetA.prefillSpeed.toLocaleString()} tok/s</strong>
               </div>
+              {presetA.sourceUrl && <a href={presetA.sourceUrl} target="_blank" rel="noreferrer" style={{ color: '#4F46E5', fontSize: '0.72rem', fontWeight: '700' }}>View LocalMaxxing source run ↗</a>}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span>Decode Speed:</span>
                 <strong style={{ fontFamily: 'var(--font-mono)', color: '#059669' }}>{presetA.decodeSpeed.toLocaleString()} tok/s</strong>
@@ -164,7 +199,7 @@ export default function HardwareComparison() {
                 marginBottom: '16px'
               }}
             >
-              {HARDWARE_PRESETS.map(p => (
+              {presets.map(p => (
                 <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
               ))}
             </select>
@@ -174,6 +209,7 @@ export default function HardwareComparison() {
                 <span>Prefill Speed:</span>
                 <strong style={{ fontFamily: 'var(--font-mono)', color: '#2563EB' }}>{presetB.prefillSpeed.toLocaleString()} tok/s</strong>
               </div>
+              {presetB.sourceUrl && <a href={presetB.sourceUrl} target="_blank" rel="noreferrer" style={{ color: '#4F46E5', fontSize: '0.72rem', fontWeight: '700' }}>View LocalMaxxing source run ↗</a>}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span>Decode Speed:</span>
                 <strong style={{ fontFamily: 'var(--font-mono)', color: '#059669' }}>{presetB.decodeSpeed.toLocaleString()} tok/s</strong>

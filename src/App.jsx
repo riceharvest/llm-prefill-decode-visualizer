@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import Header from './components/Header';
+import LocalMaxxingPresetPicker from './components/LocalMaxxingPresetPicker';
 import SpeedControls from './components/SpeedControls';
 import SingleTurnVisualizer from './components/SingleTurnVisualizer';
 import AgenticVisualizer from './components/AgenticVisualizer';
@@ -7,6 +8,7 @@ import HardwareComparison from './components/HardwareComparison';
 import KVCacheCalculator from './components/KVCacheCalculator';
 import TheoryGuide from './components/TheoryGuide';
 import { HARDWARE_PRESETS } from './utils/presets';
+import { toLocalPreset } from './utils/localMaxxing';
 import { readParam, writeParams } from './utils/urlState';
 
 export default function App() {
@@ -16,9 +18,10 @@ export default function App() {
   // unless explicit prefill/decode params override them.
   const initialPreset = (() => {
     const p = readParam('preset');
+    if (p?.startsWith('lmx:')) return p;
     return HARDWARE_PRESETS.find(x => x.id === p) ? p : 'rtx4090_exl2';
   })();
-  const initialPresetObj = HARDWARE_PRESETS.find(x => x.id === initialPreset);
+  const initialPresetObj = HARDWARE_PRESETS.find(x => x.id === initialPreset) || HARDWARE_PRESETS[0];
   const [selectedPreset, setSelectedPreset] = useState(initialPreset);
   const [prefillSpeed, setPrefillSpeed] = useState(() => Number(readParam('prefill')) || initialPresetObj.prefillSpeed);
   const [decodeSpeed, setDecodeSpeed] = useState(() => Number(readParam('decode')) || initialPresetObj.decodeSpeed);
@@ -30,6 +33,17 @@ export default function App() {
   // Incremented by the global Reset button; visualizers watch it and clear
   // ALL sim state (phase, token progress, streams, elapsed time).
   const [resetKey, setResetKey] = useState(0);
+  const [localMaxxingContext, setLocalMaxxingContext] = useState({
+    modelId: '',
+    quantization: '',
+    runs: [],
+    selectedRunId: ''
+  });
+
+  const comparisonPresets = useMemo(() => [
+    ...localMaxxingContext.runs.map(toLocalPreset),
+    ...HARDWARE_PRESETS
+  ], [localMaxxingContext.runs]);
 
   // Keep shareable settings in the URL
   useEffect(() => {
@@ -47,6 +61,17 @@ export default function App() {
     setDecodeSpeed(preset.decodeSpeed);
     setIsPlaying(false);
   };
+
+  const handleApplyLocalMaxxingRun = useCallback((run) => {
+    setSelectedPreset(`lmx:${run.id}`);
+    setPrefillSpeed(run.tokSPrefill);
+    setDecodeSpeed(run.tokSOut);
+    setIsPlaying(false);
+  }, []);
+
+  const handleLocalMaxxingContext = useCallback((context) => {
+    setLocalMaxxingContext(context);
+  }, []);
 
   const handleReset = () => {
     setIsPlaying(false);
@@ -72,6 +97,12 @@ export default function App() {
         setSelectedPreset={setSelectedPreset}
         onApplyPreset={handleApplyPreset}
         onShare={handleShare}
+      />
+
+      <LocalMaxxingPresetPicker
+        selectedPreset={selectedPreset}
+        onApplyRun={handleApplyLocalMaxxingRun}
+        onContextChange={handleLocalMaxxingContext}
       />
 
       {/* Speed & Control Panel */}
@@ -112,7 +143,10 @@ export default function App() {
         )}
 
         {activeTab === 'compare' && (
-          <HardwareComparison />
+          <HardwareComparison
+            presets={comparisonPresets}
+            localMaxxingContext={localMaxxingContext}
+          />
         )}
 
         {activeTab === 'kvcache' && (

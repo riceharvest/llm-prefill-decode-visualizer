@@ -19,24 +19,29 @@ An interactive, high-performance web application and benchmark tool designed to 
    - User-configurable **Decode Speed** (`tokens/sec`) for autoregressive generation.
    - Visual time-scale multiplier (`1x`, `2x`, `5x`, `20x`, `Instant`) for real-time streaming or fast simulation of huge context windows.
 
-3. **💬 Single-Turn Chat Mode**:
+3. **Live LocalMaxxing Presets**:
+   - Search measured LocalMaxxing model runs, then filter by quantization and hardware.
+   - Prefill exact community-reported prefill and decode throughput into every simulation.
+   - Compare two single-stream hardware runs on the same model and quantization, with links to each source run.
+
+4. **💬 Single-Turn Chat Mode**:
    - Measure **Time-To-First-Token (TTFT)**, **Time-Per-Output-Token (TPOT)**, and total walltime.
    - Animated prefill context matrix & live autoregressive decode token streaming window.
    - Walltime percentage distribution bar (Prefill % vs Decode %).
 
-4. **🤖 Agentic Multi-Turn Loop Mode**:
+5. **🤖 Agentic Multi-Turn Loop Mode**:
    - Simulates multi-turn autonomous agent loops (Plan → Tool Call → Tool Result → Next Action).
    - Measures **per-turn walltime** as prompt history expands.
    - **Prefix Caching (KV Cache Reuse)** Toggle: Compare walltime savings of prefix caching vs full history re-prefill across turns.
    - Interactive turn-by-turn Gantt / Waterfall walltime chart.
 
-5. **⚖️ Side-by-Side Hardware Comparison**:
+6. **⚖️ Side-by-Side Hardware Comparison**:
    - Compare benchmark metrics across 2 hardware profiles (e.g. Groq LPU vs NVIDIA H100 vs RTX 4090 vs Apple Silicon M3 Max vs Raspberry Pi 5).
 
-6. **🧠 Interactive KV Cache VRAM Calculator**:
+7. **🧠 Interactive KV Cache VRAM Calculator**:
    - Estimate GPU memory footprint for Key-Value caches based on model layers, hidden dimension, GQA heads, sequence length, and data precision (FP16 / FP8 / INT4).
 
-7. **📖 Theory & Engineering Guide**:
+8. **📖 Theory & Engineering Guide**:
    - Detailed breakdown of **Compute-Bound (FLOPs bound)** prefill matrix multiplications ($GEMM$) vs. **Memory Bandwidth-Bound** decode vector multiplications ($GEMV$).
 
 ---

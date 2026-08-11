@@ -76,6 +76,9 @@ export default function Header({
               outline: 'none'
             }}
           >
+            {selectedPreset.startsWith('lmx:') && (
+              <option value={selectedPreset}>📊 LocalMaxxing measured run</option>
+            )}
             {HARDWARE_PRESETS.map(p => (
               <option key={p.id} value={p.id}>
                 {p.icon} {p.name}

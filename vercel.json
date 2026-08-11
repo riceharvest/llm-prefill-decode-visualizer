@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/localmaxxing-api/:path*",
+      "destination": "https://www.localmaxxing.com/api/:path*"
+    }
+  ]
+}
