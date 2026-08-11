@@ -27,6 +27,9 @@ export default function App() {
     return v === 'instant' ? 'instant' : (Number(v) || 1);
   });
   const [isPlaying, setIsPlaying] = useState(false);
+  // Incremented by the global Reset button; visualizers watch it and clear
+  // ALL sim state (phase, token progress, streams, elapsed time).
+  const [resetKey, setResetKey] = useState(0);
 
   // Keep shareable settings in the URL
   useEffect(() => {
@@ -47,12 +50,13 @@ export default function App() {
 
   const handleReset = () => {
     setIsPlaying(false);
+    setResetKey(k => k + 1);
   };
 
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
-    } catch (e) {
+    } catch {
       // clipboard may be unavailable; no-op
     }
   };
@@ -92,6 +96,7 @@ export default function App() {
             simSpeedMultiplier={simSpeedMultiplier}
             isPlaying={isPlaying}
             setIsPlaying={setIsPlaying}
+            resetKey={resetKey}
           />
         )}
 
@@ -102,6 +107,7 @@ export default function App() {
             simSpeedMultiplier={simSpeedMultiplier}
             isPlaying={isPlaying}
             setIsPlaying={setIsPlaying}
+            resetKey={resetKey}
           />
         )}
 

@@ -8,7 +8,8 @@ export default function AgenticVisualizer({
   decodeSpeed,
   simSpeedMultiplier,
   isPlaying,
-  setIsPlaying
+  setIsPlaying,
+  resetKey
 }) {
   // Agent configuration parameters
   const [numTurns, setNumTurns] = useState(() => readParamNum('turns', 4));
@@ -157,6 +158,15 @@ export default function AgenticVisualizer({
   const lastTickRef = useRef(null);
   const simTimeRef = useRef(0);
 
+  // Global Reset button (App resetKey) clears ALL sim state
+  const resetKeyRef = useRef(resetKey);
+  useEffect(() => {
+    if (resetKeyRef.current !== resetKey) {
+      resetKeyRef.current = resetKey;
+      handleReset();
+    }
+  }, [resetKey]);
+
   const handleReset = () => {
     setActiveTurn(0);
     setCurrentPhase('idle');
@@ -191,7 +201,9 @@ export default function AgenticVisualizer({
       const realDelta = (now - lastTickRef.current) / 1000;
       lastTickRef.current = now;
 
-      if (simSpeedMultiplier === 'instant') {
+      if (simSpeedMultiplier === 'instant' || !Number.isFinite(totalAgentWalltime) || totalAgentWalltime <= 0) {
+        // Instant mode — or a non-finite/zero walltime (e.g. a speed typed as
+        // 0, which would otherwise hang the loop on turn 1 forever).
         const last = turnBreakdown[turnBreakdown.length - 1] || { newTokensPrefilled: 0, decodeTokens: 0 };
         setActiveTurn(numTurns);
         setCurrentPhase('completed');
@@ -253,11 +265,12 @@ export default function AgenticVisualizer({
         const item = turnBreakdown.find(t => t.turn === foundTurn);
         if (item) {
           if (foundPhase === 'prefilling') {
-            const frac = (nextTime - foundTurnStart) / item.prefillTime;
+            // Guard 0-token phases: 0/0 would make progress NaN
+            const frac = item.prefillTime > 0 ? (nextTime - foundTurnStart) / item.prefillTime : 1;
             setPrefillProgress(Math.min(item.newTokensPrefilled, Math.floor(frac * item.newTokensPrefilled)));
             setDecodeProgress(0);
           } else if (foundPhase === 'decoding') {
-            const frac = (nextTime - foundPrefillEnd) / item.decodeTime;
+            const frac = item.decodeTime > 0 ? (nextTime - foundPrefillEnd) / item.decodeTime : 1;
             setPrefillProgress(item.newTokensPrefilled);
             setDecodeProgress(Math.min(item.decodeTokens, Math.floor(frac * item.decodeTokens)));
           }

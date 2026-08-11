@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Zap, Gauge, FileText } from 'lucide-react';
+import { Play, Pause, Zap, Gauge, FileText, RotateCcw } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, readParam, writeParams } from '../utils/urlState';
 
@@ -8,7 +8,8 @@ export default function SingleTurnVisualizer({
   decodeSpeed,
   simSpeedMultiplier,
   isPlaying,
-  setIsPlaying
+  setIsPlaying,
+  resetKey
 }) {
   const [promptTokens, setPromptTokens] = useState(() => readParamNum('prompt', 2048));
   const [outputTokens, setOutputTokens] = useState(() => readParamNum('output', 512));
@@ -31,11 +32,12 @@ export default function SingleTurnVisualizer({
   const [currentPrefillProgress, setCurrentPrefillProgress] = useState(0); // 0 to promptTokens
   const [currentDecodeTokens, setCurrentDecodeTokens] = useState(0); // 0 to outputTokens
   const [elapsedTime, setElapsedTime] = useState(0); // seconds
-  const [generatedTokensStream, setGeneratedTokensStream] = useState([]);
 
-  // Calculated benchmarks
-  const expectedTTFT = promptTokens / prefillSpeed; // seconds
-  const expectedDecodeTime = outputTokens / decodeSpeed; // seconds
+  // Calculated benchmarks (typed 0/negative values sanitized for math)
+  const safePromptTokens = Math.max(0, promptTokens || 0);
+  const safeOutputTokens = Math.max(0, outputTokens || 0);
+  const expectedTTFT = safePromptTokens / prefillSpeed; // seconds
+  const expectedDecodeTime = safeOutputTokens / decodeSpeed; // seconds
   const expectedTotalTime = expectedTTFT + expectedDecodeTime;
   const tpotMs = decodeSpeed > 0 ? 1000 / decodeSpeed : Infinity;
 
@@ -52,6 +54,16 @@ export default function SingleTurnVisualizer({
   // Ref for timer
   const animFrameRef = useRef(null);
   const lastTickRef = useRef(null);
+  const simTimeRef = useRef(0); // simulated seconds elapsed
+
+  // Global Reset button (App resetKey) clears ALL sim state
+  const resetKeyRef = useRef(resetKey);
+  useEffect(() => {
+    if (resetKeyRef.current !== resetKey) {
+      resetKeyRef.current = resetKey;
+      handleReset();
+    }
+  }, [resetKey]);
 
   // Reset simulation
   const handleReset = () => {
@@ -59,7 +71,7 @@ export default function SingleTurnVisualizer({
     setCurrentPrefillProgress(0);
     setCurrentDecodeTokens(0);
     setElapsedTime(0);
-    setGeneratedTokensStream([]);
+    simTimeRef.current = 0;
     setIsPlaying(false);
   };
 
@@ -76,7 +88,7 @@ export default function SingleTurnVisualizer({
       setCurrentPrefillProgress(0);
       setCurrentDecodeTokens(0);
       setElapsedTime(0);
-      setGeneratedTokensStream([]);
+      simTimeRef.current = 0;
     }
 
     const tick = (now) => {
@@ -89,14 +101,22 @@ export default function SingleTurnVisualizer({
       const realDeltaSec = (now - lastTickRef.current) / 1000;
       lastTickRef.current = now;
 
+      // Non-finite walltime (e.g. a speed typed as 0): finish immediately,
+      // showing only the phases that can actually complete.
+      if (!Number.isFinite(expectedTotalTime) || expectedTotalTime <= 0) {
+        setCurrentPrefillProgress(Number.isFinite(expectedTTFT) && expectedTTFT >= 0 ? Math.max(0, promptTokens) : 0);
+        setCurrentDecodeTokens(Number.isFinite(expectedDecodeTime) && expectedDecodeTime >= 0 ? Math.max(0, outputTokens) : 0);
+        setElapsedTime(expectedTotalTime);
+        setPhase('completed');
+        setIsPlaying(false);
+        return;
+      }
+
       // Handle instant mode
       if (simSpeedMultiplier === 'instant') {
-        setCurrentPrefillProgress(promptTokens);
-        setCurrentDecodeTokens(outputTokens);
+        setCurrentPrefillProgress(safePromptTokens);
+        setCurrentDecodeTokens(safeOutputTokens);
         setElapsedTime(expectedTotalTime);
-        setGeneratedTokensStream(
-          Array.from({ length: Math.min(outputTokens, 80) }, (_, i) => sampleWords[i % sampleWords.length])
-        );
         setPhase('completed');
         setIsPlaying(false);
         return;
@@ -104,37 +124,34 @@ export default function SingleTurnVisualizer({
 
       const simDeltaSec = realDeltaSec * simSpeedMultiplier;
 
-      setElapsedTime(prevTime => {
-        const newTime = prevTime + simDeltaSec;
+      // Advance sim clock via a ref — never dispatch setState from inside a
+      // setElapsedTime updater (updaters run during render; side effects in
+      // them fire React's "Cannot update a component while rendering" error
+      // and can re-apply stale phase/progress after a reset).
+      simTimeRef.current += simDeltaSec;
+      const newTime = simTimeRef.current;
+      setElapsedTime(newTime);
 
-        // Check if in prefill phase
-        if (newTime <= expectedTTFT) {
-          setPhase('prefilling');
-          const prefillProgress = Math.min(promptTokens, Math.floor(newTime * prefillSpeed));
-          setCurrentPrefillProgress(prefillProgress);
-        } else if (newTime < expectedTotalTime) {
-          setPhase('decoding');
-          setCurrentPrefillProgress(promptTokens);
-          const decodeProgressTime = newTime - expectedTTFT;
-          const decodeCount = Math.min(outputTokens, Math.floor(decodeProgressTime * decodeSpeed));
-          setCurrentDecodeTokens(decodeCount);
-
-          // Update text stream preview
-          if (decodeCount > generatedTokensStream.length && decodeCount <= outputTokens) {
-            const nextWord = sampleWords[(decodeCount - 1) % sampleWords.length];
-            setGeneratedTokensStream(prev => [...prev.slice(-79), nextWord]);
-          }
-        } else {
-          // Completed
-          setPhase('completed');
-          setCurrentPrefillProgress(promptTokens);
-          setCurrentDecodeTokens(outputTokens);
-          setIsPlaying(false);
-          return expectedTotalTime;
-        }
-
-        return newTime;
-      });
+      // Check if in prefill phase
+      if (newTime <= expectedTTFT) {
+        setPhase('prefilling');
+        const prefillProgress = Math.max(0, Math.min(safePromptTokens, Math.floor(newTime * prefillSpeed)));
+        setCurrentPrefillProgress(prefillProgress);
+      } else if (newTime < expectedTotalTime) {
+        setPhase('decoding');
+        setCurrentPrefillProgress(safePromptTokens);
+        const decodeProgressTime = newTime - expectedTTFT;
+        const decodeCount = Math.max(0, Math.min(safeOutputTokens, Math.floor(decodeProgressTime * decodeSpeed)));
+        setCurrentDecodeTokens(decodeCount);
+      } else {
+        // Completed
+        setPhase('completed');
+        setCurrentPrefillProgress(safePromptTokens);
+        setCurrentDecodeTokens(safeOutputTokens);
+        setElapsedTime(expectedTotalTime);
+        setIsPlaying(false);
+        return;
+      }
 
       animFrameRef.current = requestAnimationFrame(tick);
     };
@@ -148,6 +165,18 @@ export default function SingleTurnVisualizer({
 
   const prefillPct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedTTFT / expectedTotalTime) * 100 : 0;
   const decodePct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedDecodeTime / expectedTotalTime) * 100 : 0;
+
+  // Token stream windowing: derive the visible words from the real decode
+  // counter (~2.5 tokens per word) so the stream always tracks the counter,
+  // even at high sim multipliers. Fixed-size window clears and refills.
+  const TOKENS_PER_WORD = 2.5;
+  const WORD_WINDOW = 80;
+  const totalStreamWords = Math.floor(Math.max(0, currentDecodeTokens) / TOKENS_PER_WORD);
+  const streamLap = Math.floor(totalStreamWords / WORD_WINDOW);
+  const streamVisible = totalStreamWords % WORD_WINDOW;
+  const streamWordsVisible = totalStreamWords === 0 || streamVisible === 0
+    ? []
+    : Array.from({ length: streamVisible }, (_, i) => sampleWords[(streamLap * 7 + i) % sampleWords.length]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '16px' }}>
@@ -284,6 +313,28 @@ export default function SingleTurnVisualizer({
               {isPlaying ? <Pause size={16} /> : <Play size={16} />}
               {isPlaying ? 'Pause' : 'Simulate Run'}
             </button>
+
+            <button
+              onClick={handleReset}
+              title="Reset simulation (phase, token progress, stream, elapsed time)"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid #CBD5E1',
+                background: '#FFFFFF',
+                color: '#475569',
+                fontWeight: '700',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <RotateCcw size={16} />
+              Reset
+            </button>
           </div>
         </div>
 
@@ -314,7 +365,7 @@ export default function SingleTurnVisualizer({
             <div style={{ height: '10px', background: '#DBEAFE', borderRadius: '5px', overflow: 'hidden', margin: '12px 0 8px 0' }}>
               <div style={{
                 height: '100%',
-                width: `${Math.min(100, (currentPrefillProgress / promptTokens) * 100)}%`,
+                width: `${promptTokens > 0 ? Math.min(100, (currentPrefillProgress / promptTokens) * 100) : 0}%`,
                 background: 'linear-gradient(90deg, #3B82F6 0%, #1D4ED8 100%)',
                 borderRadius: '5px',
                 transition: simSpeedMultiplier === 'instant' ? 'none' : 'width 0.1s linear'
@@ -390,8 +441,7 @@ export default function SingleTurnVisualizer({
             border: '1px solid #CBD5E1',
             borderRadius: '8px',
             padding: '14px',
-            minHeight: '80px',
-            maxHeight: '160px',
+            height: '160px',
             overflowY: 'auto',
             fontFamily: 'var(--font-mono)',
             fontSize: '0.88rem',
@@ -402,21 +452,25 @@ export default function SingleTurnVisualizer({
             gap: '4px',
             alignContent: 'flex-start'
           }}>
-            {generatedTokensStream.length === 0 ? (
+            {streamWordsVisible.length === 0 ? (
               <span style={{ color: '#94A3B8', fontStyle: 'italic' }}>
-                {phase === 'prefilling' ? '⏳ Ingesting prompt (Prefill phase active)...' : 'Click "Simulate Run" to watch token streaming visualizer.'}
+                {phase === 'prefilling'
+                  ? '⏳ Ingesting prompt (Prefill phase active)...'
+                  : totalStreamWords > 0
+                    ? `↻ Window ${streamLap} complete — clearing & continuing...`
+                    : 'Click "Simulate Run" to watch token streaming visualizer.'}
               </span>
             ) : (
-              generatedTokensStream.map((word, idx) => (
+              streamWordsVisible.map((word, idx) => (
                 <span
-                  key={idx}
+                  key={`${streamLap}-${idx}`}
                   className="animate-token"
                   style={{
-                    background: idx === generatedTokensStream.length - 1 ? '#D1FAE5' : 'transparent',
-                    color: idx === generatedTokensStream.length - 1 ? '#047857' : '#0F172A',
+                    background: idx === streamWordsVisible.length - 1 ? '#D1FAE5' : 'transparent',
+                    color: idx === streamWordsVisible.length - 1 ? '#047857' : '#0F172A',
                     padding: '0 2px',
                     borderRadius: '3px',
-                    fontWeight: idx === generatedTokensStream.length - 1 ? '700' : '400'
+                    fontWeight: idx === streamWordsVisible.length - 1 ? '700' : '400'
                   }}
                 >
                   {word}
@@ -449,7 +503,7 @@ export default function SingleTurnVisualizer({
               TPOT (Time Per Output Token)
             </div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.4rem', fontWeight: '800', color: '#059669', marginTop: '4px' }}>
-              {tpotMs.toFixed(1)} ms
+              {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms'}
             </div>
             <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: '4px' }}>
               {decodeSpeed} tokens / sec
@@ -473,7 +527,12 @@ export default function SingleTurnVisualizer({
               Effective Walltime Throughput
             </div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.4rem', fontWeight: '800', color: '#4F46E5', marginTop: '4px' }}>
-              {((promptTokens + outputTokens) / Math.max(expectedTotalTime, 0.0001)).toFixed(1)} <span style={{ fontSize: '0.8rem' }}>tok/s</span>
+              {!Number.isFinite(expectedTotalTime)
+                ? '0.0 '
+                : expectedTotalTime > 0
+                  ? `${((promptTokens + outputTokens) / expectedTotalTime).toFixed(1)} `
+                  : '— '}
+              <span style={{ fontSize: '0.8rem' }}>tok/s</span>
             </div>
             <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: '4px' }}>
               Total Tokens ÷ Walltime

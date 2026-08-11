@@ -17,12 +17,15 @@ export default function HardwareComparison() {
   const presetA = HARDWARE_PRESETS.find(p => p.id === hardwareA) || HARDWARE_PRESETS[0];
   const presetB = HARDWARE_PRESETS.find(p => p.id === hardwareB) || HARDWARE_PRESETS[2];
 
-  const ttftA = testPromptTokens / presetA.prefillSpeed;
-  const decodeTimeA = testOutputTokens / presetA.decodeSpeed;
+  const safeCp = Math.max(0, testPromptTokens || 0);
+  const safeCo = Math.max(0, testOutputTokens || 0);
+
+  const ttftA = safeCp / presetA.prefillSpeed;
+  const decodeTimeA = safeCo / presetA.decodeSpeed;
   const totalTimeA = ttftA + decodeTimeA;
 
-  const ttftB = testPromptTokens / presetB.prefillSpeed;
-  const decodeTimeB = testOutputTokens / presetB.decodeSpeed;
+  const ttftB = safeCp / presetB.prefillSpeed;
+  const decodeTimeB = safeCo / presetB.decodeSpeed;
   const totalTimeB = ttftB + decodeTimeB;
 
   const speedupTotal = totalTimeA > 0 ? totalTimeB / totalTimeA : 0;

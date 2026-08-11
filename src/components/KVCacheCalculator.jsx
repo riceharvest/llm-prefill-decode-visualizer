@@ -169,11 +169,12 @@ function kvBytesPerToken(preset, precisionBytes, contextLength) {
     case 'sliding': {
       // full-attn layers cache `contextLength` tokens; sliding layers cache
       // only the last `window` tokens regardless of context
+      const safeCtx = Math.max(1, contextLength); // guard 0/negative typed ctx (0/0 = NaN)
       const perLayerBytes = 2 * preset.kvHeads * preset.headDim * precisionBytes;
-      const fullBytes = preset.fullAttnLayers * perLayerBytes * contextLength;
-      const windowTokens = Math.min(contextLength, preset.slidingWindow);
+      const fullBytes = preset.fullAttnLayers * perLayerBytes * safeCtx;
+      const windowTokens = Math.min(safeCtx, preset.slidingWindow);
       const slidingBytes = preset.slidingLayers * perLayerBytes * windowTokens;
-      return (fullBytes + slidingBytes) / contextLength; // effective per-token
+      return (fullBytes + slidingBytes) / safeCtx; // effective per-token
     }
 
     case 'csa_hca': {
@@ -208,7 +209,10 @@ function kvFormula(preset) {
 export default function KVCacheCalculator() {
   const [modelPreset, setModelPreset] = useState(() => readParam('model') || 'llama70b');
   const [contextLength, setContextLength] = useState(() => readParamNum('ctx', 32768));
-  const [precision, setPrecision] = useState(() => readParamNum('prec', 2)); // 2 bytes = FP16/BF16, 1 byte = FP8/INT8, 0.5 = INT4
+  const [precision, setPrecision] = useState(() => {
+    const p = readParamNum('prec', 2);
+    return [2, 1, 0.5].includes(p) ? p : 2; // 2 bytes = FP16/BF16, 1 = FP8/INT8, 0.5 = INT4
+  });
   const [batchSize, setBatchSize] = useState(() => readParamNum('batch', 1));
 
   // Shareable per-tab settings
@@ -218,9 +222,13 @@ export default function KVCacheCalculator() {
 
   const preset = MODEL_PRESETS.find(p => p.id === modelPreset) || MODEL_PRESETS[0];
 
+  // Sanitize typed inputs for math (number fields allow 0/negative values)
+  const safeContext = Math.max(0, contextLength || 0);
+  const safeBatch = Math.max(0, batchSize || 0);
+
   // KV Cache size per token in bytes (per sequence)
-  const bytesPerTokenSingleSeq = kvBytesPerToken(preset, precision, contextLength);
-  const totalKVCacheBytes = bytesPerTokenSingleSeq * contextLength * batchSize;
+  const bytesPerTokenSingleSeq = kvBytesPerToken(preset, precision, safeContext);
+  const totalKVCacheBytes = bytesPerTokenSingleSeq * safeContext * safeBatch;
   const totalKVCacheGB = totalKVCacheBytes / (1024 * 1024 * 1024);
   const totalKVCacheMB = totalKVCacheBytes / (1024 * 1024);
 
@@ -386,10 +394,17 @@ export default function KVCacheCalculator() {
           </div>
         </div>
 
+        {/* Context exceeds model maximum warning */}
+        {contextLength > preset.maxContext && (
+          <p style={{ fontSize: '0.78rem', color: '#B45309', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 12px', marginTop: '12px', textAlign: 'center' }}>
+            ⚠️ {formatTokens(contextLength)} tokens exceeds {preset.name}'s maximum context of {formatTokens(preset.maxContext)} tokens — the estimate below is theoretical only.
+          </p>
+        )}
+
         {/* Source footnote */}
         <p style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '12px', textAlign: 'center' }}>
           {preset.kvMode === 'csa_hca'
-            ? 'DeepSeek-V4-Flash uses compressed sparse attention (CSA m=4 / HCA m\u2032=128, arXiv 2606.19348): the ~3.6 GB @ 1M figure is the paper\u2019s measured KV at mixed BF16/FP8 storage, scaled here by precision and context (linear approximation).'
+            ? 'DeepSeek-V4-Flash uses compressed sparse attention (CSA m=4 / HCA m′=128, arXiv 2606.19348): the ~3.6 GB @ 1M figure is the paper’s measured KV at mixed BF16/FP8 storage, scaled here by precision and context (linear approximation).'
             : `${preset.name} geometry from ${preset.source}. KV math follows the actual attention type: ${preset.kvMode === 'mla' ? 'MLA compresses KV into a latent vector per layer' : preset.kvMode === 'sliding' ? 'sliding-window layers cache only the last window tokens, so long-context KV is bounded' : preset.desc.includes('Hybrid') ? 'only full-attention layers cache per-token KV; linear layers are recurrent' : 'standard grouped-query attention'}.`}
         </p>
 
