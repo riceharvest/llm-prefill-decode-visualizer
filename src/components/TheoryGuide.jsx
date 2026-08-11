@@ -1,5 +1,6 @@
 import React from 'react';
-import { HelpCircle, Gauge, Zap } from 'lucide-react';
+import { HelpCircle, Gauge, Zap, Play } from 'lucide-react';
+import { demoUrl } from '../utils/urlState';
 
 export default function TheoryGuide() {
   return (
@@ -103,35 +104,43 @@ export default function TheoryGuide() {
             {[
               {
                 q: 'Why is my first token so slow, then the rest are fast?',
-                a: 'That is normal. The first token waits for the prefill phase: the whole prompt is processed at once (compute-bound). On a mid GPU that is hundreds of ms. After that, decode runs at one token per step, so it feels fast per token — but every token reads the full model weights from VRAM, which is why decode is bandwidth-bound.'
+                a: 'That is normal. The first token waits for the prefill phase: the whole prompt is processed at once (compute-bound). On a mid GPU that is hundreds of ms. After that, decode runs at one token per step, so it feels fast per token — but every token reads the full model weights from VRAM, which is why decode is bandwidth-bound.',
+                demo: { tab: 'single', prefill: 3800, decode: 105, prompt: 8192, output: 256, sim: 5 }
               },
               {
                 q: 'What is a good tok/s for a local model?',
-                a: 'It depends on the model size and your memory bandwidth. Rule of thumb: decode speed ≈ usable VRAM bandwidth ÷ model size in bytes. A 24 GB/s-class card with a 4-bit 8B model does roughly 30-60 tok/s. If you are below ~10 tok/s on an 8B, something is off (CPU offload, no GPU layers, wrong build).'
+                a: 'It depends on the model size and your memory bandwidth. Rule of thumb: decode speed ≈ usable VRAM bandwidth ÷ model size in bytes. A 24 GB/s-class card with a 4-bit 8B model does roughly 30-60 tok/s. If you are below ~10 tok/s on an 8B, something is off (CPU offload, no GPU layers, wrong build).',
+                demo: { tab: 'compare', hwA: 'rtx3060_entry', hwB: 'rtx4090_exl2', cp: 4096, co: 512 }
               },
               {
                 q: 'Why is decode so much slower than prefill?',
-                a: 'Prefill is a big parallel matrix-matrix multiply (GEMM) — perfect for tensor cores. Decode is one matrix-vector multiply (GEMV) per token and is dominated by reading weights + KV cache from VRAM. You cannot fix decode speed with more compute; you need more memory bandwidth or a smaller/faster quantized model.'
+                a: 'Prefill is a big parallel matrix-matrix multiply (GEMM) — perfect for tensor cores. Decode is one matrix-vector multiply (GEMV) per token and is dominated by reading weights + KV cache from VRAM. You cannot fix decode speed with more compute; you need more memory bandwidth or a smaller/faster quantized model.',
+                demo: { tab: 'single', prefill: 3800, decode: 105, prompt: 4096, output: 2048, sim: 20 }
               },
               {
                 q: 'How much VRAM do I need for model + context?',
-                a: 'VRAM ≈ weights + KV cache + ~1-2 GB overhead. Weights: model bytes × quant size (e.g. 70B at Q4 ≈ 35-40 GB). KV cache: use the KV Cache Calculator tab — a dense 70B at 32k context FP16 is about 10 GB, so it often does not fit on 24 GB together with weights. Lower KV precision (FP8/INT4) or a shorter context is the lever.'
+                a: 'VRAM ≈ weights + KV cache + ~1-2 GB overhead. Weights: model bytes × quant size (e.g. 70B at Q4 ≈ 35-40 GB). KV cache: use the KV Cache Calculator tab — a dense 70B at 32k context FP16 is about 10 GB, so it often does not fit on 24 GB together with weights. Lower KV precision (FP8/INT4) or a shorter context is the lever.',
+                demo: { tab: 'kvcache', model: 'llama70b', ctx: 32768, prec: 2 }
               },
               {
                 q: 'Why does my context length run out of memory?',
-                a: 'Because KV cache grows linearly with context and is allocated for every layer. Long prompts with agents (tool outputs, history) fill it fast. Solutions: quantize the KV cache (--cache-type-k/v q8_0 or q4_0), shorten the system prompt, enable prefix caching, or pick a model with MLA / linear attention (they need far less KV per token).'
+                a: 'Because KV cache grows linearly with context and is allocated for every layer. Long prompts with agents (tool outputs, history) fill it fast. Solutions: quantize the KV cache (--cache-type-k/v q8_0 or q4_0), shorten the system prompt, enable prefix caching, or pick a model with MLA / linear attention (they need far less KV per token).',
+                demo: { tab: 'kvcache', model: 'llama70b', ctx: 131072, prec: 0.5 }
               },
               {
                 q: 'Does flash attention speed up prefill or decode?',
-                a: 'Flash attention mainly accelerates prefill and long-context attention compute, and it reduces memory use. It has little effect on the decode bottleneck (bandwidth-bound GEMV). It can also free VRAM, which indirectly lets you use a bigger context. Benchmark both — the gain is model- and context-dependent.'
+                a: 'Flash attention mainly accelerates prefill and long-context attention compute, and it reduces memory use. It has little effect on the decode bottleneck (bandwidth-bound GEMV). It can also free VRAM, which indirectly lets you use a bigger context. Benchmark both — the gain is model- and context-dependent.',
+                demo: { tab: 'agentic', turns: 6, sprompt: 4096, tool: 1024, thought: 256, sim: 20 }
               },
               {
                 q: 'Is a higher quant always slower?',
-                a: 'Usually yes but not by much. Q8 vs Q4 changes decode speed roughly by the bandwidth ratio of the sizes read per token. On a 4090-class card, 70B Q4 vs Q8 can differ 10-30%. Quality also differs: use the largest quant that fits your VRAM budget — Q4_K_M is the common sweet spot.'
+                a: 'Usually yes but not by much. Q8 vs Q4 changes decode speed roughly by the bandwidth ratio of the sizes read per token. On a 4090-class card, 70B Q4 vs Q8 can differ 10-30%. Quality also differs: use the largest quant that fits your VRAM budget — Q4_K_M is the common sweet spot.',
+                demo: { tab: 'compare', hwA: 'rtx4090_exl2', hwB: 'dual_rtx3090', cp: 8192, co: 1024 }
               },
               {
                 q: 'Why is my Mac / CPU box slower than the GPU numbers I see?',
-                a: 'Unified memory and system RAM have far lower bandwidth than GDDR/HBM (e.g. ~100 GB/s vs 1000+ GB/s). Decode speed tracks that bandwidth. Also check the backend actually uses GPU layers (Metal/CUDA) and not CPU fallback, and that you are comparing the same quant and context.'
+                a: 'Unified memory and system RAM have far lower bandwidth than GDDR/HBM (e.g. ~100 GB/s vs 1000+ GB/s). Decode speed tracks that bandwidth. Also check the backend actually uses GPU layers (Metal/CUDA) and not CPU fallback, and that you are comparing the same quant and context.',
+                demo: { tab: 'compare', hwA: 'mac_ultra', hwB: 'rtx4090_exl2', cp: 8192, co: 512 }
               }
             ].map((item, i) => (
               <details
@@ -149,6 +158,28 @@ export default function TheoryGuide() {
                 <p style={{ fontSize: '0.82rem', color: '#475569', marginTop: '8px', lineHeight: 1.6 }}>
                   {item.a}
                 </p>
+                {item.demo && (
+                  <button
+                    onClick={() => { window.location.href = demoUrl(item.demo); }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      marginTop: '10px',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #4F46E5 0%, #3B82F6 100%)',
+                      color: '#FFFFFF',
+                      fontWeight: '700',
+                      fontSize: '0.78rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Play size={13} />
+                    Try it in the visualizer
+                  </button>
+                )}
               </details>
             ))}
           </div>

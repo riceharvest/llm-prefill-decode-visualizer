@@ -33,3 +33,11 @@ export function writeParams(updates) {
   const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
   window.history.replaceState(null, '', url);
 }
+
+// Build a shareable "try it" URL for a demo: sets the given params and marks
+// autoplay so the target tab starts its simulation on load.
+export function demoUrl(params) {
+  const p = new URLSearchParams(params);
+  p.set('autoplay', '1');
+  return `${window.location.pathname}?${p.toString()}`;
+}

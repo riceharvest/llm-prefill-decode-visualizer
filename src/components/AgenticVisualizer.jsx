@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
-import { readParamNum, readParamBool, writeParams } from '../utils/urlState';
+import { readParamNum, readParamBool, readParam, writeParams } from '../utils/urlState';
 
 export default function AgenticVisualizer({
   prefillSpeed,
@@ -16,6 +16,14 @@ export default function AgenticVisualizer({
   const [toolOutputTokensPerTurn, setToolOutputTokensPerTurn] = useState(() => readParamNum('tool', 800));
   const [decodeTokensPerTurn, setDecodeTokensPerTurn] = useState(() => readParamNum('thought', 250));
   const [enablePrefixCaching, setEnablePrefixCaching] = useState(() => readParamBool('cache', true));
+
+  // Auto-start the simulation when the page was opened via a "try it" demo link
+  useEffect(() => {
+    if (readParam('autoplay') === '1') {
+      const t = setTimeout(() => setIsPlaying(true), 250);
+      return () => clearTimeout(t);
+    }
+  }, [setIsPlaying]);
 
   // Shareable per-tab settings
   useEffect(() => {

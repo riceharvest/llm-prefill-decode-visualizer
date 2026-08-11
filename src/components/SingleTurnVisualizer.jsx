@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Zap, Gauge, FileText } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
-import { readParamNum, writeParams } from '../utils/urlState';
+import { readParamNum, readParam, writeParams } from '../utils/urlState';
 
 export default function SingleTurnVisualizer({
   prefillSpeed,
@@ -12,6 +12,14 @@ export default function SingleTurnVisualizer({
 }) {
   const [promptTokens, setPromptTokens] = useState(() => readParamNum('prompt', 2048));
   const [outputTokens, setOutputTokens] = useState(() => readParamNum('output', 512));
+
+  // Auto-start the simulation when the page was opened via a "try it" demo link
+  useEffect(() => {
+    if (readParam('autoplay') === '1') {
+      const t = setTimeout(() => setIsPlaying(true), 250);
+      return () => clearTimeout(t);
+    }
+  }, [setIsPlaying]);
 
   // Shareable per-tab settings
   useEffect(() => {
