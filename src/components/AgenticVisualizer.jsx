@@ -58,7 +58,8 @@ export default function AgenticVisualizer({
   const TOKENS_PER_WORD = 2.5;
   const WORD_WINDOW = 150;
   const wordWindowFor = (tokens) => {
-    const totalWords = Math.floor(tokens / TOKENS_PER_WORD);
+    const safeTokens = Math.max(0, tokens || 0);
+    const totalWords = Math.floor(safeTokens / TOKENS_PER_WORD);
     const lap = Math.floor(totalWords / WORD_WINDOW);
     const visible = totalWords % WORD_WINDOW;
     return { totalWords, lap, visible };
@@ -140,7 +141,7 @@ export default function AgenticVisualizer({
   })();
 
   const cachingTimeSaved = turnBreakdownNoCache - totalAgentWalltime;
-  const cachingPercentSaved = (cachingTimeSaved / turnBreakdownNoCache) * 100;
+  const cachingPercentSaved = Number.isFinite(turnBreakdownNoCache) && turnBreakdownNoCache > 0 ? (cachingTimeSaved / turnBreakdownNoCache) * 100 : 0;
 
   // Ref for timer
   const animFrameRef = useRef(null);
@@ -181,7 +182,7 @@ export default function AgenticVisualizer({
       lastTickRef.current = now;
 
       if (simSpeedMultiplier === 'instant') {
-        const last = turnBreakdown[turnBreakdown.length - 1];
+        const last = turnBreakdown[turnBreakdown.length - 1] || { newTokensPrefilled: 0, decodeTokens: 0 };
         setActiveTurn(numTurns);
         setCurrentPhase('completed');
         setPrefillProgress(last.newTokensPrefilled);
@@ -224,7 +225,7 @@ export default function AgenticVisualizer({
       }
 
       if (nextTime >= totalAgentWalltime) {
-        const last = turnBreakdown[turnBreakdown.length - 1];
+        const last = turnBreakdown[turnBreakdown.length - 1] || { newTokensPrefilled: 0, decodeTokens: 0 };
         setActiveTurn(numTurns);
         setCurrentPhase('completed');
         setPrefillProgress(last.newTokensPrefilled);
@@ -317,11 +318,8 @@ export default function AgenticVisualizer({
               />
               <input
                 type="number"
-                min="1"
-                max="200"
-                step="1"
                 value={numTurns}
-                onChange={(e) => { setNumTurns(Math.max(1, Math.min(200, Number(e.target.value) || 1))); handleReset(); }}
+                onChange={(e) => { setNumTurns(Number(e.target.value)); handleReset(); }}
                 style={{ width: '64px', textAlign: 'right' }}
               />
             </div>
@@ -345,11 +343,8 @@ export default function AgenticVisualizer({
               />
               <input
                 type="number"
-                min="500"
-                max="262144"
-                step="250"
                 value={basePromptTokens}
-                onChange={(e) => { setBasePromptTokens(Math.max(500, Math.min(262144, Number(e.target.value) || 500))); handleReset(); }}
+                onChange={(e) => { setBasePromptTokens(Number(e.target.value)); handleReset(); }}
                 style={{ width: '80px', textAlign: 'right' }}
               />
             </div>
@@ -373,11 +368,8 @@ export default function AgenticVisualizer({
               />
               <input
                 type="number"
-                min="100"
-                max="50000"
-                step="100"
                 value={toolOutputTokensPerTurn}
-                onChange={(e) => { setToolOutputTokensPerTurn(Math.max(100, Math.min(50000, Number(e.target.value) || 100))); handleReset(); }}
+                onChange={(e) => { setToolOutputTokensPerTurn(Number(e.target.value)); handleReset(); }}
                 style={{ width: '80px', textAlign: 'right' }}
               />
             </div>
@@ -401,11 +393,8 @@ export default function AgenticVisualizer({
               />
               <input
                 type="number"
-                min="50"
-                max="20000"
-                step="50"
                 value={decodeTokensPerTurn}
-                onChange={(e) => { setDecodeTokensPerTurn(Math.max(50, Math.min(20000, Number(e.target.value) || 50))); handleReset(); }}
+                onChange={(e) => { setDecodeTokensPerTurn(Number(e.target.value)); handleReset(); }}
                 style={{ width: '80px', textAlign: 'right' }}
               />
             </div>
@@ -525,7 +514,7 @@ export default function AgenticVisualizer({
               <div style={{ height: '8px', background: '#DBEAFE', borderRadius: '4px', overflow: 'hidden', margin: '8px 0' }}>
                 <div style={{
                   height: '100%',
-                  width: `${activeTurnItem ? Math.min(100, (prefillProgress / activeTurnItem.newTokensPrefilled) * 100) : 0}%`,
+                  width: `${activeTurnItem && activeTurnItem.newTokensPrefilled > 0 ? Math.min(100, (prefillProgress / activeTurnItem.newTokensPrefilled) * 100) : 0}%`,
                   background: 'linear-gradient(90deg, #3B82F6 0%, #1D4ED8 100%)',
                   borderRadius: '4px',
                   transition: 'width 0.1s linear'
@@ -538,8 +527,7 @@ export default function AgenticVisualizer({
                 border: '1px solid #BFDBFE',
                 borderRadius: '8px',
                 padding: '10px',
-                minHeight: '96px',
-                maxHeight: '200px',
+                height: '160px',
                 overflowY: 'auto',
                 fontFamily: 'var(--font-mono)',
                 fontSize: '0.82rem',
@@ -610,7 +598,7 @@ export default function AgenticVisualizer({
               <div style={{ height: '8px', background: '#D1FAE5', borderRadius: '4px', overflow: 'hidden', margin: '8px 0' }}>
                 <div style={{
                   height: '100%',
-                  width: `${activeTurnItem ? Math.min(100, (decodeProgress / activeTurnItem.decodeTokens) * 100) : 0}%`,
+                  width: `${activeTurnItem && activeTurnItem.decodeTokens > 0 ? Math.min(100, (decodeProgress / activeTurnItem.decodeTokens) * 100) : 0}%`,
                   background: 'linear-gradient(90deg, #10B981 0%, #047857 100%)',
                   borderRadius: '4px',
                   transition: 'width 0.1s linear'
@@ -623,8 +611,7 @@ export default function AgenticVisualizer({
                 border: '1px solid #A7F3D0',
                 borderRadius: '8px',
                 padding: '10px',
-                minHeight: '96px',
-                maxHeight: '200px',
+                height: '160px',
                 overflowY: 'auto',
                 fontFamily: 'var(--font-mono)',
                 fontSize: '0.82rem',
@@ -695,7 +682,8 @@ export default function AgenticVisualizer({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {turnBreakdown.map((turnItem) => {
               const isCurrentTurn = activeTurn === turnItem.turn;
-              const prefillRatio = (turnItem.prefillTime / turnItem.turnWalltime) * 100;
+              const prefillRatio = Number.isFinite(turnItem.turnWalltime) && turnItem.turnWalltime > 0 ? (turnItem.prefillTime / turnItem.turnWalltime) * 100 : 0;
+              const barWidth = Number.isFinite(totalAgentWalltime) && totalAgentWalltime > 0 ? (turnItem.turnWalltime / totalAgentWalltime) * 100 : 0;
 
               return (
                 <div
@@ -724,7 +712,7 @@ export default function AgenticVisualizer({
                   <div style={{ flex: 1, height: '26px', background: '#F1F5F9', borderRadius: '6px', display: 'flex', overflow: 'hidden', position: 'relative' }}>
                     <div
                       style={{
-                        width: `${(turnItem.turnWalltime / totalAgentWalltime) * 100}%`,
+                        width: `${barWidth}%`,
                         display: 'flex',
                         height: '100%'
                       }}

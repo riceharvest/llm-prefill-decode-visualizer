@@ -49,7 +49,7 @@ export default function SpeedControls({
               <input
                 type="number"
                 value={prefillSpeed}
-                onChange={(e) => setPrefillSpeed(Math.max(1, Number(e.target.value)))}
+                onChange={(e) => setPrefillSpeed(Number(e.target.value))}
                 style={{ width: '90px', textAlign: 'right' }}
               />
               <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#3B82F6' }}>tok/s</span>
@@ -93,7 +93,7 @@ export default function SpeedControls({
               <input
                 type="number"
                 value={decodeSpeed}
-                onChange={(e) => setDecodeSpeed(Math.max(1, Number(e.target.value)))}
+                onChange={(e) => setDecodeSpeed(Number(e.target.value))}
                 style={{ width: '90px', textAlign: 'right' }}
               />
               <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#10B981' }}>tok/s</span>
@@ -101,7 +101,7 @@ export default function SpeedControls({
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
             <p style={{ fontSize: '0.73rem', color: '#059669' }}>
-              Generates 1 token per step (TPOT = {(1000 / decodeSpeed).toFixed(1)} ms/tok)
+              Generates 1 token per step (TPOT = {decodeSpeed > 0 ? (1000 / decodeSpeed).toFixed(1) : '∞'} ms/tok)
             </p>
           </div>
         </div>

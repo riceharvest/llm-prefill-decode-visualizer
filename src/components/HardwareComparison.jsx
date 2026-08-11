@@ -25,9 +25,9 @@ export default function HardwareComparison() {
   const decodeTimeB = testOutputTokens / presetB.decodeSpeed;
   const totalTimeB = ttftB + decodeTimeB;
 
-  const speedupTotal = totalTimeB / totalTimeA;
-  const speedupPrefill = ttftB / ttftA;
-  const speedupDecode = decodeTimeB / decodeTimeA;
+  const speedupTotal = totalTimeA > 0 ? totalTimeB / totalTimeA : 0;
+  const speedupPrefill = ttftA > 0 ? ttftB / ttftA : 0;
+  const speedupDecode = decodeTimeA > 0 ? decodeTimeB / decodeTimeA : 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '16px' }}>
@@ -57,11 +57,8 @@ export default function HardwareComparison() {
               />
               <input
                 type="number"
-                min="512"
-                max="32768"
-                step="512"
                 value={testPromptTokens}
-                onChange={(e) => setTestPromptTokens(Math.max(512, Math.min(32768, Number(e.target.value) || 512)))}
+                onChange={(e) => setTestPromptTokens(Number(e.target.value))}
                 style={{ width: '80px', textAlign: 'right' }}
               />
             </div>
@@ -84,11 +81,8 @@ export default function HardwareComparison() {
               />
               <input
                 type="number"
-                min="64"
-                max="4096"
-                step="64"
                 value={testOutputTokens}
-                onChange={(e) => setTestOutputTokens(Math.max(64, Math.min(4096, Number(e.target.value) || 64)))}
+                onChange={(e) => setTestOutputTokens(Number(e.target.value))}
                 style={{ width: '80px', textAlign: 'right' }}
               />
             </div>
@@ -214,7 +208,7 @@ export default function HardwareComparison() {
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>Overall Walltime Speedup</div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.5rem', fontWeight: '800', color: speedupTotal >= 1 ? '#059669' : '#DC2626' }}>
-              {speedupTotal >= 1 ? `${speedupTotal.toFixed(2)}x Faster` : `${(1/speedupTotal).toFixed(2)}x Slower`}
+              {speedupTotal > 0 ? (speedupTotal >= 1 ? `${speedupTotal.toFixed(2)}x Faster` : `${(1 / speedupTotal).toFixed(2)}x Slower`) : '—'}
             </div>
           </div>
 

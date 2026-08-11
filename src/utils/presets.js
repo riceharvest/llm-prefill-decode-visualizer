@@ -92,6 +92,7 @@ export const HARDWARE_PRESETS = [
 ];
 
 export function formatTime(seconds) {
+  if (!Number.isFinite(seconds)) return '∞';
   if (seconds < 0.001) return `${(seconds * 1000000).toFixed(0)} µs`;
   if (seconds < 1) return `${(seconds * 1000).toFixed(1)} ms`;
   if (seconds < 60) return `${seconds.toFixed(2)}s`;

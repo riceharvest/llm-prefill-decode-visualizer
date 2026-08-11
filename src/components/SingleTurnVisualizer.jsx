@@ -29,7 +29,7 @@ export default function SingleTurnVisualizer({
   const expectedTTFT = promptTokens / prefillSpeed; // seconds
   const expectedDecodeTime = outputTokens / decodeSpeed; // seconds
   const expectedTotalTime = expectedTTFT + expectedDecodeTime;
-  const tpotMs = 1000 / decodeSpeed;
+  const tpotMs = decodeSpeed > 0 ? 1000 / decodeSpeed : Infinity;
 
   const sampleWords = [
     "The", "architecture", "of", "modern", "Large", "Language", "Models", "relies",
@@ -138,8 +138,8 @@ export default function SingleTurnVisualizer({
     };
   }, [isPlaying, simSpeedMultiplier, promptTokens, outputTokens, prefillSpeed, decodeSpeed, expectedTTFT, expectedTotalTime]);
 
-  const prefillPct = (expectedTTFT / expectedTotalTime) * 100;
-  const decodePct = (expectedDecodeTime / expectedTotalTime) * 100;
+  const prefillPct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedTTFT / expectedTotalTime) * 100 : 0;
+  const decodePct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedDecodeTime / expectedTotalTime) * 100 : 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '16px' }}>
@@ -177,12 +177,9 @@ export default function SingleTurnVisualizer({
               />
               <input
                 type="number"
-                min="128"
-                max="32768"
-                step="128"
                 value={promptTokens}
                 onChange={(e) => {
-                  setPromptTokens(Math.max(128, Math.min(32768, Number(e.target.value) || 128)));
+                  setPromptTokens(Number(e.target.value));
                   handleReset();
                 }}
                 style={{ width: '80px', textAlign: 'right' }}
@@ -220,12 +217,9 @@ export default function SingleTurnVisualizer({
               />
               <input
                 type="number"
-                min="32"
-                max="4096"
-                step="32"
                 value={outputTokens}
                 onChange={(e) => {
-                  setOutputTokens(Math.max(32, Math.min(4096, Number(e.target.value) || 32)));
+                  setOutputTokens(Number(e.target.value));
                   handleReset();
                 }}
                 style={{ width: '80px', textAlign: 'right' }}
@@ -345,7 +339,7 @@ export default function SingleTurnVisualizer({
                 </span>
               </div>
               <span className="badge badge-decode" style={{ fontSize: '0.72rem' }}>
-                {decodeSpeed.toLocaleString()} tok/s ({tpotMs.toFixed(1)} ms/tok)
+                {decodeSpeed.toLocaleString()} tok/s ({Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms/tok` : '∞ ms/tok'})
               </span>
             </div>
 
@@ -353,7 +347,7 @@ export default function SingleTurnVisualizer({
             <div style={{ height: '10px', background: '#D1FAE5', borderRadius: '5px', overflow: 'hidden', margin: '12px 0 8px 0' }}>
               <div style={{
                 height: '100%',
-                width: `${Math.min(100, (currentDecodeTokens / outputTokens) * 100)}%`,
+                width: `${outputTokens > 0 ? Math.min(100, (currentDecodeTokens / outputTokens) * 100) : 0}%`,
                 background: 'linear-gradient(90deg, #10B981 0%, #047857 100%)',
                 borderRadius: '5px',
                 transition: simSpeedMultiplier === 'instant' ? 'none' : 'width 0.1s linear'
@@ -379,7 +373,7 @@ export default function SingleTurnVisualizer({
               Live Simulated Autoregressive Decode Stream ({currentDecodeTokens} tokens)
             </span>
             <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: '#059669', fontWeight: '700' }}>
-              TPOT: {tpotMs.toFixed(1)} ms / token
+              TPOT: {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms / token` : '∞ ms / token'}
             </span>
           </div>
 
@@ -471,7 +465,7 @@ export default function SingleTurnVisualizer({
               Effective Walltime Throughput
             </div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.4rem', fontWeight: '800', color: '#4F46E5', marginTop: '4px' }}>
-              {((promptTokens + outputTokens) / expectedTotalTime).toFixed(1)} <span style={{ fontSize: '0.8rem' }}>tok/s</span>
+              {((promptTokens + outputTokens) / Math.max(expectedTotalTime, 0.0001)).toFixed(1)} <span style={{ fontSize: '0.8rem' }}>tok/s</span>
             </div>
             <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: '4px' }}>
               Total Tokens ÷ Walltime
