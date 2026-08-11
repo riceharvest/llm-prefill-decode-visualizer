@@ -3,11 +3,128 @@ import { HardDrive } from 'lucide-react';
 import { formatTokens } from '../utils/presets';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
 
+// KV-cache geometry pulled from each model's actual config.json on HuggingFace.
+//   kvMode 'gqa' -> bytes/token/layer = 2 * kvHeads * headDim * bytes
+//   kvMode 'mla' -> bytes/token/layer = (kvLoraRank + qkRopeHeadDim) * bytes
+//                    (Multi-head Latent Attention: only the compressed latent +
+//                     RoPE part is cached per token)
+//   kvLayers     -> layers that actually store a KV cache (linear/KDA layers
+//                    don't; e.g. Kimi-K3 stores KV only on 24 full-attn layers)
+const MODEL_PRESETS = [
+  {
+    id: 'llama70b',
+    name: 'LLaMA-3.3 70B',
+    params: '70B',
+    layers: 80,
+    kvHeads: 8,
+    headDim: 128,
+    kvMode: 'gqa',
+    kvLayers: 80,
+    maxContext: 131072,
+    desc: 'GQA · 8 KV heads × 128'
+  },
+  {
+    id: 'llama8b',
+    name: 'LLaMA-3.1 8B',
+    params: '8B',
+    layers: 32,
+    kvHeads: 8,
+    headDim: 128,
+    kvMode: 'gqa',
+    kvLayers: 32,
+    maxContext: 131072,
+    desc: 'GQA · 8 KV heads × 128'
+  },
+  {
+    id: 'mistral7b',
+    name: 'Mistral 7B',
+    params: '7B',
+    layers: 32,
+    kvHeads: 8,
+    headDim: 128,
+    kvMode: 'gqa',
+    kvLayers: 32,
+    maxContext: 131072,
+    desc: 'GQA · 8 KV heads × 128'
+  },
+  {
+    id: 'dsv4flash',
+    name: 'DeepSeek-V4-Flash-0731',
+    params: '284B',
+    layers: 43,
+    kvHeads: 1,
+    headDim: 512,
+    kvMode: 'gqa',
+    kvLayers: 43,
+    maxContext: 1048576,
+    desc: 'DSA · 1 KV head × 512'
+  },
+  {
+    id: 'museglimmer',
+    name: 'Muse-Glimmer-30B',
+    params: '28B',
+    layers: 52,
+    kvHeads: 2,
+    headDim: 128,
+    kvMode: 'gqa',
+    kvLayers: 52,
+    maxContext: 131072,
+    desc: 'GQA · 2 KV heads × 128 · sliding window'
+  },
+  {
+    id: 'kimik3',
+    name: 'Kimi-K3',
+    params: '2.8T',
+    layers: 93,
+    kvMode: 'mla',
+    kvLoraRank: 512,
+    qkRopeHeadDim: 64,
+    kvLayers: 24, // only full-attention layers cache KV (KDA linear layers don't)
+    maxContext: 1048576,
+    desc: 'KDA · MLA · 24 full-attn layers'
+  },
+  {
+    id: 'lfm25',
+    name: 'LFM2.5-2.6B',
+    params: '2.6B',
+    layers: 30,
+    kvHeads: 8,
+    headDim: 64,
+    kvMode: 'gqa',
+    kvLayers: 30,
+    maxContext: 131072,
+    desc: 'GQA · 8 KV heads × 64'
+  },
+  {
+    id: 'glm52',
+    name: 'GLM-5.2',
+    params: '754B',
+    layers: 78,
+    kvMode: 'mla',
+    kvLoraRank: 512,
+    qkRopeHeadDim: 64,
+    kvLayers: 78,
+    maxContext: 1048576,
+    desc: 'DSA · MLA · IndexShare'
+  }
+];
+
+function kvBytesPerToken(preset, precisionBytes) {
+  if (preset.kvMode === 'mla') {
+    return preset.kvLayers * (preset.kvLoraRank + preset.qkRopeHeadDim) * precisionBytes;
+  }
+  return 2 * preset.kvLayers * preset.kvHeads * preset.headDim * precisionBytes;
+}
+
+function kvFormula(preset) {
+  if (preset.kvMode === 'mla') {
+    return `${preset.kvLayers} layers × (${preset.kvLoraRank} latent + ${preset.qkRopeHeadDim} rope) × ${preset.kvLayers === preset.layers ? '' : `${preset.kvLayers}/${preset.layers} full-attn `}bytes`;
+  }
+  return `2 × ${preset.kvLayers} layers × ${preset.kvHeads} KV heads × ${preset.headDim} dim × bytes`;
+}
+
 export default function KVCacheCalculator() {
   const [modelPreset, setModelPreset] = useState(() => readParam('model') || 'llama70b');
-  const [numLayers, setNumLayers] = useState(80);
-  const [kvHeads, setKvHeads] = useState(8); // Grouped-Query Attention (GQA) kv heads
-  const [headDim, setHeadDim] = useState(128);
   const [contextLength, setContextLength] = useState(() => readParamNum('ctx', 32768));
   const [precision, setPrecision] = useState(() => readParamNum('prec', 2)); // 2 bytes = FP16/BF16, 1 byte = FP8/INT8, 0.5 = INT4
   const [batchSize, setBatchSize] = useState(() => readParamNum('batch', 1));
@@ -17,29 +134,10 @@ export default function KVCacheCalculator() {
     writeParams({ model: modelPreset, ctx: contextLength, prec: precision, batch: batchSize });
   }, [modelPreset, contextLength, precision, batchSize]);
 
-  const applyModelPreset = (presetKey) => {
-    setModelPreset(presetKey);
-    if (presetKey === 'llama8b') {
-      setNumLayers(32);
-      setKvHeads(8);
-      setHeadDim(128);
-    } else if (presetKey === 'llama70b') {
-      setNumLayers(80);
-      setKvHeads(8);
-      setHeadDim(128);
-    } else if (presetKey === 'qwen72b') {
-      setNumLayers(80);
-      setKvHeads(8);
-      setHeadDim(128);
-    } else if (presetKey === 'mistral7b') {
-      setNumLayers(32);
-      setKvHeads(8);
-      setHeadDim(128);
-    }
-  };
+  const preset = MODEL_PRESETS.find(p => p.id === modelPreset) || MODEL_PRESETS[0];
 
-  // KV Cache size per token in bytes = 2 * numLayers * kvHeads * headDim * precision
-  const bytesPerTokenSingleSeq = 2 * numLayers * kvHeads * headDim * precision;
+  // KV Cache size per token in bytes (per sequence)
+  const bytesPerTokenSingleSeq = kvBytesPerToken(preset, precision);
   const totalKVCacheBytes = bytesPerTokenSingleSeq * contextLength * batchSize;
   const totalKVCacheGB = totalKVCacheBytes / (1024 * 1024 * 1024);
   const totalKVCacheMB = totalKVCacheBytes / (1024 * 1024);
@@ -54,19 +152,16 @@ export default function KVCacheCalculator() {
         </h2>
 
         <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '20px' }}>
-          Every prompt and generated token creates Key and Value matrices stored in GPU VRAM during prefill and decode phases.
+          Every prompt and generated token creates Key and Value matrices stored in GPU VRAM during prefill and decode phases. Model geometry pulled from official HuggingFace config.json.
         </p>
 
         {/* Model Presets */}
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '24px' }}>
-          {[
-            { id: 'llama70b', label: 'LLaMA-3.3 70B (GQA 8 KV heads)' },
-            { id: 'llama8b', label: 'LLaMA-3.1 8B (GQA 8 KV heads)' },
-            { id: 'mistral7b', label: 'Mistral 7B (GQA 8 KV heads)' }
-          ].map(p => (
+          {MODEL_PRESETS.map(p => (
             <button
               key={p.id}
-              onClick={() => applyModelPreset(p.id)}
+              onClick={() => setModelPreset(p.id)}
+              title={p.desc}
               style={{
                 padding: '8px 14px',
                 borderRadius: '8px',
@@ -78,7 +173,7 @@ export default function KVCacheCalculator() {
                 cursor: 'pointer'
               }}
             >
-              {p.label}
+              {p.name} <span style={{ opacity: 0.7, fontWeight: '600' }}>({p.params})</span>
             </button>
           ))}
         </div>
@@ -94,9 +189,9 @@ export default function KVCacheCalculator() {
             <input
               type="range"
               min="1024"
-              max="131072"
+              max={Math.min(1048576, preset.maxContext)}
               step="1024"
-              value={contextLength}
+              value={Math.min(contextLength, preset.maxContext)}
               onChange={(e) => setContextLength(Number(e.target.value))}
             />
           </div>
@@ -118,7 +213,7 @@ export default function KVCacheCalculator() {
 
           <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Precision Data Type</span>
+              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>KV Cache Precision</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#059669' }}>
                 {precision === 2 ? 'FP16 / BF16 (2 bytes)' : precision === 1 ? 'FP8 / INT8 (1 byte)' : 'INT4 (0.5 byte)'}
               </span>
@@ -183,10 +278,10 @@ export default function KVCacheCalculator() {
 
           <div>
             <div style={{ fontSize: '0.78rem', fontWeight: '700', color: '#065F46', textTransform: 'uppercase' }}>
-              VRAM Formula
+              KV Formula ({preset.kvMode === 'mla' ? 'MLA' : 'GQA'})
             </div>
             <div style={{ fontSize: '0.78rem', fontFamily: 'var(--font-mono)', color: '#065F46', marginTop: '6px' }}>
-              2 × {numLayers} layers × {kvHeads} KV heads × {headDim} dim × {precision}B
+              {kvFormula(preset)}
             </div>
           </div>
         </div>
