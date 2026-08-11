@@ -268,14 +268,23 @@ export default function KVCacheCalculator() {
               <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Context Length</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#7C3AED' }}>{formatTokens(contextLength)} tok</span>
             </div>
-            <input
-              type="range"
-              min="1024"
-              max={Math.min(1048576, preset.maxContext)}
-              step="1024"
-              value={Math.min(contextLength, preset.maxContext)}
-              onChange={(e) => setContextLength(Number(e.target.value))}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="range"
+                min="1024"
+                max={Math.min(1048576, preset.maxContext)}
+                step="1024"
+                value={Math.min(contextLength, preset.maxContext)}
+                onChange={(e) => setContextLength(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <input
+                type="number"
+                value={contextLength}
+                onChange={(e) => setContextLength(Number(e.target.value))}
+                style={{ width: '90px', textAlign: 'right' }}
+              />
+            </div>
           </div>
 
           <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
@@ -283,14 +292,23 @@ export default function KVCacheCalculator() {
               <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155' }}>Concurrent Batch Size</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontWeight: '800', color: '#2563EB' }}>{batchSize} sequences</span>
             </div>
-            <input
-              type="range"
-              min="1"
-              max="64"
-              step="1"
-              value={batchSize}
-              onChange={(e) => setBatchSize(Number(e.target.value))}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="range"
+                min="1"
+                max="64"
+                step="1"
+                value={batchSize}
+                onChange={(e) => setBatchSize(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <input
+                type="number"
+                value={batchSize}
+                onChange={(e) => setBatchSize(Number(e.target.value))}
+                style={{ width: '64px', textAlign: 'right' }}
+              />
+            </div>
           </div>
 
           <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
@@ -370,7 +388,9 @@ export default function KVCacheCalculator() {
 
         {/* Source footnote */}
         <p style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '12px', textAlign: 'center' }}>
-          {preset.name} geometry from {preset.source}. DeepSeek-V4-Flash uses compressed sparse attention (CSA m=4 / HCA m'=128, arXiv 2606.19348): the ~3.6 GB @ 1M figure is the paper's measured KV at mixed BF16/FP8 storage, scaled here by precision and context (linear approximation).
+          {preset.kvMode === 'csa_hca'
+            ? 'DeepSeek-V4-Flash uses compressed sparse attention (CSA m=4 / HCA m\u2032=128, arXiv 2606.19348): the ~3.6 GB @ 1M figure is the paper\u2019s measured KV at mixed BF16/FP8 storage, scaled here by precision and context (linear approximation).'
+            : `${preset.name} geometry from ${preset.source}. KV math follows the actual attention type: ${preset.kvMode === 'mla' ? 'MLA compresses KV into a latent vector per layer' : preset.kvMode === 'sliding' ? 'sliding-window layers cache only the last window tokens, so long-context KV is bounded' : preset.desc.includes('Hybrid') ? 'only full-attention layers cache per-token KV; linear layers are recurrent' : 'standard grouped-query attention'}.`}
         </p>
 
       </div>
