@@ -13,7 +13,10 @@ export default function App() {
   const [selectedPreset, setSelectedPreset] = useState(() => readParam('preset') || 'rtx4090_exl2');
   const [prefillSpeed, setPrefillSpeed] = useState(() => Number(readParam('prefill')) || 3800);
   const [decodeSpeed, setDecodeSpeed] = useState(() => Number(readParam('decode')) || 105);
-  const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => readParam('sim') || 1);
+  const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => {
+    const v = readParam('sim');
+    return v === 'instant' ? 'instant' : (Number(v) || 1);
+  });
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Keep shareable settings in the URL
