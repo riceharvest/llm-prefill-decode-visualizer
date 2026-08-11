@@ -33,6 +33,7 @@ export default function AgenticVisualizer({
   const [currentPhase, setCurrentPhase] = useState('idle'); // 'idle' | 'prefilling' | 'decoding' | 'completed'
   const [prefillProgress, setPrefillProgress] = useState(0); // tokens ingested in current turn prefill
   const [decodeProgress, setDecodeProgress] = useState(0); // tokens decoded in current turn
+  const [elapsedSim, setElapsedSim] = useState(0); // simulated seconds elapsed across the whole loop
 
   // Sample token streams for the live prefill/decode visualization
   const SAMPLE_PROMPT_WORDS = [
@@ -153,6 +154,7 @@ export default function AgenticVisualizer({
     setCurrentPhase('idle');
     setPrefillProgress(0);
     setDecodeProgress(0);
+    setElapsedSim(0);
     simTimeRef.current = 0;
     setIsPlaying(false);
   };
@@ -187,6 +189,7 @@ export default function AgenticVisualizer({
         setCurrentPhase('completed');
         setPrefillProgress(last.newTokensPrefilled);
         setDecodeProgress(last.decodeTokens);
+        setElapsedSim(totalAgentWalltime);
         setIsPlaying(false);
         return;
       }
@@ -194,6 +197,7 @@ export default function AgenticVisualizer({
       const simDelta = realDelta * simSpeedMultiplier;
       simTimeRef.current += simDelta;
       const nextTime = simTimeRef.current;
+      setElapsedSim(nextTime);
 
       // Find which turn and phase we are currently in
       let accumulated = 0;
@@ -230,6 +234,7 @@ export default function AgenticVisualizer({
         setCurrentPhase('completed');
         setPrefillProgress(last.newTokensPrefilled);
         setDecodeProgress(last.decodeTokens);
+        setElapsedSim(totalAgentWalltime);
         setIsPlaying(false);
         return;
       } else {
@@ -492,6 +497,27 @@ export default function AgenticVisualizer({
             </span>
           </div>
 
+          {/* Overall agent loop progress bar */}
+          <div style={{ marginBottom: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#334155' }}>
+                Overall Agent Loop Progress
+              </span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', fontWeight: '800', color: '#D97706' }}>
+                {formatTime(elapsedSim)} / {formatTime(totalAgentWalltime)}
+              </span>
+            </div>
+            <div style={{ height: '10px', background: '#F1F5F9', borderRadius: '5px', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%',
+                width: `${totalAgentWalltime > 0 ? Math.min(100, (elapsedSim / totalAgentWalltime) * 100) : 0}%`,
+                background: 'linear-gradient(90deg, #F59E0B 0%, #D97706 100%)',
+                borderRadius: '5px',
+                transition: 'width 0.1s linear'
+              }} />
+            </div>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
             {/* Prefill Panel */}
             <div style={{
@@ -572,7 +598,7 @@ export default function AgenticVisualizer({
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: '#1E3A8A' }}>
-                <span>Tokens Ingested: <strong>{formatTokens(prefillProgress)}</strong> / {formatTokens(activeTurnItem ? activeTurnItem.newTokensPrefilled : 0)}</span>
+                <span>Tokens Ingested: <strong>{prefillProgress.toLocaleString()}</strong> / {activeTurnItem ? activeTurnItem.newTokensPrefilled.toLocaleString() : '0'}</span>
                 <span>≈{TOKENS_PER_WORD} tok/word · {WORD_WINDOW}-word window</span>
               </div>
             </div>
@@ -656,7 +682,7 @@ export default function AgenticVisualizer({
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: '#064E3B' }}>
-                <span>Tokens Generated: <strong>{formatTokens(decodeProgress)}</strong> / {formatTokens(activeTurnItem ? activeTurnItem.decodeTokens : 0)}</span>
+                <span>Tokens Generated: <strong>{decodeProgress.toLocaleString()}</strong> / {activeTurnItem ? activeTurnItem.decodeTokens.toLocaleString() : '0'}</span>
                 <span>≈{TOKENS_PER_WORD} tok/word · {WORD_WINDOW}-word window</span>
               </div>
             </div>
