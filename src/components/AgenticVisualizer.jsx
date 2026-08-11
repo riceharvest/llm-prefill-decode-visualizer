@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, readParamBool, readParam, writeParams } from '../utils/urlState';
+import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
 
 export default function AgenticVisualizer({
   prefillSpeed,
@@ -81,74 +82,38 @@ export default function AgenticVisualizer({
     return Array.from({ length: visible }, (_, i) => corpus[(lap * 7 + i) % corpus.length]);
   };
 
-  // Calculate mathematical timeline per turn
-  const calculateTurnBreakdown = () => {
-    const turns = [];
-    let cumulativePromptTokens = basePromptTokens;
-    let cumulativeWalltime = 0;
-
-    const turnActions = [
-      { tool: 'user_query', label: 'User Task & Agent Plan Generation' },
-      { tool: 'database_query', label: 'Tool Call #1: Query Vector DB / RAG' },
-      { tool: 'execute_code', label: 'Tool Call #2: Run Data Analysis Code' },
-      { tool: 'web_search', label: 'Tool Call #3: Fetch Web Documentation' },
-      { tool: 'format_response', label: 'Tool Call #4: Structure Final Report' },
-      { tool: 'review_check', label: 'Tool Call #5: Verification & Double-Check' }
-    ];
-
-    for (let t = 1; t <= numTurns; t++) {
-      let promptTokensThisTurn = cumulativePromptTokens;
-      let newTokensToPrefill = promptTokensThisTurn;
-
-      if (enablePrefixCaching && t > 1) {
-        // Only prefill the NEW tool output + previous decode tokens added in the last turn
-        newTokensToPrefill = toolOutputTokensPerTurn + decodeTokensPerTurn;
-      }
-
-      const prefillTime = newTokensToPrefill / prefillSpeed;
-      const decodeTime = decodeTokensPerTurn / decodeSpeed;
-      const turnWalltime = prefillTime + decodeTime;
-      cumulativeWalltime += turnWalltime;
-
-      const actionInfo = turnActions[(t - 1) % turnActions.length];
-
-      turns.push({
-        turn: t,
-        label: actionInfo.label,
-        tool: actionInfo.tool,
-        totalPromptTokens: promptTokensThisTurn,
-        newTokensPrefilled: newTokensToPrefill,
-        decodeTokens: decodeTokensPerTurn,
-        prefillTime,
-        decodeTime,
-        turnWalltime,
-        cumulativeWalltime,
-        isCached: enablePrefixCaching && t > 1
-      });
-
-      // Update prompt history length for next turn (adds decode tokens + tool output tokens)
-      cumulativePromptTokens += decodeTokensPerTurn + toolOutputTokensPerTurn;
-    }
-
-    return turns;
+  const turnActions = [
+    { tool: 'user_query', label: 'User Task & Agent Plan Generation' },
+    { tool: 'database_query', label: 'Tool Call #1: Query Vector DB / RAG' },
+    { tool: 'execute_code', label: 'Tool Call #2: Run Data Analysis Code' },
+    { tool: 'web_search', label: 'Tool Call #3: Fetch Web Documentation' },
+    { tool: 'format_response', label: 'Tool Call #4: Structure Final Report' },
+    { tool: 'review_check', label: 'Tool Call #5: Verification & Double-Check' }
+  ];
+  const timelineInputs = {
+    numTurns,
+    basePromptTokens,
+    toolOutputTokensPerTurn,
+    decodeTokensPerTurn,
+    prefillSpeed,
+    decodeSpeed
   };
-
-  const turnBreakdown = calculateTurnBreakdown();
+  const turnBreakdown = calculateAgenticTimeline({
+    ...timelineInputs,
+    enablePrefixCaching
+  }).map((turn, index) => ({
+    ...turn,
+    ...turnActions[index % turnActions.length]
+  }));
   const totalAgentWalltime = turnBreakdown.reduce((acc, t) => acc + t.turnWalltime, 0);
+  const waterfallLayout = waterfallGeometry(turnBreakdown);
   const activeTurnItem = activeTurn ? turnBreakdown.find(t => t.turn === activeTurn) : null;
 
   // Compare walltime if caching was turned off
-  const turnBreakdownNoCache = (() => {
-    let cumPrompt = basePromptTokens;
-    let total = 0;
-    for (let t = 1; t <= numTurns; t++) {
-      const pTime = cumPrompt / prefillSpeed;
-      const dTime = decodeTokensPerTurn / decodeSpeed;
-      total += pTime + dTime;
-      cumPrompt += decodeTokensPerTurn + toolOutputTokensPerTurn;
-    }
-    return total;
-  })();
+  const turnBreakdownNoCache = calculateAgenticTimeline({
+    ...timelineInputs,
+    enablePrefixCaching: false
+  }).reduce((total, turn) => total + turn.turnWalltime, 0);
 
   const cachingTimeSaved = turnBreakdownNoCache - totalAgentWalltime;
   const cachingPercentSaved = Number.isFinite(turnBreakdownNoCache) && turnBreakdownNoCache > 0 ? (cachingTimeSaved / turnBreakdownNoCache) * 100 : 0;
@@ -555,8 +520,7 @@ export default function AgenticVisualizer({
                 height: '100%',
                 width: `${totalAgentWalltime > 0 ? Math.min(100, (elapsedSim / totalAgentWalltime) * 100) : 0}%`,
                 background: 'linear-gradient(90deg, #F59E0B 0%, #D97706 100%)',
-                borderRadius: '5px',
-                transition: 'width 0.1s linear'
+                borderRadius: '5px'
               }} />
             </div>
           </div>
@@ -585,8 +549,7 @@ export default function AgenticVisualizer({
                   height: '100%',
                   width: `${activeTurnItem && activeTurnItem.newTokensPrefilled > 0 ? Math.min(100, (prefillProgress / activeTurnItem.newTokensPrefilled) * 100) : 0}%`,
                   background: 'linear-gradient(90deg, #3B82F6 0%, #1D4ED8 100%)',
-                  borderRadius: '4px',
-                  transition: 'width 0.1s linear'
+                  borderRadius: '4px'
                 }} />
               </div>
 
@@ -669,8 +632,7 @@ export default function AgenticVisualizer({
                   height: '100%',
                   width: `${activeTurnItem && activeTurnItem.decodeTokens > 0 ? Math.min(100, (decodeProgress / activeTurnItem.decodeTokens) * 100) : 0}%`,
                   background: 'linear-gradient(90deg, #10B981 0%, #047857 100%)',
-                  borderRadius: '4px',
-                  transition: 'width 0.1s linear'
+                  borderRadius: '4px'
                 }} />
               </div>
 
@@ -749,10 +711,13 @@ export default function AgenticVisualizer({
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {turnBreakdown.map((turnItem) => {
+            {turnBreakdown.map((turnItem, turnIndex) => {
               const isCurrentTurn = activeTurn === turnItem.turn;
-              const prefillRatio = Number.isFinite(turnItem.turnWalltime) && turnItem.turnWalltime > 0 ? (turnItem.prefillTime / turnItem.turnWalltime) * 100 : 0;
-              const barWidth = Number.isFinite(totalAgentWalltime) && totalAgentWalltime > 0 ? (turnItem.turnWalltime / totalAgentWalltime) * 100 : 0;
+              const {
+                leftPercent: barLeft,
+                widthPercent: barWidth,
+                prefillPercent: prefillRatio
+              } = waterfallLayout[turnIndex];
 
               return (
                 <div
@@ -782,6 +747,8 @@ export default function AgenticVisualizer({
                     <div
                       style={{
                         width: `${barWidth}%`,
+                        left: `${barLeft}%`,
+                        position: 'absolute',
                         display: 'flex',
                         height: '100%'
                       }}
