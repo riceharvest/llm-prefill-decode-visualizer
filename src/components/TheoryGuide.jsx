@@ -105,7 +105,7 @@ export default function TheoryGuide() {
               {
                 q: 'Why is my first token so slow, then the rest are fast?',
                 a: 'That is normal. The first token waits for the prefill phase: the whole prompt is processed at once (compute-bound). On a mid GPU that is hundreds of ms. After that, decode runs at one token per step, so it feels fast per token — but every token reads the full model weights from VRAM, which is why decode is bandwidth-bound.',
-                demo: { tab: 'single', prefill: 3800, decode: 105, prompt: 8192, output: 256, sim: 5 }
+                demo: { tab: 'single', preset: 'rtx4090_exl2', prefill: 3800, decode: 105, prompt: 8192, output: 256, sim: 5 }
               },
               {
                 q: 'What is a good tok/s for a local model?',
@@ -125,12 +125,12 @@ export default function TheoryGuide() {
               {
                 q: 'Why does my context length run out of memory?',
                 a: 'Because KV cache grows linearly with context and is allocated for every layer. Long prompts with agents (tool outputs, history) fill it fast. Solutions: quantize the KV cache (--cache-type-k/v q8_0 or q4_0), shorten the system prompt, enable prefix caching, or pick a model with MLA / linear attention (they need far less KV per token).',
-                demo: { tab: 'kvcache', model: 'llama70b', ctx: 131072, prec: 0.5 }
+                demo: { tab: 'kvcache', model: 'llama70b', ctx: 131072, prec: 2 }
               },
               {
                 q: 'Does flash attention speed up prefill or decode?',
                 a: 'Flash attention mainly accelerates prefill and long-context attention compute, and it reduces memory use. It has little effect on the decode bottleneck (bandwidth-bound GEMV). It can also free VRAM, which indirectly lets you use a bigger context. Benchmark both — the gain is model- and context-dependent.',
-                demo: { tab: 'agentic', turns: 6, sprompt: 4096, tool: 1024, thought: 256, sim: 20 }
+                demo: { tab: 'agentic', preset: 'rtx4090_exl2', prefill: 3800, decode: 105, turns: 6, sprompt: 4096, tool: 1024, thought: 256, sim: 20 }
               },
               {
                 q: 'Is a higher quant always slower?',
