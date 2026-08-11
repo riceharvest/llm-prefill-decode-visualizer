@@ -115,7 +115,7 @@ export default function TheoryGuide() {
               {
                 q: 'Why is decode so much slower than prefill?',
                 a: 'Prefill is a big parallel matrix-matrix multiply (GEMM) — perfect for tensor cores. Decode is one matrix-vector multiply (GEMV) per token and is dominated by reading weights + KV cache from VRAM. You cannot fix decode speed with more compute; you need more memory bandwidth or a smaller/faster quantized model.',
-                demo: { tab: 'single', prefill: 3800, decode: 105, prompt: 4096, output: 2048, sim: 20 }
+                demo: { tab: 'single', preset: 'rtx3060_entry', prefill: 920, decode: 32, prompt: 4096, output: 2048, sim: 20 }
               },
               {
                 q: 'How much VRAM do I need for model + context?',

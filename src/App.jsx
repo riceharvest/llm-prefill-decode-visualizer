@@ -6,13 +6,22 @@ import AgenticVisualizer from './components/AgenticVisualizer';
 import HardwareComparison from './components/HardwareComparison';
 import KVCacheCalculator from './components/KVCacheCalculator';
 import TheoryGuide from './components/TheoryGuide';
+import { HARDWARE_PRESETS } from './utils/presets';
 import { readParam, writeParams } from './utils/urlState';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => readParam('tab') || 'single');
-  const [selectedPreset, setSelectedPreset] = useState(() => readParam('preset') || 'rtx4090_exl2');
-  const [prefillSpeed, setPrefillSpeed] = useState(() => Number(readParam('prefill')) || 3800);
-  const [decodeSpeed, setDecodeSpeed] = useState(() => Number(readParam('decode')) || 105);
+
+  // Preset from the URL drives both the dropdown label AND the default speeds,
+  // unless explicit prefill/decode params override them.
+  const initialPreset = (() => {
+    const p = readParam('preset');
+    return HARDWARE_PRESETS.find(x => x.id === p) ? p : 'rtx4090_exl2';
+  })();
+  const initialPresetObj = HARDWARE_PRESETS.find(x => x.id === initialPreset);
+  const [selectedPreset, setSelectedPreset] = useState(initialPreset);
+  const [prefillSpeed, setPrefillSpeed] = useState(() => Number(readParam('prefill')) || initialPresetObj.prefillSpeed);
+  const [decodeSpeed, setDecodeSpeed] = useState(() => Number(readParam('decode')) || initialPresetObj.decodeSpeed);
   const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => {
     const v = readParam('sim');
     return v === 'instant' ? 'instant' : (Number(v) || 1);
