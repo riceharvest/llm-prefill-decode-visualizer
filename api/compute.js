@@ -147,7 +147,7 @@ function capabilityList() {
       maxSize: MAX_BATCH_SIZE,
       example: { batch: [{ model: 'singleTurn', promptTokens: 4096 }, { model: 'kvCache', architecture: 'llama70b', contextLength: 131072 }] }
     },
-    otherEndpoints: ['/api/presets', '/api/localmaxxing', '/llms.txt']
+    otherEndpoints: ['/api/vram', '/api/presets', '/api/localmaxxing', '/llms.txt']
   };
 }
 

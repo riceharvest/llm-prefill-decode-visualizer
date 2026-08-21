@@ -24,6 +24,13 @@ Models:
 - `kvCache` — KV-cache VRAM for an architecture. Params: `architecture` (`llama70b|llama8b|qwen72b|mistral7b`) or explicit `numLayers`+`kvHeads`+`headDim`, plus `contextLength`, `precisionBytes` (2=FP16, 1=FP8, 0.5=INT4), `batchSize`.
 - `flagged` — engine launch-flag modeling. Params: `prefillSpeed`, `decodeSpeed`, `promptTokens`, `outputTokens`, and `flags` (comma-separated ids: `flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3`). Returns adjusted speeds, a per-flag audit trail (delta + source note), warnings, and a `singleTurn` simulation at the adjusted speeds. Deltas are documented heuristics, not measurements.
 
+**GET /api/vram** — combined model + KV-cache + context VRAM from just an `hfId`. Architecture (layers, hidden dim, GQA heads, head dim) and weight size are resolved from the Hugging Face config automatically — you never look up model internals.
+- `/api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m` → weights GB + KV GB + total, with the resolved architecture and the KV bytes/token formula.
+- Add `&vramGb=24` → `fits` flag plus `maxContextTokens` that fit the budget (upper bound; ignores activation overhead).
+- Add `&numTurns=40&tokensPerTurn=1200` → per-turn KV-growth projection with the exact turn where the context window (`firstContextOverflowTurn`) or VRAM budget (`firstVramOverflowTurn`) is first exceeded.
+- `quant` accepts GGUF/GPTQ tags (fp16, fp8, q8_0, q6_k, q5_k_m, q4_k_m, q4_0, q3_k_m, q2_k…); unknown tags assume ~4-bit and set `inputs.quantAssumed: true`.
+- GGUF-only repos (no safetensors metadata) fall back to the largest `.gguf` file size for weight VRAM.
+
 Calling `/api/compute` with no `model` returns a self-describing capability list.
 
 **Batching (one round trip for N comparisons):** `POST /api/compute` with `{"batch": [{"model": "singleTurn", "promptTokens": 4096}, {"model": "kvCache", "architecture": "llama70b", "contextLength": 131072}]}` (also accepted as `variants`, or `?batch=[...]` as URL-encoded JSON on GET). Each item is a normal parameter set including its own `model` field; max 50 items. Response: `{batch: true, count, okCount, errorCount, results: [{index, ok, result | error}]}` — one bad scenario returns a per-item error instead of failing the whole batch.
@@ -56,6 +63,7 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 ### Typical agent workflow
 
 1. `GET /api/sizing?model=<family>&contextLength=…&concurrency=…&maxTpotMs=…` → ranked hardware recommendations with VRAM fit and expected latency, in one call.
+1. `GET /api/vram?hfId=<model>&context=<tokens>&vramGb=<budget>` → will it fit, and at what max context? (no model internals needed).
 2. `GET /api/best?by=decode&maxParamsB=8` → find the fastest measured hardware for a model class.
 3. `GET /api/presets` for canonical speed numbers, or take medians from `/api/benchmarks` for real-world numbers.
 4. `GET /api/compute?model=singleTurn&prefillSpeed=...&decodeSpeed=...&promptTokens=...&outputTokens=...` → walltime/TTFT/TPOT for a specific request shape.
