@@ -4,7 +4,8 @@ import { BarChart3, Users, PlugZap } from 'lucide-react';
 import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
 import { methodologyMismatch } from '../utils/localMaxxing';
 import Metric from './Metric';
-
+import { estimateFromLabel } from '../utils/streetPricing';
+ (feat: attach pricing and availability links to every recommended GPU (#66))
 
 // Typical whole-rig wattage under inference load (GPU + rest-of-system overhead).
 // Used as the default for the TCO section; the user can always override it.
@@ -87,6 +88,36 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
 
   const presetA = presets.find(p => p.id === hardwareA) || presets[0] || HARDWARE_PRESETS[0];
   const presetB = presets.find(p => p.id === hardwareB) || presets[1] || HARDWARE_PRESETS[2];
+
+  // Street-price estimates: curated USD range plus direct eBay/Craigslist
+  // search links and an as-of date, so a budget line can be verified against
+  // live listings instead of trusted blindly.
+  const pricingA = estimateFromLabel(presetA.name);
+  const pricingB = estimateFromLabel(presetB.name);
+
+  const renderPricing = (preset, pricing) => {
+    if (!pricing) return null;
+    return (
+      <>
+        <div style={{ ...rowStyle, ...rowDivider }}>
+          <span>Street price</span>
+          <span style={numStyle}>
+            ${pricing.estimateUsd.toLocaleString()}
+            <span style={{ color: 'var(--text-subtle)', fontWeight: 400 }}> (${pricing.lowUsd.toLocaleString()}–${pricing.highUsd.toLocaleString()})</span>
+          </span>
+        </div>
+        {/* rowDivider styling lives on the price row; links sit directly under it */}
+        <div style={{ fontSize: '0.72rem' }}>
+          <a href={pricing.links.ebay} target="_blank" rel="noreferrer" aria-label={`eBay listings for ${preset.name}`}>eBay ↗</a>
+          {' · '}
+          <a href={pricing.links.ebayUsed} target="_blank" rel="noreferrer" aria-label={`used eBay listings for ${preset.name}`}>used ↗</a>
+          {' · '}
+          <a href={pricing.links.craigslist} target="_blank" rel="noreferrer" aria-label={`Craigslist listings for ${preset.name}`}>Craigslist ↗</a>
+          <span style={{ color: 'var(--text-subtle)' }}> · est. as of {pricing.asOf}</span>
+        </div>
+      </>
+    );
+  };
 
   const safeCp = Math.max(0, testPromptTokens || 0);
   const safeCo = Math.max(0, testOutputTokens || 0);
@@ -308,6 +339,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 </div>
               )}
               {presetA.sourceUrl && <a href={presetA.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600 }}>View LocalMaxxing source run ↗</a>}
+              {renderPricing(presetA, pricingA)}
               <div style={rowStyle}>
                 <span>Decode speed <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>(per user)</em></span>
                 <span style={{ ...numStyle, color: 'var(--decode)' }}>{Math.round(batchedPerUserDecodeA).toLocaleString()} tok/s</span>
@@ -399,6 +431,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 </div>
               )}
               {presetB.sourceUrl && <a href={presetB.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600 }}>View LocalMaxxing source run ↗</a>}
+              {renderPricing(presetB, pricingB)}
               <div style={rowStyle}>
                 <span>Decode speed <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>(per user)</em></span>
                 <span style={{ ...numStyle, color: 'var(--decode)' }}>{Math.round(batchedPerUserDecodeB).toLocaleString()} tok/s</span>

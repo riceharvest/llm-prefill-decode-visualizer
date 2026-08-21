@@ -84,6 +84,8 @@ Every `/api/compute` and `/api/best` response carries a deterministic `id` (`cal
 
 **GET /api/snapshots** — versioned dataset snapshot IDs (e.g. `snapshot-2026-08-21-a1b2c3d4`). Every data endpoint response carries a `snapshot` object; pass its ID back as `?snapshot=<id>` on `/api/localmaxxing`, `/api/benchmarks` or `/api/best` to pin the dataset and get reproducible numbers. Unknown/expired IDs fall back to current data with `snapshot.served: false`.
 
+Every result includes a `pricing` object: USD street-price estimate (`estimateUsd`, `lowUsd`, `highUsd`), `perGpu` breakdown when gpuCount > 1, an `asOf` date (prices are curated estimates, not live quotes), and `links.ebay` / `links.ebayUsed` / `links.craigslist` search URLs so a budget constraint can be verified against live listings. `pricing` is `null` for cpu_only rigs and unknown GPUs.
+
 ### Typical agent workflow
 
 1. `GET /api/sizing?model=<family>&contextLength=…&concurrency=…&maxTpotMs=…` → ranked hardware recommendations with VRAM fit and expected latency, in one call.

@@ -192,7 +192,7 @@ export default function handler(req, res) {
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
             SNAPSHOT_PARAM
           ],
-          responses: { '200': { description: 'Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns' }, '429': { $ref: '#/components/responses/RateLimited' } }
+          responses: { '200': { description: 'Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns. Each result includes a `pricing` object: USD street-price estimate with low/high range, perGpu breakdown for multi-GPU rigs, asOf date, and eBay (new + used) and Craigslist search links to verify against live listings. `pricing` is null when no anchor exists (cpu_only, unknown GPUs).' }, '429': { $ref: '#/components/responses/RateLimited' } }
         }
       },
       '/api/health': {
