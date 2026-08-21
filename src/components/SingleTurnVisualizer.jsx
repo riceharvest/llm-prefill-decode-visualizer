@@ -11,6 +11,14 @@ import { readParamNum, readParam, readParamBool, writeParams } from '../utils/ur
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
 import { drawItlSamples, summarizeItl, histogramItl, cumulativeItlSchedule, tokensEmittedBy } from '../utils/itl';
+import {
+  DEFAULT_HALF_SPEED_CONTEXT,
+  HALF_SPEED_CONTEXT_PRESETS,
+  decodeSpeedAtContext,
+  scaledDecodeTime,
+  averageScaledSpeed,
+  tokensGeneratedAt
+} from '../utils/contextScaling';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
 import { sanityWarnings } from '../../api/_math.js';
@@ -40,6 +48,12 @@ export default function SingleTurnVisualizer({
     const v = readParamNum('acc', 0.7);
     return Math.min(0.95, Math.max(0.3, v));
   });
+  // Context-length scaling: decode slows as the KV cache fills. One knob, C½
+  // (the cache depth at which speed has halved) — see utils/contextScaling.js.
+  const [ctxScaleEnabled, setCtxScaleEnabled] = useState(() => readParamBool('ctx', false));
+  const [ctxHalf, setCtxHalf] = useState(() => Math.max(1024, readParamNum('ctxHalf', DEFAULT_HALF_SPEED_CONTEXT)));
+  // Draggable depth probe on the decay curve (generated tokens); null = midpoint.
+  const [probeTokens, setProbeTokens] = useState(null);
   // Multimodal attachments: images tile into ~1MP vision-encoder chunks
   // (~1.1K tokens each) that prefill must ingest before the first token.
   const [imagesEnabled, setImagesEnabled] = useState(() => readParamBool('img', false));
@@ -107,13 +121,15 @@ export default function SingleTurnVisualizer({
       spec: specEnabled ? '1' : '',
       draftK: specEnabled ? draftTokens : '',
       acc: specEnabled ? acceptance : '',
+      ctx: ctxScaleEnabled ? '1' : '',
+      ctxHalf: ctxScaleEnabled && ctxHalf !== DEFAULT_HALF_SPEED_CONTEXT ? ctxHalf : '',
       img: imagesEnabled ? '1' : '',
       imgN: imagesEnabled && imageCount !== 1 ? imageCount : '',
       imgRes: imagesEnabled && imageResId !== '1080p' ? imageResId : '',
       jit: jitterEnabled ? '1' : '',
       jitPct: jitterEnabled && jitterPct !== 25 ? jitterPct : ''
     });
-  }, [promptTokens, outputTokens, specEnabled, draftTokens, acceptance, imagesEnabled, imageCount, imageResId, jitterEnabled, jitterPct]);
+  }, [promptTokens, outputTokens, specEnabled, draftTokens, acceptance, ctxScaleEnabled, ctxHalf, imagesEnabled, imageCount, imageResId, jitterEnabled, jitterPct]);
 
   // Simulation state
   const [phase, setPhase] = useState('idle'); // 'idle' | 'prefilling' | 'decoding' | 'completed'
@@ -128,7 +144,20 @@ export default function SingleTurnVisualizer({
   // too — they extend the KV cache before the first text token can emerge.
   const totalPrefillTokens = safePromptTokens + totalImageTokens;
   const expectedTTFT = totalPrefillTokens / prefillSpeed; // seconds
-  const tpotMs = effectiveDecodeSpeed > 0 ? 1000 / effectiveDecodeSpeed : Infinity;
+  // Context scaling: token i of the output is produced with the KV cache at
+  // depth totalPrefillTokens + i, so per-token time grows linearly and the
+  // decode phase no longer runs at a single constant speed. Walltime uses the
+  // closed form; the sim clock inverts it. Disabled → plain n / speed.
+  const ctxHalfSafe = Math.max(1024, ctxHalf || DEFAULT_HALF_SPEED_CONTEXT);
+  const avgDecodeSpeed = ctxScaleEnabled && safeOutputTokens > 0
+    ? averageScaledSpeed(effectiveDecodeSpeed, totalPrefillTokens, safeOutputTokens, ctxHalfSafe)
+    : effectiveDecodeSpeed;
+  // Average per-token time under context scaling feeds the ITL draws below
+  // (mean-preserving), and the closed-form walltime is the jitter-off baseline.
+  const ctxScaledDecodeTime = ctxScaleEnabled && safeOutputTokens > 0
+    ? scaledDecodeTime(effectiveDecodeSpeed, totalPrefillTokens, safeOutputTokens, ctxHalfSafe)
+    : safeOutputTokens / effectiveDecodeSpeed;
+  const tpotMs = ctxScaledDecodeTime > 0 ? (1000 * ctxScaledDecodeTime) / Math.max(1, safeOutputTokens) : Infinity;
 
   // Per-token ITL draws (seeded ⇒ stable across re-renders and share links).
   // Mean-preserving lognormal: the average TPOT is unchanged, only the tail
@@ -155,7 +184,7 @@ export default function SingleTurnVisualizer({
 
   const expectedDecodeTime = itlSchedule && itlSchedule.length > 0
     ? itlSchedule[itlSchedule.length - 1] / 1000 // spec-aware + jittered: sum of drawn per-token gaps
-    : safeOutputTokens / effectiveDecodeSpeed; // seconds (spec-aware)
+    : ctxScaledDecodeTime; // seconds (spec-aware, context-scaled when enabled)
   const expectedTotalTime = expectedTTFT + expectedDecodeTime;
   const ttftFloorWarnings = sanityWarnings({
     promptTokens: safePromptTokens,
@@ -264,10 +293,16 @@ export default function SingleTurnVisualizer({
         setCurrentPrefillProgress(totalPrefillTokens);
         const decodeProgressTime = newTime - expectedTTFT;
         // With ITL jitter on, token n appears when its cumulative drawn gap
-        // elapses (schedule is ms since decode start); otherwise linear rate.
-        const decodeCount = itlSchedule
-          ? Math.min(safeOutputTokens, tokensEmittedBy(itlSchedule, decodeProgressTime * 1000))
-          : Math.max(0, Math.min(safeOutputTokens, Math.floor(decodeProgressTime * effectiveDecodeSpeed)));
+        // elapses (schedule is ms since decode start). With context scaling
+        // the rate decays as the cache grows, so progress is the (quadratic)
+        // inverse of walltime; otherwise linear rate.
+        const decodeCount = Math.max(0, Math.min(safeOutputTokens,
+          itlSchedule
+            ? tokensEmittedBy(itlSchedule, decodeProgressTime * 1000)
+            : ctxScaleEnabled
+              ? Math.floor(tokensGeneratedAt(effectiveDecodeSpeed, totalPrefillTokens, decodeProgressTime, ctxHalfSafe))
+              : Math.floor(decodeProgressTime * effectiveDecodeSpeed)
+        ));
         setCurrentDecodeTokens(decodeCount);
       } else {
         // Completed
@@ -287,16 +322,59 @@ export default function SingleTurnVisualizer({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isPlaying, simSpeedMultiplier, promptTokens, outputTokens, prefillSpeed, decodeSpeed, effectiveDecodeSpeed, expectedTTFT, expectedTotalTime, totalPrefillTokens, safeOutputTokens, itlSchedule]);
+  }, [isPlaying, simSpeedMultiplier, promptTokens, outputTokens, prefillSpeed, decodeSpeed, effectiveDecodeSpeed, expectedTTFT, expectedTotalTime, totalPrefillTokens, safeOutputTokens, itlSchedule, ctxScaleEnabled, ctxHalfSafe]);
 
   const prefillPct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedTTFT / expectedTotalTime) * 100 : 0;
   const decodePct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedDecodeTime / expectedTotalTime) * 100 : 0;
 
+  // --- Context-scaling decay curve + draggable depth probe (issue #55 task) ---
+  const probeGen = Math.min(safeOutputTokens, Math.max(0, probeTokens ?? Math.floor(safeOutputTokens / 2)));
+  const ctxPresetIndex = HALF_SPEED_CONTEXT_PRESETS.reduce(
+    (best, v, i) => (Math.abs(v - ctxHalfSafe) < Math.abs(HALF_SPEED_CONTEXT_PRESETS[best] - ctxHalfSafe) ? i : best),
+    0
+  );
+  const CHART_W = 640;
+  const CHART_H = 170;
+  const PAD_L = 56;
+  const PAD_R = 14;
+  const PAD_T = 16;
+  const PAD_B = 26;
+  const innerW = CHART_W - PAD_L - PAD_R;
+  const innerH = CHART_H - PAD_T - PAD_B;
+  const chartMaxGen = Math.max(1, safeOutputTokens);
+  const instantSpeedAt = (genTok) =>
+    decodeSpeedAtContext(effectiveDecodeSpeed, totalPrefillTokens + genTok, ctxHalfSafe);
+  const curveStartSpeed = ctxScaleEnabled ? instantSpeedAt(0) : effectiveDecodeSpeed;
+  const curveEndSpeed = ctxScaleEnabled ? instantSpeedAt(chartMaxGen) : effectiveDecodeSpeed;
+  const xAt = (g) => PAD_L + (g / chartMaxGen) * innerW;
+  const yHi = Math.max(effectiveDecodeSpeed, 1) * 1.05;
+  const yLo = Math.max(0, curveEndSpeed - Math.max((curveStartSpeed - curveEndSpeed) * 0.08, effectiveDecodeSpeed * 0.03));
+  const yAt = (s) => PAD_T + (1 - (Math.min(Math.max(s, yLo), yHi) - yLo) / Math.max(yHi - yLo, 1e-9)) * innerH;
+  const CURVE_SAMPLES = 96;
+  const curvePoints = Array.from({ length: CURVE_SAMPLES + 1 }, (_, i) => {
+    const g = (i / CURVE_SAMPLES) * chartMaxGen;
+    const s = ctxScaleEnabled ? instantSpeedAt(g) : effectiveDecodeSpeed;
+    return `${xAt(g).toFixed(1)},${yAt(s).toFixed(1)}`;
+  }).join(' ');
+  const probeSpeed = ctxScaleEnabled ? instantSpeedAt(probeGen) : effectiveDecodeSpeed;
+  const probePctOfBase = effectiveDecodeSpeed > 0 ? (probeSpeed / effectiveDecodeSpeed) * 100 : 0;
+  const decaySvgRef = useRef(null);
+  const moveProbeToClientX = (clientX) => {
+    const svg = decaySvgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const px = ((clientX - rect.left) * CHART_W) / rect.width;
+    const frac = Math.min(1, Math.max(0, (px - PAD_L) / innerW));
+    setProbeTokens(Math.round(frac * chartMaxGen));
+  };
+  const displayDecodeSpeed = Math.round(avgDecodeSpeed || 0);
+
   // Live substitutions for the why-explainer popovers (issue #87)
   const ttftSub = `${safePromptTokens.toLocaleString()} tok ÷ ${prefillSpeed.toLocaleString()} tok/s = ${formatTime(expectedTTFT)}`;
-  const decodeTimeSub = `${safeOutputTokens.toLocaleString()} tok ÷ ${Math.round(effectiveDecodeSpeed).toLocaleString()} tok/s = ${formatTime(expectedDecodeTime)}`;
+  const decodeTimeSub = `${safeOutputTokens.toLocaleString()} tok ÷ ${displayDecodeSpeed.toLocaleString()} tok/s = ${formatTime(expectedDecodeTime)}`;
   const tpotSub = Number.isFinite(tpotMs)
-    ? `1000 ms ÷ ${Math.round(effectiveDecodeSpeed).toLocaleString()} tok/s = ${tpotMs.toFixed(1)} ms`
+    ? `1000 ms ÷ ${displayDecodeSpeed.toLocaleString()} tok/s = ${tpotMs.toFixed(1)} ms`
     : `decode speed is 0 tok/s → ∞ ms`;
   const walltimeSub = `${formatTime(expectedTTFT)} + ${formatTime(expectedDecodeTime)} = ${formatTime(expectedTotalTime)}`;
   const throughputSub = `(${(safePromptTokens + safeOutputTokens).toLocaleString()} tok) ÷ ${formatTime(expectedTotalTime)}`;
@@ -577,6 +655,139 @@ export default function SingleTurnVisualizer({
               </div>
               <p className="hint-text" style={{ marginTop: '8px' }}>
                 {t('singleTurn.itlHint')}
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* Context-length scaling of decode speed */}
+        <div className="panel-inset" style={{ marginBottom: '14px', borderColor: ctxScaleEnabled ? 'var(--decode-border)' : 'var(--border)' }}>
+          <div className="field-head" style={{ marginBottom: ctxScaleEnabled ? '10px' : '0' }}>
+            <button
+              onClick={() => setCtxScaleEnabled(!ctxScaleEnabled)}
+              className={`seg${ctxScaleEnabled ? ' active' : ''}`}
+              aria-pressed={ctxScaleEnabled}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '4px 12px', cursor: 'pointer',
+                borderRadius: 'var(--radius-sm)',
+                border: `1px solid ${ctxScaleEnabled ? 'var(--decode-border)' : 'var(--border)'}`,
+                background: ctxScaleEnabled ? 'var(--decode-dim)' : 'var(--bg-inset)',
+                color: ctxScaleEnabled ? 'var(--decode)' : 'var(--text-muted)'
+              }}
+            >
+              <Gauge size={14} /> {t('singleTurn.ctxScaling')} {ctxScaleEnabled ? t('singleTurn.specOn') : t('singleTurn.specOff')}
+            </button>
+            {ctxScaleEnabled && (
+              <span className="tag tag-decode">
+                {t('singleTurn.ctxEffectiveTag', { speed: displayDecodeSpeed.toLocaleString() })}
+              </span>
+            )}
+          </div>
+          {ctxScaleEnabled && (
+            <>
+              <div className="grid-auto" style={{ '--grid-min': '220px' }}>
+                <div className="field">
+                  <div className="field-head">
+                    <span className="field-label">{t('singleTurn.ctxHalfLabel')}</span>
+                    <span className="field-value" style={{ color: 'var(--decode)' }}>
+                      {formatTokens(ctxHalfSafe)} tok
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max={HALF_SPEED_CONTEXT_PRESETS.length - 1}
+                    step="1"
+                    value={ctxPresetIndex}
+                    aria-label={t('singleTurn.ctxHalfAria')}
+                    onChange={(e) => setCtxHalf(HALF_SPEED_CONTEXT_PRESETS[Number(e.target.value)])}
+                  />
+                  <div className="field-scale">
+                    <span>{formatTokens(HALF_SPEED_CONTEXT_PRESETS[0])}</span>
+                    <span>{formatTokens(HALF_SPEED_CONTEXT_PRESETS[HALF_SPEED_CONTEXT_PRESETS.length - 1])}</span>
+                  </div>
+                </div>
+                <div className="field">
+                  <div className="field-head">
+                    <span className="field-label">{t('singleTurn.ctxChartLabel')}</span>
+                    <span className="field-value" style={{ color: 'var(--decode)', fontFamily: 'var(--font-mono)' }}>
+                      {Math.round(curveStartSpeed).toLocaleString()} → {Math.round(curveEndSpeed).toLocaleString()} tok/s
+                    </span>
+                  </div>
+                  <p className="hint-text" style={{ margin: 0 }}>
+                    {t('singleTurn.ctxProbeReadout', {
+                      generated: probeGen.toLocaleString(),
+                      cache: (totalPrefillTokens + probeGen).toLocaleString(),
+                      speed: Math.round(probeSpeed).toLocaleString(),
+                      pct: probePctOfBase.toFixed(0)
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Decay curve with draggable depth marker */}
+              <svg
+                ref={decaySvgRef}
+                viewBox={`0 0 ${CHART_W} ${CHART_H}`}
+                role="img"
+                aria-label={t('singleTurn.ctxChartAria')}
+                style={{ width: '100%', marginTop: '10px', cursor: 'ew-resize', touchAction: 'none', display: 'block' }}
+                onPointerDown={(e) => {
+                  e.currentTarget.setPointerCapture?.(e.pointerId);
+                  moveProbeToClientX(e.clientX);
+                }}
+                onPointerMove={(e) => {
+                  if (e.buttons & 1) moveProbeToClientX(e.clientX);
+                }}
+              >
+                {/* plot frame + baseline */}
+                <rect x={PAD_L} y={PAD_T} width={innerW} height={innerH} fill="none" stroke="var(--border)" />
+                {/* curve area fill + line */}
+                <polygon
+                  points={`${PAD_L},${yAt(yLo)} ${curvePoints} ${CHART_W - PAD_R},${yAt(yLo)}`}
+                  fill="var(--decode)"
+                  opacity="0.12"
+                />
+                <polyline points={curvePoints} fill="none" stroke="var(--decode)" strokeWidth="2" />
+                {/* base-speed reference at the left edge */}
+                <line x1={PAD_L} y1={yAt(effectiveDecodeSpeed)} x2={CHART_W - PAD_R} y2={yAt(effectiveDecodeSpeed)} stroke="var(--text-subtle)" strokeDasharray="4 4" strokeWidth="1" />
+                <text x={PAD_L} y={yAt(effectiveDecodeSpeed) - 5} fontSize="10" fill="var(--text-muted)" fontFamily="var(--font-mono)">
+                  base {Math.round(effectiveDecodeSpeed).toLocaleString()} tok/s
+                </text>
+                {/* live position while decoding */}
+                {phase === 'decoding' && (
+                  <line
+                    x1={xAt(Math.min(currentDecodeTokens, chartMaxGen))} y1={PAD_T}
+                    x2={xAt(Math.min(currentDecodeTokens, chartMaxGen))} y2={CHART_H - PAD_B}
+                    stroke="var(--prefill)" strokeWidth="1.5" opacity="0.7"
+                  />
+                )}
+                {/* draggable depth probe */}
+                <g>
+                  <line x1={xAt(probeGen)} y1={PAD_T} x2={xAt(probeGen)} y2={CHART_H - PAD_B} stroke="var(--decode)" strokeWidth="1.5" />
+                  <circle cx={xAt(probeGen)} cy={yAt(probeSpeed)} r="5" fill="var(--decode)" stroke="var(--bg-raised)" strokeWidth="2" />
+                  <text
+                    x={Math.min(xAt(probeGen) + 8, CHART_W - PAD_R - 90)} y={PAD_T + 12}
+                    fontSize="11" fill="var(--text-main)" fontFamily="var(--font-mono)" fontWeight="700"
+                  >
+                    {Math.round(probeSpeed).toLocaleString()} tok/s @ +{probeGen.toLocaleString()}
+                  </text>
+                </g>
+              </svg>
+              <input
+                type="range"
+                min="0"
+                max={chartMaxGen}
+                step="1"
+                value={probeGen}
+                aria-label={t('singleTurn.ctxProbeAria')}
+                onChange={(e) => setProbeTokens(Number(e.target.value))}
+                style={{ width: '100%' }}
+              />
+
+              <p className="hint-text" style={{ marginTop: '8px' }}>
+                {t('singleTurn.ctxHint')}
               </p>
             </>
           )}
@@ -875,7 +1086,7 @@ export default function SingleTurnVisualizer({
                 <Analogy term="decode" />
               </span>
               <span className="tag tag-decode">
-                {decodeSpeed.toLocaleString()} tok/s · {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms/tok` : '∞ ms/tok'}
+                {displayDecodeSpeed.toLocaleString()} tok/s · {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms/tok` : '∞ ms/tok'}
               </span>
             </div>
 
@@ -1087,7 +1298,7 @@ export default function SingleTurnVisualizer({
                 {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms'}
               </Metric>
             </div>
-            <div className="metric-sub">{t('singleTurn.tokensPerSecSub', { speed: decodeSpeed })}</div>
+            <div className="metric-sub">{t('singleTurn.tokensPerSecSub', { speed: displayDecodeSpeed.toLocaleString() })}</div>
             {tpotAnchorText && <div className="metric-anchor">📖 {tpotAnchorText}</div>}
           </div>
 
