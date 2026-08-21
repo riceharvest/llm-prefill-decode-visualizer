@@ -43,29 +43,31 @@ export default function handler(req, res) {
       '/api/localmaxxing': {
         get: {
           summary: 'Raw community benchmark runs (flattened, model-normalized)',
-          description: 'Bare call returns a hardware-group summary. Filters: ?hardware=<substr>&model=<substr>&quant=<exact>&limit=N. Runs carry measured prefillTokPerSec / decodeTokPerSec.',
+          description: 'Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: { total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow next_cursor until has_more is false.',
           parameters: [
             { name: 'hardware', in: 'query', schema: { type: 'string' }, description: 'substring match on rig name/key' },
             { name: 'model', in: 'query', schema: { type: 'string' }, description: 'substring match on normalized family or hfId' },
             { name: 'quant', in: 'query', schema: { type: 'string' }, description: 'exact quantization, e.g. q4_k_m' },
-            { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 500 } }
+            { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 500 }, description: 'page size' },
+            { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' }
           ],
-          responses: { '200': { description: 'Hardware summary or run list' } }
+          responses: { '200': { description: 'Hardware summary, or paginated run list { total, items[], has_more, next_cursor }' } }
         }
       },
       '/api/benchmarks': {
         get: {
           summary: 'Aggregated speeds: median + IQR per group',
-          description: 'Outlier-resistant stats per hardware×model-family group (default). Regroup with ?groupBy=hardware|model|quant.',
+          description: 'Outlier-resistant stats per hardware×model-family group (default). Regroup with ?groupBy=hardware|model|quant. Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak).',
           parameters: [
             { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['hardwareModel', 'hardware', 'model', 'quant'] } },
             { name: 'hardware', in: 'query', schema: { type: 'string' } },
             { name: 'model', in: 'query', schema: { type: 'string' } },
             { name: 'quant', in: 'query', schema: { type: 'string' } },
             { name: 'hwClass', in: 'query', schema: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] } },
-            { name: 'limit', in: 'query', schema: { type: 'integer', default: 25 } }
+            { name: 'limit', in: 'query', schema: { type: 'integer', default: 25, maximum: 200 }, description: 'page size' },
+            { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' }
           ],
-          responses: { '200': { description: 'Groups with median/q1/q3/min/max prefill & decode, plus bestRun' } }
+          responses: { '200': { description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode, plus bestRun' } }
         }
       },
       '/api/best': {
