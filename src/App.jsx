@@ -8,6 +8,7 @@ import AgenticVisualizer from './components/AgenticVisualizer';
 import HardwareComparison from './components/HardwareComparison';
 import ABReplay from './components/ABReplay';
 import RunDiff from './components/RunDiff';
+import HardwareShortlist from './components/HardwareShortlist';
 import KVCacheCalculator from './components/KVCacheCalculator';
 import TheoryGuide from './components/TheoryGuide';
 import GuidedTour, { hasSeenTour } from './components/GuidedTour';
@@ -120,8 +121,8 @@ export default function App() {
         setIsPlaying(p => !p);
       } else if (e.key === 'r' || e.key === 'R') {
         handleReset();
-      } else if (/^[1-7]$/.test(e.key)) {
-        const tabs = ['single', 'agentic', 'compare', 'ab', 'diff', 'kvcache', 'theory'];
+      } else if (/^[1-8]$/.test(e.key)) {
+        const tabs = ['single', 'agentic', 'compare', 'ab', 'diff', 'shortlist', 'kvcache', 'theory'];
         setActiveTab(tabs[Number(e.key) - 1]);
       }
     };
@@ -224,6 +225,10 @@ export default function App() {
           <RunDiff />
         )}
 
+        {activeTab === 'shortlist' && (
+          <HardwareShortlist />
+        )}
+
         {activeTab === 'kvcache' && (
           <KVCacheCalculator />
         )}
@@ -250,7 +255,7 @@ export default function App() {
           <strong>LLM Prefill &amp; Decode Speed Visualizer</strong> · Open source inference benchmark instrument
         </p>
         <p style={{ fontSize: '0.7rem', marginTop: '4px', color: 'var(--text-subtle)' }}>
-          Shortcuts: <kbd>Space</kbd> play/pause · <kbd>R</kbd> reset · <kbd>1</kbd>–<kbd>6</kbd> switch tabs
+          Shortcuts: <kbd>Space</kbd> play/pause · <kbd>R</kbd> reset · <kbd>1</kbd>–<kbd>8</kbd> switch tabs
         </p>
         <p style={{ fontSize: '0.7rem', marginTop: '4px', color: 'var(--text-subtle)' }}>
           AI agents: all data available as JSON — <a href="/llms.txt">/llms.txt</a> · <a href="/api/spec">OpenAPI</a> · <a href="/api/compute">/api/compute</a> · <a href="/api/best">/api/best</a> · <a href="/api/localmaxxing">/api/localmaxxing</a> · <a href="/api/diff">/api/diff</a>
