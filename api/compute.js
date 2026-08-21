@@ -10,6 +10,7 @@ import {
 import { ENGINE_FLAGS, applyEngineFlags } from '../src/utils/engineFlags.js';
 import { enforceRateLimit } from './_ratelimit.js';
 import { sendJson, withSchemaVersion, applySchemaHeaders } from './_schema.js';
+import { ApiError, sendProblemFromError } from './_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -136,7 +137,9 @@ function computeOne(params) {
       return { status: 200, body: capabilityList() };
 
     default:
-      return { status: 400, body: { error: `Unknown model '${model}'`, available: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost'] } };
+      throw new ApiError('INVALID_PARAMS', `Unknown model '${model}'`, {
+        extras: { available: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost'] }
+      });
   }
 }
 
@@ -177,31 +180,33 @@ function runBatch(rawItems) {
     try {
       items = JSON.parse(items);
     } catch {
-      return { status: 400, body: { error: 'batch must be a JSON array of parameter sets (could not parse batch as JSON)' } };
+      throw new ApiError('INVALID_PARAMS', 'batch must be a JSON array of parameter sets (could not parse batch as JSON)');
     }
   }
 
   if (!Array.isArray(items)) {
-    return { status: 400, body: { error: 'batch must be a JSON array of parameter sets' } };
+    throw new ApiError('INVALID_PARAMS', 'batch must be a JSON array of parameter sets');
   }
   if (items.length === 0) {
-    return { status: 400, body: { error: 'batch must contain at least one parameter set' } };
+    throw new ApiError('INVALID_PARAMS', 'batch must contain at least one parameter set');
   }
   if (items.length > MAX_BATCH_SIZE) {
-    return { status: 400, body: { error: `batch exceeds maximum of ${MAX_BATCH_SIZE} parameter sets (got ${items.length})`, maxSize: MAX_BATCH_SIZE } };
+    throw new ApiError('INVALID_PARAMS', `batch exceeds maximum of ${MAX_BATCH_SIZE} parameter sets (got ${items.length})`, {
+      extras: { maxSize: MAX_BATCH_SIZE }
+    });
   }
 
   const results = items.map((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      return { index, ok: false, error: 'batch item must be an object with a "model" field' };
+      return { index, ok: false, code: 'INVALID_PARAMS', error: 'batch item must be an object with a "model" field' };
     }
     try {
       const { status, body } = computeOne(item);
       // Stamp schema_version so batch items match individual call bodies.
       if (status === 200) return { index, ok: true, result: withSchemaVersion(body) };
-      return { index, ok: false, error: body?.error || 'unknown error' };
+      return { index, ok: false, code: body?.code || 'INTERNAL', error: body?.detail || body?.title || body?.error || 'unknown error' };
     } catch (err) {
-      return { index, ok: false, error: String(err.message || err) };
+      return { index, ok: false, code: err instanceof ApiError ? err.code : 'INTERNAL', error: String(err.message || err) };
     }
   });
 
@@ -234,14 +239,18 @@ export default function handler(req, res) {
   // Batched mode: ?batch=[...] / POST {"batch":[...]} ("variants" alias)
   const rawBatch = params.batch ?? params.variants;
   if (rawBatch !== undefined) {
-    const { status, body } = runBatch(rawBatch);
-    return json(res, body, status);
+    try {
+      const { status, body } = runBatch(rawBatch);
+      return json(res, body, status);
+    } catch (err) {
+      return sendProblemFromError(res, req, err);
+    }
   }
 
   try {
     const { status, body } = computeOne(params);
     return json(res, body, status);
   } catch (err) {
-    return json(res, { error: String(err.message || err) }, 500);
+    return sendProblemFromError(res, req, err);
   }
 }

@@ -6,6 +6,7 @@ import { buildCaveats, rowCaveats } from './_caveats.js';
 import { sendJson } from './_schema.js';
 import { engineTag, matchesEngineQuery } from './_engine.js';
 import { confidence, crossCheck } from './_crosscheck.js';
+import { sendProblem, sendProblemFromError } from './_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -134,8 +135,8 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     if (err instanceof InvalidCursorError) {
-      return json(res, { error: err.message }, 400);
+      return sendProblem(res, req, { status: 400, code: 'INVALID_CURSOR', detail: err.message });
     }
-    return json(res, { error: String(err.message || err) }, 502);
+    return sendProblemFromError(res, req, err);
   }
 }

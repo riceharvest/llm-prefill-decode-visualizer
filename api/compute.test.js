@@ -84,6 +84,7 @@ test('one bad scenario does not fail the batch — per-item error instead', () =
   assert.equal(json.errorCount, 2);
   assert.equal(json.results[0].ok, false);
   assert.match(json.results[0].error, /Unknown model/);
+  assert.equal(json.results[0].code, 'INVALID_PARAMS');
   assert.equal(json.results[1].ok, true);
   assert.equal(json.results[2].ok, false);
   assert.match(json.results[2].error, /must be an object/);
@@ -98,14 +99,16 @@ test('GET ?batch=<json array> works like POST batch', () => {
   assert.notEqual(json.results[1].result.totalGb, json.results[0].result.totalGb);
 });
 
-test('empty batch and oversized batch are rejected with a clear error', () => {
+test('empty batch and oversized batch are rejected with an INVALID_PARAMS problem', () => {
   const empty = call({ method: 'POST', body: { batch: [] } });
   assert.equal(empty.status, 400);
-  assert.match(empty.json.error, /at least one/);
+  assert.equal(empty.json.code, 'INVALID_PARAMS');
+  assert.match(empty.json.detail, /at least one/);
 
   const tooBig = call({ method: 'POST', body: { batch: Array(MAX_BATCH_SIZE + 1).fill({ model: 'singleTurn' }) } });
   assert.equal(tooBig.status, 400);
-  assert.match(tooBig.json.error, new RegExp(String(MAX_BATCH_SIZE)));
+  assert.equal(tooBig.json.code, 'INVALID_PARAMS');
+  assert.match(tooBig.json.detail, new RegExp(String(MAX_BATCH_SIZE)));
   assert.equal(tooBig.json.maxSize, MAX_BATCH_SIZE);
 
   // exactly at the cap is allowed
@@ -144,12 +147,25 @@ test('flagged model warns on unknown flags and simulates unflagged when none giv
   assert.equal(bare.json.simulation.totalWalltimeSeconds, plain.json.totalWalltimeSeconds);
 });
 
-test('non-array batch payloads get a 400', () => {
+test('non-array batch payloads get a 400 INVALID_PARAMS problem', () => {
   const badJson = call({ query: { batch: '{not json' } });
   assert.equal(badJson.status, 400);
-  assert.match(badJson.error ?? badJson.json.error, /JSON array|parse/);
+  assert.equal(badJson.json.code, 'INVALID_PARAMS');
+  assert.match(badJson.error ?? badJson.json.detail, /JSON array|parse/);
 
   const obj = call({ method: 'POST', body: { batch: { model: 'singleTurn' } } });
   assert.equal(obj.status, 400);
-  assert.match(obj.json.error, /JSON array/);
+  assert.equal(obj.json.code, 'INVALID_PARAMS');
+  assert.match(obj.json.detail, /JSON array/);
+});
+
+test('unknown model gets an RFC 9457 INVALID_PARAMS problem served as application/problem+json', () => {
+  const res = mockRes();
+  handler({ method: 'GET', query: { model: 'nope' } }, res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.headers['Content-Type'], 'application/problem+json');
+  const json = JSON.parse(res.body);
+  assert.equal(json.code, 'INVALID_PARAMS');
+  assert.match(json.detail, /Unknown model/);
+  assert.deepEqual(json.available, ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost']);
 });

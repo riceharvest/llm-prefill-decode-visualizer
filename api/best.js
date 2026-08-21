@@ -8,6 +8,7 @@ import { enforceRateLimit } from './_ratelimit.js';
 import { buildCaveats, rowCaveats } from './_caveats.js';
 import { matchesEngineQuery } from './_engine.js';
 import { confidence } from './_crosscheck.js';
+import { sendProblemFromError } from './_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -326,6 +327,6 @@ export default async function handler(req, res) {
       results: ranked
     });
   } catch (err) {
-    return json(res, { error: String(err.message || err) }, 502);
+    return sendProblemFromError(res, req, err);
   }
 }

@@ -1,4 +1,5 @@
 import { enforceRateLimit } from './_ratelimit.js';
+import { ERROR_CODES, problemType } from './_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -40,7 +41,21 @@ const RATE_LIMITED_RESPONSE = {
 const SNAPSHOT_PARAM = {
   name: 'snapshot', in: 'query', schema: { type: 'string' },
   description: 'Serve the pinned dataset snapshot instead of live data. IDs from /api/snapshots; unknown IDs fall back to current data with snapshot.served=false.'
+};
 
+// Shared error responses (RFC 9457 problem+json), from _errors.js (#16).
+const PROBLEM = { $ref: '#/components/schemas/Problem' };
+const RATE_LIMITED = { description: 'Rate limited (code RATE_LIMITED)', content: { 'application/problem+json': { schema: PROBLEM } } };
+
+const COMPUTE_ERRORS = {
+  '400': { description: 'Invalid parameters (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } },
+  '429': RATE_LIMITED,
+  '500': { description: 'Internal server error (code INTERNAL)', content: { 'application/problem+json': { schema: PROBLEM } } }
+};
+
+const DATA_ERRORS = {
+  '429': RATE_LIMITED,
+  '502': { description: 'Upstream benchmark source unavailable (code UPSTREAM_UNAVAILABLE) — transient, safe to retry with backoff', content: { 'application/problem+json': { schema: PROBLEM } } }
 };
 
 export default function handler(req, res) {
@@ -49,8 +64,8 @@ export default function handler(req, res) {
     openapi: '3.1.0',
     info: {
       title: 'LLM Prefill & Decode Speed Visualizer API',
-      version: '2.5.0',
-      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. Every response body carries a schema_version field ("1") and every response sets an X-Schema-Version header; see CHANGELOG-API.md for the versioning + deprecation policy. Human docs at /llms.txt. Rate limited to 120 requests/min per client (best-effort, per serverless instance); every response carries X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset, and exhaustion returns 429 with Retry-After. Benchmark endpoints (/api/localmaxxing, /api/benchmarks, /api/best) carry a machine-readable top-level `caveats` array (objects with code/severity/summary/detail) describing dataset limitations, and each aggregate carries a confidence block plus crossCheck.'
+      version: '2.6.0',
+      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. Every response body carries a schema_version field ("1") and every response sets an X-Schema-Version header; see CHANGELOG-API.md for the versioning + deprecation policy. Human docs at /llms.txt. Rate limited to 120 requests/min per client (best-effort, per serverless instance); every response carries X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset, and exhaustion returns 429 with Retry-After. Benchmark endpoints (/api/localmaxxing, /api/benchmarks, /api/best) carry a machine-readable top-level `caveats` array (objects with code/severity/summary/detail) describing dataset limitations, and each aggregate carries a confidence block plus crossCheck. Errors follow RFC 9457 problem+json with a stable machine-readable code — see x-error-codes.'
     },
     servers: [{ url: BASE }],
     paths: {
@@ -78,7 +93,7 @@ export default function handler(req, res) {
             { name: 'precisionBytes', in: 'query', schema: { type: 'number', enum: [2, 1, 0.5] }, description: 'kvCache: FP16/FP8/INT4' },
             { name: 'flags', in: 'query', schema: { type: 'string' }, description: 'flagged: comma-separated engine flag ids (flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3). Documented heuristic deltas; response carries a per-flag audit trail.' }
           ],
-          responses: { '200': { description: 'Computed metrics object' } },
+          responses: { '200': { description: 'Computed metrics object' }, '400': { description: 'Invalid parameters (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } }, '500': { description: 'Internal server error (code INTERNAL)', content: { 'application/problem+json': { schema: PROBLEM } } } },
           '429': { $ref: '#/components/responses/RateLimited' }
         }
       },
@@ -209,8 +224,30 @@ export default function handler(req, res) {
     },
     components: {
       headers: RATE_LIMIT_HEADERS,
-      responses: { RateLimited: RATE_LIMITED_RESPONSE }
-    }
+      responses: { RateLimited: RATE_LIMITED_RESPONSE },
+      schemas: {
+        Problem: {
+          type: 'object',
+          description: 'RFC 9457 problem+json error body. Content-Type: application/problem+json.',
+          required: ['type', 'title', 'status', 'code'],
+          properties: {
+            type: { type: 'string', format: 'uri', description: 'Stable problem-type URI, e.g. .../problems/invalid-params' },
+            title: { type: 'string', description: 'Short human-readable summary' },
+            status: { type: 'integer', description: 'HTTP status code' },
+            detail: { type: 'string', description: 'Human-readable explanation of this occurrence' },
+            instance: { type: 'string', description: 'Request path + query that produced the error' },
+            code: { type: 'string', enum: Object.keys(ERROR_CODES), description: 'Stable machine-readable error code — branch on this, not on title/detail prose' }
+          }
+        }
+      }
+    },
+    'x-error-codes': Object.entries(ERROR_CODES).map(([code, meta]) => ({
+      code,
+      httpStatus: meta.status,
+      type: problemType(code),
+      title: meta.title,
+      description: meta.description
+    }))
   };
 
   // Every JSON response carries schema_version + X-Schema-Version
