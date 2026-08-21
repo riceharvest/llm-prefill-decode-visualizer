@@ -245,14 +245,77 @@ export function confidenceFor(group) {
   };
 }
 
+// ---------- Bootstrap confidence intervals ----------
+// Percentile bootstrap over the group's runs: resample with replacement,
+// take the median of each resample, and read the 2.5/97.5 percentiles off
+// the resampled medians. Seeded PRNG keyed on the group so responses are
+// deterministic across requests (and cache-friendly).
+
+const BOOTSTRAP_RESAMPLES = 2000;
+const BOOTSTRAP_CONFIDENCE = 0.95;
+
+/** Deterministic 32-bit PRNG (mulberry32). */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hashSeed(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Percentile bootstrap CI for the median of a sorted sample.
+ * Returns { lo, hi } rounded ints, or null when there are fewer than
+ * two runs (a single observation has no meaningful spread).
+ */
+export function bootstrapMedianCI(sorted, {
+  resamples = BOOTSTRAP_RESAMPLES,
+  confidence = BOOTSTRAP_CONFIDENCE,
+  seed = 1
+} = {}) {
+  const n = sorted.length;
+  if (n < 2) return null;
+  const rand = mulberry32(seed);
+  const medians = new Array(resamples);
+  for (let b = 0; b < resamples; b++) {
+    const sample = new Array(n);
+    for (let i = 0; i < n; i++) sample[i] = sorted[(rand() * n) | 0];
+    sample.sort((a, b) => a - b);
+    medians[b] = median(sample);
+  }
+  medians.sort((a, b) => a - b);
+  const alpha = (1 - confidence) / 2;
+  const loIdx = Math.floor(alpha * resamples);
+  const hiIdx = Math.min(resamples - 1, Math.ceil((1 - alpha) * resamples) - 1);
+  return { lo: Math.round(medians[loIdx]), hi: Math.round(medians[hiIdx]) };
+}
+
+/** 'median [lo–hi]' rendering of a stat block that carries ci95. */
+function ciLabel(stats) {
+  if (!stats.ci95) return `${stats.median}`;
+  return `${stats.median} [${stats.ci95.lo}–${stats.ci95.hi}]`;
+}
+
 /**
  * Group runs by an arbitrary key function and aggregate speeds with
  * outlier-resistant stats (median + IQR), a 0-100 confidence score
- * (sample size, IQR width, outlier density) and a provenance-reviewed outlier
- * report: runs further than `outlierIqrs` IQRs from the group median are listed
- * in `outliers`. Pass `includeOutliers: false` to compute the stats without
+ * (sample size, IQR width, outlier density), a provenance-reviewed outlier
+ * report (runs further than `outlierIqrs` IQRs from the group median are listed
+ * in `outliers`; pass `includeOutliers: false` to compute the stats without
  * them — this stops one misconfigured rig from dragging a group median while
- * the raw data stays queryable via the `outliers` array.
+ * the raw data stays queryable via the `outliers` array) and a 95% percentile
+ * bootstrap confidence interval on each median (ci95 + 'median [lo–hi]' label).
  */
 export function aggregate(runs, keyFn, { outlierIqrs = DEFAULT_OUTLIER_IQRS, includeOutliers = true } = {}) {
   const groups = new Map();
@@ -268,6 +331,13 @@ export function aggregate(runs, keyFn, { outlierIqrs = DEFAULT_OUTLIER_IQRS, inc
     const outliers = flagOutliers(group, outlierIqrs);
     const outlierIds = new Set(outliers.map(o => o.runId));
     const statsRuns = includeOutliers ? group : group.filter(r => !outlierIds.has(r.runId));
+
+    // Deterministic bootstrap CIs over the group's runs (#43).
+    const prefills = group.map(r => r.prefillTokPerSec).sort((a, b) => a - b);
+    const decodes = group.map(r => r.decodeTokPerSec).sort((a, b) => a - b);
+    const seed = hashSeed(String(key));
+    const pCI = bootstrapMedianCI(prefills, { seed });
+    const dCI = bootstrapMedianCI(decodes, { seed });
     out.push({
       key,
       runs: group.length,
@@ -276,14 +346,17 @@ export function aggregate(runs, keyFn, { outlierIqrs = DEFAULT_OUTLIER_IQRS, inc
       models: [...new Set(group.map(r => r.modelFamily))],
       outlierIqrs,
       includeOutliers,
-      prefill: statsOf(statsRuns.map(r => r.prefillTokPerSec)),
-      decode: statsOf(statsRuns.map(r => r.decodeTokPerSec)),
+      prefill: { ...statsOf(statsRuns.map(r => r.prefillTokPerSec)), ci95: pCI, label: null },
+      decode: { ...statsOf(statsRuns.map(r => r.decodeTokPerSec)), ci95: dCI, label: null },
       engines: engineTags(group),
       mixedEngines: engineTags(group).length > 1,
       confidence: confidenceFor(group),
       bestRun: group.reduce((best, r) => (r.decodeTokPerSec > best.decodeTokPerSec ? r : best), group[0]),
       outliers
     });
+    // labels reference the stat blocks above
+    out[out.length - 1].prefill.label = ciLabel(out[out.length - 1].prefill);
+    out[out.length - 1].decode.label = ciLabel(out[out.length - 1].decode);
   }
   return out.sort((a, b) => b.decode.median - a.decode.median);
 }

@@ -290,12 +290,23 @@ export default async function handler(req, res) {
       row.confidence = { ...confidence(members.get(`${row.hardwareKey}|${row.modelFamily}`) || []), ...(g?.confidence || {}) };
     }
 
+    // Attach 95% percentile bootstrap CIs per row (#43).
+    for (const row of ranked) {
+      const g = grpByKey.get(`${row.hardwareKey}|${row.modelFamily}`);
+      if (g) {
+        row.medianPrefillCi95 = g.prefill.ci95;
+        row.medianPrefillLabel = g.prefill.label;
+        row.medianDecodeCi95 = g.decode.ci95;
+        row.medianDecodeLabel = g.decode.label;
+      }
+    }
+
     const warnings = groups.filter(g => g.mixedEngines)
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
 
     return json(res, {
       description: by === 'walltime'
-        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant; runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), and ?engine=<substr> restricts to same-engine builds only.`
+        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant and carry a 95% percentile bootstrap CI (medianXxxCi95 + medianXxxLabel); overlapping intervals mean statistical ties. runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), and ?engine=<substr> restricts to same-engine builds only.`
         : by === 'cost'
         ? 'Ranked hardware×model groups by cost-efficiency: $/1M tokens from hardware price (amortized) + electricity at measured median speeds for the given scenario shape. Lower is better.'
         : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), and ?engine=<substr> restricts to same-engine builds only.',
