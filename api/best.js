@@ -3,6 +3,7 @@ import { singleTurn, cost } from './_math.js';
 import { SCENARIO_PRESETS } from '../src/utils/presets.js';
 import { fitsInMemory } from './_vramfit.js';
 import { enforceRateLimit } from './_ratelimit.js';
+import { buildCaveats, rowCaveats } from './_caveats.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -250,6 +251,14 @@ export default async function handler(req, res) {
       }
     }
 
+    // Attach per-row statistical caveats (#19).
+    const grpByKey = new Map(groups.map(g => [g.key, g]));
+    for (const row of ranked) {
+      const g = grpByKey.get(`${row.hardwareKey}|${row.modelFamily}`);
+      if (g) row.caveats = rowCaveats(g);
+    }
+
+
     return json(res, {
       description: by === 'walltime'
         ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant; runsInGroup shows sample size.`
@@ -258,21 +267,13 @@ export default async function handler(req, res) {
         : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size.',
       rankedBy: by,
       matchedRuns: runs.length,
+      caveats: buildCaveats(runs, groups),
       ...(by === 'walltime' ? {
         workload: {
           promptTokens: workload.promptTokens,
           outputTokens: workload.outputTokens,
           source: workload.source,
           ...(workload.scenarioLabel ? { scenario: workload.scenarioLabel } : {})
-        }
-      } : {}),
-      ...(fitCheck ? {
-        fitCheck: {
-          contextLength: fitContextLength,
-          precisionBytes: fitPrecisionBytes,
-          batchSize: fitBatchSize,
-          excludedRuns: excludedByFit,
-          note: 'Fit is ESTIMATED: weights from params × assumed bits-per-weight (from quant tag, else q4-ish 4.5), KV cache from a param-count-based architecture guess, plus 10% overhead; unified memory assumes 75% usable. See api/_vramfit.js.'
         }
       } : {}),
       results: ranked

@@ -1,6 +1,7 @@
 import { getAllRuns, aggregate, DEFAULT_OUTLIER_IQRS } from './_localmaxxing.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from './_pagination.js';
 import { enforceRateLimit } from './_ratelimit.js';
+import { buildCaveats, rowCaveats } from './_caveats.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -69,6 +70,7 @@ export default async function handler(req, res) {
       ...g,
       models: undefined,
       modelFamilies: g.models,
+      caveats: rowCaveats(g),
       bestRun: {
         runId: g.bestRun.runId,
         modelName: g.bestRun.modelName,
@@ -94,7 +96,8 @@ export default async function handler(req, res) {
       note: 'medians are outlier-resistant; use bestRun for the single fastest measured run in each group',
       items: groups,
       has_more: page.has_more,
-      next_cursor: page.next_cursor
+      next_cursor: page.next_cursor,
+      caveats: buildCaveats(runs, allGroups)
     });
   } catch (err) {
     if (err instanceof InvalidCursorError) {

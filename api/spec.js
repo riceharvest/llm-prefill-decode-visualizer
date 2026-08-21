@@ -39,8 +39,8 @@ export default function handler(req, res) {
     openapi: '3.1.0',
     info: {
       title: 'LLM Prefill & Decode Speed Visualizer API',
-      version: '2.2.0',
-      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. Human docs at /llms.txt. Rate limited to 120 requests/min per client (best-effort, per serverless instance); every response carries X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset, and exhaustion returns 429 with Retry-After.'
+      version: '2.3.0',
+      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. Human docs at /llms.txt. Rate limited to 120 requests/min per client (best-effort, per serverless instance); every response carries X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset, and exhaustion returns 429 with Retry-After. Benchmark endpoints (/api/localmaxxing, /api/benchmarks, /api/best) carry a machine-readable top-level `caveats` array (objects with code/severity/summary/detail) describing dataset limitations.'
     },
     servers: [{ url: BASE }],
     paths: {
@@ -107,7 +107,7 @@ export default function handler(req, res) {
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 500 }, description: 'page size' },
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' }
           ],
-          responses: { '200': { description: 'Hardware summary, or paginated run list { total, items[], has_more, next_cursor }' }, '429': { $ref: '#/components/responses/RateLimited' } }
+          responses: { '200': { description: 'Hardware summary, or paginated run list { total, items[], has_more, next_cursor }; both carry a machine-readable `caveats` array (single-stream-only, self-reported data, engine mix)' }, '429': { $ref: '#/components/responses/RateLimited' } }
         }
       },
       '/api/benchmarks': {
@@ -123,8 +123,7 @@ export default function handler(req, res) {
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 25, maximum: 200 }, description: 'page size' },
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' }
           ],
-          responses: { '200': { description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode, plus bestRun' } },
-          '429': { $ref: '#/components/responses/RateLimited' }
+          responses: { '200': { description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode, plus bestRun. Top-level and per-group `caveats` arrays flag n=1 groups and mixed engine versions.' }, '429': { $ref: '#/components/responses/RateLimited' } }
         }
       },
       '/api/best': {
@@ -150,7 +149,7 @@ export default function handler(req, res) {
             { name: 'batchSize', in: 'query', schema: { type: 'integer', default: 1 }, description: 'batch size for fitCheck KV cache math' },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } }
           ],
-          responses: { '200': { description: 'Ranked groups with medians and source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns' }, '429': { $ref: '#/components/responses/RateLimited' } }
+          responses: { '200': { description: 'Ranked groups with medians, per-row `caveats` (n=1, mixed engines) and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns' }, '429': { $ref: '#/components/responses/RateLimited' } }
         }
       },
       '/api/health': {
@@ -184,6 +183,7 @@ export default function handler(req, res) {
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 5, maximum: 25 } }
           ],
           responses: { '200': { description: 'workload echo, assumptions, and ranked recommendations with vramFit, expected, confidence, meetsSlo' } }
+
         }
       }
     },

@@ -1,4 +1,5 @@
 import { getAllRuns } from './_localmaxxing.js';
+import { runsCaveats } from './_caveats.js';
 import { normalizeModelId } from './_normalize.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from './_pagination.js';
 import { validateSubmission, checkDuplicates, queueSubmission } from './_submit.js';
@@ -119,6 +120,7 @@ export default async function handler(req, res) {
       return json(res, {
         description: 'Community-measured single-stream LLM benchmark runs. Filter with ?hardware=&model=&quant=&limit=&cursor= for paginated runs. Aggregated stats: /api/benchmarks. Ranked answers: /api/best.',
         totalComparableRuns: runs.length,
+        caveats: runsCaveats(runs),
         hardwareGroups: [...groups.values()]
           .sort((a, b) => b.runs - a.runs)
           .map(g => ({
@@ -138,6 +140,7 @@ export default async function handler(req, res) {
     return json(res, {
       description: 'Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false.',
       total: runs.length,
+      caveats: runsCaveats(runs),
       items: page.items,
       has_more: page.has_more,
       next_cursor: page.next_cursor
