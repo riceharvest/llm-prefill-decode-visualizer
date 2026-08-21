@@ -53,6 +53,48 @@ export default function handler(req, res) {
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' }
           ],
           responses: { '200': { description: 'Hardware summary, or paginated run list { total, items[], has_more, next_cursor }' } }
+        },
+        post: {
+          summary: 'Submit a community benchmark run for review',
+          description: 'Validates required fields (model, quant, hardware, hwClass, prefillTokPerSec, decodeTokPerSec), applies per-hardware-class sanity bounds (e.g. rejects 99,999 tok/s claimed on an RPi5), and checks for duplicates against existing runs. Accepted submissions are queued for manual review — never published immediately. Optional: engine, promptTokens, outputTokens, contextLength, provenance {engineVersion, command, sourceUrl, notes}, submitter.',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['model', 'quant', 'hardware', 'hwClass', 'prefillTokPerSec', 'decodeTokPerSec'],
+                  properties: {
+                    model: { type: 'string', description: 'HF id or family name, e.g. unsloth/Qwen3.6-27B-GGUF' },
+                    quant: { type: 'string', example: 'Q4_K_M' },
+                    hardware: { type: 'string', description: 'rig description, e.g. Raspberry Pi 5 (16GB)' },
+                    hwClass: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] },
+                    prefillTokPerSec: { type: 'number' },
+                    decodeTokPerSec: { type: 'number' },
+                    engine: { type: 'string', example: 'llama.cpp' },
+                    promptTokens: { type: 'integer' },
+                    outputTokens: { type: 'integer' },
+                    contextLength: { type: 'integer' },
+                    provenance: {
+                      type: 'object',
+                      properties: {
+                        engineVersion: { type: 'string', example: 'llama.cpp b6242' },
+                        command: { type: 'string', example: 'llama-bench -m model.gguf -p 512 -n 128' },
+                        sourceUrl: { type: 'string' },
+                        notes: { type: 'string' }
+                      }
+                    },
+                    submitter: { type: 'string' }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            '202': { description: 'Queued for review — returns submissionId + status "queued"' },
+            '400': { description: 'Validation failed — machine-readable errors array [{field, code, message}]' },
+            '409': { description: 'Duplicate run — near-identical run already exists (error: duplicate_run)' }
+          }
         }
       },
       '/api/benchmarks': {

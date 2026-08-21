@@ -1,6 +1,7 @@
 import { getAllRuns } from './_localmaxxing.js';
 import { normalizeModelId } from './_normalize.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from './_pagination.js';
+import { validateSubmission, checkDuplicates, queueSubmission } from './_submit.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -17,11 +18,75 @@ function json(res, body, status = 200) {
 const RUN_KEY = r => [r.decodeTokPerSec, String(r.runId)];
 
 /**
+ * POST /api/localmaxxing — submit a community benchmark run for review.
+ * Validates required fields (model, quant, hardware, hwClass, prefill/decode
+ * tok/s), applies per-hardware-class sanity bounds, checks for duplicates
+ * against existing runs, and queues the submission — it is never published
+ * without manual review. Validation failures return 400 with machine-readable
+ * errors: { error: 'validation_failed', errors: [{ field, code, message }] }.
+ */
+async function handlePost(req, res) {
+  const body = req.body;
+  const { ok, errors, submission } = validateSubmission(body);
+
+  if (!ok) {
+    return json(res, { error: 'validation_failed', errors }, 400);
+  }
+
+  // Duplicate / near-duplicate detection against the existing dataset.
+  let dup = { duplicate: null, similar: null };
+  try {
+    dup = checkDuplicates(submission, await getAllRuns());
+  } catch {
+    // Dataset unavailable — queue anyway; review catches the rest.
+  }
+  if (dup.duplicate) {
+    return json(res, {
+      error: 'duplicate_run',
+      message: 'A near-identical run (same model family, quant and rig within 10% on both speeds) already exists.',
+      errors: [{ field: 'run', code: 'duplicate', message: `matches existing run ${dup.duplicate.runId}` }],
+      existingRun: dup.duplicate
+    }, 409);
+  }
+
+  try {
+    const record = await queueSubmission(submission);
+    return json(res, {
+      description: 'Run accepted and queued for manual review. It will appear in GET /api/localmaxxing only after approval.',
+      status: 'queued',
+      reviewStatus: record.reviewStatus,
+      submissionId: record.submissionId,
+      ...(dup.similar ? { warnings: [{ code: 'similar_run_exists', message: 'Other runs exist for this model+quant+rig combination at different speeds.', existingRun: dup.similar }] } : {})
+    }, 202);
+  } catch (err) {
+    return json(res, { error: 'queue_unavailable', message: String(err.message || err) }, 503);
+  }
+}
+
+/**
  * GET /api/localmaxxing — raw comparable runs (flattened, normalized).
- * ?hardware=<substr> &model=<substr> &quant=<exact> &limit=N (default 50, max 500) &cursor=<opaque>
+ * POST /api/localmaxxing — submit a run for review (validated, queued).
+ * GET: ?hardware=<substr> &model=<substr> &quant=<exact> &limit=N (default 50, max 500) &cursor=<opaque>
  * Bare call returns the hardware-group summary.
  */
 export default async function handler(req, res) {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return res.status(204).end();
+  }
+  if (req.method === 'POST') {
+    try {
+      return await handlePost(req, res);
+    } catch (err) {
+      return json(res, { error: String(err.message || err) }, 500);
+    }
+  }
+  if (req.method !== 'GET') {
+    return json(res, { error: `Method ${req.method} not allowed. Use GET to query runs or POST to submit one.` }, 405);
+  }
+
   try {
     const q = req.query || {};
 
