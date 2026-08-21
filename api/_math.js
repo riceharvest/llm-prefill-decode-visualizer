@@ -211,6 +211,8 @@ export function kvCache({ numLayers = 80, kvHeads = 8, headDim = 128, contextLen
 export const VRAM_WARN_UTILIZATION = 0.9;
 /** Framework overhead default — middle of the real-world 10–20% band. */
 export const DEFAULT_OVERHEAD_FRACTION = 0.15;
+/** Fraction of GPU VRAM kept as safety headroom before a fit counts as comfortable. */
+export const SAFETY_HEADROOM_FRACTION = 0.05;
 
 /**
  * Build a VRAM ledger and pass/warn/fail verdict against an optional GPU.
@@ -240,6 +242,52 @@ export function vramBudget({ weightsGb = 0, kvGb = 0, overheadFraction = DEFAULT
     headroomGb: hasGpu ? round(vram - totalGb) : null,
     utilizationPct: hasGpu ? round(utilization * 100) : null,
     fits: verdict === 'pass' || verdict === 'warn',
+    verdict
+  };
+}
+
+/**
+ * Full memory ledger: model weights at a precision + KV cache at a target
+ * context + framework overhead, judged against a specific GPU's VRAM.
+ *
+ * `paramsB` is the parameter count in billions; `kvBytes` is the total KV
+ * footprint in bytes at the target context (callers compute it from the real
+ * attention geometry — GQA/MLA/sliding/CSA-HCA differ, see kvCache() for the
+ * standard GQA case). Verdicts:
+ *   'pass' → fits while keeping the safety-headroom reserve intact
+ *   'warn' → fits, but only by eating into that reserve
+ *   'fail' → does not fit at all (OOM at deploy time)
+ */
+export function memoryLedger({
+  paramsB = 0, precisionBytes = 2, kvBytes = 0,
+  gpuVramGb = 0, overheadFraction = DEFAULT_OVERHEAD_FRACTION,
+  headroomFraction = SAFETY_HEADROOM_FRACTION
+} = {}) {
+  const weightsGb = (Math.max(0, paramsB) * 1e9 * precisionBytes) / (1024 ** 3);
+  const kvGb = Math.max(0, kvBytes) / (1024 ** 3);
+  const overheadGb = (weightsGb + kvGb) * overheadFraction;
+  const totalGb = weightsGb + kvGb + overheadGb;
+
+  const vram = Math.max(0, Number(gpuVramGb) || 0);
+  const reservedGb = vram * headroomFraction;
+  const usableGb = vram - reservedGb;
+
+  const verdict = vram <= 0
+    ? null
+    : totalGb > vram ? 'fail'
+      : totalGb > usableGb ? 'warn'
+        : 'pass';
+
+  return {
+    inputs: { paramsB, precisionBytes, kvBytes, gpuVramGb: vram, overheadFraction, headroomFraction },
+    weightsGb: round(weightsGb),
+    kvCacheGb: round(kvGb),
+    frameworkOverheadGb: round(overheadGb),
+    totalGb: round(totalGb),
+    gpuVramGb: round(vram),
+    safetyHeadroomGb: round(reservedGb),
+    freeAfterReserveGb: round(usableGb - totalGb),
+    utilizationPct: round(vram > 0 ? (totalGb / vram) * 100 : null),
     verdict
   };
 }
