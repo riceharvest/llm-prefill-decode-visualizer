@@ -12,6 +12,8 @@ import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance }
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
+import Metric from './Metric';
+
 
 export default function SingleTurnVisualizer({
   prefillSpeed,
@@ -245,6 +247,17 @@ export default function SingleTurnVisualizer({
 
   const prefillPct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedTTFT / expectedTotalTime) * 100 : 0;
   const decodePct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedDecodeTime / expectedTotalTime) * 100 : 0;
+
+  // Live substitutions for the why-explainer popovers (issue #87)
+  const ttftSub = `${safePromptTokens.toLocaleString()} tok ÷ ${prefillSpeed.toLocaleString()} tok/s = ${formatTime(expectedTTFT)}`;
+  const decodeTimeSub = `${safeOutputTokens.toLocaleString()} tok ÷ ${Math.round(effectiveDecodeSpeed).toLocaleString()} tok/s = ${formatTime(expectedDecodeTime)}`;
+  const tpotSub = Number.isFinite(tpotMs)
+    ? `1000 ms ÷ ${Math.round(effectiveDecodeSpeed).toLocaleString()} tok/s = ${tpotMs.toFixed(1)} ms`
+    : `decode speed is 0 tok/s → ∞ ms`;
+  const walltimeSub = `${formatTime(expectedTTFT)} + ${formatTime(expectedDecodeTime)} = ${formatTime(expectedTotalTime)}`;
+  const throughputSub = `(${(safePromptTokens + safeOutputTokens).toLocaleString()} tok) ÷ ${formatTime(expectedTotalTime)}`;
+  const prefillPctSub = `${formatTime(expectedTTFT)} ÷ ${formatTime(expectedTotalTime)} × 100 = ${prefillPct.toFixed(1)}%`;
+  const decodePctSub = `${formatTime(expectedDecodeTime)} ÷ ${formatTime(expectedTotalTime)} × 100 = ${decodePct.toFixed(1)}%`;
 
   // Token stream windowing: derive the visible words from the real decode
   // counter (~2.5 tokens per word) so the stream always tracks the counter,
@@ -675,7 +688,12 @@ export default function SingleTurnVisualizer({
 
             <div className="field-head" style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
               <span>Ingested <strong style={{ color: 'var(--text-main)' }}>{currentPrefillProgress.toLocaleString()}</strong> / {totalPrefillTokens.toLocaleString()} tok</span>
-              <span>TTFT <strong style={{ color: 'var(--prefill)' }}>{formatTime(expectedTTFT)}</strong></span>
+              <span>
+                TTFT{' '}
+                <Metric term="ttft" substitution={ttftSub}>
+                  <strong style={{ color: 'var(--prefill)' }}>{formatTime(expectedTTFT)}</strong>
+                </Metric>
+              </span>
             </div>
             {totalImageTokens > 0 && (
               <div className="field-head" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
@@ -721,7 +739,12 @@ export default function SingleTurnVisualizer({
 
             <div className="field-head" style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
               <span>Generated <strong style={{ color: 'var(--text-main)' }}>{currentDecodeTokens.toLocaleString()}</strong> / {outputTokens.toLocaleString()} tok</span>
-              <span>Decode <strong style={{ color: 'var(--decode)' }}>{formatTime(expectedDecodeTime)}</strong></span>
+              <span>
+                Decode{' '}
+                <Metric term="decodeTime" substitution={decodeTimeSub} align="left">
+                  <strong style={{ color: 'var(--decode)' }}>{formatTime(expectedDecodeTime)}</strong>
+                </Metric>
+              </span>
             </div>
 
             <p className="hint-text" style={{ marginTop: '8px' }}>
@@ -738,7 +761,10 @@ export default function SingleTurnVisualizer({
               Decode stream · {currentDecodeTokens} tokens
             </span>
             <span style={{ fontSize: '0.74rem', fontFamily: 'var(--font-mono)', color: 'var(--decode)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-              TPOT {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms'}
+              TPOT{' '}
+              <Metric term="tpot" substitution={tpotSub}>
+                {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms'}
+              </Metric>
             </span>
           </div>
 
@@ -779,7 +805,9 @@ export default function SingleTurnVisualizer({
           <div className="metric" style={{ borderLeftColor: 'var(--prefill)' }}>
             <div className="metric-label">TTFT · time to first token</div>
             <div className="metric-value" style={{ color: 'var(--prefill)' }}>
-              {formatTime(expectedTTFT)}
+              <Metric term="ttft" substitution={ttftSub}>
+                {formatTime(expectedTTFT)}
+              </Metric>
             </div>
             <div className="metric-sub">
               {totalImageTokens > 0
@@ -791,7 +819,9 @@ export default function SingleTurnVisualizer({
           <div className="metric" style={{ borderLeftColor: 'var(--decode)' }}>
             <div className="metric-label">TPOT · time per output token</div>
             <div className="metric-value" style={{ color: 'var(--decode)' }}>
-              {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms'}
+              <Metric term="tpot" substitution={tpotSub}>
+                {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms'}
+              </Metric>
             </div>
             <div className="metric-sub">{decodeSpeed} tokens / sec</div>
           </div>
@@ -799,7 +829,9 @@ export default function SingleTurnVisualizer({
           <div className="metric" style={{ borderLeftColor: 'var(--accent)' }}>
             <div className="metric-label">Total chat walltime</div>
             <div className="metric-value">
-              {formatTime(expectedTotalTime)}
+              <Metric term="walltime" substitution={walltimeSub}>
+                {formatTime(expectedTotalTime)}
+              </Metric>
             </div>
             <div className="metric-sub">Prefill + decode combined</div>
           </div>
@@ -807,12 +839,14 @@ export default function SingleTurnVisualizer({
           <div className="metric" style={{ borderLeftColor: 'var(--agent)' }}>
             <div className="metric-label">Effective throughput</div>
             <div className="metric-value">
-              {!Number.isFinite(expectedTotalTime)
-                ? '0.0 '
-                : expectedTotalTime > 0
-                  ? `${((totalPrefillTokens + outputTokens) / expectedTotalTime).toFixed(1)} `
-                  : '— '}
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>tok/s</span>
+              <Metric term="throughput" substitution={throughputSub} align="left">
+                {!Number.isFinite(expectedTotalTime)
+                  ? '0.0 '
+                  : expectedTotalTime > 0
+                    ? `${((totalPrefillTokens + outputTokens) / expectedTotalTime).toFixed(1)} `
+                    : '— '}
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>tok/s</span>
+              </Metric>
             </div>
             <div className="metric-sub">Total tokens ÷ walltime{totalImageTokens > 0 ? ' (incl. vision tokens)' : ''}</div>
           </div>
@@ -824,8 +858,14 @@ export default function SingleTurnVisualizer({
           <div className="field-head" style={{ marginBottom: '8px' }}>
             <span className="section-label">Walltime distribution</span>
             <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-              Prefill <strong style={{ color: 'var(--prefill)' }}>{prefillPct.toFixed(1)}%</strong>
-              {' · '}Decode <strong style={{ color: 'var(--decode)' }}>{decodePct.toFixed(1)}%</strong>
+              Prefill{' '}
+              <Metric term="walltimePctPrefill" substitution={prefillPctSub} align="left">
+                <strong style={{ color: 'var(--prefill)' }}>{prefillPct.toFixed(1)}%</strong>
+              </Metric>
+              {' · '}Decode{' '}
+              <Metric term="walltimePctDecode" substitution={decodePctSub}>
+                <strong style={{ color: 'var(--decode)' }}>{decodePct.toFixed(1)}%</strong>
+              </Metric>
             </span>
           </div>
 

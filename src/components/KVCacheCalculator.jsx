@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { HardDrive } from 'lucide-react';
 import { formatTokens } from '../utils/presets';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import Metric from './Metric';
 
 // KV-cache geometry pulled from each model's actual config.json on HuggingFace
 // and its architecture paper. Four KV modes:
@@ -349,14 +350,25 @@ export default function KVCacheCalculator() {
           <div className="metric" style={{ borderLeftColor: 'var(--accent)' }}>
             <div className="metric-label">KV cache / token</div>
             <div className="metric-value" style={{ color: 'var(--accent)' }}>
-              {(bytesPerTokenSingleSeq / 1024).toFixed(1)} KB
+              <Metric
+                term="kvPerToken"
+                substitution={`${kvFormula(preset)} × ${precision} bytes = ${(bytesPerTokenSingleSeq / 1024).toFixed(1)} KB`}
+              >
+                {(bytesPerTokenSingleSeq / 1024).toFixed(1)} KB
+              </Metric>
             </div>
           </div>
 
           <div className="metric" style={{ borderLeftColor: 'var(--prefill)' }}>
             <div className="metric-label">Total KV cache VRAM</div>
             <div className="metric-value" style={{ color: 'var(--prefill)', fontSize: '1.55rem' }}>
-              {totalKVCacheGB >= 1 ? `${totalKVCacheGB.toFixed(2)} GB` : `${totalKVCacheMB.toFixed(0)} MB`}
+              <Metric
+                term="kvTotal"
+                substitution={`${(bytesPerTokenSingleSeq / 1024).toFixed(1)} KB × ${safeContext.toLocaleString()} tok × ${safeBatch} batch = ${totalKVCacheGB >= 1 ? `${totalKVCacheGB.toFixed(2)} GB` : `${totalKVCacheMB.toFixed(0)} MB`}`}
+                align="left"
+              >
+                {totalKVCacheGB >= 1 ? `${totalKVCacheGB.toFixed(2)} GB` : `${totalKVCacheMB.toFixed(0)} MB`}
+              </Metric>
             </div>
           </div>
 

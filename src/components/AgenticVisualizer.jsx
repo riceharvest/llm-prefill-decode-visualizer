@@ -5,6 +5,8 @@ import { readParamNum, readParamBool, readParam, writeParams } from '../utils/ur
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
 import { exportNodeAsPng } from '../utils/exportPng';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
+import Metric from './Metric';
+
 
 export default function AgenticVisualizer({
   prefillSpeed,
@@ -475,7 +477,13 @@ export default function AgenticVisualizer({
               MULTI-TURN LOOP
             </span>
             <span className="hint-text" style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
-              Total walltime <strong style={{ color: 'var(--text-main)', fontSize: '1rem' }}>{formatTime(totalAgentWalltime)}</strong>
+              Total walltime{' '}
+              <Metric
+                term="agentWalltime"
+                substitution={`${turnBreakdown.length} turns × (prefill + decode per turn) = ${formatTime(totalAgentWalltime)}`}
+              >
+                <strong style={{ color: 'var(--text-main)', fontSize: '1rem' }}>{formatTime(totalAgentWalltime)}</strong>
+              </Metric>
             </span>
           </div>
 

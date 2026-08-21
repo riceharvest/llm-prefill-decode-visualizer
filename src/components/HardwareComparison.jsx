@@ -3,6 +3,8 @@ import { HARDWARE_PRESETS, formatTime, formatTokens } from '../utils/presets';
 import { BarChart3, Users, PlugZap } from 'lucide-react';
 import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
 import { methodologyMismatch } from '../utils/localMaxxing';
+import Metric from './Metric';
+
 
 // Typical whole-rig wattage under inference load (GPU + rest-of-system overhead).
 // Used as the default for the TCO section; the user can always override it.
@@ -318,7 +320,11 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               )}
               <div style={{ ...rowStyle, ...rowDivider }}>
                 <span>TTFT (prompt)</span>
-                <span style={{ ...numStyle, color: 'var(--prefill)' }}>{formatTime(ttftA)}</span>
+                <span style={{ ...numStyle, color: 'var(--prefill)' }}>
+                  <Metric term="ttft" substitution={`${presetA.name}: ${safeCp.toLocaleString()} tok ÷ ${presetA.prefillSpeed.toLocaleString()} tok/s = ${formatTime(ttftA)}`} align="left">
+                    {formatTime(ttftA)}
+                  </Metric>
+                </span>
               </div>
               <div style={rowStyle}>
                 <span>Decode time</span>
@@ -405,7 +411,11 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               )}
               <div style={{ ...rowStyle, ...rowDivider }}>
                 <span>TTFT (prompt)</span>
-                <span style={{ ...numStyle, color: 'var(--prefill)' }}>{formatTime(ttftB)}</span>
+                <span style={{ ...numStyle, color: 'var(--prefill)' }}>
+                  <Metric term="ttft" substitution={`${presetB.name}: ${safeCp.toLocaleString()} tok ÷ ${presetB.prefillSpeed.toLocaleString()} tok/s = ${formatTime(ttftB)}`} align="left">
+                    {formatTime(ttftB)}
+                  </Metric>
+                </span>
               </div>
               <div style={rowStyle}>
                 <span>Decode time</span>
@@ -472,7 +482,12 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
           >
             <div className="metric-label">Overall walltime</div>
             <div className="metric-value" style={{ color: speedupTotal >= 1 ? 'var(--decode)' : 'var(--danger)', fontSize: '1.5rem' }}>
-              {speedupTotal > 0 ? (speedupTotal >= 1 ? `${speedupTotal.toFixed(2)}x faster` : `${(1 / speedupTotal).toFixed(2)}x slower`) : '—'}
+              <Metric
+                term="speedupTotal"
+                substitution={`${formatTime(totalTimeB)} ÷ ${formatTime(totalTimeA)} = ${speedupTotal > 0 ? `${speedupTotal.toFixed(2)}x` : '—'}`}
+              >
+                {speedupTotal > 0 ? (speedupTotal >= 1 ? `${speedupTotal.toFixed(2)}x faster` : `${(1 / speedupTotal).toFixed(2)}x slower`) : '—'}
+              </Metric>
             </div>
             <div className="metric-sub">System A vs System B</div>
           </div>
@@ -480,14 +495,18 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
           <div className="metric" style={{ borderLeftColor: 'var(--prefill)', textAlign: 'center' }}>
             <div className="metric-label">Prefill TTFT advantage</div>
             <div className="metric-value" style={{ color: 'var(--prefill)' }}>
-              {speedupPrefill.toFixed(2)}x
+              <Metric term="speedupPrefill" substitution={`${formatTime(ttftB)} ÷ ${formatTime(ttftA)} = ${speedupPrefill.toFixed(2)}x`}>
+                {speedupPrefill.toFixed(2)}x
+              </Metric>
             </div>
           </div>
 
           <div className="metric" style={{ borderLeftColor: 'var(--decode)', textAlign: 'center' }}>
             <div className="metric-label">Decode generation advantage</div>
             <div className="metric-value" style={{ color: 'var(--decode)' }}>
-              {speedupDecode.toFixed(2)}x
+              <Metric term="speedupDecode" substitution={`${formatTime(decodeTimeB)} ÷ ${formatTime(decodeTimeA)} = ${speedupDecode.toFixed(2)}x`}>
+                {speedupDecode.toFixed(2)}x
+              </Metric>
             </div>
           </div>
         </div>
