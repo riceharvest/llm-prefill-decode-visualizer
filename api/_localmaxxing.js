@@ -203,14 +203,56 @@ export function flagOutliers(group, threshold = DEFAULT_OUTLIER_IQRS) {
 }
 
 /**
+ * 0–100 confidence for one aggregate group, combining three signals:
+ * - sample count: saturates at SAMPLE_SATURATION comparable runs
+ * - IQR width: relative IQR of decode speeds (IQR / median); tighter is better
+ * - outlier density: share of runs outside the 1.5×IQR fences
+ */
+const SAMPLE_SATURATION = 10;
+const WEIGHTS = { sample: 0.4, spread: 0.4, outliers: 0.2 };
+
+function clamp01(x) {
+  return Math.max(0, Math.min(1, x));
+}
+
+function round3(x) {
+  return Number.isFinite(x) ? Math.round(x * 1000) / 1000 : null;
+}
+
+export function confidenceFor(group) {
+  const decodes = group.map(r => r.decodeTokPerSec).sort((a, b) => a - b);
+  const dq = quartiles(decodes);
+  const iqr = dq.q3 - dq.q1;
+  const relIqr = dq.median > 0 ? iqr / dq.median : Infinity;
+  const lo = dq.q1 - 1.5 * iqr;
+  const hi = dq.q3 + 1.5 * iqr;
+  const outliers = decodes.filter(v => v < lo || v > hi).length;
+  const outlierDensity = decodes.length ? outliers / decodes.length : 1;
+
+  const sampleFactor = clamp01(decodes.length / SAMPLE_SATURATION);
+  const spreadFactor = clamp01(1 - relIqr);
+  const outlierFactor = clamp01(1 - outlierDensity);
+
+  const score = Math.round(
+    100 * (WEIGHTS.sample * sampleFactor + WEIGHTS.spread * spreadFactor + WEIGHTS.outliers * outlierFactor)
+  );
+
+  return {
+    score: Math.max(0, Math.min(100, score)),
+    sampleSize: decodes.length,
+    relativeIqr: round3(relIqr),
+    outlierDensity: round3(outlierDensity)
+  };
+}
+
+/**
  * Group runs by an arbitrary key function and aggregate speeds with
- * outlier-resistant stats (median + IQR).
- *
- * Every group also carries a provenance-reviewed outlier report: runs further
- * than `outlierIqrs` IQRs from the group median are listed in `outliers`.
- * Pass `includeOutliers: false` to compute the stats without them — this stops
- * one misconfigured rig from dragging a group median while the raw data stays
- * queryable via the `outliers` array.
+ * outlier-resistant stats (median + IQR), a 0-100 confidence score
+ * (sample size, IQR width, outlier density) and a provenance-reviewed outlier
+ * report: runs further than `outlierIqrs` IQRs from the group median are listed
+ * in `outliers`. Pass `includeOutliers: false` to compute the stats without
+ * them — this stops one misconfigured rig from dragging a group median while
+ * the raw data stays queryable via the `outliers` array.
  */
 export function aggregate(runs, keyFn, { outlierIqrs = DEFAULT_OUTLIER_IQRS, includeOutliers = true } = {}) {
   const groups = new Map();
@@ -238,6 +280,7 @@ export function aggregate(runs, keyFn, { outlierIqrs = DEFAULT_OUTLIER_IQRS, inc
       decode: statsOf(statsRuns.map(r => r.decodeTokPerSec)),
       engines: engineTags(group),
       mixedEngines: engineTags(group).length > 1,
+      confidence: confidenceFor(group),
       bestRun: group.reduce((best, r) => (r.decodeTokPerSec > best.decodeTokPerSec ? r : best), group[0]),
       outliers
     });
