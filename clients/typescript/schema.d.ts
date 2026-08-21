@@ -537,6 +537,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/parse-constraints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Parse plain-language constraints into the canonical constraint JSON
+         * @description Converts a natural-language constraint string (e.g. "self-hosted Qwen 27B at Q4 for 10 users under $1500") into the canonical constraint struct used by /api/sizing and /api/best. Deterministic regex/heuristics — no external LLM calls. Returns the echoed input, the parsed struct (null = not stated) and an `ambiguities` array listing every assumption (e.g. "10 users: assume 1 stream each or batched?"), plus a ready-made `sizingQuery` for the downstream decision endpoint.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Plain-language constraints, e.g. self-hosted Qwen 27B at Q4 for 10 users under $1500 */
+                    q: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description {input, recognizedCount, constraints{deployment,modelFamily,paramsB,quantization,contextLength,concurrency,budgetUsdMax,minDecodeTokPerSec,maxVramGb,hwClass}, ambiguities[], sizingQuery} */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            input?: string;
+                            recognizedCount?: number;
+                            constraints?: {
+                                /** @enum {string|null} */
+                                deployment?: "self-hosted" | "cloud" | null;
+                                modelFamily?: string | null;
+                                paramsB?: number | null;
+                                quantization?: string | null;
+                                contextLength?: number | null;
+                                concurrency?: number | null;
+                                budgetUsdMax?: number | null;
+                                minDecodeTokPerSec?: number | null;
+                                maxVramGb?: number | null;
+                                /** @enum {string|null} */
+                                hwClass?: "discrete_gpu" | "unified" | "cpu_only" | null;
+                            };
+                            ambiguities?: {
+                                field?: string;
+                                message?: string;
+                            }[];
+                            /** @description Ready-made /api/sizing query string; null when nothing mappable was recognized */
+                            sizingQuery?: string | null;
+                        };
+                    };
+                };
+                /** @description Missing q parameter (code INVALID_PARAMS) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Rate limited (code RATE_LIMITED) */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/snapshots": {
         parameters: {
             query?: never;
