@@ -32,6 +32,7 @@ Models:
 - Add `&numTurns=40&tokensPerTurn=1200` → per-turn KV-growth projection with the exact turn where the context window (`firstContextOverflowTurn`) or VRAM budget (`firstVramOverflowTurn`) is first exceeded.
 - `quant` accepts GGUF/GPTQ tags (fp16, fp8, q8_0, q6_k, q5_k_m, q4_k_m, q4_0, q3_k_m, q2_k…); unknown tags assume ~4-bit and set `inputs.quantAssumed: true`.
 - GGUF-only repos (no safetensors metadata) fall back to the largest `.gguf` file size for weight VRAM.
+- Resolution is three-tier (check `model.resolutionSource`): `builtin-table` — common families (llama*, qwen3*, gemma*, mistral*) resolve offline from a built-in config table, no huggingface.co call; `huggingface` — everything else resolves from the repo's config.json / GGUF header; `name-heuristic` — when HF is unreachable or gated but the model name carries a size tag ("Foo-13B"), a coarse bucketed estimate is returned with the assumption spelled out in `model.notes`. Bad ids still 404.
 
 Calling `/api/compute` with no `model` returns a self-describing capability list.
 

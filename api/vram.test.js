@@ -56,21 +56,33 @@ test('resolves architecture from hfId and computes combined weights+KV VRAM', as
     query: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', context: '65536', quant: 'q4_k_m' }
   });
   assert.equal(status, 200);
-  // Architecture resolved from the stubbed config, not supplied by the caller.
+  // Llama-3.1-8B is a known family: resolved from the built-in lookup table,
+  // not supplied by the caller and not fetched from the network (#68).
+  assert.equal(json.model.resolutionSource, 'builtin-table');
+  assert.match(json.model.notes.join(' '), /built-in lookup table/);
   assert.equal(json.model.architecture.numLayers, 32);
   assert.equal(json.model.architecture.hiddenSize, 4096);
   assert.equal(json.model.architecture.kvHeads, 8);       // GQA heads
   assert.equal(json.model.architecture.headDim, 128);
-  assert.equal(json.model.paramsTotal, 8_030_269_568);
+  assert.equal(json.model.paramsTotal, 8_030_269_440);
 
   // KV bytes/token = 2 × 32 × 8 × 128 × 2 = 131072 B
   assert.equal(json.kvCache.bytesPerToken, 131072);
   // Weights ≈ params × (4.85/8)
-  const expectedWeightsGb = (8_030_269_568 * (4.85 / 8)) / 1024 ** 3;
+  const expectedWeightsGb = (8_030_269_440 * (4.85 / 8)) / 1024 ** 3;
   assert.ok(Math.abs(json.weights.gb - expectedWeightsGb) < 1e-4, 'weights gb');
   assert.ok(Math.abs(json.total.gb - (json.weights.gb + json.kvCache.gbAtContext)) < 1e-6);
   assert.equal(json.contextWindow.withinLimit, true);
   assert.match(json.kvCache.formula, /32 layers/);
+});
+
+test('non-table models still resolve over the HF network path', async () => {
+  const { status, json } = await call({
+    query: { hfId: 'org/not-in-the-table', context: '65536' }
+  });
+  assert.equal(status, 200);
+  assert.equal(json.model.resolutionSource, 'huggingface');
+  assert.equal(json.model.paramsTotal, 8_030_269_568); // from the stubbed metadata
 });
 
 test('vramGb budget produces fits flag and max context that fits', async () => {
@@ -215,4 +227,49 @@ test('GGUF-only repo without config.json resolves architecture from the file hea
   // Weights come from the gguf file size at repo quantization, not params×bpw.
   assert.equal(json.weights.sourceKind, 'file-size');
   assert.equal(json.weights.gb, round3(8_500_000_000 / 1024 ** 3));
+});
+
+// ---- Offline tiers (issue #68): built-in table + name-heuristic fallback ----
+
+test('built-in table hits never touch the network', async () => {
+  globalThis.fetch = async () => { throw new Error('network must not be used for table-resolved families'); };
+  const { status, json } = await call({
+    query: { hfId: 'Qwen/Qwen3-32B', context: '65536', quant: 'q5_k_m' }
+  });
+  assert.equal(status, 200);
+  assert.equal(json.model.resolutionSource, 'builtin-table');
+  assert.equal(json.model.family, 'qwen3-32b');
+  assert.equal(json.model.architecture.numLayers, 64);
+  assert.equal(json.model.architecture.hiddenSize, 5120);
+  assert.equal(json.model.architecture.kvHeads, 8);
+  // Weights come straight from the table's parameter count × quant bpw.
+  assert.equal(json.weights.sourceKind, 'params×quant');
+  assert.ok(Math.abs(json.weights.gb - (32_764_386_304 * (5.67 / 8)) / 1024 ** 3) < 1e-4);
+});
+
+test('when HF is unreachable, a size tag in the name still yields an estimate', async () => {
+  // Everything 502s — huggingface.co down.
+  globalThis.fetch = async () => ({ ok: false, status: 502, json: async () => ({}) });
+  const { status, json } = await call({
+    query: { hfId: 'some-org/NovaMinx-13B-Instruct', context: '4096' }
+  });
+  assert.equal(status, 200); // estimate instead of hard failure
+  assert.equal(json.model.resolutionSource, 'name-heuristic');
+  assert.match(json.model.notes.join(' '), /13b.*name tag|name tag/);
+  assert.equal(json.model.architecture.numLayers, 48);   // 13B → mid bucket
+  assert.equal(json.model.architecture.kvHeads, 8);      // assumed GQA shape
+  assert.equal(json.model.architecture.headDim, 128);
+  assert.equal(json.model.paramsTotal, 13_000_000_000);
+  assert.ok(json.total.gb > json.kvCache.gbAtContext);
+});
+
+test('heuristic fallback does not mask a genuinely unknown repo (404 passes through)', async () => {
+  installFetch({ config: null });
+  const notFound = await call({ query: { hfId: 'org/no-such-repo-xyz' } });
+  assert.equal(notFound.status, 404);
+
+  // …and names with no parseable size tag don't guess either.
+  globalThis.fetch = async () => ({ ok: false, status: 502, json: async () => ({}) });
+  const unreachable = await call({ query: { hfId: 'org/no-size-tag-here' } });
+  assert.equal(unreachable.status, 502);
 });

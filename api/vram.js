@@ -1,7 +1,14 @@
 // GET/POST /api/vram — combined model + KV-cache + context VRAM estimate from
 // a bare { hfId, context, quant }. Architecture (layers, hidden dim, GQA
-// heads, head dim) and weight size are resolved from the Hugging Face config
-// automatically, so agents never guess model internals.
+// heads, head dim) and weight size are resolved automatically, so agents
+// never guess model internals. Resolution tiers (issue #68):
+//   1. built-in lookup table for common families (llama*, qwen3*, gemma*,
+//      mistral*) — offline and deterministic (_hflookup.js)
+//   2. huggingface.co config.json / GGUF header for everything else
+//      (_hfconfig.js)
+//   3. name-tag heuristic ("Foo-13B" → ~13B bucketed arch) when HF is
+//      unreachable or gated — coarse, and flagged in model.resolutionSource
+//      and model.notes
 //
 //   /api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m
 //   /api/vram?hfId=...&context=...&vramGb=24            → fits + max context
@@ -10,6 +17,7 @@
 
 import { resolveModel } from './_hfconfig.js';
 import { resolveQuant } from './_quant.js';
+import { lookupHfArch, guessArchFromName } from './_hflookup.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -33,6 +41,12 @@ function round(x) {
   return Math.round(x * 1e6) / 1e6;
 }
 
+// Mirror of _hfconfig.js's id cleanup (strip full huggingface.co URLs and
+// trailing slashes) for the offline tiers.
+function normalizeHfId(hfIdRaw) {
+  return String(hfIdRaw || '').trim().replace(/^https?:\/\/huggingface\.co\//, '').replace(/\/+$/, '');
+}
+
 async function estimate(params) {
   const hfId = params.hfId ?? params.model ?? params.repo;
   if (!hfId) {
@@ -51,7 +65,29 @@ async function estimate(params) {
     };
   }
 
-  const resolved = await resolveModel(hfId, { quant: params.quant ?? params.q }); // throws tagged httpErrors
+  // Resolution tiers (issue #68): built-in table → Hugging Face → name
+  // heuristic. The table keeps common families (llama*/qwen3*/gemma*/mistral*)
+  // offline and deterministic; the network paths cover everything else.
+  const local = lookupHfArch(hfId);
+  let resolved;
+  if (local) {
+    resolved = { hfId: normalizeHfId(hfId), ...local };
+  } else {
+    try {
+      resolved = await resolveModel(hfId, { quant: params.quant ?? params.q }); // throws tagged httpErrors
+      resolved.resolutionSource = 'huggingface';
+    } catch (err) {
+      // "Caller got the id wrong" errors pass through untouched; only
+      // environmental failures (502 HF unreachable, 403 gated/no files,
+      // 422 unparseable header) fall back to the coarse name-tag heuristic.
+      const status = Number(err?.status);
+      if (status === 400 || status === 404 || !Number.isInteger(status)) throw err;
+      const guess = guessArchFromName(hfId);
+      if (!guess) throw err;
+      resolved = { hfId: normalizeHfId(hfId), ...guess };
+    }
+  }
+  resolved.resolutionSource ??= resolved.source ?? 'huggingface';
   const quant = resolveQuant(params.quant ?? params.q);
   const context = Math.max(1, Math.round(num(params.context ?? params.contextLength, 32768)));
   const batchSize = Math.max(1, Math.round(num(params.batchSize, 1)));
@@ -148,6 +184,7 @@ async function estimate(params) {
       model: {
         hfId: resolved.hfId,
         family: resolved.family,
+        resolutionSource: resolved.resolutionSource,
         architecture: arch,
         paramsTotal: resolved.paramsTotal,
         paramsB: resolved.paramsTotal != null ? round(resolved.paramsTotal / 1e9) : null,
