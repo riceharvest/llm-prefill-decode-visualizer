@@ -33,6 +33,10 @@ export const locales = {
       instant: 'INST'
     },
 
+    kv: {
+      rowUnit: '1 row = 1 token · {rows} rows shown'
+    },
+
     app: {
       footerTagline: 'Open source inference benchmark instrument',
       shortcutsPrefix: 'Shortcuts:',
@@ -150,6 +154,11 @@ export const locales = {
       prefillHint: 'Compute-bound parallel matrix multiplication. Builds the KV cache for all {tokens} prompt tokens.',
       generated: 'Generated',
       decodeHint: 'Memory-bandwidth bound autoregressive loop. Reads all model weights & KV cache per generated token.',
+      kvSectionLabel: 'KV cache growth — prefill writes every row at once, decode adds one row per token',
+      kvPrefillTitle: 'Prefill · parallel write',
+      kvDecodeTitle: 'Decode · one row per token',
+      kvPrefillCaption: 'Compute-bound: the whole matrix is written in a single forward pass — every cache row fills together.',
+      kvDecodeCaption: 'Memory-bound: each generated token appends exactly one new cache row.',
       streamSectionLabel: 'Decode stream · {count} tokens',
       tpotLabel: 'TPOT',
       placeholderPrefilling: 'Ingesting prompt — prefill phase active…',
@@ -224,6 +233,14 @@ export const locales = {
       statusCompleted: 'Loop complete',
       statusIdle: 'Run the simulation to see both phases side by side',
       contextGrowth: 'Context (KV cache) growth',
+      kvSectionLabel: 'Turn {turn} KV cache — shaded rows are reused, only the delta is prefilled',
+      kvPrefillTitle: 'This turn · prompt prefill',
+      kvDecodeTitle: 'This turn · decode append',
+      kvCachedLegend: 'cached prefix (reused)',
+      kvDeltaLegend: 'new tokens prefilled',
+      kvCachedCaption: 'Prefix caching ON: history from earlier turns is reused as-is — only the tool-output delta is prefilled this turn.',
+      kvNoCacheCaption: 'Prefix caching OFF: every turn re-prefills the entire accumulated history from scratch.',
+      kvDecodeCaption: 'Each generated token appends exactly one new cache row.',
       accumulatedSuffix: '{thousands}k accumulated',
       waterfallLabel: 'Turn-by-turn walltime waterfall',
       legendPrefill: 'Prefill',

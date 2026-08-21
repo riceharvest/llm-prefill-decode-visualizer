@@ -12,6 +12,7 @@ import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../uti
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
 import { drawItlSamples, summarizeItl, histogramItl, cumulativeItlSchedule, tokensEmittedBy } from '../utils/itl';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
+import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
 import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
 import Metric from './Metric';
@@ -904,6 +905,34 @@ export default function SingleTurnVisualizer({
             </p>
           </div>
 
+        </div>
+
+        {/* KV Cache Growth Matrices — prefill fills every row at once (compute-bound),
+            decode appends one row per token (memory-bound). The asymmetry IS the lesson. */}
+        <div className="panel-inset" style={{ marginBottom: '20px' }}>
+          <KVCacheSectionHeader label={t('singleTurn.kvSectionLabel')} />
+          <div className="grid-auto" style={{ '--grid-min': '280px' }}>
+            <KVCacheMatrix
+              title={t('singleTurn.kvPrefillTitle')}
+              icon={<Zap size={13} />}
+              tone="prefill"
+              variant="parallel"
+              totalTokens={totalPrefillTokens}
+              progress={currentPrefillProgress}
+              active={phase === 'prefilling'}
+              captions={{ caption: t('singleTurn.kvPrefillCaption') }}
+            />
+            <KVCacheMatrix
+              title={t('singleTurn.kvDecodeTitle')}
+              icon={<Gauge size={13} />}
+              tone="decode"
+              variant="append"
+              totalTokens={outputTokens}
+              progress={currentDecodeTokens}
+              active={phase === 'decoding'}
+              captions={{ caption: t('singleTurn.kvDecodeCaption') }}
+            />
+          </div>
         </div>
 
         {/* Dynamic Token Stream & Simulated Output */}
