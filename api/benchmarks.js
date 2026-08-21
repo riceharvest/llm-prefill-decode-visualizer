@@ -4,6 +4,7 @@ import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from 
 import { enforceRateLimit } from './_ratelimit.js';
 import { buildCaveats, rowCaveats } from './_caveats.js';
 import { sendJson } from './_schema.js';
+import { engineTag, matchesEngineQuery } from './_engine.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -29,6 +30,7 @@ export default async function handler(req, res) {
     const model = q.model ? String(q.model).toLowerCase() : null;   // matches family OR raw hfId
     const quant = q.quant ? String(q.quant).toLowerCase() : null;
     const hwClass = q.hwClass ? String(q.hwClass).toLowerCase() : null; // discrete_gpu | unified | cpu_only
+    const engineQ = q.engine ? String(q.engine) : null;             // matches "name version" tag substring
 
     const { runs: liveRuns, snapshot } = await resolveRuns(q);
     let runs = liveRuns;
@@ -37,6 +39,9 @@ export default async function handler(req, res) {
     if (model) runs = runs.filter(r => r.modelFamily.includes(model) || r.modelId?.toLowerCase().includes(model));
     if (quant) runs = runs.filter(r => r.quantization?.toLowerCase() === quant);
     if (hwClass) runs = runs.filter(r => r.hwClass?.toLowerCase() === hwClass);
+    if (engineQ) runs = runs.filter(r => matchesEngineQuery(r, engineQ));
+
+    const crossEngine = ['1', 'true', 'yes'].includes(String(q.crossEngine).toLowerCase());
 
     const groupBy = q.groupBy === 'model' ? 'model'
       : q.groupBy === 'hardware' ? 'hardware'
@@ -56,7 +61,11 @@ export default async function handler(req, res) {
       hardware: r => r.hardwareKey,
       model: r => r.modelFamily,
       quant: r => `${r.hardwareKey}|${r.quantization}`,
-      hardwareModel: r => `${r.hardwareKey}|${r.modelFamily}`
+      // default cohorts are same-engine (name+version); ?crossEngine=true
+      // opts out into hardware×model groups that may mix engine builds.
+      hardwareModel: crossEngine
+        ? (r => `${r.hardwareKey}|${r.modelFamily}`)
+        : (r => `${r.hardwareKey}|${r.modelFamily}|${engineTag(r)}`)
     };
 
     const { limit, cursor } = parsePagination(q, { defaultLimit: 25, maxLimit: 200 });
@@ -72,11 +81,14 @@ export default async function handler(req, res) {
       models: undefined,
       modelFamilies: g.models,
       caveats: rowCaveats(g),
+      engines: g.engines,
+      mixedEngines: g.mixedEngines,
       bestRun: {
         runId: g.bestRun.runId,
         modelName: g.bestRun.modelName,
         hardware: g.bestRun.hardware,
         engine: g.bestRun.engine,
+        engineVersion: g.bestRun.engineVersion,
         quantization: g.bestRun.quantization,
         prefillTokPerSec: g.bestRun.prefillTokPerSec,
         decodeTokPerSec: g.bestRun.decodeTokPerSec,
@@ -84,12 +96,18 @@ export default async function handler(req, res) {
       }
     }));
 
+    const warnings = groups.filter(g => g.mixedEngines)
+      .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
+
     return json(res, {
-      description: 'Aggregated community benchmark speeds (median + IQR per group). Filter with ?hardware=&model=&quant=&hwClass=; regroup with ?groupBy=hardware|model|quant|hardwareModel. Cursor pagination: follow next_cursor until has_more is false.',
+      description: 'Aggregated community benchmark speeds (median + IQR per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=; regroup with ?groupBy=hardware|model|quant|hardwareModel. Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false.',
       snapshot,
       total: allGroups.length,
       matchedRuns: runs.length,
       distinctModelFamilies: [...new Set(runs.map(r => r.modelFamily))].length,
+      distinctEngines: [...new Set(runs.map(r => engineTag(r)))],
+      engineCohortedByDefault: !crossEngine && groupBy === 'hardwareModel',
+      warnings,
       outlierPolicy: {
         thresholdIqrs: outlierIqrs,
         includeOutliers,

@@ -6,6 +6,7 @@ import { SCENARIO_PRESETS } from '../src/utils/presets.js';
 import { fitsInMemory } from './_vramfit.js';
 import { enforceRateLimit } from './_ratelimit.js';
 import { buildCaveats, rowCaveats } from './_caveats.js';
+import { matchesEngineQuery } from './_engine.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -127,6 +128,7 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  * ?contextLength=N                context for fitCheck (default 32768; implies fitCheck)
  * ?precisionBytes=2               KV cache dtype for fitCheck (fp16 default)
  * ?batchSize=1                    KV cache batch for fitCheck
+ * ?engine=<substr>                restrict to engine name/version tag substring (e.g. llama.cpp, b4523)
  * ?limit=N                        default 10
  *
  * Cost ranking (?by=cost) inputs:
@@ -167,6 +169,7 @@ export default async function handler(req, res) {
       const h = String(q.hardware).toLowerCase();
       runs = runs.filter(r => r.hardwareKey?.toLowerCase().includes(h) || r.hardware?.toLowerCase().includes(h));
     }
+    if (q.engine) runs = runs.filter(r => matchesEngineQuery(r, String(q.engine)));
 
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
     // plus KV cache at the requested context. Estimates only — see _vramfit.js.
@@ -249,24 +252,31 @@ export default async function handler(req, res) {
       }
     }
 
-    // Attach per-row statistical caveats (#19).
+    // Attach statistical caveats (#19) and engine cohort info (#29) per row.
     const grpByKey = new Map(groups.map(g => [g.key, g]));
     for (const row of ranked) {
       const g = grpByKey.get(`${row.hardwareKey}|${row.modelFamily}`);
-      if (g) row.caveats = rowCaveats(g);
+      if (!g) continue;
+      row.caveats = rowCaveats(g);
+      row.engineVersion = g.bestRun?.engineVersion ?? null;
+      row.engines = g.engines;
+      row.mixedEngines = g.mixedEngines;
     }
 
+    const warnings = groups.filter(g => g.mixedEngines)
+      .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
 
     return json(res, {
       description: by === 'walltime'
-        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant; runsInGroup shows sample size.`
+        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant; runsInGroup shows sample size. Filter with ?engine=<substr> to compare same-engine builds only.`
         : by === 'cost'
         ? 'Ranked hardware×model groups by cost-efficiency: $/1M tokens from hardware price (amortized) + electricity at measured median speeds for the given scenario shape. Lower is better.'
-        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size.',
+        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size. Filter with ?engine=<substr> to compare same-engine builds only.',
       rankedBy: by,
       snapshot,
       matchedRuns: runs.length,
       caveats: buildCaveats(runs, groups),
+      warnings,
       ...(by === 'walltime' ? {
         workload: {
           promptTokens: workload.promptTokens,

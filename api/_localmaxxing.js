@@ -2,6 +2,7 @@
 // cached full-dataset fetch, model-name normalization, and aggregation.
 
 import { normalizeModelId } from './_normalize.js';
+import { engineTags } from './_engine.js';
 
 const UPSTREAM = 'https://www.localmaxxing.com/api';
 const PAGE = 200;
@@ -84,6 +85,7 @@ function slim(r) {
     unifiedMemoryGb: h.unifiedMemoryGb,
     cpu: h.cpu,
     engine: r.engine?.engineName,
+    engineVersion: r.engine?.engineVersion ?? null,
     quantization: r.engine?.quantization,
     prefillTokPerSec: Math.round(r.tokSPrefill),
     decodeTokPerSec: Math.round(r.tokSOut),
@@ -233,7 +235,8 @@ export function aggregate(runs, keyFn, { outlierIqrs = DEFAULT_OUTLIER_IQRS, inc
       includeOutliers,
       prefill: statsOf(statsRuns.map(r => r.prefillTokPerSec)),
       decode: statsOf(statsRuns.map(r => r.decodeTokPerSec)),
-      engines: [...new Set(group.map(r => r.engine).filter(Boolean))],
+      engines: engineTags(group),
+      mixedEngines: engineTags(group).length > 1,
       bestRun: group.reduce((best, r) => (r.decodeTokPerSec > best.decodeTokPerSec ? r : best), group[0]),
       outliers
     });
