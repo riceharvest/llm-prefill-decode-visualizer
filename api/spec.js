@@ -83,6 +83,16 @@ export default function handler(req, res) {
           ],
           responses: { '200': { description: 'Ranked groups with medians and source links' } }
         }
+      },
+      '/api/health': {
+        get: {
+          summary: 'Service health and upstream data freshness',
+          description: 'Liveness probe. Returns ok plus upstreamFreshness (fresh/stale/empty, last sync time, cached row count) and cacheAge in seconds. Human status page at /status.html.',
+          responses: {
+            '200': { description: '{ok, service, time, upstreamFreshness, cacheAge}' },
+            '500': { description: 'Health handler itself failed' }
+          }
+        }
       }
     }
   };

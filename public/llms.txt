@@ -9,6 +9,8 @@ Everything on the page is available as plain JSON over HTTP. No browser needed.
 Base URL: https://llm-prefill-decode-visualizer.vercel.app
 OpenAPI spec: /api/spec (machine-readable, derive all endpoints from it)
 
+**GET /api/health** — liveness + upstream data freshness ({ok, upstreamFreshness, cacheAge}). Human status page at /status.html.
+
 ### Endpoints
 
 **GET /api/compute?model=<name>&<params>** — run any simulator math and get exact numbers.

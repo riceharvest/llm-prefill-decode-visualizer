@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status — LLM Prefill & Decode Speed Visualizer</title>
+<meta name="robots" content="noindex">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --fg: #e6edf3; --muted: #8b949e;
+    --ok: #3fb950; --warn: #d29922; --bad: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; justify-content: center; padding: 48px 16px;
+  }
+  main { width: 100%; max-width: 640px; }
+  h1 { font-size: 20px; margin: 0 0 24px; font-weight: 600; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 24px; margin-bottom: 16px;
+  }
+  .status-line { display: flex; align-items: center; gap: 12px; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; background: var(--muted); }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 12px var(--ok); }
+  .dot.warn { background: var(--warn); box-shadow: 0 0 12px var(--warn); }
+  .dot.bad { background: var(--bad); box-shadow: 0 0 12px var(--bad); }
+  #headline { font-size: 18px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  td { padding: 6px 0; vertical-align: top; }
+  td:first-child { color: var(--muted); width: 45%; }
+  a { color: #58a6ff; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 24px; }
+  .refreshing { opacity: 0.6; transition: opacity 0.2s; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LLM Prefill &amp; Decode Speed Visualizer — Status</h1>
+
+  <div class="card">
+    <div class="status-line">
+      <span id="dot" class="dot"></span>
+      <span id="headline">Checking…</span>
+    </div>
+  </div>
+
+  <div class="card" id="details-card">
+    <table>
+      <tr><td>API service</td><td id="api-status">—</td></tr>
+      <tr><td>Upstream data</td><td id="freshness">—</td></tr>
+      <tr><td>Last successful sync</td><td id="last-sync">—</td></tr>
+      <tr><td>Cache age</td><td id="cache-age">—</td></tr>
+      <tr><td>Cached benchmark runs</td><td id="row-count">—</td></tr>
+      <tr><td>Checked at</td><td id="checked-at">—</td></tr>
+    </table>
+  </div>
+
+  <footer>
+    Auto-refreshes every 60s ·
+    Data source: <a href="https://www.localmaxxing.com" rel="noopener">localmaxxing.com</a> ·
+    Machine-readable endpoint: <a href="/api/health"><code>/api/health</code></a>
+  </footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var REFRESH_MS = 60000;
+
+  function el(id) { return document.getElementById(id); }
+
+  function fmtAge(seconds) {
+    if (seconds == null) return '—';
+    if (seconds < 60) return seconds + 's';
+    var m = Math.floor(seconds / 60);
+    if (m < 60) return m + 'm ' + (seconds % 60) + 's';
+    var h = Math.floor(m / 60);
+    return h + 'h ' + (m % 60) + 'm';
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return 'never';
+    try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+  }
+
+  function setState(dotClass, headline) {
+    el('dot').className = 'dot ' + dotClass;
+    el('headline').textContent = headline;
+  }
+
+  function render(data) {
+    var f = data.upstreamFreshness || {};
+    el('api-status').innerHTML = data.ok ? '<span style="color:var(--ok)">Operational</span>' : '<span style="color:var(--bad)">Error</span>';
+
+    var freshLabel = { fresh: ['var(--ok)', 'Fresh'], stale: ['var(--warn)', 'Stale (serving cached data)'], empty: ['var(--warn)', 'No data yet'] };
+    var fl = freshLabel[f.status] || freshLabel.empty;
+    el('freshness').innerHTML = '<span style="color:' + fl[0] + '">' + fl[1] + '</span>';
+
+    el('last-sync').textContent = fmtTime(f.fetchedAt);
+    el('cache-age').textContent = f.ageSeconds != null ? fmtAge(f.ageSeconds) + ' ago' : '—';
+    el('row-count').textContent = f.rowCount != null ? f.rowCount.toLocaleString() : '—';
+    el('checked-at').textContent = fmtTime(data.time);
+
+    if (!data.ok) setState('bad', 'API error');
+    else if (f.status === 'stale') setState('warn', 'Degraded — upstream data is stale');
+    else if (f.status === 'empty') setState('warn', 'Starting up — no upstream data yet');
+    else setState('ok', 'All systems operational');
+  }
+
+  function check() {
+    document.body.classList.add('refreshing');
+    fetch('/api/health', { cache: 'no-store' })
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+      .then(function (r) { render(r.ok ? r.body : { ok: false }); })
+      .catch(function () {
+        setState('bad', 'Unreachable — could not reach the API');
+        el('checked-at').textContent = new Date().toLocaleString();
+      })
+      .finally(function () { document.body.classList.remove('refreshing'); });
+  }
+
+  check();
+  setInterval(check, REFRESH_MS);
+})();
+</script>
+</body>
+</html>
