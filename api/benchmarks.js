@@ -1,4 +1,5 @@
 import { getAllRuns, aggregate } from './_localmaxxing.js';
+import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from './_pagination.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -10,10 +11,15 @@ function json(res, body, status = 200, cacheTtl = 600) {
   res.end(JSON.stringify(body, null, 2));
 }
 
+// Shared pagination contract (see ./_pagination.js): ?limit=N (default 25, max
+// 200) + opaque &cursor=; responses carry items[], has_more, next_cursor, total.
+// Stable total order: best median decode first, group key as unique tiebreak
+// (matches the ordering aggregate() already returns).
+const GROUP_KEY = g => [g.decode.median, g.key];
+
 export default async function handler(req, res) {
   try {
     const q = req.query || {};
-    const limit = Math.min(200, Math.max(1, Number(q.limit) || 25));
 
     // Filters
     const hardware = q.hardware ? String(q.hardware).toLowerCase() : null;
@@ -40,7 +46,15 @@ export default async function handler(req, res) {
       hardwareModel: r => `${r.hardwareKey}|${r.modelFamily}`
     };
 
-    const groups = aggregate(runs, keyFns[groupBy]).slice(0, limit).map(g => ({
+    const { limit, cursor } = parsePagination(q, { defaultLimit: 25, maxLimit: 200 });
+
+    // aggregate() sorts by median decode desc; enforce the full stable order
+    const allGroups = aggregate(runs, keyFns[groupBy])
+      .sort((a, b) => descNumAscStrCmp(GROUP_KEY(a), GROUP_KEY(b)));
+
+    const page = paginate({ items: allGroups, limit, cursor, keyOf: GROUP_KEY, cmp: descNumAscStrCmp });
+
+    const groups = page.items.map(g => ({
       ...g,
       models: undefined,
       modelFamilies: g.models,
@@ -57,13 +71,19 @@ export default async function handler(req, res) {
     }));
 
     return json(res, {
-      description: 'Aggregated community benchmark speeds (median + IQR per group). Filter with ?hardware=&model=&quant=&hwClass=; regroup with ?groupBy=hardware|model|quant|hardwareModel.',
+      description: 'Aggregated community benchmark speeds (median + IQR per group). Filter with ?hardware=&model=&quant=&hwClass=; regroup with ?groupBy=hardware|model|quant|hardwareModel. Cursor pagination: follow next_cursor until has_more is false.',
+      total: allGroups.length,
       matchedRuns: runs.length,
       distinctModelFamilies: [...new Set(runs.map(r => r.modelFamily))].length,
       note: 'medians are outlier-resistant; use bestRun for the single fastest measured run in each group',
-      groups
+      items: groups,
+      has_more: page.has_more,
+      next_cursor: page.next_cursor
     });
   } catch (err) {
+    if (err instanceof InvalidCursorError) {
+      return json(res, { error: err.message }, 400);
+    }
     return json(res, { error: String(err.message || err) }, 502);
   }
 }
