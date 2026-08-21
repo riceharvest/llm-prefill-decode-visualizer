@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, FileDown, Copy } from 'lucide-react';
+import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, FileDown, Copy, Zap, Gauge } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, readParamBool, readParam, writeParams } from '../utils/urlState';
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
 import { exportNodeAsPng } from '../utils/exportPng';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
+import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
 import Metric from './Metric';
 
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
@@ -132,6 +133,15 @@ export default function AgenticVisualizer({
   const totalAgentWalltime = turnBreakdown.reduce((acc, t) => acc + t.turnWalltime, 0);
   const waterfallLayout = waterfallGeometry(turnBreakdown);
   const activeTurnItem = activeTurn ? turnBreakdown.find(t => t.turn === activeTurn) : null;
+
+  // KV-cache matrix inputs for the active turn. With prefix caching on, the
+  // agent-colored region is history reused from earlier turns — only the
+  // delta gets prefilled, which is why turn 2+ TTFTs collapse.
+  const kvTurnTotal = activeTurnItem ? activeTurnItem.totalPromptTokens : 0;
+  const kvCachedTokens = activeTurnItem && enablePrefixCaching && activeTurnItem.isCached
+    ? Math.max(0, activeTurnItem.totalPromptTokens - activeTurnItem.newTokensPrefilled)
+    : 0;
+  const kvPrefillProgress = kvCachedTokens + (activeTurnItem ? Math.max(0, prefillProgress) : 0);
 
   // Context growth: KV-cache token count over the loop. During a turn's prefill
   // the context grows from the previous turn's end to this turn's full prompt;
@@ -621,6 +631,39 @@ export default function AgenticVisualizer({
                   width: `${totalAgentWalltime > 0 ? Math.min(100, (elapsedSim / totalAgentWalltime) * 100) : 0}%`,
                   background: 'var(--agent)'
                 }}
+              />
+            </div>
+          </div>
+
+          {/* KV cache growth for this turn — the cached prefix stays shaded
+              (reused) while only the delta rows are written during prefill. */}
+          <div style={{ marginBottom: '14px' }}>
+            <KVCacheSectionHeader label={t('agentic.kvSectionLabel', { turn: activeTurn || '—' })} />
+            <div className="grid-auto" style={{ '--grid-min': '280px' }}>
+              <KVCacheMatrix
+                title={t('agentic.kvPrefillTitle')}
+                icon={<Zap size={13} />}
+                tone={kvCachedTokens > 0 ? 'agent' : 'prefill'}
+                variant="parallel"
+                totalTokens={kvTurnTotal}
+                progress={kvPrefillProgress}
+                cachedTokens={kvCachedTokens}
+                active={currentPhase === 'prefilling'}
+                captions={{
+                  legend: kvCachedTokens > 0 ? t('agentic.kvDeltaLegend') : undefined,
+                  cachedLegend: kvCachedTokens > 0 ? t('agentic.kvCachedLegend') : undefined,
+                  caption: enablePrefixCaching ? t('agentic.kvCachedCaption') : t('agentic.kvNoCacheCaption')
+                }}
+              />
+              <KVCacheMatrix
+                title={t('agentic.kvDecodeTitle')}
+                icon={<Gauge size={13} />}
+                tone="decode"
+                variant="append"
+                totalTokens={activeTurnItem ? activeTurnItem.decodeTokens : 0}
+                progress={activeTurnItem ? decodeProgress : 0}
+                active={currentPhase === 'decoding'}
+                captions={{ caption: t('agentic.kvDecodeCaption') }}
               />
             </div>
           </div>
