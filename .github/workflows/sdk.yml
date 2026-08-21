@@ -46,7 +46,7 @@ jobs:
       - name: Generate Python client
         run: |
           pipx install openapi-python-client
-          openapi-python-client generate --path openapi.json --output-path clients/python
+          openapi-python-client generate --path openapi.json --output-path clients/python --overwrite
 
       - name: Commit generated clients
         run: |
