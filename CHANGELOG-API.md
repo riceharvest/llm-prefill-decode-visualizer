@@ -47,6 +47,16 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ## Changelog
 
+### Unreleased (additive — no version bump)
+
+- `/api/benchmarks` and `/api/best` rows now carry a `dataQuality` block
+  (`status: ok|flagged`, `flaggedRuns`, `flagCounts`, affected runIds) from
+  the new unit-consistency audit; `/api/benchmarks` adds a top-level
+  `unitAudit` summary. `/api/localmaxxing` submissions are audited at ingest
+  and queue with a stored `unitAudit`; flagged submissions still return 202
+  with an extra warning.
+- Affected endpoints: `/api/benchmarks`, `/api/best`, `/api/localmaxxing`.
+
 ### 1 — 2026-08-21
 
 - Initial versioned schema. All `/api/*` JSON responses now include a

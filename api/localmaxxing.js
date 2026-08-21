@@ -60,6 +60,17 @@ async function handlePost(req, res) {
       status: 'queued',
       reviewStatus: record.reviewStatus,
       submissionId: record.submissionId,
+      // Unit-consistency audit is advisory: flagged runs are still queued for
+      // review, but the submitter sees why a reviewer might reject (#43).
+      ...(submission.unitAudit && !submission.unitAudit.ok
+        ? {
+            unitAudit: submission.unitAudit,
+            warnings: [{
+              code: 'unit_audit_flags',
+              message: `Speeds look unit-inconsistent (${submission.unitAudit.flags.map(f => f.code).join(', ')}) — queued, but likely to be rejected on review.`
+            }]
+          }
+        : {}),
       ...(dup.similar ? { warnings: [{ code: 'similar_run_exists', message: 'Other runs exist for this model+quant+rig combination at different speeds.', existingRun: dup.similar }] } : {})
     }, 202);
   } catch (err) {

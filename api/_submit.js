@@ -3,6 +3,7 @@
 // Pure logic — no Vercel/req/res dependencies — so it can be unit-tested.
 
 import { normalizeModelId } from './_normalize.js';
+import { auditRun } from './_unit_audit.js';
 
 const HW_CLASSES = ['discrete_gpu', 'unified', 'cpu_only'];
 
@@ -133,6 +134,17 @@ export function validateSubmission(body) {
 
   if (errors.length) return { ok: false, errors, submission: null };
 
+  // Unit-consistency audit (issue #43): advisory only — the coarse sanity
+  // bounds above already hard-reject gross violations, this catches
+  // borderline unit errors (roofline breaches, ms/token mix-ups) and stores
+  // them on the queued record for reviewers.
+  const unitAudit = auditRun({
+    hwClass,
+    gpuCount: 1,
+    prefillTokPerSec: speeds.prefillTokPerSec,
+    decodeTokPerSec: speeds.decodeTokPerSec
+  });
+
   return {
     ok: true,
     errors: [],
@@ -151,7 +163,8 @@ export function validateSubmission(body) {
       ...(provenance ? { provenance } : {}),
       ...(submitter ? { submitter } : {}),
       submittedAt: new Date().toISOString(),
-      reviewStatus: 'pending_review'
+      reviewStatus: 'pending_review',
+      unitAudit
     }
   };
 }
