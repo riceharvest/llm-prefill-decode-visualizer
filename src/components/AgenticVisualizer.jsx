@@ -250,7 +250,18 @@ export default function AgenticVisualizer({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isPlaying, simSpeedMultiplier, numTurns, totalAgentWalltime]);
+  }, [
+    isPlaying,
+    simSpeedMultiplier,
+    numTurns,
+    basePromptTokens,
+    toolOutputTokensPerTurn,
+    decodeTokensPerTurn,
+    enablePrefixCaching,
+    prefillSpeed,
+    decodeSpeed,
+    totalAgentWalltime
+  ]);
 
   const phaseStatusText = currentPhase === 'prefilling' ? 'Prefilling — ingesting prompt tokens'
     : currentPhase === 'decoding' ? 'Decoding — generating tokens'
