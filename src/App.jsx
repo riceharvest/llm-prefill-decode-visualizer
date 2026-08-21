@@ -179,6 +179,17 @@ export default function App() {
     setIsPlaying(false);
   }, []);
 
+  // Quantization matrix (issue #47): clicking a measured quant row bakes its
+  // best-run speeds straight into the sim, same as applying a preset.
+  const handleApplyMeasuredSpeeds = useCallback((prefill, decode) => {
+    const p = Number(prefill);
+    const d = Number(decode);
+    if (!Number.isFinite(p) || !Number.isFinite(d) || p <= 0 || d <= 0) return;
+    setPrefillSpeed(p);
+    setDecodeSpeed(d);
+    setIsPlaying(false);
+  }, []);
+
   const handleLocalMaxxingContext = useCallback((context) => {
     setLocalMaxxingContext(context);
   }, []);
@@ -340,6 +351,7 @@ export default function App() {
             presets={comparisonPresets}
             localMaxxingContext={localMaxxingContext}
             sloBudgets={sloBudgets}
+            onApplySpeeds={handleApplyMeasuredSpeeds}
           />
         )}
 

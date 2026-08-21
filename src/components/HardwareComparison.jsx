@@ -5,6 +5,7 @@ import { readParam, readParamNum, readParamBool, writeParams } from '../utils/ur
 import { methodologyMismatch } from '../utils/localMaxxing';
 import { buildSizingReport, buildSizingReportJson, buildSizingReportYaml, buildSizingReportMarkdown, downloadSizingReport } from '../utils/sizingReport';
 import { buildDeepLink } from '../utils/exportMarkdown';
+import QuantTradeoffMatrix from './QuantTradeoffMatrix';
 import Metric from './Metric';
 import SloBadge from './SloBadge';
 import { estimateFromLabel } from '../utils/streetPricing';
@@ -28,7 +29,7 @@ const DEFAULT_WATTS = {
 };
 const defaultWattsFor = (id) => DEFAULT_WATTS[id] ?? 400;
 
-export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMaxxingContext, sloBudgets }) {
+export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMaxxingContext, sloBudgets, onApplySpeeds }) {
   const [hardwareA, setHardwareA] = useState(() => readParam('hwA') || 'groq');
   const [hardwareB, setHardwareB] = useState(() => readParam('hwB') || 'rtx4090_exl2');
   const [batchSize, setBatchSize] = useState(() => Math.max(1, Math.round(readParamNum('batch', 1))));
@@ -748,6 +749,13 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
         </div>
 
       </section>
+
+      {/* Quantization tradeoff matrix (issue #47): measured tok/s per quant
+          for one model family; rows load into the sim via onApplySpeeds. */}
+      <QuantTradeoffMatrix
+        localMaxxingContext={localMaxxingContext}
+        onApplySpeeds={onApplySpeeds}
+      />
 
       {/* TCO: Local Electricity vs Cloud */}
       <section className="panel" aria-label="Total cost of ownership electricity versus cloud">
