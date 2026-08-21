@@ -39,6 +39,8 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 
 **GET /api/benchmarks** — aggregated stats: median + IQR per group (outlier-resistant). Default groups by hardware×model-family; regroup with `?groupBy=hardware|model|quant`. Each group carries median/q1/q3/min/max for prefill and decode plus the single best measured run. Cursor-paginated like /api/localmaxxing: `{ total, items[], has_more, next_cursor }`, sorted by median decode desc (group key tiebreak); page size `limit` (default 25, max 200).
 
+**GET /api/diff?runA=<id>&runB=<id>** — diff two measured runs in one call: both runs' metrics plus per-metric deltas, ratios (B ÷ A) and a plain-language summary. Time metrics are normalized to a 2048-token prompt / 512-token output.
+
 **GET /api/best** — ranked answers to natural questions:
 - `/api/best?by=decode&maxParamsB=8&quant=q4_k_m` → top rigs for ≤8B models at Q4_K_M
 - `/api/best?by=prefill&hwClass=unified` → fastest prefill on unified-memory systems
