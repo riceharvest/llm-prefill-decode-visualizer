@@ -113,6 +113,36 @@ test('empty batch and oversized batch are rejected with a clear error', () => {
   assert.equal(atCap.json.count, MAX_BATCH_SIZE);
 });
 
+test('flagged model applies engine flag deltas and returns an audit trail', () => {
+  const { status, json } = call({
+    method: 'POST',
+    body: { model: 'flagged', prefillSpeed: 2400, decodeSpeed: 65, flags: 'flash-attn,kv-q8' }
+  });
+  assert.equal(status, 200);
+  assert.deepEqual(json.inputs.flags, ['flash-attn', 'kv-q8']);
+  // flash-attn (+18/+3) then kv-q8 (+4/+8) compose multiplicatively
+  assert.equal(json.adjusted.prefillSpeed, Math.round(2400 * 1.18 * 1.04));
+  assert.equal(json.adjusted.kvBits, 8);
+  assert.equal(json.adjustments.length, 2);
+  assert.ok(json.adjustments.every(a => a.source === 'heuristic' && a.sourceNote));
+  assert.ok(json.simulation.ttftSeconds > 0);
+  assert.ok(json.simulation.totalWalltimeSeconds > 0);
+});
+
+test('flagged model warns on unknown flags and simulates unflagged when none given', () => {
+  const unknown = call({ query: { model: 'flagged', flags: 'bogus' } });
+  assert.equal(unknown.status, 200);
+  assert.match(unknown.json.warnings[0], /Unknown flag id 'bogus'/);
+
+  const bare = call({ query: { model: 'flagged', prefillSpeed: 3800, decodeSpeed: 105 } });
+  assert.equal(bare.json.adjusted.prefillSpeed, 3800);
+  assert.deepEqual(bare.json.adjustments, []);
+
+  // Same math as singleTurn when no flags are active
+  const plain = call({ query: { model: 'singleTurn', prefillSpeed: 3800, decodeSpeed: 105 } });
+  assert.equal(bare.json.simulation.totalWalltimeSeconds, plain.json.totalWalltimeSeconds);
+});
+
 test('non-array batch payloads get a 400', () => {
   const badJson = call({ query: { batch: '{not json' } });
   assert.equal(badJson.status, 400);

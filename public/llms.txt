@@ -20,6 +20,7 @@ Models:
 - `batched` — per-user vs aggregate throughput at batch size B (per-user decode decays ~B^0.25). Params: `prefillSpeed`, `decodeSpeed`, `batchSize`, `promptTokens`, `outputTokens`.
 - `agentic` — turn-by-turn walltime for a tool-calling loop, with/without prefix caching savings. Params: `numTurns`, `basePromptTokens`, `toolOutputTokensPerTurn`, `decodeTokensPerTurn`, `prefillSpeed`, `decodeSpeed`, `enablePrefixCaching`.
 - `kvCache` — KV-cache VRAM for an architecture. Params: `architecture` (`llama70b|llama8b|qwen72b|mistral7b`) or explicit `numLayers`+`kvHeads`+`headDim`, plus `contextLength`, `precisionBytes` (2=FP16, 1=FP8, 0.5=INT4), `batchSize`.
+- `flagged` — engine launch-flag modeling. Params: `prefillSpeed`, `decodeSpeed`, `promptTokens`, `outputTokens`, and `flags` (comma-separated ids: `flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3`). Returns adjusted speeds, a per-flag audit trail (delta + source note), warnings, and a `singleTurn` simulation at the adjusted speeds. Deltas are documented heuristics, not measurements.
 
 Calling `/api/compute` with no `model` returns a self-describing capability list.
 

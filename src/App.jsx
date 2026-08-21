@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import Header from './components/Header';
 import LocalMaxxingPresetPicker from './components/LocalMaxxingPresetPicker';
+import EngineFlagPicker from './components/EngineFlagPicker';
 import SpeedControls from './components/SpeedControls';
 import SingleTurnVisualizer from './components/SingleTurnVisualizer';
 import AgenticVisualizer from './components/AgenticVisualizer';
@@ -30,6 +31,14 @@ export default function App() {
     return v === 'instant' ? 'instant' : (Number(v) || 1);
   });
   const [isPlaying, setIsPlaying] = useState(false);
+  // Engine flags (issue #70): comma-separated ids persisted in the URL. The
+  // picker shows their documented deltas; "Apply to simulation" bakes the
+  // composed speeds into prefill/decode and clears the selection so toggling
+  // again never double-applies on top of already-adjusted speeds.
+  const [selectedFlags, setSelectedFlags] = useState(() => {
+    const raw = readParam('flags');
+    return raw ? raw.split(',').filter(Boolean) : [];
+  });
   // Incremented by the global Reset button; visualizers watch it and clear
   // ALL sim state (phase, token progress, streams, elapsed time).
   const [resetKey, setResetKey] = useState(0);
@@ -52,9 +61,10 @@ export default function App() {
       preset: selectedPreset,
       prefill: prefillSpeed,
       decode: decodeSpeed,
-      sim: simSpeedMultiplier === 'instant' ? 'instant' : simSpeedMultiplier
+      sim: simSpeedMultiplier === 'instant' ? 'instant' : simSpeedMultiplier,
+      flags: selectedFlags.length > 0 ? selectedFlags.join(',') : null
     });
-  }, [activeTab, selectedPreset, prefillSpeed, decodeSpeed, simSpeedMultiplier]);
+  }, [activeTab, selectedPreset, prefillSpeed, decodeSpeed, simSpeedMultiplier, selectedFlags]);
 
   const handleApplyPreset = (preset) => {
     setPrefillSpeed(preset.prefillSpeed);
@@ -77,6 +87,20 @@ export default function App() {
     setIsPlaying(false);
     setResetKey(k => k + 1);
   };
+
+  const handleToggleFlag = useCallback((id) => {
+    setSelectedFlags(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
+  }, []);
+
+  // Bake the flag-adjusted speeds into the main controls and clear the
+  // toggles, so re-toggling can never apply the same delta twice on top of
+  // already-adjusted speeds.
+  const handleApplyFlags = useCallback((prefill, decode) => {
+    setPrefillSpeed(prefill);
+    setDecodeSpeed(decode);
+    setSelectedFlags([]);
+    setIsPlaying(false);
+  }, []);
 
   // Keyboard shortcuts: Space = play/pause, R = reset, 1-5 = tabs.
   // Ignored while typing in inputs/selects or with modifier keys held.
@@ -138,6 +162,15 @@ export default function App() {
         isPlaying={isPlaying}
         setIsPlaying={setIsPlaying}
         onReset={handleReset}
+        />
+
+        {/* Engine flag modeling: documented llama.cpp/vLLM flag deltas */}
+        <EngineFlagPicker
+          prefillSpeed={prefillSpeed}
+          decodeSpeed={decodeSpeed}
+          selectedFlags={selectedFlags}
+          onToggleFlag={handleToggleFlag}
+          onApplyFlags={handleApplyFlags}
         />
 
       {/* Tab Content */}
