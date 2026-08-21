@@ -1,15 +1,12 @@
 import { HARDWARE_PRESETS, SCENARIO_PRESETS } from '../src/utils/presets.js';
 import { enforceRateLimit } from './_ratelimit.js';
+import { sendJson } from './_schema.js';
 
 export const config = { runtime: 'nodejs' };
 
 export default function handler(req, res) {
   if (!enforceRateLimit(req, res)) return;
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, max-age=3600');
-  res.end(JSON.stringify({
+  return sendJson(res, {
     description: 'Built-in hardware speed presets and workload scenario presets. Use these values as inputs to /api/compute.',
     hardware: HARDWARE_PRESETS.map(p => ({
       id: p.id,
@@ -25,5 +22,5 @@ export default function handler(req, res) {
       promptTokens: s.promptTokens,
       outputTokens: s.outputTokens
     }))
-  }, null, 2));
+  }, { cacheTtl: 3600 });
 }

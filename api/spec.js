@@ -2,6 +2,8 @@ import { enforceRateLimit } from './_ratelimit.js';
 
 export const config = { runtime: 'nodejs' };
 
+import { sendJson } from './_schema.js';
+
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
 // Shared rate-limit documentation (issue #14). Budget: RATE_LIMIT per
@@ -47,8 +49,8 @@ export default function handler(req, res) {
     openapi: '3.1.0',
     info: {
       title: 'LLM Prefill & Decode Speed Visualizer API',
-      version: '2.3.0',
-      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. Human docs at /llms.txt. Rate limited to 120 requests/min per client (best-effort, per serverless instance); every response carries X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset, and exhaustion returns 429 with Retry-After. Benchmark endpoints (/api/localmaxxing, /api/benchmarks, /api/best) carry a machine-readable top-level `caveats` array (objects with code/severity/summary/detail) describing dataset limitations.'
+      version: '2.4.0',
+      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. Every response body carries a schema_version field ("1") and every response sets an X-Schema-Version header; see CHANGELOG-API.md for the versioning + deprecation policy. Human docs at /llms.txt. Rate limited to 120 requests/min per client (best-effort, per serverless instance); every response carries X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset, and exhaustion returns 429 with Retry-After. Benchmark endpoints (/api/localmaxxing, /api/benchmarks, /api/best) carry a machine-readable top-level `caveats` array (objects with code/severity/summary/detail) describing dataset limitations.'
     },
     servers: [{ url: BASE }],
     paths: {
@@ -211,9 +213,7 @@ export default function handler(req, res) {
     }
   };
 
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, max-age=3600');
-  res.end(JSON.stringify(spec, null, 2));
+  // Every JSON response carries schema_version + X-Schema-Version
+  // (see _schema.js / CHANGELOG-API.md). The spec itself is no exception.
+  return sendJson(res, spec, { cacheTtl: 3600 });
 }

@@ -9,6 +9,7 @@ import {
 } from './_math.js';
 import { ENGINE_FLAGS, applyEngineFlags } from '../src/utils/engineFlags.js';
 import { enforceRateLimit } from './_ratelimit.js';
+import { sendJson, withSchemaVersion, applySchemaHeaders } from './_schema.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -23,11 +24,10 @@ const MODEL_PRESETS = {
   mistral7b: { numLayers: 32, hiddenSize: 4096, kvHeads: 8, numHeads: 32, headDim: 128 }
 };
 
+// Thin wrapper over the shared sender so every response carries
+// schema_version + X-Schema-Version (see _schema.js / CHANGELOG-API.md).
 function json(res, body, status = 200) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.end(JSON.stringify(body, null, 2));
+  return sendJson(res, body, { status });
 }
 
 function num(v, fallback) {
@@ -197,7 +197,8 @@ function runBatch(rawItems) {
     }
     try {
       const { status, body } = computeOne(item);
-      if (status === 200) return { index, ok: true, result: body };
+      // Stamp schema_version so batch items match individual call bodies.
+      if (status === 200) return { index, ok: true, result: withSchemaVersion(body) };
       return { index, ok: false, error: body?.error || 'unknown error' };
     } catch (err) {
       return { index, ok: false, error: String(err.message || err) };
@@ -221,6 +222,8 @@ export default function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Max-Age', '86400');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    applySchemaHeaders(res);
     return res.status(204).end();
   }
   if (!enforceRateLimit(req, res)) return;

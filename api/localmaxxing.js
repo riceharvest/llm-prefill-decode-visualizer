@@ -5,15 +5,14 @@ import { normalizeModelId } from './_normalize.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from './_pagination.js';
 import { validateSubmission, checkDuplicates, queueSubmission } from './_submit.js';
 import { enforceRateLimit } from './_ratelimit.js';
+import { sendJson } from './_schema.js';
 
 export const config = { runtime: 'nodejs' };
 
+// Thin wrapper over the shared sender so every response carries
+// schema_version + X-Schema-Version (see _schema.js / CHANGELOG-API.md).
 function json(res, body, status = 200) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, max-age=600');
-  res.end(JSON.stringify(body, null, 2));
+  return sendJson(res, body, { status, cacheTtl: 600 });
 }
 
 // Shared pagination contract (see ./_pagination.js): ?limit=N (default 50, max

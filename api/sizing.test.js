@@ -12,6 +12,7 @@ function mockRes() {
     headers: {},
     body: undefined,
     setHeader(k, v) { this.headers[k] = v; },
+    getHeader(k) { return this.headers[k]; },
     status(code) { this.statusCode = code; return this; },
     end(payload) { if (payload !== undefined) this.body = payload; }
   };
