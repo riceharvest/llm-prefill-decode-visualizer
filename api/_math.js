@@ -28,7 +28,11 @@ export function speculative({ baseDecodeSpeed = 105, draftTokens = 4, acceptance
     inputs: { baseDecodeSpeed, draftTokens: k, acceptanceRate: alpha, draftCostFraction },
     effectiveDecodeTokPerSec: round(effective),
     speedupVsVanilla: round(effective / baseDecodeSpeed),
-    tokensPerVerifyStep: round(tokensPerStep)
+    tokensPerVerifyStep: round(tokensPerStep),
+    // Acceptance rate below which speculation is slower than vanilla decode
+    // (= draftCostFraction in this linear verify-cost model).
+    breakevenAcceptanceRate: round(Math.min(1, Math.max(0, draftCostFraction))),
+    hurtsVsVanilla: alpha <= Math.min(1, Math.max(0, draftCostFraction))
   };
 }
 
