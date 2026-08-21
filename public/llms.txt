@@ -86,6 +86,40 @@ Every `/api/compute` and `/api/best` response carries a deterministic `id` (`cal
 
 **GET /api/parse-constraints** — turn plain-language constraints into the canonical struct: `/api/parse-constraints?q=self-hosted%20Qwen%2027B%20at%20Q4%20for%2010%20users%20under%20%241500` → `{input, constraints, ambiguities, sizingQuery}`. Deterministic regex/heuristics (no LLM). `constraints` mirrors /api/sizing params with null for anything not stated; `ambiguities` lists every assumption ("10 users: assume 1 stream each or batched?") — resolve these before trusting downstream numbers; `sizingQuery` is a ready-made /api/sizing query string.
 
+## Endpoint reference
+
+Canonical curl + response shape for each core endpoint. All work identically under `/v1/` (e.g. `/v1/compute`); every response carries `schema_version` and rate-limit headers.
+
+```bash
+# Inference math for one request shape (TTFT, TPOT, walltime)
+curl -s "$BASE/api/compute?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105"
+```
+→ `{ id, inputs, warnings[], ttftSeconds, tpotMs, decodeSeconds, totalWalltimeSeconds, effectiveThroughputTokPerSec, prefillSharePct, decodeSharePct }` — e.g. ttftSeconds 1.077895, totalWalltimeSeconds 5.954085.
+
+```bash
+# Built-in hardware speed presets + workload scenarios
+curl -s "$BASE/api/presets"
+```
+→ `{ description, hardware[{id, name, prefillSpeedTokPerSec, decodeSpeedTokPerSec, vramBandwidth, badge}], scenarios[{id, label, promptTokens, outputTokens}] }` — feed these values into /api/compute.
+
+```bash
+# Raw community benchmark runs, filtered + cursor-paginated
+curl -s "$BASE/api/localmaxxing?model=qwen3.6-27b&quant=q4_k_m&limit=50"
+```
+→ `{ snapshot{id, createdAt, runCount}, total, caveats[{code, severity, summary, detail}], items[{runId, modelFamily, hardwareKey, hwClass, engine, quantization, prefillTokPerSec, decodeTokPerSec, contextBand, ageDays, staleness, source}], has_more, next_cursor }` — bare call returns a hardware-group summary instead of items[].
+
+```bash
+# Aggregated medians per hardware×model group with bootstrap CIs
+curl -s "$BASE/api/benchmarks?groupBy=hardwareModel&limit=25"
+```
+→ `{ snapshot, total, caveats[], items[{key, runs, prefill{median, q1, q3, min, max, ci95{lo, hi}, label}, decode{…}, engines[], mixedEngines, caveats[], confidence{runs, iqrSpreadPct, outliers, newestRunAgeDays, grade}, crossCheck{relatedRigComparisons, contradictions}, bestRun{runId, …}}], has_more, next_cursor }`.
+
+```bash
+# Ranked answer: fastest rigs for ≤8B models at Q4_K_M
+curl -s "$BASE/api/best?by=decode&maxParamsB=8&quant=q4_k_m&limit=10"
+```
+→ `{ id, rankedBy, snapshot, matchedRuns, caveats[], results[{hardware, hardwareKey, hwClass, gpuCount, vramGb, modelFamily, quantization, runsInGroup, confidence{}, medianPrefillTokPerSec, medianDecodeTokPerSec, medianDecodeCi95, medianDecodeLabel, pricing{estimateUsd, lowUsd, highUsd, links{}}, explain}] }` — replayable via `/api/calc/<id>?endpoint=best&<same filters>`.
+
 ### Statistical caveats (machine-readable)
 
 `/api/localmaxxing`, `/api/benchmarks` and `/api/best` all return a top-level `caveats` array — objects with `code`, `severity`, `summary`, `detail`. Don't quote benchmark numbers without checking it. Codes:
