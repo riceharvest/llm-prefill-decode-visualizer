@@ -74,6 +74,18 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 
 All endpoints return JSON, support CORS, need no auth, and set cache headers (10 min on data endpoints).
 
+### Rate limits
+
+Every `/api/*` response carries rate-limit headers so agents can self-throttle:
+
+- `X-RateLimit-Limit` — requests allowed per 60s window per client (currently **120**).
+- `X-RateLimit-Remaining` — requests left in the current window.
+- `X-RateLimit-Reset` — Unix epoch seconds when the window resets.
+- When exhausted, endpoints return **429** with a `Retry-After` header (seconds) and a JSON body explaining the budget. Back off for that many seconds instead of retrying immediately.
+
+Budget: 120 requests/min per client IP. Note this is enforced best-effort **per serverless instance**: Vercel functions share no memory across invocations, so concurrent warm instances each allow 120/min and cold starts reset counters — treat the limit as a floor on good behavior, not a hard global cap.
+
+
 ### Interactive page
 
 The human-facing UI is this same site. Deep links carry state via URL params: `?tab=single|agentic|compare|kvcache|theory`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, 1–5 tabs.

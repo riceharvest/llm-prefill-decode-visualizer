@@ -8,6 +8,7 @@ import {
   cost
 } from './_math.js';
 import { ENGINE_FLAGS, applyEngineFlags } from '../src/utils/engineFlags.js';
+import { enforceRateLimit } from './_ratelimit.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -222,6 +223,7 @@ export default function handler(req, res) {
     res.setHeader('Access-Control-Max-Age', '86400');
     return res.status(204).end();
   }
+  if (!enforceRateLimit(req, res)) return;
 
   // Accept both GET (?model=singleTurn&promptTokens=...) and POST (JSON body)
   const params = req.method === 'POST' ? (req.body || {}) : req.query;

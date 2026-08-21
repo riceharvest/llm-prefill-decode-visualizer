@@ -1,5 +1,6 @@
 import { getAllRuns, aggregate, DEFAULT_OUTLIER_IQRS } from './_localmaxxing.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from './_pagination.js';
+import { enforceRateLimit } from './_ratelimit.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -18,6 +19,7 @@ function json(res, body, status = 200, cacheTtl = 600) {
 const GROUP_KEY = g => [g.decode.median, g.key];
 
 export default async function handler(req, res) {
+  if (!enforceRateLimit(req, res)) return;
   try {
     const q = req.query || {};
 
