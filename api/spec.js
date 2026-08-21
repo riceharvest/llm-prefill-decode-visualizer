@@ -7,8 +7,8 @@ export default function handler(req, res) {
     openapi: '3.1.0',
     info: {
       title: 'LLM Prefill & Decode Speed Visualizer API',
-      version: '2.0.0',
-      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. Human docs at /llms.txt.'
+      version: '2.1.0',
+      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth, and serve ETag validators (honor If-None-Match with 304). Data endpoints stamp every response with a dataset version + build timestamp; pass ?asOf=<version|timestamp> to re-run against a cached snapshot for point-in-time reproducibility. Human docs at /llms.txt.'
     },
     servers: [{ url: BASE }],
     paths: {
@@ -44,13 +44,14 @@ export default function handler(req, res) {
       '/api/localmaxxing': {
         get: {
           summary: 'Raw community benchmark runs (flattened, model-normalized)',
-          description: 'Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: { total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow next_cursor until has_more is false.',
+          description: 'Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: { total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow next_cursor until has_more is false. Runs carry measured prefillTokPerSec / decodeTokPerSec. ?asOf=<snapshot id|ISO date|epoch> replays against a cached dataset snapshot.',
           parameters: [
             { name: 'hardware', in: 'query', schema: { type: 'string' }, description: 'substring match on rig name/key' },
             { name: 'model', in: 'query', schema: { type: 'string' }, description: 'substring match on normalized family or hfId' },
             { name: 'quant', in: 'query', schema: { type: 'string' }, description: 'exact quantization, e.g. q4_k_m' },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 500 }, description: 'page size' },
-            { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' }
+            { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' },
+            { name: 'asOf', in: 'query', schema: { type: 'string' }, description: 'point-in-time: snapshot id/version or timestamp; 404 lists available snapshots' }
           ],
           responses: { '200': { description: 'Hardware summary, or paginated run list { total, items[], has_more, next_cursor }' } }
         },
@@ -115,7 +116,7 @@ export default function handler(req, res) {
       '/api/benchmarks': {
         get: {
           summary: 'Aggregated speeds: median + IQR per group',
-          description: 'Outlier-resistant stats per hardware×model-family group (default). Regroup with ?groupBy=hardware|model|quant. Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak).',
+          description: 'Outlier-resistant stats per hardware×model-family group (default). Regroup with ?groupBy=hardware|model|quant. Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak). ?asOf=<snapshot id|ISO date|epoch> replays against a cached dataset snapshot.',
           parameters: [
             { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['hardwareModel', 'hardware', 'model', 'quant'] } },
             { name: 'hardware', in: 'query', schema: { type: 'string' } },
@@ -123,7 +124,8 @@ export default function handler(req, res) {
             { name: 'quant', in: 'query', schema: { type: 'string' } },
             { name: 'hwClass', in: 'query', schema: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] } },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 25, maximum: 200 }, description: 'page size' },
-            { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' }
+            { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' },
+            { name: 'asOf', in: 'query', schema: { type: 'string' }, description: 'point-in-time: snapshot id/version or timestamp; 404 lists available snapshots' }
           ],
           responses: { '200': { description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode, plus bestRun' } }
         }
@@ -131,7 +133,7 @@ export default function handler(req, res) {
       '/api/best': {
         get: {
           summary: 'Ranked answers: fastest rigs for given constraints',
-          description: 'Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed.',
+          description: 'Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed. ?asOf=<snapshot id|ISO date|epoch> replays against a cached dataset snapshot.',
           parameters: [
             { name: 'by', in: 'query', schema: { type: 'string', enum: ['decode', 'prefill'], default: 'decode' } },
             { name: 'model', in: 'query', schema: { type: 'string' } },
@@ -143,7 +145,8 @@ export default function handler(req, res) {
             { name: 'contextLength', in: 'query', schema: { type: 'integer', default: 32768 }, description: 'context for fitCheck; providing it implies fitCheck=true' },
             { name: 'precisionBytes', in: 'query', schema: { type: 'number', default: 2 }, description: 'KV cache dtype bytes for fitCheck (2 = fp16)' },
             { name: 'batchSize', in: 'query', schema: { type: 'integer', default: 1 }, description: 'batch size for fitCheck KV cache math' },
-            { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } }
+            { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
+            { name: 'asOf', in: 'query', schema: { type: 'string' }, description: 'point-in-time: snapshot id/version or timestamp; 404 lists available snapshots' }
           ],
           responses: { '200': { description: 'Ranked groups with medians and source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns' } }
         }

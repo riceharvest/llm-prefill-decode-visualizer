@@ -2,6 +2,8 @@ import { getAllRuns, aggregate } from './_localmaxxing.js';
 import { singleTurn } from './_math.js';
 import { SCENARIO_PRESETS } from '../src/utils/presets.js';
 import { fitsInMemory } from './_vramfit.js';
+import { datasetStore } from './_dataset.js';
+import { sendJson } from './_respond.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -94,14 +96,6 @@ export function rankGroups(groups, by, workload, limit) {
     .map(({ _rawWalltime, ...entry }) => entry);
 }
 
-function json(res, body, status = 200) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, max-age=600');
-  res.end(JSON.stringify(body, null, 2));
-}
-
 /**
  * GET /api/best — ranked answers to natural benchmark questions.
  *
@@ -120,14 +114,30 @@ function json(res, body, status = 200) {
  * ?batchSize=1                    KV cache batch for fitCheck
  * ?limit=N                        default 10
  */
-export default async function handler(req, res) {
+export async function handlerWith(store, req, res) {
   try {
     const q = req.query || {};
     const limit = Math.min(50, Math.max(1, Number(q.limit) || 10));
     const by = BY_MODES.includes(q.by) ? q.by : 'decode';
     const workload = resolveWorkload(q);
 
-    let runs = await getAllRuns();
+    const asOf = q.asOf ? String(q.asOf) : null;
+    let snapshot;
+    if (asOf) {
+      const hit = store.resolve(asOf);
+      if (!hit) {
+        return sendJson(req, res, {
+          error: `No cached dataset snapshot matches asOf='${asOf}'. Snapshots live in server memory; try an id from 'snapshots' or a timestamp within the retention window.`,
+          requestedAsOf: asOf,
+          snapshots: store.listSnapshots()
+        }, { status: 404 });
+      }
+      snapshot = hit.snapshot;
+    } else {
+      snapshot = await store.current();
+    }
+
+    let runs = snapshot.rows;
 
     if (q.model) {
       const m = String(q.model).toLowerCase();
@@ -177,10 +187,16 @@ export default async function handler(req, res) {
       }
     }
 
-    return json(res, {
+    return sendJson(req, res, {
+      dataset: {
+        version: snapshot.id,
+        buildTimestamp: snapshot.buildTimestamp,
+        runCount: snapshot.runCount,
+        asOf: asOf || null
+      },
       description: by === 'walltime'
-        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant; runsInGroup shows sample size.`
-        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size.',
+        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant; runsInGroup shows sample size. Cite the dataset version for reproducibility.`
+        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size. Cite the dataset version for reproducibility.',
       rankedBy: by,
       matchedRuns: runs.length,
       ...(by === 'walltime' ? {
@@ -203,6 +219,10 @@ export default async function handler(req, res) {
       results: ranked
     });
   } catch (err) {
-    return json(res, { error: String(err.message || err) }, 502);
+    return sendJson(req, res, { error: String(err.message || err) }, { status: 502 });
   }
+}
+
+export default function handler(req, res) {
+  return handlerWith(datasetStore, req, res);
 }

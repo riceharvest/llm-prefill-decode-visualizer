@@ -1,15 +1,9 @@
-import { getAllRuns, aggregate } from './_localmaxxing.js';
+import { aggregate } from './_localmaxxing.js';
+import { datasetStore } from './_dataset.js';
+import { sendJson } from './_respond.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from './_pagination.js';
 
 export const config = { runtime: 'nodejs' };
-
-function json(res, body, status = 200, cacheTtl = 600) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', `public, max-age=${cacheTtl}`);
-  res.end(JSON.stringify(body, null, 2));
-}
 
 // Shared pagination contract (see ./_pagination.js): ?limit=N (default 25, max
 // 200) + opaque &cursor=; responses carry items[], has_more, next_cursor, total.
@@ -17,7 +11,7 @@ function json(res, body, status = 200, cacheTtl = 600) {
 // (matches the ordering aggregate() already returns).
 const GROUP_KEY = g => [g.decode.median, g.key];
 
-export default async function handler(req, res) {
+export async function handlerWith(store, req, res) {
   try {
     const q = req.query || {};
 
@@ -27,7 +21,23 @@ export default async function handler(req, res) {
     const quant = q.quant ? String(q.quant).toLowerCase() : null;
     const hwClass = q.hwClass ? String(q.hwClass).toLowerCase() : null; // discrete_gpu | unified | cpu_only
 
-    let runs = await getAllRuns();
+    const asOf = q.asOf ? String(q.asOf) : null;
+    let snapshot;
+    if (asOf) {
+      const hit = store.resolve(asOf);
+      if (!hit) {
+        return sendJson(req, res, {
+          error: `No cached dataset snapshot matches asOf='${asOf}'. Snapshots live in server memory; try an id from 'snapshots' or a timestamp within the retention window.`,
+          requestedAsOf: asOf,
+          snapshots: store.listSnapshots()
+        }, { status: 404 });
+      }
+      snapshot = hit.snapshot;
+    } else {
+      snapshot = await store.current();
+    }
+
+    let runs = snapshot.rows;
 
     if (hardware) runs = runs.filter(r => r.hardwareKey?.toLowerCase().includes(hardware) || r.hardware?.toLowerCase().includes(hardware));
     if (model) runs = runs.filter(r => r.modelFamily.includes(model) || r.modelId?.toLowerCase().includes(model));
@@ -70,8 +80,14 @@ export default async function handler(req, res) {
       }
     }));
 
-    return json(res, {
-      description: 'Aggregated community benchmark speeds (median + IQR per group). Filter with ?hardware=&model=&quant=&hwClass=; regroup with ?groupBy=hardware|model|quant|hardwareModel. Cursor pagination: follow next_cursor until has_more is false.',
+    return sendJson(req, res, {
+      description: 'Aggregated community benchmark speeds (median + IQR per group). Filter with ?hardware=&model=&quant=&hwClass=; regroup with ?groupBy=hardware|model|quant|hardwareModel. Cursor pagination: follow next_cursor until has_more is false. Pin numbers with ?asOf=<version>.',
+      dataset: {
+        version: snapshot.id,
+        buildTimestamp: snapshot.buildTimestamp,
+        runCount: snapshot.runCount,
+        asOf: asOf || null
+      },
       total: allGroups.length,
       matchedRuns: runs.length,
       distinctModelFamilies: [...new Set(runs.map(r => r.modelFamily))].length,
@@ -82,8 +98,12 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     if (err instanceof InvalidCursorError) {
-      return json(res, { error: err.message }, 400);
+      return sendJson(req, res, { error: err.message }, { status: 400 });
     }
-    return json(res, { error: String(err.message || err) }, 502);
+    return sendJson(req, res, { error: String(err.message || err) }, { status: 502 });
   }
+}
+
+export default function handler(req, res) {
+  return handlerWith(datasetStore, req, res);
 }

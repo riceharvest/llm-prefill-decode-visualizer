@@ -63,6 +63,14 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 
 All endpoints return JSON, support CORS, need no auth, and set cache headers (10 min on data endpoints).
 
+### Dataset versioning & point-in-time queries
+
+Every data endpoint (`/api/localmaxxing`, `/api/benchmarks`, `/api/best`) stamps its response with a `dataset` block: `version` (content-addressed id like `ds-20260821-a1b2c3d4`), `buildTimestamp`, `runCount`. Cite the version when quoting numbers.
+
+- **Reproducibility:** pass `?asOf=<version>` (or an ISO date/timestamp, or epoch seconds) to re-run against the cached snapshot that was current at that point — identical numbers unless you explicitly ask for newer data. Unknown values get a 404 listing the snapshots available on the instance (snapshots live in server memory; retention is bounded).
+- **Conditional requests:** all API responses carry a strong content-hash `ETag`; send `If-None-Match` and get a 304 with no body when nothing changed. A dataset change always produces a new ETag, so cached clients never see stale 304s.
+- `/api/presets` ships with the code and carries its own content-addressed `version`.
+
 ### Interactive page
 
 The human-facing UI is this same site. Deep links carry state via URL params: `?tab=single|agentic|compare|kvcache|theory`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, 1–5 tabs.
