@@ -155,7 +155,9 @@ export default async function handler(req, res) {
         note: 'unit-consistency audit per run: decode_above_roofline / decode_below_floor / prefill_below_floor / prefill_below_decode; each group carries a data_quality block (status ok|flagged) listing affected runIds'
       },
       note: 'medians are outlier-resistant; ci95 is the 95% percentile bootstrap interval (2,000 resamples) over the group\'s runs and label renders it as "median [lo–hi]"; overlapping intervals mean two groups are statistically tied; use bestRun for the single fastest measured run in each group; confidence.grade judges how much a ranking is backed by data and confidence.score (0-100) combines sample size, IQR width and outlier density; check freshness.majorReleaseWarnings before comparing across engine generations',
-r: page.next_cursor,
+      items: groups,
+      has_more: page.has_more,
+      next_cursor: page.next_cursor,
       caveats: buildCaveats(runs, allGroups)
     });
   } catch (err) {
