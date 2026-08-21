@@ -95,7 +95,8 @@ export const locales = {
       ab: { label: 'A/B Replay', hint: 'SYNC' },
       diff: { label: 'Run Diff', hint: 'RUN IDS' },
       kvcache: { label: 'KV Cache', hint: 'VRAM' },
-      theory: { label: 'Theory', hint: 'FLOPS vs BW' }
+      theory: { label: 'Theory', hint: 'FLOPS vs BW' },
+      curriculum: { label: 'Curriculum', hint: 'LESSONS' }
     },
 
     speedControls: {

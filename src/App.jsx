@@ -11,6 +11,7 @@ import RunDiff from './components/RunDiff';
 import HardwareShortlist from './components/HardwareShortlist';
 import KVCacheCalculator from './components/KVCacheCalculator';
 import TheoryGuide from './components/TheoryGuide';
+import CurriculumMode from './components/CurriculumMode';
 import GuidedTour, { hasSeenTour } from './components/GuidedTour';
 import { HARDWARE_PRESETS } from './utils/presets';
 import { toLocalPreset } from './utils/localMaxxing';
@@ -212,8 +213,8 @@ export default function App() {
         setIsPlaying(p => !p);
       } else if (e.key === 'r' || e.key === 'R') {
         handleReset();
-      } else if (/^[1-8]$/.test(e.key)) {
-        const tabs = ['single', 'agentic', 'compare', 'ab', 'diff', 'shortlist', 'kvcache', 'theory'];
+      } else if (/^[1-9]$/.test(e.key)) {
+        const tabs = ['single', 'agentic', 'compare', 'ab', 'diff', 'shortlist', 'kvcache', 'theory', 'curriculum'];
         setActiveTab(tabs[Number(e.key) - 1]);
       }
     };
@@ -337,6 +338,10 @@ export default function App() {
         {activeTab === 'theory' && (
           <TheoryGuide />
         )}
+
+        {activeTab === 'curriculum' && (
+          <CurriculumMode />
+        )}
       </main>
 
       {/* First-run guided tour overlay */}
@@ -356,7 +361,7 @@ export default function App() {
           <strong>{t('header.brandTitle')}</strong> · {t('app.footerTagline')}
         </p>
         <p style={{ fontSize: '0.7rem', marginTop: '4px', color: 'var(--text-subtle)' }}>
-          {t('app.shortcutsPrefix')} <kbd>Space</kbd> {t('app.shortcutPlay')} · <kbd>R</kbd> {t('app.shortcutReset')} · <kbd>Ctrl</kbd>+<kbd>Z</kbd> {t('app.shortcutUndo')} · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> {t('app.shortcutRedo')} · <kbd>1</kbd>–<kbd>8</kbd> {t('app.shortcutTabs')}
+          {t('app.shortcutsPrefix')} <kbd>Space</kbd> {t('app.shortcutPlay')} · <kbd>R</kbd> {t('app.shortcutReset')} · <kbd>Ctrl</kbd>+<kbd>Z</kbd> {t('app.shortcutUndo')} · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> {t('app.shortcutRedo')} · <kbd>1</kbd>–<kbd>9</kbd> {t('app.shortcutTabs')}
         </p>
         <p style={{ fontSize: '0.7rem', marginTop: '4px', color: 'var(--text-subtle)' }}>
           {t('app.agentsLinePrefix')} <a href="/llms.txt">/llms.txt</a> · <a href="/api/spec">OpenAPI</a> · <a href="/api/compute">/api/compute</a> · <a href="/api/best">/api/best</a> · <a href="/api/localmaxxing">/api/localmaxxing</a> · <a href="/api/diff">/api/diff</a>        </p>
