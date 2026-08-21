@@ -12,6 +12,7 @@ import { sendProblemFromError } from './_errors.js';
 import { computeCalcId } from './_calc_id.js';
 import { filterByMaxAge, parseMaxAgeParam } from './_freshness.js';
 import { estimateStreetPrice } from '../src/utils/streetPricing.js';
+import { explainRecommendation } from './_explain.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -373,6 +374,24 @@ export async function bestBody(query = {}) {
     for (const row of ranked) {
       const sample = priceByKey.get(`${row.hardwareKey}|${row.modelFamily}`);
       row.pricing = sample ? estimateStreetPrice(sample) : null;
+    }
+
+    // Attach a one-sentence human-readable explanation per row (#73):
+    // fit math + measured source, pass-through ready for agent chat
+    // pipelines. Weight/KV figures are estimates (see _vramfit.js); the
+    // tok/s figure is the group's measured median.
+    for (const row of ranked) {
+      const sample = sampleByKey.get(`${row.hardwareKey}|${row.modelFamily}`);
+      row.explain = explainRecommendation({
+        memoryGb: row.vramFit?.availableVramGb ?? row.effectiveVramGb,
+        paramsB: sample?.paramsB,
+        quantization: sample?.quantization,
+        contextLength: fitContextLength,
+        fit: row.vramFit ?? (sample ? fitsInMemory({ ...sample, contextLength: fitContextLength }) : null),
+        decodeTokPerSec: row.medianDecodeTokPerSec,
+        runId: sample?.runId,
+        runsInGroup: row.runsInGroup
+      });
     }
 
     return {

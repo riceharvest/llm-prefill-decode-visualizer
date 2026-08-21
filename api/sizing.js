@@ -1,5 +1,6 @@
 import { getAllRuns, aggregate } from './_localmaxxing.js';
 import { kvCache } from './_math.js';
+import { explainRecommendation } from './_explain.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -194,6 +195,20 @@ export default async function handler(req, res) {
           note: g.runs < 3 ? 'fewer than 3 runs — medians may not generalize' : undefined
         },
         meetsSlo: { ttft: meetsTtft, tpot: meetsTpot, vram: fitsVram, all: [meetsTtft, meetsTpot, fitsVram].every(v => v !== false) },
+        // One-sentence human-readable explanation (#73): fit math + measured
+        // source, pass-through ready for agent chat pipelines.
+        explain: explainRecommendation({
+          memoryGb,
+          paramsB: s.paramsB,
+          quantization: s.quantization,
+          contextLength: workload.contextLength,
+          fit: requiredGb != null
+            ? { fits: fitsVram, estimatedWeightsGb: weightsGb, estimatedKvCacheGb: kv ? kv.totalGb : null, headroomGb }
+            : null,
+          decodeTokPerSec: g.decode.median,
+          runId: s.runId,
+          runsInGroup: g.runs
+        }),
         source: s.source
       };
     })

@@ -196,7 +196,7 @@ export default function handler(req, res) {
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
             SNAPSHOT_PARAM
           ],
-          responses: { '200': { description: 'Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns. Each result includes a `pricing` object: USD street-price estimate with low/high range, perGpu breakdown for multi-GPU rigs, asOf date, and eBay (new + used) and Craigslist search links to verify against live listings. `pricing` is null when no anchor exists (cpu_only, unknown GPUs).' }, '429': { $ref: '#/components/responses/RateLimited' } }
+          responses: { '200': { description: 'Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns. Each result includes a `pricing` object: USD street-price estimate with low/high range, perGpu breakdown for multi-GPU rigs, asOf date, and eBay (new + used) and Craigslist search links to verify against live listings. `pricing` is null when no anchor exists (cpu_only, unknown GPUs). Each result also carries `explain`: a one-sentence human-readable explanation combining the VRAM-fit math (weights + KV estimates) with the measured source, e.g. \'24GB fits 8B q4_k_m weights ~5GB + 32k KV ~4GB with 14GB headroom; measured 100 tok/s decode from run #a1\' — pass-through ready for agent chat pipelines.' }, '429': { $ref: '#/components/responses/RateLimited' } }
         }
       },
       '/api/health': {
@@ -229,7 +229,7 @@ export default function handler(req, res) {
             { name: 'hwClass', in: 'query', schema: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] } },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 5, maximum: 25 } }
           ],
-          responses: { '200': { description: 'workload echo, assumptions, and ranked recommendations with vramFit, expected, confidence, meetsSlo' } }
+          responses: { '200': { description: 'workload echo, assumptions, and ranked recommendations with vramFit, expected, confidence, meetsSlo, and a one-sentence human-readable `explain` string combining fit math with the measured source (#73)' } }
 
         }
       },
