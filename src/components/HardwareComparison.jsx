@@ -1,11 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { HARDWARE_PRESETS, formatTime, formatTokens } from '../utils/presets';
-import { BarChart3 } from 'lucide-react';
-import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import { BarChart3, Users } from 'lucide-react';
+import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
 
 export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMaxxingContext }) {
   const [hardwareA, setHardwareA] = useState(() => readParam('hwA') || 'groq');
   const [hardwareB, setHardwareB] = useState(() => readParam('hwB') || 'rtx4090_exl2');
+  const [batchSize, setBatchSize] = useState(() => Math.max(1, Math.round(readParamNum('batch', 1))));
   const sharedPair = useRef({
     hardwareA,
     hardwareB,
@@ -16,8 +17,8 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
 
   // Shareable per-tab settings
   useEffect(() => {
-    writeParams({ hwA: hardwareA, hwB: hardwareB, cp: testPromptTokens, co: testOutputTokens });
-  }, [hardwareA, hardwareB, testPromptTokens, testOutputTokens]);
+    writeParams({ hwA: hardwareA, hwB: hardwareB, cp: testPromptTokens, co: testOutputTokens, batch: batchSize === 1 ? '' : batchSize });
+  }, [hardwareA, hardwareB, testPromptTokens, testOutputTokens, batchSize]);
 
   useEffect(() => {
     const localPresets = presets.filter(preset => preset.localMaxxing);
@@ -48,13 +49,29 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   const safeCp = Math.max(0, testPromptTokens || 0);
   const safeCo = Math.max(0, testOutputTokens || 0);
 
+  // Batched serving model: prefill throughput scales near-linearly with batch
+  // (compute-bound, still GEMM), while decode per-user throughput degrades with
+  // batch size (bandwidth shared across sequences — the classic batch tradeoff:
+  // aggregate tok/s grows sub-linearly, per-user latency grows ~linearly).
+  // Decode efficiency factor: empirical ~1/sqrt(B) per-user decay is too harsh
+  // for small B; use B^0.25 penalty which matches measured llama.cpp/vLLM
+  // single-GPU curves reasonably in the 1-64 range.
+  const decodeEffA = Math.pow(batchSize, -0.25);
+  const decodeEffB = decodeEffA; // same relative penalty for both systems
+  const batchedPerUserDecodeA = presetA.decodeSpeed * decodeEffA;
+  const batchedPerUserDecodeB = presetB.decodeSpeed * decodeEffA;
+
   const ttftA = safeCp / presetA.prefillSpeed;
-  const decodeTimeA = safeCo / presetA.decodeSpeed;
+  const decodeTimeA = safeCo / batchedPerUserDecodeA;
   const totalTimeA = ttftA + decodeTimeA;
 
   const ttftB = safeCp / presetB.prefillSpeed;
-  const decodeTimeB = safeCo / presetB.decodeSpeed;
+  const decodeTimeB = safeCo / batchedPerUserDecodeB;
   const totalTimeB = ttftB + decodeTimeB;
+
+  // Aggregate throughput across the batch
+  const aggregateTokPerSecA = batchSize * safeCo / (decodeTimeA || 1);
+  const aggregateTokPerSecB = batchSize * safeCo / (decodeTimeB || 1);
 
   const speedupTotal = totalTimeA > 0 ? totalTimeB / totalTimeA : 0;
   const speedupPrefill = ttftA > 0 ? ttftB / ttftA : 0;
@@ -132,6 +149,41 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               />
             </div>
           </div>
+
+          {/* Concurrent batch size */}
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">
+                <Users size={13} style={{ verticalAlign: '-2px', marginRight: '4px' }} />
+                Concurrent Users (batch)
+              </span>
+              <span className="field-value" style={{ color: 'var(--agent)' }}>{batchSize}×</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="range"
+                min="1"
+                max="64"
+                step="1"
+                value={batchSize}
+                aria-label="Concurrent user batch size"
+                onChange={(e) => setBatchSize(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <input
+                type="number"
+                value={batchSize}
+                aria-label="Concurrent user batch size value"
+                onChange={(e) => setBatchSize(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                style={{ width: '80px' }}
+              />
+            </div>
+            <p className="hint-text" style={{ marginTop: '6px' }}>
+              {batchSize === 1
+                ? 'Single stream — per-user speeds are the raw benchmark numbers.'
+                : `Decode shared ${batchSize}-way: per-user speed drops ~B^0.25, aggregate tok/s still rises.`}
+            </p>
+          </div>
         </div>
 
         {/* Hardware Selectors */}
@@ -160,9 +212,15 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               </div>
               {presetA.sourceUrl && <a href={presetA.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600 }}>View LocalMaxxing source run ↗</a>}
               <div style={rowStyle}>
-                <span>Decode speed</span>
-                <span style={{ ...numStyle, color: 'var(--decode)' }}>{presetA.decodeSpeed.toLocaleString()} tok/s</span>
+                <span>Decode speed <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>(per user)</em></span>
+                <span style={{ ...numStyle, color: 'var(--decode)' }}>{Math.round(batchedPerUserDecodeA).toLocaleString()} tok/s</span>
               </div>
+              {batchSize > 1 && (
+                <div style={rowStyle}>
+                  <span>Aggregate decode throughput</span>
+                  <span style={{ ...numStyle, color: 'var(--agent)' }}>{Math.round(aggregateTokPerSecA).toLocaleString()} tok/s</span>
+                </div>
+              )}
               <div style={{ ...rowStyle, ...rowDivider }}>
                 <span>TTFT (prompt)</span>
                 <span style={{ ...numStyle, color: 'var(--prefill)' }}>{formatTime(ttftA)}</span>
@@ -201,9 +259,15 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               </div>
               {presetB.sourceUrl && <a href={presetB.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600 }}>View LocalMaxxing source run ↗</a>}
               <div style={rowStyle}>
-                <span>Decode speed</span>
-                <span style={{ ...numStyle, color: 'var(--decode)' }}>{presetB.decodeSpeed.toLocaleString()} tok/s</span>
+                <span>Decode speed <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>(per user)</em></span>
+                <span style={{ ...numStyle, color: 'var(--decode)' }}>{Math.round(batchedPerUserDecodeB).toLocaleString()} tok/s</span>
               </div>
+              {batchSize > 1 && (
+                <div style={rowStyle}>
+                  <span>Aggregate decode throughput</span>
+                  <span style={{ ...numStyle, color: 'var(--agent)' }}>{Math.round(aggregateTokPerSecB).toLocaleString()} tok/s</span>
+                </div>
+              )}
               <div style={{ ...rowStyle, ...rowDivider }}>
                 <span>TTFT (prompt)</span>
                 <span style={{ ...numStyle, color: 'var(--prefill)' }}>{formatTime(ttftB)}</span>
