@@ -14,7 +14,14 @@ export default function handler(req, res) {
       prefillSpeedTokPerSec: p.prefillSpeed,
       decodeSpeedTokPerSec: p.decodeSpeed,
       vramBandwidth: p.vramBandwidth,
-      badge: p.badge
+      badge: p.badge,
+      // Power/thermal guidance (#69): board power (TDP), typical whole-rig
+      // wattage under sustained inference, and recommended PSU size —
+      // null where not applicable (cloud/edge/custom).
+      tdpWatts: p.tdpWatts ?? null,
+      loadWatts: p.loadWatts ?? null,
+      psuWatts: p.psuWatts ?? null,
+      powerNote: p.powerNote ?? null
     })),
     scenarios: SCENARIO_PRESETS.map(s => ({
       id: s.id,
