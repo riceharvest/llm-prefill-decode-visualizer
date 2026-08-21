@@ -7,6 +7,7 @@ import { GPU_CATALOG, WEIGHT_PRECISIONS, gpuById, parseParamsB, weightsGiB } fro
 import Metric from './Metric';
 import Analogy from './Analogy';
 import { memoryLedger, SAFETY_HEADROOM_FRACTION } from '../../api/_math.js';
+import MultiGpuPlanner from './MultiGpuPlanner';
 import { t } from '../i18n/strings';
 
 // KV-cache geometry pulled from each model's actual config.json on HuggingFace
@@ -840,7 +841,10 @@ export default function KVCacheCalculator() {
           </p>
         )}
 
-      </section>
+        </section>
+
+        {/* Multi-GPU split planner (#48) — reuses this panel's KV total */}
+        <MultiGpuPlanner preset={preset} totalKVCacheBytes={totalKVCacheBytes} />
 
     </div>
   );
