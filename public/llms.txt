@@ -74,14 +74,24 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 
 `/api/best` and `/api/benchmarks` rows also carry a per-row `caveats` array (`n1_group`, `mixed_engines`) when they apply to that specific group.
 
+**GET /api/snapshots** — versioned dataset snapshot IDs (e.g. `snapshot-2026-08-21-a1b2c3d4`). Every data endpoint response carries a `snapshot` object; pass its ID back as `?snapshot=<id>` on `/api/localmaxxing`, `/api/benchmarks` or `/api/best` to pin the dataset and get reproducible numbers. Unknown/expired IDs fall back to current data with `snapshot.served: false`.
+
 ### Typical agent workflow
 
+<<<<<<< HEAD
 1. `GET /api/sizing?model=<family>&contextLength=…&concurrency=…&maxTpotMs=…` → ranked hardware recommendations with VRAM fit and expected latency, in one call.
 1. `GET /api/vram?hfId=<model>&context=<tokens>&vramGb=<budget>` → will it fit, and at what max context? (no model internals needed).
 2. `GET /api/best?by=decode&maxParamsB=8` → find the fastest measured hardware for a model class.
 3. `GET /api/presets` for canonical speed numbers, or take medians from `/api/benchmarks` for real-world numbers.
 4. `GET /api/compute?model=singleTurn&prefillSpeed=...&decodeSpeed=...&promptTokens=...&outputTokens=...` → walltime/TTFT/TPOT for a specific request shape.
 5. Compare variants with one call: `POST /api/compute` with `{"batch": [{...}, {...}]}` (up to 50 parameter sets, per-item ok/error status).
+=======
+1. `GET /api/best?by=decode&maxParamsB=8` → find the fastest measured hardware for a model class.
+2. `GET /api/presets` for canonical speed numbers, or take medians from `/api/benchmarks` for real-world numbers.
+3. `GET /api/compute?model=singleTurn&prefillSpeed=...&decodeSpeed=...&promptTokens=...&outputTokens=...` → walltime/TTFT/TPOT for a specific request shape.
+4. Compare variants by re-calling `/api/compute` with different parameters.
+5. Citing an answer? Quote the `snapshot.id` from the data response (and re-pin with `?snapshot=<id>`) so the numbers are reproducible later.
+>>>>>>> 49ce4d6 (feat: versioned content-addressed dataset snapshots with ?snapshot= pinning (#20))
 
 All endpoints return JSON, support CORS, need no auth, and set cache headers (10 min on data endpoints).
 

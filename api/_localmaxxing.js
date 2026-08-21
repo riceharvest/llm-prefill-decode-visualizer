@@ -27,10 +27,17 @@ function comparable(r) {
 
 /** Fetch all comparable runs, from cache when fresh. */
 export async function getAllRuns() {
+  return (await getDataset()).rows;
+}
+
+/** Fetch all comparable runs plus the fetch timestamp of the cached set. */
+export async function getDataset() {
   if (cache.rows && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
-    return cache.rows;
+    return { rows: cache.rows, fetchedAt: cache.fetchedAt };
   }
-  if (cache.promise) return cache.promise;
+  if (cache.promise) {
+    return cache.promise.then(rows => ({ rows, fetchedAt: cache.fetchedAt }));
+  }
 
   cache.promise = (async () => {
     const rows = [];
@@ -51,10 +58,10 @@ export async function getAllRuns() {
   })();
 
   try {
-    return await cache.promise;
+    return { rows: await cache.promise, fetchedAt: cache.fetchedAt };
   } catch (err) {
     cache.promise = null; // allow retry; serve stale if we have it
-    if (cache.rows) return cache.rows;
+    if (cache.rows) return { rows: cache.rows, fetchedAt: cache.fetchedAt };
     throw err;
   }
 }
