@@ -1,0 +1,61 @@
+name: Client SDKs
+
+# Regenerates the typed TypeScript and Python clients from the OpenAPI spec
+# (as served by /api/spec, dumped from api/spec.js) whenever the API surface
+# changes, and commits them to /clients. No package publishing — the generated
+# code lives in-repo so downstream devs can consume it directly and review
+# API drift in the diff. clients/VERSION is stamped with the spec's
+# info.version so breaking changes are visible at a glance.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - '.github/workflows/sdk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Dump OpenAPI spec
+        run: node scripts/dump-openapi.mjs openapi.json
+
+      - name: Stamp schema version
+        run: |
+          mkdir -p clients
+          node -e "console.log(JSON.parse(require('fs').readFileSync('openapi.json','utf8')).info.version)" > clients/VERSION
+
+      - name: Generate TypeScript client
+        run: npx --yes openapi-typescript openapi.json -o clients/typescript/schema.d.ts
+
+      - name: Generate Python client
+        run: |
+          pipx install openapi-python-client
+          openapi-python-client generate --path openapi.json --output-path clients/python
+
+      - name: Commit generated clients
+        run: |
+          git config user.name "sdk-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add clients
+          if git diff --cached --quiet; then
+            echo "No client changes to commit"
+          else
+            git commit -m "chore: regenerate typed clients from OpenAPI spec (schema v$(cat clients/VERSION))"
+            git push
+          fi
