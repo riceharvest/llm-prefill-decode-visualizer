@@ -103,6 +103,38 @@ export function agentic(options = {}) {
   };
 }
 
+export function cost({
+  hardwarePriceUsd = 0, electricityRatePerKwh = 0, powerDrawWatts = 0,
+  amortizationMonths = 36, promptTokens = 2048, outputTokens = 512,
+  prefillSpeed = 3800, decodeSpeed = 105
+} = {}) {
+  const ttft = promptTokens / prefillSpeed;
+  const decodeTime = outputTokens / decodeSpeed;
+  const total = ttft + decodeTime;
+  const throughput = total > 0 ? (promptTokens + outputTokens) / total : 0;
+  const HOURS_PER_MONTH = 730;
+  const hourlyHardware = amortizationMonths > 0
+    ? hardwarePriceUsd / (amortizationMonths * HOURS_PER_MONTH)
+    : 0;
+  const hourlyElectricity = (powerDrawWatts / 1000) * electricityRatePerKwh;
+  const hourlyTotal = hourlyHardware + hourlyElectricity;
+  const requestsPerHour = total > 0 ? 3600 / total : 0;
+
+  return {
+    inputs: {
+      hardwarePriceUsd, electricityRatePerKwh, powerDrawWatts, amortizationMonths,
+      promptTokens, outputTokens, prefillSpeed, decodeSpeed
+    },
+    effectiveThroughputTokPerSec: round(throughput),
+    requestsPerHour: round(requestsPerHour),
+    hardwareCostUsdPerHour: round(hourlyHardware),
+    electricityCostUsdPerHour: round(hourlyElectricity),
+    totalCostUsdPerHour: round(hourlyTotal),
+    costUsdPerMillionTokens: round(throughput > 0 ? (hourlyTotal / throughput) * 1e6 : null),
+    costUsdPerThousandRequests: round(requestsPerHour > 0 ? (hourlyTotal / requestsPerHour) * 1000 : null)
+  };
+}
+
 export function kvCache({ numLayers = 80, kvHeads = 8, headDim = 128, contextLength = 32768, precisionBytes = 2, batchSize = 1 } = {}) {
   const bytesPerToken = 2 * numLayers * kvHeads * headDim * precisionBytes;
   const totalBytes = bytesPerToken * contextLength * batchSize;
