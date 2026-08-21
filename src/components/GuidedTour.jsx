@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Lightbulb, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { useFocusTrap } from '../utils/focus';
 
 // First-run guided tour (issue #193). A 5-step spotlight tour that teaches the
 // two-phase model of LLM inference by having the user drive the sim themselves:
@@ -72,6 +73,10 @@ const STEPS = [
 export default function GuidedTour({ activeTab, setActiveTab, prefillSpeed, decodeSpeed, onClose }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [rect, setRect] = useState(null);
+  // WAI-ARIA dialog pattern: while the tour is open, Tab cycles inside the
+  // tour card and closing restores focus to whoever opened it.
+  const cardRef = useRef(null);
+  useFocusTrap(cardRef, true);
   const step = STEPS[stepIndex];
   const isLast = stepIndex === STEPS.length - 1;
 
@@ -208,7 +213,7 @@ export default function GuidedTour({ activeTab, setActiveTab, prefillSpeed, deco
       )}
       {isLast && <div className="tour-backdrop" />}
 
-      <div className="tour-card" style={cardStyle} role="dialog" aria-label={`Guided tour step ${stepIndex + 1} of ${STEPS.length}`}>
+      <div ref={cardRef} className="tour-card" style={cardStyle} role="dialog" aria-modal="true" aria-label={`Guided tour step ${stepIndex + 1} of ${STEPS.length}`} tabIndex={-1}>
         <div className="tour-card-head">
           <span className="tour-step-count">{stepIndex + 1} / {STEPS.length}</span>
           <button

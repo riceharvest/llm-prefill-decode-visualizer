@@ -23,6 +23,7 @@ import {
   createHistory, recordChange, undo as historyUndo, redo as historyRedo
 } from './utils/settingsHistory';
 import SnapshotsSidebar from './components/SnapshotsSidebar';
+import { useFocusPanelHeading } from './utils/focus';
 import { setLocale, getLocale, getDirection, t } from './i18n/strings';
 import { installTouchTooltips } from './utils/touchTooltips';
 
@@ -187,6 +188,13 @@ export default function App() {
     setResetKey(k => k + 1);
   };
 
+  // Issue #77: on tab switches, move focus to the new panel's heading so
+  // screen-reader and keyboard users land inside the content they just
+  // opened. The guided tour drives tabs itself while it's open — its dialog
+  // owns focus, so panel focusing is suspended until it closes.
+  const mainRef = useRef(null);
+  useFocusPanelHeading(mainRef, activeTab, { enabled: !tourOpen });
+
   const handleToggleFlag = useCallback((id) => {
     setSelectedFlags(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
   }, []);
@@ -250,7 +258,7 @@ export default function App() {
         onTour={() => setTourOpen(true)}
       />
 
-      <main className="app-frame stack">
+      <main className="app-frame stack" ref={mainRef}>
         <LocalMaxxingPresetPicker
           selectedPreset={selectedPreset}
           onApplyRun={handleApplyLocalMaxxingRun}

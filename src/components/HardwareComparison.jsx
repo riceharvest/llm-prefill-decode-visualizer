@@ -337,7 +337,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
 
       <section className="panel" aria-label={t('compare.panelAria')} ref={chartRef}>
         <div className="field-head" style={{ marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
-          <h2 className="panel-title" style={{ margin: 0 }}>
+          <h2 className="panel-title" style={{ margin: 0 }} tabIndex={-1} data-panel-heading>
             <BarChart3 size={16} />
             <span>{t('compare.panelTitle')}</span>
           </h2>

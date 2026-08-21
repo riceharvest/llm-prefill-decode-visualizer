@@ -112,6 +112,13 @@ button, input, select {
   border-radius: var(--radius-xs);
 }
 
+/* Issue #77: panel headings receive programmatic focus on tab switches so
+   screen readers announce the new panel. They are not interactive targets,
+   so no visible focus ring is drawn for them. */
+.panel-title[tabindex='-1']:focus {
+  outline: none;
+}
+
 a { color: var(--accent); }
 
 /* Scrollbars */

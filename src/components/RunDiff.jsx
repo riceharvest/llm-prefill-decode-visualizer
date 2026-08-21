@@ -48,7 +48,7 @@ export default function RunDiff() {
 
   return (
     <section className="panel" aria-label="Run diff">
-      <h2 className="panel-title" style={{ marginBottom: '14px' }}>
+      <h2 className="panel-title" style={{ marginBottom: '14px' }} tabIndex={-1} data-panel-heading>
         <GitCompare size={16} />
         <span>Run Diff (measured A vs B)</span>
       </h2>

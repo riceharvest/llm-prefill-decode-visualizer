@@ -119,7 +119,7 @@ export default function HardwareShortlist() {
     <div className="stack">
 
       <section className="panel" aria-label="Hardware shortlist">
-        <h2 className="panel-title" style={{ marginBottom: '14px' }}>
+        <h2 className="panel-title" style={{ marginBottom: '14px' }} tabIndex={-1} data-panel-heading>
           <ListFilter size={16} />
           <span>Find Me Hardware</span>
         </h2>

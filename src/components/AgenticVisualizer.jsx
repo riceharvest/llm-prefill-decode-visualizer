@@ -395,7 +395,7 @@ export default function AgenticVisualizer({
       {/* Top Configuration Card */}
       <section className="panel" aria-label={t('agentic.paramsPanelAria')}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
-          <h2 className="panel-title">
+          <h2 className="panel-title" tabIndex={-1} data-panel-heading>
             <Bot size={16} style={{ color: 'var(--agent)' }} />
             <span>{t('agentic.paramsPanelTitle')}</span>
           </h2>

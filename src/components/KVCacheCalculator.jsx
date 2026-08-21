@@ -336,7 +336,7 @@ export default function KVCacheCalculator() {
     <div className="stack">
 
       <section className="panel" aria-label={t('kvCache.panelAria')}>
-        <h2 className="panel-title" style={{ marginBottom: '12px' }}>
+        <h2 className="panel-title" style={{ marginBottom: '12px' }} tabIndex={-1} data-panel-heading>
           <HardDrive size={16} />
           <span>{t('kvCache.panelTitle')}</span>
           <Analogy term="kvCache" />

@@ -478,7 +478,7 @@ export default function SingleTurnVisualizer({
 
       {/* Top Parameter Cards */}
       <section className="panel" aria-label={t('singleTurn.paramsPanelAria')}>
-        <h2 className="panel-title" style={{ marginBottom: '14px' }}>
+        <h2 className="panel-title" style={{ marginBottom: '14px' }} tabIndex={-1} data-panel-heading>
           <FileText size={16} />
           <span>{t('singleTurn.paramsPanelTitle')}</span>
         </h2>
