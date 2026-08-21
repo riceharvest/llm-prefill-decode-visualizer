@@ -655,3 +655,16 @@ input[type="range"]::-moz-range-thumb {
   .brand-sub { display: none; }
   .metric-value { font-size: 1.15rem; }
 }
+
+/* Keyboard shortcut hints */
+kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-raised);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--text-muted);
+}

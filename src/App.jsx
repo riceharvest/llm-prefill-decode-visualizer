@@ -78,6 +78,27 @@ export default function App() {
     setResetKey(k => k + 1);
   };
 
+  // Keyboard shortcuts: Space = play/pause, R = reset, 1-5 = tabs.
+  // Ignored while typing in inputs/selects or with modifier keys held.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if (e.code === 'Space') {
+        e.preventDefault(); // stop page scroll
+        setIsPlaying(p => !p);
+      } else if (e.key === 'r' || e.key === 'R') {
+        handleReset();
+      } else if (/^[1-5]$/.test(e.key)) {
+        const tabs = ['single', 'agentic', 'compare', 'kvcache', 'theory'];
+        setActiveTab(tabs[Number(e.key) - 1]);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -162,6 +183,9 @@ export default function App() {
       <footer className="site-footer">
         <p>
           <strong>LLM Prefill &amp; Decode Speed Visualizer</strong> · Open source inference benchmark instrument
+        </p>
+        <p style={{ fontSize: '0.7rem', marginTop: '4px', color: 'var(--text-subtle)' }}>
+          Shortcuts: <kbd>Space</kbd> play/pause · <kbd>R</kbd> reset · <kbd>1</kbd>–<kbd>5</kbd> switch tabs
         </p>
       </footer>
 
