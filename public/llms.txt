@@ -37,6 +37,8 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 - `?quant=q4_k_m`: exact quantization filter.
 - Filtered calls are cursor-paginated: `{ total, items[], has_more, next_cursor }`, sorted by decode speed desc (runId tiebreak). Page size: `limit` (default 50, max 500). Follow `next_cursor` until `has_more` is false; cursors stay stable even when new runs land mid-scan.
 
+**POST /api/localmaxxing** — submit a community benchmark run for review. JSON body with required `model`, `quant`, `hardware`, `hwClass` (`discrete_gpu|unified|cpu_only`), `prefillTokPerSec`, `decodeTokPerSec`; optional `engine`, token counts, `provenance` (`engineVersion`, `command`, `sourceUrl`, `notes`) and `submitter`. Server-side validation enforces sanity bounds per hardware class (a claimed 99,999 tok/s on an RPi5 is rejected) and rejects near-duplicates of existing runs (same model family + quant + rig within 10%). Valid submissions return `202` with a `submissionId` and are queued for manual review — they never publish immediately. Validation failures return `400` with machine-readable errors: `{"error":"validation_failed","errors":[{"field","code","message"}]}`.
+
 **GET /api/benchmarks** — aggregated stats: median + IQR per group (outlier-resistant). Default groups by hardware×model-family; regroup with `?groupBy=hardware|model|quant`. Each group carries median/q1/q3/min/max for prefill and decode plus the single best measured run. Cursor-paginated like /api/localmaxxing: `{ total, items[], has_more, next_cursor }`, sorted by median decode desc (group key tiebreak); page size `limit` (default 25, max 200).
 
 **GET /api/best** — ranked answers to natural questions:
