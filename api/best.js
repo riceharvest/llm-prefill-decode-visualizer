@@ -7,6 +7,7 @@ import { fitsInMemory } from './_vramfit.js';
 import { enforceRateLimit } from './_ratelimit.js';
 import { buildCaveats, rowCaveats } from './_caveats.js';
 import { matchesEngineQuery } from './_engine.js';
+import { confidence } from './_crosscheck.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -190,7 +191,16 @@ export default async function handler(req, res) {
 
     // Rank per hardware rig × model family using the group's medians,
     // so one lucky run doesn't top the chart.
-    const groups = aggregate(runs, r => `${r.hardwareKey}|${r.modelFamily}`);
+    const keyFn = r => `${r.hardwareKey}|${r.modelFamily}`;
+    const groups = aggregate(runs, keyFn);
+
+    const members = new Map();
+    for (const run of runs) {
+      const k = keyFn(run);
+      if (!k) continue;
+      if (!members.has(k)) members.set(k, []);
+      members.get(k).push(run);
+    }
 
     let ranked;
     if (by === 'cost') {
@@ -252,15 +262,18 @@ export default async function handler(req, res) {
       }
     }
 
-    // Attach statistical caveats (#19) and engine cohort info (#29) per row.
+    // Attach statistical caveats (#19), engine cohort info (#29) and
+    // data-quality confidence blocks (#32) per row.
     const grpByKey = new Map(groups.map(g => [g.key, g]));
     for (const row of ranked) {
       const g = grpByKey.get(`${row.hardwareKey}|${row.modelFamily}`);
-      if (!g) continue;
-      row.caveats = rowCaveats(g);
-      row.engineVersion = g.bestRun?.engineVersion ?? null;
-      row.engines = g.engines;
-      row.mixedEngines = g.mixedEngines;
+      if (g) {
+        row.caveats = rowCaveats(g);
+        row.engineVersion = g.bestRun?.engineVersion ?? null;
+        row.engines = g.engines;
+        row.mixedEngines = g.mixedEngines;
+      }
+      row.confidence = confidence(members.get(`${row.hardwareKey}|${row.modelFamily}`) || []);
     }
 
     const warnings = groups.filter(g => g.mixedEngines)
@@ -268,10 +281,10 @@ export default async function handler(req, res) {
 
     return json(res, {
       description: by === 'walltime'
-        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant; runsInGroup shows sample size. Filter with ?engine=<substr> to compare same-engine builds only.`
+        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant; runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), and ?engine=<substr> restricts to same-engine builds only.`
         : by === 'cost'
         ? 'Ranked hardware×model groups by cost-efficiency: $/1M tokens from hardware price (amortized) + electricity at measured median speeds for the given scenario shape. Lower is better.'
-        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size. Filter with ?engine=<substr> to compare same-engine builds only.',
+        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), and ?engine=<substr> restricts to same-engine builds only.',
       rankedBy: by,
       snapshot,
       matchedRuns: runs.length,

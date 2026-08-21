@@ -49,8 +49,8 @@ export default function handler(req, res) {
     openapi: '3.1.0',
     info: {
       title: 'LLM Prefill & Decode Speed Visualizer API',
-      version: '2.4.0',
-      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. Every response body carries a schema_version field ("1") and every response sets an X-Schema-Version header; see CHANGELOG-API.md for the versioning + deprecation policy. Human docs at /llms.txt. Rate limited to 120 requests/min per client (best-effort, per serverless instance); every response carries X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset, and exhaustion returns 429 with Retry-After. Benchmark endpoints (/api/localmaxxing, /api/benchmarks, /api/best) carry a machine-readable top-level `caveats` array (objects with code/severity/summary/detail) describing dataset limitations.'
+      version: '2.5.0',
+      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. Every response body carries a schema_version field ("1") and every response sets an X-Schema-Version header; see CHANGELOG-API.md for the versioning + deprecation policy. Human docs at /llms.txt. Rate limited to 120 requests/min per client (best-effort, per serverless instance); every response carries X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset, and exhaustion returns 429 with Retry-After. Benchmark endpoints (/api/localmaxxing, /api/benchmarks, /api/best) carry a machine-readable top-level `caveats` array (objects with code/severity/summary/detail) describing dataset limitations, and each aggregate carries a confidence block plus crossCheck.'
     },
     servers: [{ url: BASE }],
     paths: {
@@ -124,7 +124,7 @@ export default function handler(req, res) {
       '/api/benchmarks': {
         get: {
           summary: 'Aggregated speeds: median + IQR per group',
-          description: 'Outlier-resistant stats per hardware×model-family group (default). Regroup with ?groupBy=hardware|model|quant. Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak).',
+          description: 'Outlier-resistant stats per hardware×model-family group (default). Regroup with ?groupBy=hardware|model|quant. Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak). Each group carries confidence {runs, iqrSpreadPct, outliers, newestRunAgeDays, grade} and cross_check {relatedRigComparisons, contradictions[]} comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.',
           parameters: [
             { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['hardwareModel', 'hardware', 'model', 'quant'] } },
             { name: 'hardware', in: 'query', schema: { type: 'string' } },
@@ -135,7 +135,7 @@ export default function handler(req, res) {
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' },
             SNAPSHOT_PARAM
           ],
-          responses: { '200': { description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode, plus bestRun. Top-level and per-group `caveats` arrays flag n=1 groups and mixed engine versions.' }, '429': { $ref: '#/components/responses/RateLimited' } }
+          responses: { '200': { description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode, bestRun, a confidence block and crossCheck. Top-level and per-group `caveats` arrays flag n=1 groups and mixed engine versions.' }, '429': { $ref: '#/components/responses/RateLimited' } }
         }
       },
       '/api/best': {
@@ -162,7 +162,7 @@ export default function handler(req, res) {
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
             SNAPSHOT_PARAM
           ],
-          responses: { '200': { description: 'Ranked groups with medians, per-row `caveats` (n=1, mixed engines) and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns' }, '429': { $ref: '#/components/responses/RateLimited' } }
+          responses: { '200': { description: 'Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns' }, '429': { $ref: '#/components/responses/RateLimited' } }
         }
       },
       '/api/health': {
