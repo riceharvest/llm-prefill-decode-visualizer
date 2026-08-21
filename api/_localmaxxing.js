@@ -71,6 +71,7 @@ function slim(r) {
   const h = r.hardware || {};
   return {
     runId: r.id,
+    createdAt: r.createdAt || null,
     modelFamily: normalizeModelId(r.model?.hfId),
     modelId: r.model?.hfId,
     modelName: r.model?.displayName,

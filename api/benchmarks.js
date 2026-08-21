@@ -5,6 +5,7 @@ import { enforceRateLimit } from './_ratelimit.js';
 import { buildCaveats, rowCaveats } from './_caveats.js';
 import { sendJson } from './_schema.js';
 import { engineTag, matchesEngineQuery } from './_engine.js';
+import { confidence, crossCheck } from './_crosscheck.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -68,6 +69,16 @@ export default async function handler(req, res) {
         : (r => `${r.hardwareKey}|${r.modelFamily}|${engineTag(r)}`)
     };
 
+    // Keep per-group membership so each group can carry its confidence block
+    // and cross-hardware consistency checks.
+    const members = new Map();
+    for (const run of runs) {
+      const k = keyFns[groupBy](run);
+      if (!k) continue;
+      if (!members.has(k)) members.set(k, []);
+      members.get(k).push(run);
+    }
+
     const { limit, cursor } = parsePagination(q, { defaultLimit: 25, maxLimit: 200 });
 
     // aggregate() sorts by median decode desc; enforce the full stable order
@@ -83,6 +94,8 @@ export default async function handler(req, res) {
       caveats: rowCaveats(g),
       engines: g.engines,
       mixedEngines: g.mixedEngines,
+      confidence: confidence(members.get(g.key) || []),
+      crossCheck: crossCheck(members.get(g.key) || []),
       bestRun: {
         runId: g.bestRun.runId,
         modelName: g.bestRun.modelName,
@@ -100,7 +113,7 @@ export default async function handler(req, res) {
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
 
     return json(res, {
-      description: 'Aggregated community benchmark speeds (median + IQR per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=; regroup with ?groupBy=hardware|model|quant|hardwareModel. Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false.',
+      description: 'Aggregated community benchmark speeds (median + IQR per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=; regroup with ?groupBy=hardware|model|quant|hardwareModel. Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false. Each group carries a confidence block (run count, IQR spread %, outlier count, recency, grade) and a cross_check comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.',
       snapshot,
       total: allGroups.length,
       matchedRuns: runs.length,
@@ -113,7 +126,7 @@ export default async function handler(req, res) {
         includeOutliers,
         note: `runs more than ${outlierIqrs} IQRs from their group median carry an outlier flag with a z-score-style deviation field${includeOutliers ? ' and are included in the stats' : ' and are excluded from the stats; pass ?include_outliers=true to include them'}`
       },
-      note: 'medians are outlier-resistant; use bestRun for the single fastest measured run in each group',
+      note: 'medians are outlier-resistant; use bestRun for the single fastest measured run in each group and confidence.grade to judge how much a ranking is backed by data',
       items: groups,
       has_more: page.has_more,
       next_cursor: page.next_cursor,
