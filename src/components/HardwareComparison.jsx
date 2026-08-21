@@ -1,7 +1,21 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { HARDWARE_PRESETS, formatTime, formatTokens } from '../utils/presets';
-import { BarChart3, Users } from 'lucide-react';
+import { BarChart3, Users, PlugZap } from 'lucide-react';
 import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
+
+// Typical whole-rig wattage under inference load (GPU + rest-of-system overhead).
+// Used as the default for the TCO section; the user can always override it.
+const DEFAULT_WATTS = {
+  rtx4090_exl2: 450,
+  dual_rtx3090: 700,
+  rtx3090_llamacpp: 350,
+  mac_ultra: 180,
+  rtx3060_entry: 220,
+  h100: 700,
+  rpi5: 12,
+  custom: 400
+};
+const defaultWattsFor = (id) => DEFAULT_WATTS[id] ?? 400;
 
 export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMaxxingContext }) {
   const [hardwareA, setHardwareA] = useState(() => readParam('hwA') || 'groq');
@@ -21,14 +35,29 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   const [priceBIn, setPriceBIn] = useState(() => readParam('piB') ?? '');
   const [priceBOut, setPriceBOut] = useState(() => readParam('poB') ?? '');
 
+  // TCO: local electricity vs cloud pricing. Marginal cost of a local rig is
+  // watts-under-load × $/kWh; cloud cost is a single blended $/M token input.
+  const [tcoHw, setTcoHw] = useState(() => readParam('tcoHw') || 'rtx4090_exl2');
+  const [tcoWatts, setTcoWatts] = useState(() => readParam('tcoW') ?? String(defaultWattsFor(readParam('tcoHw') || 'rtx4090_exl2')));
+  const [tcoKwh, setTcoKwh] = useState(() => readParam('tcoKwh') ?? '0.30');
+  const [tcoCloud, setTcoCloud] = useState(() => readParam('tcoCloud') ?? '');
+  const [tcoCapex, setTcoCapex] = useState(() => readParam('tcoCapex') ?? '2500');
+  const [tcoAmortMonths, setTcoAmortMonths] = useState(() => Math.max(1, Math.round(readParamNum('tcoAmort', 24))));
+
+  const handleTcoHwChange = (id) => {
+    setTcoHw(id);
+    setTcoWatts(String(defaultWattsFor(id)));
+  };
+
   // Shareable per-tab settings
   useEffect(() => {
     writeParams({
       hwA: hardwareA, hwB: hardwareB, cp: testPromptTokens, co: testOutputTokens,
       batch: batchSize === 1 ? '' : batchSize,
-      piA: priceAIn, poA: priceAOut, piB: priceBIn, poB: priceBOut
+      piA: priceAIn, poA: priceAOut, piB: priceBIn, poB: priceBOut,
+      tcoHw, tcoW: tcoWatts, tcoKwh, tcoCloud, tcoCapex, tcoAmort: tcoAmortMonths
     });
-  }, [hardwareA, hardwareB, testPromptTokens, testOutputTokens, batchSize, priceAIn, priceAOut, priceBIn, priceBOut]);
+  }, [hardwareA, hardwareB, testPromptTokens, testOutputTokens, batchSize, priceAIn, priceAOut, priceBIn, priceBOut, tcoHw, tcoWatts, tcoKwh, tcoCloud, tcoCapex, tcoAmortMonths]);
 
   useEffect(() => {
     const localPresets = presets.filter(preset => preset.localMaxxing);
@@ -92,6 +121,32 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   };
   const costA = costPerRequest(priceAIn, priceAOut);
   const costB = costPerRequest(priceBIn, priceBOut);
+
+  // ---- TCO: electricity vs cloud -----------------------------------------
+  // Marginal local cost is electricity only: (W/1000 × $/kWh) ÷ aggregate
+  // decode tok/s → $ per token. The rig draws power whenever it is on, so
+  // monthly electricity assumes 24/7 load. Break-even answers: how many
+  // tokens/month make cloud spend equal owning the rig (capex amortized +
+  // always-on electricity)? Below that volume, renting wins.
+  const tcoPreset = presets.find(p => p.id === tcoHw) || presets[0] || HARDWARE_PRESETS[0];
+  const tcoWattsNum = parseFloat(tcoWatts);
+  const tcoKwhNum = parseFloat(tcoKwh);
+  const tcoCloudNum = parseFloat(tcoCloud);
+  const tcoCapexNum = parseFloat(tcoCapex);
+  const tcoValid = Number.isFinite(tcoWattsNum) && tcoWattsNum > 0 && tcoPreset.decodeSpeed > 0;
+
+  const tcoThroughput = tcoValid
+    ? tcoPreset.decodeSpeed * Math.pow(Math.max(1, batchSize), 0.75) // aggregate tok/s
+    : 0;
+  // kW × $/kWh is dollars per hour of full-load runtime.
+  const tcoCostPerHour = tcoValid ? (tcoWattsNum / 1000) * (Number.isFinite(tcoKwhNum) ? tcoKwhNum : 0) : 0;
+  const tcoLocalPerMtok = tcoThroughput > 0 ? ((tcoCostPerHour / 3600) / tcoThroughput) * 1e6 : null;
+  const tcoMonthlyElectricity = tcoCostPerHour * 24 * 30; // 720 h month at constant load
+  const tcoMonthlyCapex = Number.isFinite(tcoCapexNum) ? tcoCapexNum / tcoAmortMonths : 0;
+  // Cloud must beat the marginal electricity cost for any break-even to exist.
+  const tcoBreakEven = (tcoLocalPerMtok !== null && Number.isFinite(tcoCloudNum) && tcoCloudNum > tcoLocalPerMtok)
+    ? ((tcoMonthlyCapex + tcoMonthlyElectricity) * 1e6) / (tcoCloudNum - tcoLocalPerMtok)
+    : null;
 
   const speedupTotal = totalTimeA > 0 ? totalTimeB / totalTimeA : 0;
   const speedupPrefill = ttftA > 0 ? ttftB / ttftA : 0;
@@ -397,6 +452,180 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
           </div>
         </div>
 
+      </section>
+
+      {/* TCO: Local Electricity vs Cloud */}
+      <section className="panel" aria-label="Total cost of ownership electricity versus cloud">
+        <h2 className="panel-title" style={{ marginBottom: '14px' }}>
+          <PlugZap size={16} />
+          <span>TCO · Local Electricity vs Cloud</span>
+        </h2>
+
+        <div className="grid-auto" style={{ '--grid-min': '240px', marginBottom: '16px' }}>
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Local rig</span>
+            </div>
+            <select
+              value={tcoHw}
+              onChange={(e) => handleTcoHwChange(e.target.value)}
+              aria-label="TCO local hardware profile"
+              style={{ width: '100%' }}
+            >
+              {presets.map(p => (
+                <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Wattage under load</span>
+              <span className="field-value" style={{ color: 'var(--agent)' }}>{tcoWatts || '—'} W</span>
+            </div>
+            <input
+              type="number"
+              min="1"
+              step="10"
+              value={tcoWatts}
+              aria-label="Rig wattage under inference load"
+              onChange={(e) => setTcoWatts(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Electricity price</span>
+              <span className="field-value" style={{ color: 'var(--agent)' }}>${tcoKwh || '—'}/kWh</span>
+            </div>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={tcoKwh}
+              aria-label="Local electricity price per kilowatt-hour"
+              onChange={(e) => setTcoKwh(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Cloud price</span>
+              <span className="field-value" style={{ color: 'var(--agent)' }}>${tcoCloud || '—'}/Mtok</span>
+            </div>
+            <input
+              type="number"
+              min="0"
+              step="0.10"
+              placeholder="blended $ / 1M tok"
+              value={tcoCloud}
+              aria-label="Cloud price per million tokens"
+              onChange={(e) => setTcoCloud(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Rig cost</span>
+              <span className="field-value" style={{ color: 'var(--agent)' }}>${tcoCapex || '—'}</span>
+            </div>
+            <input
+              type="number"
+              min="0"
+              step="100"
+              value={tcoCapex}
+              aria-label="Local rig purchase price"
+              onChange={(e) => setTcoCapex(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Amortize over</span>
+              <span className="field-value" style={{ color: 'var(--agent)' }}>{tcoAmortMonths} mo</span>
+            </div>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={tcoAmortMonths}
+              aria-label="Amortization period in months"
+              onChange={(e) => setTcoAmortMonths(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+              style={{ width: '100%' }}
+            />
+          </div>
+        </div>
+
+        {tcoValid ? (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', color: 'var(--text-muted)', maxWidth: '480px' }}>
+              <div style={rowStyle}>
+                <span>Aggregate decode throughput</span>
+                <span style={{ ...numStyle, color: 'var(--decode)' }}>{Math.round(tcoThroughput).toLocaleString()} tok/s</span>
+              </div>
+              <div style={rowStyle}>
+                <span>Local marginal cost (electricity only)</span>
+                <span style={{ ...numStyle, color: 'var(--prefill)' }}>
+                  {tcoLocalPerMtok !== null ? `$${tcoLocalPerMtok < 0.01 ? tcoLocalPerMtok.toFixed(4) : tcoLocalPerMtok.toFixed(2)} / Mtok` : '—'}
+                </span>
+              </div>
+              {Number.isFinite(tcoCloudNum) && tcoLocalPerMtok !== null && (
+                <div style={rowStyle}>
+                  <span>Cloud cost</span>
+                  <span style={{ ...numStyle, color: 'var(--agent)' }}>${tcoCloudNum.toFixed(2)} / Mtok</span>
+                </div>
+              )}
+              <div style={{ ...rowStyle, ...rowDivider }}>
+                <span>Always-on electricity (24/7 load)</span>
+                <span style={numStyle}>${tcoMonthlyElectricity.toFixed(2)} / mo</span>
+              </div>
+              {tcoMonthlyCapex > 0 && (
+                <div style={rowStyle}>
+                  <span>Rig amortized over {tcoAmortMonths} mo</span>
+                  <span style={numStyle}>${tcoMonthlyCapex.toFixed(2)} / mo</span>
+                </div>
+              )}
+            </div>
+
+            <div className="metric-grid" style={{ marginTop: '16px' }}>
+              <div className="metric" style={{ borderLeftColor: tcoBreakEven !== null ? 'var(--decode)' : 'var(--prefill)', textAlign: 'center' }}>
+                <div className="metric-label">Break-even volume</div>
+                <div className="metric-value" style={{ color: tcoBreakEven !== null ? 'var(--decode)' : 'var(--prefill)', fontSize: '1.5rem' }}>
+                  {tcoBreakEven !== null
+                    ? `${formatTokens(Math.round(tcoBreakEven))} tok/mo`
+                    : (Number.isFinite(tcoCloudNum) ? 'Cloud wins at any volume' : '—')}
+                </div>
+                <div className="metric-sub">
+                  {tcoBreakEven !== null
+                    ? 'above this, the local rig is cheaper than cloud'
+                    : (Number.isFinite(tcoCloudNum) ? 'cloud $/Mtok is at or below the electricity cost per Mtok' : 'enter a cloud $/Mtok to compute')}
+                </div>
+              </div>
+
+              {tcoBreakEven !== null && (
+                <div className="metric" style={{ borderLeftColor: 'var(--agent)', textAlign: 'center' }}>
+                  <div className="metric-label">Cloud spend at break-even</div>
+                  <div className="metric-value" style={{ color: 'var(--agent)' }}>
+                    ${(tcoBreakEven / 1e6 * tcoCloudNum).toFixed(0)}/mo
+                  </div>
+                  <div className="metric-sub">monthly cloud bill the rig must beat</div>
+                </div>
+              )}
+            </div>
+
+            <p className="hint-text" style={{ marginTop: '12px' }}>
+              Marginal local cost = (watts ÷ 1000 × $/kWh) ÷ aggregate decode tok/s. The rig draws power whenever it is on,
+              so monthly electricity assumes 24/7 load; break-even adds the rig price amortized over the chosen period.
+              Idle draw, cooling, and internet are not modeled.
+            </p>
+          </>
+        ) : (
+          <p className="hint-text">Enter a positive wattage to compute the local rig's electricity cost per million tokens.</p>
+        )}
       </section>
 
     </div>
