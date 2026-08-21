@@ -4,6 +4,7 @@ import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, readParamBool, readParam, writeParams } from '../utils/urlState';
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
 import { exportNodeAsPng } from '../utils/exportPng';
+import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 
 export default function AgenticVisualizer({
   prefillSpeed,
@@ -19,6 +20,24 @@ export default function AgenticVisualizer({
   const [toolOutputTokensPerTurn, setToolOutputTokensPerTurn] = useState(() => readParamNum('tool', 800));
   const [decodeTokensPerTurn, setDecodeTokensPerTurn] = useState(() => readParamNum('thought', 250));
   const [enablePrefixCaching, setEnablePrefixCaching] = useState(() => readParamBool('cache', true));
+
+  // --- Misconception callout: fires when the user explicitly enables prefix
+  // caching — the moment to note that turn 1 still prefills everything. ---
+  const [activeCallouts, setActiveCallouts] = useState([]);
+  const fireMisconception = (id) => {
+    setActiveCallouts(prev => (
+      prev.includes(id) || isMisconceptionDismissed(id) ? prev : [...prev, id]
+    ));
+  };
+  const handleDismissMisconception = (id) => {
+    dismissMisconception(id);
+    setActiveCallouts(prev => prev.filter(x => x !== id));
+  };
+  const handleTogglePrefixCaching = () => {
+    if (!enablePrefixCaching) fireMisconception('prefix-caching-first-turn');
+    setEnablePrefixCaching(!enablePrefixCaching);
+    handleReset();
+  };
 
   // Auto-start the simulation when the page was opened via a "try it" demo link
   useEffect(() => {
@@ -313,10 +332,7 @@ export default function AgenticVisualizer({
           {/* Prefix Caching Toggle */}
           <button
             data-tour="prefix-caching"
-            onClick={() => {
-              setEnablePrefixCaching(!enablePrefixCaching);
-              handleReset();
-            }}
+            onClick={handleTogglePrefixCaching}
             className="btn"
             aria-pressed={enablePrefixCaching}
             style={enablePrefixCaching
@@ -440,6 +456,15 @@ export default function AgenticVisualizer({
 
         </div>
       </section>
+
+      {/* Misconception callout (context-triggered, dismissible) */}
+      {activeCallouts.map(id => (
+        <MisconceptionCallout
+          key={id}
+          id={id}
+          onDismiss={() => handleDismissMisconception(id)}
+        />
+      ))}
 
       {/* Main Agent Loop Simulation Stage */}
       <section className="panel" aria-label="Agent loop simulation">

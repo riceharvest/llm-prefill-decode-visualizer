@@ -550,6 +550,51 @@ input[type="range"]::-moz-range-thumb {
   }
 }
 
+/* ---------- Misconception callouts ---------- */
+
+.misconception-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: var(--radius-md);
+  animation: token-appear 0.15s ease-out forwards;
+}
+
+.misconception-body { flex: 1; min-width: 0; }
+
+.misconception-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--warn);
+}
+
+.misconception-text {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin-top: 2px;
+}
+
+.misconception-dismiss {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.misconception-dismiss:hover { background: var(--bg-hover); color: var(--text-main); }
+
 /* ---------- Tooltips ---------- */
 
 [data-tooltip] { position: relative; }

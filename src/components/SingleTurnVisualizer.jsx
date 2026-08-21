@@ -9,6 +9,7 @@ import {
 } from '../utils/multimodal';
 import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
+import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 
 export default function SingleTurnVisualizer({
   prefillSpeed,
@@ -253,6 +254,35 @@ export default function SingleTurnVisualizer({
     : 'COMPLETED';
   const phaseTagClass = phase === 'prefilling' ? 'tag-prefill'
     : phase === 'decoding' || phase === 'completed' ? 'tag-decode' : '';
+
+  // --- Misconception callouts: fire once per session at the teachable moment ---
+  const [activeCallouts, setActiveCallouts] = useState([]);
+  const fireMisconception = (id) => {
+    setActiveCallouts(prev => (
+      prev.includes(id) || isMisconceptionDismissed(id) ? prev : [...prev, id]
+    ));
+  };
+  const handleDismissMisconception = (id) => {
+    dismissMisconception(id);
+    setActiveCallouts(prev => prev.filter(x => x !== id));
+  };
+
+  // Trigger: user raises the target output length — TTFT is unaffected.
+  const prevOutputRef = useRef(outputTokens);
+  useEffect(() => {
+    if (outputTokens > prevOutputRef.current) fireMisconception('output-length-ttft');
+    prevOutputRef.current = outputTokens;
+  }, [outputTokens]);
+
+  // Trigger: the run crosses into the decode phase — TPOT becomes visible.
+  const prevPhaseRef = useRef(phase);
+  useEffect(() => {
+    if (phase === 'decoding' && prevPhaseRef.current !== 'decoding') {
+      fireMisconception('tpot-throughput');
+    }
+    prevPhaseRef.current = phase;
+  }, [phase]);
+
 
   return (
     <div className="stack">
@@ -558,6 +588,15 @@ export default function SingleTurnVisualizer({
           </div>
         </div>
       </section>
+
+      {/* Misconception callouts (context-triggered, dismissible) */}
+      {activeCallouts.map(id => (
+        <MisconceptionCallout
+          key={id}
+          id={id}
+          onDismiss={() => handleDismissMisconception(id)}
+        />
+      ))}
 
       {/* Main Visualizer Stage */}
       <section className="panel" aria-label="Simulation stage">
