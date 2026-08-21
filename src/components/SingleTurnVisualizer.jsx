@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Zap, Gauge, FileText, RotateCcw } from 'lucide-react';
+import { Play, Pause, Zap, Gauge, FileText, RotateCcw, Image as ImageIcon } from 'lucide-react';
 import { formatTime, formatTokens, SCENARIO_PRESETS } from '../utils/presets';
+import {
+  IMAGE_RESOLUTION_PRESETS,
+  TOKENS_PER_TILE,
+  estimateImageTiles,
+  estimateImageTokens
+} from '../utils/multimodal';
 import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
 
@@ -23,6 +29,19 @@ export default function SingleTurnVisualizer({
     const v = readParamNum('acc', 0.7);
     return Math.min(0.95, Math.max(0.3, v));
   });
+  // Multimodal attachments: images tile into ~1MP vision-encoder chunks
+  // (~1.1K tokens each) that prefill must ingest before the first token.
+  const [imagesEnabled, setImagesEnabled] = useState(() => readParamBool('img', false));
+  const [imageCount, setImageCount] = useState(() => Math.min(8, Math.max(1, Math.round(readParamNum('imgN', 1)))));
+  const [imageResId, setImageResId] = useState(() => {
+    const v = readParam('imgRes');
+    return IMAGE_RESOLUTION_PRESETS.some(p => p.id === v) ? v : '1080p';
+  });
+  const imageResolution = IMAGE_RESOLUTION_PRESETS.find(p => p.id === imageResId) || IMAGE_RESOLUTION_PRESETS[1];
+  const imageCountSafe = imagesEnabled ? imageCount : 0;
+  const imageTokensPerImage = estimateImageTokens(imageResolution);
+  const imageTilesPerImage = estimateImageTiles(imageResolution);
+  const totalImageTokens = imageTokensPerImage * imageCountSafe;
 
   const effectiveDecodeSpeed = (() => {
     if (!specEnabled) return decodeSpeed;
@@ -67,9 +86,12 @@ export default function SingleTurnVisualizer({
       output: outputTokens,
       spec: specEnabled ? '1' : '',
       draftK: specEnabled ? draftTokens : '',
-      acc: specEnabled ? acceptance : ''
+      acc: specEnabled ? acceptance : '',
+      img: imagesEnabled ? '1' : '',
+      imgN: imagesEnabled && imageCount !== 1 ? imageCount : '',
+      imgRes: imagesEnabled && imageResId !== '1080p' ? imageResId : ''
     });
-  }, [promptTokens, outputTokens, specEnabled, draftTokens, acceptance]);
+  }, [promptTokens, outputTokens, specEnabled, draftTokens, acceptance, imagesEnabled, imageCount, imageResId]);
 
   // Simulation state
   const [phase, setPhase] = useState('idle'); // 'idle' | 'prefilling' | 'decoding' | 'completed'
@@ -80,7 +102,10 @@ export default function SingleTurnVisualizer({
   // Calculated benchmarks (typed 0/negative values sanitized for math)
   const safePromptTokens = Math.max(0, promptTokens || 0);
   const safeOutputTokens = Math.max(0, outputTokens || 0);
-  const expectedTTFT = safePromptTokens / prefillSpeed; // seconds
+  // Vision-encoder tokens from attached images are ingested during prefill
+  // too — they extend the KV cache before the first text token can emerge.
+  const totalPrefillTokens = safePromptTokens + totalImageTokens;
+  const expectedTTFT = totalPrefillTokens / prefillSpeed; // seconds
   const expectedDecodeTime = safeOutputTokens / effectiveDecodeSpeed; // seconds (spec-aware)
   const expectedTotalTime = expectedTTFT + expectedDecodeTime;
   const tpotMs = effectiveDecodeSpeed > 0 ? 1000 / effectiveDecodeSpeed : Infinity;
@@ -148,7 +173,7 @@ export default function SingleTurnVisualizer({
       // Non-finite walltime (e.g. a speed typed as 0): finish immediately,
       // showing only the phases that can actually complete.
       if (!Number.isFinite(expectedTotalTime) || expectedTotalTime <= 0) {
-        setCurrentPrefillProgress(Number.isFinite(expectedTTFT) && expectedTTFT >= 0 ? Math.max(0, promptTokens) : 0);
+        setCurrentPrefillProgress(Number.isFinite(expectedTTFT) && expectedTTFT >= 0 ? Math.max(0, totalPrefillTokens) : 0);
         setCurrentDecodeTokens(Number.isFinite(expectedDecodeTime) && expectedDecodeTime >= 0 ? Math.max(0, outputTokens) : 0);
         setElapsedTime(expectedTotalTime);
         setPhase('completed');
@@ -158,7 +183,7 @@ export default function SingleTurnVisualizer({
 
       // Handle instant mode
       if (simSpeedMultiplier === 'instant') {
-        setCurrentPrefillProgress(safePromptTokens);
+        setCurrentPrefillProgress(totalPrefillTokens);
         setCurrentDecodeTokens(safeOutputTokens);
         setElapsedTime(expectedTotalTime);
         setPhase('completed');
@@ -179,18 +204,18 @@ export default function SingleTurnVisualizer({
       // Check if in prefill phase
       if (newTime <= expectedTTFT) {
         setPhase('prefilling');
-        const prefillProgress = Math.max(0, Math.min(safePromptTokens, Math.floor(newTime * prefillSpeed)));
+        const prefillProgress = Math.max(0, Math.min(totalPrefillTokens, Math.floor(newTime * prefillSpeed)));
         setCurrentPrefillProgress(prefillProgress);
       } else if (newTime < expectedTotalTime) {
         setPhase('decoding');
-        setCurrentPrefillProgress(safePromptTokens);
+        setCurrentPrefillProgress(totalPrefillTokens);
         const decodeProgressTime = newTime - expectedTTFT;
         const decodeCount = Math.max(0, Math.min(safeOutputTokens, Math.floor(decodeProgressTime * effectiveDecodeSpeed)));
         setCurrentDecodeTokens(decodeCount);
       } else {
         // Completed
         setPhase('completed');
-        setCurrentPrefillProgress(safePromptTokens);
+        setCurrentPrefillProgress(totalPrefillTokens);
         setCurrentDecodeTokens(safeOutputTokens);
         setElapsedTime(expectedTotalTime);
         setIsPlaying(false);
@@ -205,7 +230,7 @@ export default function SingleTurnVisualizer({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isPlaying, simSpeedMultiplier, promptTokens, outputTokens, prefillSpeed, decodeSpeed, effectiveDecodeSpeed, expectedTTFT, expectedTotalTime]);
+  }, [isPlaying, simSpeedMultiplier, promptTokens, outputTokens, prefillSpeed, decodeSpeed, effectiveDecodeSpeed, expectedTTFT, expectedTotalTime, totalPrefillTokens]);
 
   const prefillPct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedTTFT / expectedTotalTime) * 100 : 0;
   const decodePct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedDecodeTime / expectedTotalTime) * 100 : 0;
@@ -371,6 +396,86 @@ export default function SingleTurnVisualizer({
           )}
         </div>
 
+        {/* Multimodal attachments */}
+        <div className="panel-inset" style={{ marginBottom: '14px', borderColor: imagesEnabled ? 'var(--prefill-border)' : 'var(--border)' }}>
+          <div className="field-head" style={{ marginBottom: imagesEnabled ? '10px' : '0' }}>
+            <button
+              onClick={() => setImagesEnabled(!imagesEnabled)}
+              className={`seg${imagesEnabled ? ' active' : ''}`}
+              aria-pressed={imagesEnabled}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '4px 12px', cursor: 'pointer',
+                borderRadius: 'var(--radius-sm)',
+                border: `1px solid ${imagesEnabled ? 'var(--prefill-border)' : 'var(--border)'}`,
+                background: imagesEnabled ? 'var(--prefill-dim)' : 'var(--bg-inset)',
+                color: imagesEnabled ? 'var(--prefill)' : 'var(--text-muted)'
+              }}
+            >
+              <ImageIcon size={14} /> Attached Images: {imagesEnabled ? `${imageCount} × ${imageResolution.label}` : 'OFF'}
+            </button>
+            {imagesEnabled && (
+              <span className="tag tag-prefill">
+                +{totalImageTokens.toLocaleString()} vision tok
+                {' '}({imageTilesPerImage} tile{imageTilesPerImage > 1 ? 's' : ''} ≈ {imageTokensPerImage.toLocaleString()} tok each)
+              </span>
+            )}
+          </div>
+          {imagesEnabled && (
+            <>
+              <div className="grid-auto" style={{ '--grid-min': '220px' }}>
+                <div className="field">
+                  <div className="field-head">
+                    <span className="field-label">Number of images</span>
+                    <span className="field-value" style={{ color: 'var(--prefill)' }}>{imageCount}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="8"
+                    step="1"
+                    value={imageCount}
+                    aria-label="Number of attached images"
+                    onChange={(e) => {
+                      setImageCount(Number(e.target.value));
+                      handleReset();
+                    }}
+                  />
+                </div>
+                <div className="field">
+                  <div className="field-head">
+                    <span className="field-label">Resolution</span>
+                    <span className="field-value" style={{ color: 'var(--prefill)' }}>
+                      {imageResolution.width}×{imageResolution.height}
+                    </span>
+                  </div>
+                  <div className="seg" role="group" aria-label="Image resolution presets" style={{ flexWrap: 'wrap' }}>
+                    {IMAGE_RESOLUTION_PRESETS.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          setImageResId(p.id);
+                          handleReset();
+                        }}
+                        className={imageResId === p.id ? 'active' : ''}
+                        aria-pressed={imageResId === p.id}
+                        title={`${p.width}×${p.height} → ~${estimateImageTokens(p).toLocaleString()} vision tokens`}
+                      >
+                        {p.id}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <p className="hint-text" style={{ marginTop: '8px' }}>
+                Vision-encoder estimate: images are tiled into ~1MP chunks at ~{TOKENS_PER_TILE.toLocaleString()} tokens per tile
+                (min 1 tile, capped at 6 tiles/image — matching how hosted VLMs downscale oversized inputs).
+                Image tokens join the text prompt in prefill and directly inflate TTFT.
+              </p>
+            </>
+          )}
+        </div>
+
         <div className="grid-auto" style={{ '--grid-min': '280px' }}>
           {/* Prompt Tokens Slider */}
           <div className="panel-inset field">
@@ -513,19 +618,25 @@ export default function SingleTurnVisualizer({
               <div
                 className="progress-fill"
                 style={{
-                  width: `${promptTokens > 0 ? Math.min(100, (currentPrefillProgress / promptTokens) * 100) : 0}%`,
+                  width: `${totalPrefillTokens > 0 ? Math.min(100, (currentPrefillProgress / totalPrefillTokens) * 100) : 0}%`,
                   background: 'var(--prefill)'
                 }}
               />
             </div>
 
             <div className="field-head" style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-              <span>Ingested <strong style={{ color: 'var(--text-main)' }}>{currentPrefillProgress.toLocaleString()}</strong> / {promptTokens.toLocaleString()} tok</span>
+              <span>Ingested <strong style={{ color: 'var(--text-main)' }}>{currentPrefillProgress.toLocaleString()}</strong> / {totalPrefillTokens.toLocaleString()} tok</span>
               <span>TTFT <strong style={{ color: 'var(--prefill)' }}>{formatTime(expectedTTFT)}</strong></span>
             </div>
+            {totalImageTokens > 0 && (
+              <div className="field-head" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                <span>{safePromptTokens.toLocaleString()} text + {totalImageTokens.toLocaleString()} vision ({imageCountSafe} img)</span>
+                <span>+{formatTime(totalImageTokens / prefillSpeed)} from images</span>
+              </div>
+            )}
 
             <p className="hint-text" style={{ marginTop: '8px' }}>
-              Compute-bound parallel matrix multiplication. Builds the KV cache for all {promptTokens.toLocaleString()} prompt tokens.
+              Compute-bound parallel matrix multiplication. Builds the KV cache for all {totalPrefillTokens.toLocaleString()} prompt tokens{totalImageTokens > 0 ? ` (incl. ${totalImageTokens.toLocaleString()} image tokens)` : ''}.
             </p>
           </div>
 
@@ -620,7 +731,11 @@ export default function SingleTurnVisualizer({
             <div className="metric-value" style={{ color: 'var(--prefill)' }}>
               {formatTime(expectedTTFT)}
             </div>
-            <div className="metric-sub">Prompt prefill latency</div>
+            <div className="metric-sub">
+              {totalImageTokens > 0
+                ? `Prefill ${totalPrefillTokens.toLocaleString()} tok (incl. images)`
+                : 'Prompt prefill latency'}
+            </div>
           </div>
 
           <div className="metric" style={{ borderLeftColor: 'var(--decode)' }}>
@@ -645,11 +760,11 @@ export default function SingleTurnVisualizer({
               {!Number.isFinite(expectedTotalTime)
                 ? '0.0 '
                 : expectedTotalTime > 0
-                  ? `${((promptTokens + outputTokens) / expectedTotalTime).toFixed(1)} `
+                  ? `${((totalPrefillTokens + outputTokens) / expectedTotalTime).toFixed(1)} `
                   : '— '}
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>tok/s</span>
             </div>
-            <div className="metric-sub">Total tokens ÷ walltime</div>
+            <div className="metric-sub">Total tokens ÷ walltime{totalImageTokens > 0 ? ' (incl. vision tokens)' : ''}</div>
           </div>
 
         </div>
