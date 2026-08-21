@@ -5,6 +5,7 @@ import EngineFlagPicker from './components/EngineFlagPicker';
 import SpeedControls from './components/SpeedControls';
 import SingleTurnVisualizer from './components/SingleTurnVisualizer';
 import AgenticVisualizer from './components/AgenticVisualizer';
+import BatchingVisualizer from './components/BatchingVisualizer';
 import HardwareComparison from './components/HardwareComparison';
 import ABReplay from './components/ABReplay';
 import RunDiff from './components/RunDiff';
@@ -214,7 +215,7 @@ export default function App() {
       } else if (e.key === 'r' || e.key === 'R') {
         handleReset();
       } else if (/^[1-9]$/.test(e.key)) {
-        const tabs = ['single', 'agentic', 'compare', 'ab', 'diff', 'shortlist', 'kvcache', 'theory', 'curriculum'];
+        const tabs = ['single', 'agentic', 'batching', 'compare', 'ab', 'diff', 'shortlist', 'kvcache', 'theory', 'curriculum'];
         setActiveTab(tabs[Number(e.key) - 1]);
       }
     };
@@ -297,6 +298,17 @@ export default function App() {
 
         {activeTab === 'agentic' && (
           <AgenticVisualizer
+            prefillSpeed={prefillSpeed}
+            decodeSpeed={decodeSpeed}
+            simSpeedMultiplier={simSpeedMultiplier}
+            isPlaying={isPlaying}
+            setIsPlaying={setIsPlaying}
+            resetKey={resetKey}
+          />
+        )}
+
+        {activeTab === 'batching' && (
+          <BatchingVisualizer
             prefillSpeed={prefillSpeed}
             decodeSpeed={decodeSpeed}
             simSpeedMultiplier={simSpeedMultiplier}
