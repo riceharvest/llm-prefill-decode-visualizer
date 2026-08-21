@@ -10,12 +10,16 @@ import ABReplay from './components/ABReplay';
 import RunDiff from './components/RunDiff';
 import KVCacheCalculator from './components/KVCacheCalculator';
 import TheoryGuide from './components/TheoryGuide';
+import GuidedTour, { hasSeenTour } from './components/GuidedTour';
 import { HARDWARE_PRESETS } from './utils/presets';
 import { toLocalPreset } from './utils/localMaxxing';
 import { readParam, writeParams } from './utils/urlState';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => readParam('tab') || 'single');
+
+  // First-run guided tour: shown once, skippable, re-launchable from the header '?' button.
+  const [tourOpen, setTourOpen] = useState(() => !hasSeenTour());
 
   // Preset from the URL drives both the dropdown label AND the default speeds,
   // unless explicit prefill/decode params override them.
@@ -144,6 +148,7 @@ export default function App() {
         setSelectedPreset={setSelectedPreset}
         onApplyPreset={handleApplyPreset}
         onShare={handleShare}
+        onTour={() => setTourOpen(true)}
       />
 
       <main className="app-frame stack">
@@ -227,6 +232,17 @@ export default function App() {
           <TheoryGuide />
         )}
       </main>
+
+      {/* First-run guided tour overlay */}
+      {tourOpen && (
+        <GuidedTour
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          prefillSpeed={prefillSpeed}
+          decodeSpeed={decodeSpeed}
+          onClose={() => setTourOpen(false)}
+        />
+      )}
 
       {/* Footer */}
       <footer className="site-footer">

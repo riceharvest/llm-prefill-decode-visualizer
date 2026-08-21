@@ -702,3 +702,107 @@ kbd {
   font-size: 0.85em;
   color: var(--text-muted);
 }
+
+/* ---------- First-run guided tour (issue #193) ---------- */
+
+/* Full-screen dim behind the final step's centered card */
+.tour-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 9, 0.72);
+  z-index: 898;
+  pointer-events: none;
+}
+
+/* Spotlight "cutout" around the target: transparent center, dim everywhere
+   else via a huge box-shadow. pointer-events stays none so the user can
+   interact with the spotlighted control (that's the whole point of the tour). */
+.tour-spotlight {
+  position: fixed;
+  z-index: 899;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 200vmax rgba(4, 6, 9, 0.72);
+  pointer-events: none;
+  transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+}
+
+.tour-card {
+  position: fixed;
+  z-index: 900;
+  width: min(360px, calc(100vw - 24px));
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel), 0 16px 40px -12px rgba(0, 0, 0, 0.7);
+  padding: 14px 16px;
+  transition: top 0.25s ease, left 0.25s ease;
+}
+
+.tour-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.tour-step-count {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+
+.tour-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.tour-body {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.tour-takeaway {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--agent-border);
+  background: var(--agent-dim);
+  border-radius: var(--radius-md);
+  font-size: 0.78rem;
+  color: var(--text-main);
+  margin-bottom: 12px;
+}
+
+.tour-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tour-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.tour-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+
+.tour-dot.done {
+  background: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-spotlight,
+  .tour-card {
+    transition: none;
+  }
+}

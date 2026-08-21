@@ -17,7 +17,7 @@ export default function SpeedControls({
       <div className="grid-auto" style={{ '--grid-min': '280px', alignItems: 'stretch' }}>
 
         {/* Prefill Speed Input */}
-        <div className="panel-inset" style={{ borderLeft: '2px solid var(--prefill)' }}>
+        <div className="panel-inset" data-tour="prefill-slider" style={{ borderLeft: '2px solid var(--prefill)' }}>
           <div className="field-head" style={{ marginBottom: '10px' }}>
             <span className="panel-title" style={{ color: 'var(--prefill)' }}>
               <Zap size={15} style={{ color: 'var(--prefill)' }} />
@@ -52,7 +52,7 @@ export default function SpeedControls({
         </div>
 
         {/* Decode Speed Input */}
-        <div className="panel-inset" style={{ borderLeft: '2px solid var(--decode)' }}>
+        <div className="panel-inset" data-tour="decode-slider" style={{ borderLeft: '2px solid var(--decode)' }}>
           <div className="field-head" style={{ marginBottom: '10px' }}>
             <span className="panel-title" style={{ color: 'var(--decode)' }}>
               <Gauge size={15} style={{ color: 'var(--decode)' }} />

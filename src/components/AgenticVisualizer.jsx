@@ -312,6 +312,7 @@ export default function AgenticVisualizer({
 
           {/* Prefix Caching Toggle */}
           <button
+            data-tour="prefix-caching"
             onClick={() => {
               setEnablePrefixCaching(!enablePrefixCaching);
               handleReset();

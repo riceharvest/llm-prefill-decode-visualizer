@@ -8,7 +8,8 @@ export default function Header({
   selectedPreset,
   setSelectedPreset,
   onApplyPreset,
-  onShare
+  onShare,
+  onTour
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -59,6 +60,16 @@ export default function Header({
               ))}
             </select>
 
+            {/* Replay the guided tour */}
+            <button
+              onClick={onTour}
+              title="Replay the guided tour"
+              aria-label="Replay the guided tour"
+              className="btn btn-icon"
+            >
+              <HelpCircle size={15} />
+            </button>
+
             {/* Share exact settings */}
             <button
               onClick={handleShare}
@@ -90,6 +101,7 @@ export default function Header({
           return (
             <button
               key={tab.id}
+              {...(tab.id === 'theory' ? { 'data-tour': 'tab-theory' } : {})}
               onClick={() => setActiveTab(tab.id)}
               className={`tab-btn${isActive ? ' active' : ''}`}
               aria-current={isActive ? 'page' : undefined}
