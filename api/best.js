@@ -1,4 +1,5 @@
-import { getAllRuns, aggregate } from './_localmaxxing.js';
+import { aggregate } from './_localmaxxing.js';
+import { resolveRuns } from './_snapshots.js';
 import { singleTurn, cost } from './_math.js';
 import { SCENARIO_PRESETS } from '../src/utils/presets.js';
 import { fitsInMemory } from './_vramfit.js';
@@ -153,7 +154,7 @@ export default async function handler(req, res) {
       outputTokens: num(q.outputTokens, 512)
     };
 
-    let runs = await getAllRuns();
+    const { runs, snapshot } = await resolveRuns(q);
 
     if (q.model) {
       const m = String(q.model).toLowerCase();
@@ -266,6 +267,7 @@ export default async function handler(req, res) {
         ? 'Ranked hardware×model groups by cost-efficiency: $/1M tokens from hardware price (amortized) + electricity at measured median speeds for the given scenario shape. Lower is better.'
         : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size.',
       rankedBy: by,
+      snapshot,
       matchedRuns: runs.length,
       caveats: buildCaveats(runs, groups),
       ...(by === 'walltime' ? {

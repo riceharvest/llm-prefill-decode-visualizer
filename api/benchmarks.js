@@ -1,4 +1,5 @@
-import { getAllRuns, aggregate, DEFAULT_OUTLIER_IQRS } from './_localmaxxing.js';
+import { aggregate, DEFAULT_OUTLIER_IQRS } from './_localmaxxing.js';
+import { resolveRuns } from './_snapshots.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from './_pagination.js';
 import { enforceRateLimit } from './_ratelimit.js';
 import { buildCaveats, rowCaveats } from './_caveats.js';
@@ -30,7 +31,8 @@ export default async function handler(req, res) {
     const quant = q.quant ? String(q.quant).toLowerCase() : null;
     const hwClass = q.hwClass ? String(q.hwClass).toLowerCase() : null; // discrete_gpu | unified | cpu_only
 
-    let runs = await getAllRuns();
+    const { runs: liveRuns, snapshot } = await resolveRuns(q);
+    let runs = liveRuns;
 
     if (hardware) runs = runs.filter(r => r.hardwareKey?.toLowerCase().includes(hardware) || r.hardware?.toLowerCase().includes(hardware));
     if (model) runs = runs.filter(r => r.modelFamily.includes(model) || r.modelId?.toLowerCase().includes(model));
@@ -85,6 +87,7 @@ export default async function handler(req, res) {
 
     return json(res, {
       description: 'Aggregated community benchmark speeds (median + IQR per group). Filter with ?hardware=&model=&quant=&hwClass=; regroup with ?groupBy=hardware|model|quant|hardwareModel. Cursor pagination: follow next_cursor until has_more is false.',
+      snapshot,
       total: allGroups.length,
       matchedRuns: runs.length,
       distinctModelFamilies: [...new Set(runs.map(r => r.modelFamily))].length,

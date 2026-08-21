@@ -33,6 +33,14 @@ const RATE_LIMITED_RESPONSE = {
   }
 };
 
+// Shared by /api/localmaxxing, /api/benchmarks and /api/best: pin a
+// versioned dataset snapshot (see /api/snapshots) for reproducible results.
+const SNAPSHOT_PARAM = {
+  name: 'snapshot', in: 'query', schema: { type: 'string' },
+  description: 'Serve the pinned dataset snapshot instead of live data. IDs from /api/snapshots; unknown IDs fall back to current data with snapshot.served=false.'
+
+};
+
 export default function handler(req, res) {
   if (!enforceRateLimit(req, res)) return;
   const spec = {
@@ -105,7 +113,8 @@ export default function handler(req, res) {
             { name: 'model', in: 'query', schema: { type: 'string' }, description: 'substring match on normalized family or hfId' },
             { name: 'quant', in: 'query', schema: { type: 'string' }, description: 'exact quantization, e.g. q4_k_m' },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 500 }, description: 'page size' },
-            { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' }
+            { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' },
+            SNAPSHOT_PARAM
           ],
           responses: { '200': { description: 'Hardware summary, or paginated run list { total, items[], has_more, next_cursor }; both carry a machine-readable `caveats` array (single-stream-only, self-reported data, engine mix)' }, '429': { $ref: '#/components/responses/RateLimited' } }
         }
@@ -121,7 +130,8 @@ export default function handler(req, res) {
             { name: 'quant', in: 'query', schema: { type: 'string' } },
             { name: 'hwClass', in: 'query', schema: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] } },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 25, maximum: 200 }, description: 'page size' },
-            { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' }
+            { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' },
+            SNAPSHOT_PARAM
           ],
           responses: { '200': { description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode, plus bestRun. Top-level and per-group `caveats` arrays flag n=1 groups and mixed engine versions.' }, '429': { $ref: '#/components/responses/RateLimited' } }
         }
@@ -147,7 +157,8 @@ export default function handler(req, res) {
             { name: 'contextLength', in: 'query', schema: { type: 'integer', default: 32768 }, description: 'context for fitCheck; providing it implies fitCheck=true' },
             { name: 'precisionBytes', in: 'query', schema: { type: 'number', default: 2 }, description: 'KV cache dtype bytes for fitCheck (2 = fp16)' },
             { name: 'batchSize', in: 'query', schema: { type: 'integer', default: 1 }, description: 'batch size for fitCheck KV cache math' },
-            { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } }
+            { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
+            SNAPSHOT_PARAM
           ],
           responses: { '200': { description: 'Ranked groups with medians, per-row `caveats` (n=1, mixed engines) and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns' }, '429': { $ref: '#/components/responses/RateLimited' } }
         }
@@ -184,6 +195,13 @@ export default function handler(req, res) {
           ],
           responses: { '200': { description: 'workload echo, assumptions, and ranked recommendations with vramFit, expected, confidence, meetsSlo' } }
 
+        }
+      },
+      '/api/snapshots': {
+        get: {
+          summary: 'Versioned dataset snapshot IDs',
+          description: 'Lists content-addressed dataset snapshots (e.g. snapshot-2026-08-21-a1b2c3d4). Pass any listed ID as ?snapshot= on /api/localmaxxing, /api/benchmarks or /api/best to get reproducible numbers. Snapshot IDs are stable for identical run sets within a fetch-time bucket; instances keep a bounded in-memory ring, so old IDs may expire.',
+          responses: { '200': { description: '{current, snapshots[]}' } }
         }
       }
     },

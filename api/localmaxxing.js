@@ -1,5 +1,6 @@
 import { getAllRuns } from './_localmaxxing.js';
 import { runsCaveats } from './_caveats.js';
+import { resolveRuns, listSnapshots } from './_snapshots.js';
 import { normalizeModelId } from './_normalize.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from './_pagination.js';
 import { validateSubmission, checkDuplicates, queueSubmission } from './_submit.js';
@@ -93,7 +94,9 @@ export default async function handler(req, res) {
   try {
     const q = req.query || {};
 
-    let runs = await getAllRuns();
+    const resolved = await resolveRuns(q);
+    let runs = resolved.runs;
+    const { snapshot } = resolved;
 
     const hardware = q.hardware ? String(q.hardware).toLowerCase() : null;
     const model = q.model ? String(q.model).toLowerCase() : null;
@@ -119,6 +122,7 @@ export default async function handler(req, res) {
       }
       return json(res, {
         description: 'Community-measured single-stream LLM benchmark runs. Filter with ?hardware=&model=&quant=&limit=&cursor= for paginated runs. Aggregated stats: /api/benchmarks. Ranked answers: /api/best.',
+        snapshot,
         totalComparableRuns: runs.length,
         caveats: runsCaveats(runs),
         hardwareGroups: [...groups.values()]
@@ -139,6 +143,7 @@ export default async function handler(req, res) {
 
     return json(res, {
       description: 'Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false.',
+      snapshot,
       total: runs.length,
       caveats: runsCaveats(runs),
       items: page.items,
