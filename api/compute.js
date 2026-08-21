@@ -11,6 +11,8 @@ import { ENGINE_FLAGS, applyEngineFlags } from '../src/utils/engineFlags.js';
 import { enforceRateLimit } from './_ratelimit.js';
 import { sendJson, withSchemaVersion, applySchemaHeaders } from './_schema.js';
 import { ApiError, sendProblemFromError } from './_errors.js';
+import { computeCalcId } from './_calc_id.js';
+import { normalizeParams } from './_calc_id.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -31,6 +33,12 @@ function json(res, body, status = 200) {
   return sendJson(res, body, { status });
 }
 
+// Stamp a deterministic calc_<hash> id derived from the RESOLVED inputs,
+// so omitting an explicit default yields the identical id (#68).
+function withId(model, inputs, result) {
+  return { status: 200, body: { id: computeCalcId('compute', { model, ...normalizeParams(inputs) }), ...result } };
+}
+
 function num(v, fallback) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
@@ -42,34 +50,40 @@ function computeOne(params) {
   const model = params.model || params.m || '';
 
   switch (model) {
-    case 'singleTurn':
-      return { status: 200, body: singleTurn({
+    case 'singleTurn': {
+      const inputs = {
         promptTokens: num(params.promptTokens, 2048),
         outputTokens: num(params.outputTokens, 512),
         prefillSpeed: num(params.prefillSpeed, 3800),
         decodeSpeed: num(params.decodeSpeed, 105)
-      }) };
+      };
+      return withId('singleTurn', inputs, singleTurn(inputs));
+    }
 
-    case 'speculative':
-      return { status: 200, body: speculative({
+    case 'speculative': {
+      const inputs = {
         baseDecodeSpeed: num(params.baseDecodeSpeed ?? params.decodeSpeed, 105),
         draftTokens: num(params.draftTokens, 4),
         acceptanceRate: num(params.acceptanceRate, 0.7),
         draftCostFraction: num(params.draftCostFraction, 0.2)
-      }) };
+      };
+      return withId('speculative', inputs, speculative(inputs));
+    }
 
-    case 'batched':
-      return { status: 200, body: batched({
+    case 'batched': {
+      const inputs = {
         prefillSpeed: num(params.prefillSpeed, 3800),
         decodeSpeed: num(params.decodeSpeed, 105),
         batchSize: num(params.batchSize, 1),
         promptTokens: num(params.promptTokens, 4096),
         outputTokens: num(params.outputTokens, 512),
         decodeDecayExponent: num(params.decodeDecayExponent, 0.25)
-      }) };
+      };
+      return withId('batched', inputs, batched(inputs));
+    }
 
-    case 'agentic':
-      return { status: 200, body: agentic({
+    case 'agentic': {
+      const inputs = {
         numTurns: Math.min(50, Math.max(1, num(params.numTurns, 4))),
         basePromptTokens: num(params.basePromptTokens, 1500),
         toolOutputTokensPerTurn: num(params.toolOutputTokensPerTurn, 800),
@@ -77,19 +91,23 @@ function computeOne(params) {
         prefillSpeed: num(params.prefillSpeed, 3800),
         decodeSpeed: num(params.decodeSpeed, 105),
         enablePrefixCaching: params.enablePrefixCaching !== 'false' && params.enablePrefixCaching !== false
-      }) };
+      };
+      return withId('agentic', inputs, agentic(inputs));
+    }
 
     case 'kvCache': {
       const presetKey = params.architecture;
       const preset = presetKey ? MODEL_PRESETS[presetKey] : null;
-      return { status: 200, body: kvCache({
+      const inputs = {
+        architecture: presetKey || 'generic',
         numLayers: num(params.numLayers, preset?.numLayers ?? 80),
         kvHeads: num(params.kvHeads, preset?.kvHeads ?? 8),
         headDim: num(params.headDim, preset?.headDim ?? 128),
         contextLength: num(params.contextLength, 32768),
         precisionBytes: num(params.precisionBytes, 2),
         batchSize: num(params.batchSize, 1)
-      }) };
+      };
+      return withId('kvCache', inputs, kvCache(inputs));
     }
 
     case 'flagged': {
@@ -202,8 +220,9 @@ function runBatch(rawItems) {
     }
     try {
       const { status, body } = computeOne(item);
-      // Stamp schema_version so batch items match individual call bodies.
-      if (status === 200) return { index, ok: true, result: withSchemaVersion(body) };
+      // Stamp schema_version + the same deterministic calc id an individual
+      // call would get, so batch results match standalone calls (#68).
+      if (status === 200) return { index, ok: true, result: { id: computeCalcId('compute', { model: item.model || item.m || '', ...item }), ...withSchemaVersion(body) } };
       return { index, ok: false, code: body?.code || 'INTERNAL', error: body?.detail || body?.title || body?.error || 'unknown error' };
     } catch (err) {
       return { index, ok: false, code: err instanceof ApiError ? err.code : 'INTERNAL', error: String(err.message || err) };
@@ -222,6 +241,33 @@ function runBatch(rawItems) {
   };
 }
 
+/**
+ * Shared core for /api/compute and /api/calc/<id> replay (issue #68).
+ * Returns { status, body }; successful bodies carry a deterministic `id`
+ * hashed from the raw request parameters.
+ */
+export function computeBody(params = {}) {
+  // Batched mode: ?batch=[...] / POST {"batch":[...]} ("variants" alias)
+  const rawBatch = params.batch ?? params.variants;
+  if (rawBatch !== undefined) {
+    const out = runBatch(rawBatch);
+    if (out.status === 200) out.body = { id: computeCalcId('compute', params), ...out.body };
+    return out;
+  }
+
+  try {
+    const out = computeOne(params);
+    if (out.status === 200 && out.body) {
+      out.body = { id: computeCalcId('compute', { model: params.model || params.m || '', ...params }), ...out.body };
+    }
+    return out;
+  } catch (err) {
+    // Let ApiErrors reach the handler's problem+json renderer untouched.
+    if (err instanceof ApiError) throw err;
+    return { status: 500, body: { error: String(err.message || err) } };
+  }
+}
+
 export default function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -236,19 +282,8 @@ export default function handler(req, res) {
   // Accept both GET (?model=singleTurn&promptTokens=...) and POST (JSON body)
   const params = req.method === 'POST' ? (req.body || {}) : req.query;
 
-  // Batched mode: ?batch=[...] / POST {"batch":[...]} ("variants" alias)
-  const rawBatch = params.batch ?? params.variants;
-  if (rawBatch !== undefined) {
-    try {
-      const { status, body } = runBatch(rawBatch);
-      return json(res, body, status);
-    } catch (err) {
-      return sendProblemFromError(res, req, err);
-    }
-  }
-
   try {
-    const { status, body } = computeOne(params);
+    const { status, body } = computeBody(params);
     return json(res, body, status);
   } catch (err) {
     return sendProblemFromError(res, req, err);

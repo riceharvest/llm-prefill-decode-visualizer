@@ -72,7 +72,7 @@ export default function handler(req, res) {
       '/api/compute': {
         get: {
           summary: 'Run inference math (TTFT, TPOT, walltime, VRAM)',
-          description: 'Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts POST with a JSON body, or a batch of up to 50 parameter sets via POST {"batch": [...]} / GET ?batch=[...] — returns per-index results with per-item ok/error status.',
+          description: 'Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts POST with a JSON body, or a batch of up to 50 parameter sets via POST {"batch": [...]} / GET ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via /api/calc/{id}.'
           parameters: [
             { name: 'model', in: 'query', schema: { type: 'string', enum: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost'] } },
             { name: 'promptTokens', in: 'query', schema: { type: 'number' }, description: 'singleTurn/batched/agentic/cost' },
@@ -112,6 +112,21 @@ export default function handler(req, res) {
             { name: 'tokensPerTurn', in: 'query', schema: { type: 'number' }, description: 'tokens added to context per turn' }
           ],
           responses: { '200': { description: 'Resolved model + weights/kv/total VRAM breakdown' }, '400': { description: 'Missing hfId' }, '404': { description: 'Unknown hfId on huggingface.co' }, '422': { description: 'config.json lacks required architecture fields' } }
+        }
+      },
+      '/api/calc/{id}': {
+        get: {
+          summary: 'Replay a computation or recommendation from its deterministic id',
+          description: 'Ids are content hashes (calc_ + 12 hex chars of sha256 over the normalized request) returned as `id` by /api/compute and /api/best. They are not stored anywhere: re-send the original parameters alongside the id and this endpoint re-runs the same math and returns the result with verified:true. A mismatching parameter set is rejected with the expected id.',
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string', pattern: '^calc_[0-9a-f]{12}$' } },
+            { name: 'endpoint', in: 'query', schema: { type: 'string', enum: ['compute', 'best'], default: 'compute' } },
+            { name: '<original request parameters>', in: 'query', description: 'The same model + params (or best filters) that minted the id. Defaults may be omitted — they resolve identically before hashing.' }
+          ],
+          responses: {
+            '200': { description: 'Recomputed result, stamped verified:true and carrying the id' },
+            '400': { description: 'Malformed id, missing replay parameters, or id/parameter mismatch (body.expected carries the correct id)' }
+          }
         }
       },
       '/api/presets': {
@@ -156,7 +171,7 @@ export default function handler(req, res) {
       '/api/best': {
         get: {
           summary: 'Ranked answers: fastest or cheapest rigs for given constraints',
-          description: 'Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed. by=cost ranks by cost-efficiency instead. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel).',
+          description: 'Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed. by=cost ranks by cost-efficiency instead. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel). Responses carry a deterministic `id` (hash of the resolved filters) replayable via /api/calc/{id}?endpoint=best&<same filters>.',
           parameters: [
             { name: 'by', in: 'query', schema: { type: 'string', enum: ['decode', 'prefill', 'cost'], default: 'decode' } },
             { name: 'price', in: 'query', schema: { type: 'number' }, description: 'cost mode: rig purchase price in USD (default 0)' },

@@ -9,6 +9,7 @@ import { buildCaveats, rowCaveats } from './_caveats.js';
 import { matchesEngineQuery } from './_engine.js';
 import { confidence } from './_crosscheck.js';
 import { sendProblemFromError } from './_errors.js';
+import { computeCalcId } from './_calc_id.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -144,13 +145,20 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  * ?powerWatts=W                   default estimate by hwClass (see DEFAULT_POWER_WATTS)
  * ?amortizationMonths=M           spread hardware price over this many months (default 36)
  * ?promptTokens=&outputTokens=    scenario shape (defaults 2048/512)
+ *
+ * Every response carries a deterministic `id` (calc_<hash> of the resolved
+ * filters) — replayable via /api/calc/<id>?endpoint=best&<same filters>.
  */
 const RANK_BY = ['decode', 'prefill', 'efficiency', 'confidence'];
 
-export default async function handler(req, res) {
-  if (!enforceRateLimit(req, res)) return;
+/**
+ * Shared body builder for /api/best and /api/calc/<id>?endpoint=best replay
+ * (issue #68). Returns { status, body }; body carries a deterministic `id`
+ * hashed from the resolved filter set.
+ */
+export async function bestBody(query = {}) {
+  const q = query;
   try {
-    const q = req.query || {};
     const limit = Math.min(50, Math.max(1, Number(q.limit) || 10));
     const by = [...BY_MODES, 'cost'].includes(q.sort_by) ? q.sort_by : [...BY_MODES, 'cost'].includes(q.by) ? q.by : 'decode';
     const workload = resolveWorkload(q);
@@ -305,7 +313,17 @@ export default async function handler(req, res) {
     const warnings = groups.filter(g => g.mixedEngines)
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
 
-    return json(res, {
+    const filters = { by, limit };
+    if (q.model) filters.model = String(q.model).toLowerCase();
+    if (q.maxParamsB) filters.maxParamsB = Number(q.maxParamsB);
+    if (q.quant) filters.quant = String(q.quant).toLowerCase();
+    if (q.hwClass) filters.hwClass = String(q.hwClass).toLowerCase();
+    if (q.hardware) filters.hardware = String(q.hardware).toLowerCase();
+
+    return {
+      status: 200,
+      body: {
+        id: computeCalcId('best', filters),
       description: by === 'walltime'
         ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant and carry a 95% percentile bootstrap CI (medianXxxCi95 + medianXxxLabel); overlapping intervals mean statistical ties. runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), and ?engine=<substr> restricts to same-engine builds only.`
         : by === 'cost'
@@ -325,7 +343,18 @@ export default async function handler(req, res) {
         }
       } : {}),
       results: ranked
-    });
+      }
+    };
+  } catch (err) {
+    throw err;
+  }
+}
+
+export default async function handler(req, res) {
+  if (!enforceRateLimit(req, res)) return;
+  try {
+    const { status, body } = await bestBody(req.query || {});
+    return json(res, body, status);
   } catch (err) {
     return sendProblemFromError(res, req, err);
   }
