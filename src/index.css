@@ -666,6 +666,109 @@ input[type="range"]::-moz-range-thumb {
 
 .misconception-dismiss:hover { background: var(--bg-hover); color: var(--text-main); }
 
+/* ---------- Concept-check quizzes ---------- */
+
+.concept-progress {
+  margin-inline-start: auto;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.concept-reset { flex-shrink: 0; }
+
+.concept-check { display: flex; flex-direction: column; gap: 10px; }
+.concept-check.is-correct-card { border: 1px solid var(--decode-border); }
+.concept-check.is-wrong-card { border: 1px solid rgba(248, 113, 113, 0.4); }
+
+.concept-question {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.45;
+}
+
+.concept-q-badge {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  margin-top: 1px;
+}
+
+.concept-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.concept-choice {
+  text-align: start;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+  min-height: 34px;
+}
+
+.concept-choice:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-main);
+  background: var(--bg-hover);
+}
+
+.concept-choice:disabled { cursor: default; opacity: 0.75; }
+
+.concept-choice.is-correct {
+  border-color: var(--decode-border);
+  background: var(--decode-dim);
+  color: var(--decode);
+  font-weight: 600;
+  opacity: 1;
+}
+
+.concept-choice.is-wrong {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.08);
+  color: var(--danger);
+  text-decoration: line-through;
+  opacity: 1;
+}
+
+.concept-reveal {
+  font-size: 0.76rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.concept-reveal.good {
+  background: var(--decode-dim);
+  border-inline-start: 2px solid var(--decode);
+}
+
+.concept-reveal.bad {
+  background: rgba(248, 113, 113, 0.06);
+  border-inline-start: 2px solid var(--danger);
+}
+
+.concept-reveal strong { color: var(--text-main); }
+
 /* ---------- Tooltips ---------- */
 
 [data-tooltip] { position: relative; }

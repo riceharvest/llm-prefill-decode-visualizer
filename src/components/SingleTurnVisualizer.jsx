@@ -21,6 +21,7 @@ import {
 } from '../utils/contextScaling';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
+import ConceptCheck from './ConceptCheck';
 import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
 import Metric from './Metric';
@@ -1410,6 +1411,18 @@ export default function SingleTurnVisualizer({
         </div>
 
       </section>
+
+      {/* Concept-check quizzes: prediction-then-reveal wired to live sim state */}
+      <ConceptCheck
+        tab="single"
+        context={{
+          promptTokens: totalPrefillTokens,
+          outputTokens: safeOutputTokens,
+          prefillSpeed,
+          decodeSpeed: effectiveDecodeSpeed,
+          ttft: expectedTTFT
+        }}
+      />
 
     </div>
   );

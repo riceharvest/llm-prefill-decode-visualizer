@@ -8,6 +8,7 @@ import Metric from './Metric';
 import Analogy from './Analogy';
 import { memoryLedger, SAFETY_HEADROOM_FRACTION } from '../../api/_math.js';
 import MultiGpuPlanner from './MultiGpuPlanner';
+import ConceptCheck from './ConceptCheck';
 import { t } from '../i18n/strings';
 
 // KV-cache geometry pulled from each model's actual config.json on HuggingFace
@@ -845,6 +846,17 @@ export default function KVCacheCalculator() {
 
         {/* Multi-GPU split planner (#48) — reuses this panel's KV total */}
         <MultiGpuPlanner preset={preset} totalKVCacheBytes={totalKVCacheBytes} />
+      {/* Concept-check quizzes: prediction-then-reveal wired to live sim state */}
+      <ConceptCheck
+        tab="kvcache"
+        context={{
+          contextLength: safeContext,
+          bytesPerToken: bytesPerTokenSingleSeq,
+          gb: totalKVCacheGB,
+          batch: safeBatch,
+          model: preset.name
+        }}
+      />
 
     </div>
   );
