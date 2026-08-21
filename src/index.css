@@ -46,6 +46,40 @@
   --shadow-panel: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px -12px rgba(0,0,0,0.6);
 }
 
+/* Light theme for users whose OS prefers it (site default is dark). */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-app: #F5F7FA;
+    --bg-panel: #FFFFFF;
+    --bg-inset: #EEF1F5;
+    --bg-raised: #FFFFFF;
+    --bg-hover: #E4E9EF;
+
+    --text-main: #16202B;
+    --text-muted: #4C5A68;
+    --text-subtle: #8493A2;
+
+    --border: #D6DDE5;
+    --border-strong: #B9C4CF;
+
+    --accent-dim: rgba(14, 165, 200, 0.10);
+    --accent-ink: #FFFFFF;
+
+    --prefill-dim: rgba(2, 132, 199, 0.08);
+    --prefill-border: rgba(2, 132, 199, 0.40);
+
+    --decode-dim: rgba(5, 150, 105, 0.08);
+    --decode-border: rgba(5, 150, 105, 0.40);
+
+    --agent-dim: rgba(217, 119, 6, 0.10);
+    --agent-border: rgba(217, 119, 6, 0.40);
+
+    --shadow-panel: 0 1px 0 rgba(255,255,255,0.8) inset, 0 8px 24px -12px rgba(22, 32, 43, 0.18);
+  }
+
+  html { color-scheme: light; }
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

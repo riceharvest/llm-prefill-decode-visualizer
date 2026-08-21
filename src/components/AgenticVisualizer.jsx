@@ -731,7 +731,7 @@ export default function AgenticVisualizer({
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: '#04131C',
+                          color: 'var(--accent-ink)',
                           fontSize: '0.64rem',
                           fontWeight: 700,
                           fontFamily: 'var(--font-mono)'
@@ -750,7 +750,7 @@ export default function AgenticVisualizer({
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: '#04170F',
+                          color: 'var(--accent-ink)',
                           fontSize: '0.64rem',
                           fontWeight: 700,
                           fontFamily: 'var(--font-mono)'
