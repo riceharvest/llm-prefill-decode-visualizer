@@ -148,3 +148,91 @@ export function buildCaveats(runs, groups) {
   return [...datasetCaveats(), ...groupCaveats(groups || [])]
     .sort((a, b) => a.code.localeCompare(b.code));
 }
+
+// ---- Per-estimate caveat builders (issue #69) ---------------------------
+// One builder per assumption that can attach to a specific numeric result.
+// All return the same {code, severity, summary, detail} shape as above so
+// consumers can treat every caveat identically. Pair them with
+// annotate(basis, [...]) from ./_basis.js.
+
+export function selfReportedCaveat() {
+  return datasetCaveats().find(c => c.code === 'self_reported_unvalidated');
+}
+
+export function singleStreamCaveat() {
+  return datasetCaveats().find(c => c.code === 'single_stream_only');
+}
+
+export function empiricalDecayExponentCaveat(exponent = 0.25) {
+  return {
+    code: 'empirical_decay_exponent',
+    severity: 'info',
+    summary: `Batch decay exponent ${exponent} is an empirical fit`,
+    detail: `Per-user decode was scaled by B^-${exponent} for concurrency. The exponent is a rough empirical fit, not a law — real batch decay varies by engine, model and workload.`
+  };
+}
+
+export function assumedQuantCaveat(label, bpw) {
+  return {
+    code: 'assumed_quant_bits',
+    severity: 'warning',
+    summary: `Unknown quantization '${label}' — assumed ${bpw} bpw`,
+    detail: `The quantization label could not be parsed, so ${bpw} bits-per-weight (the typical community GGUF) was assumed. Pass an explicit quant to tighten the estimate.`
+  };
+}
+
+export function estimatedKvArchCaveat(arch) {
+  return {
+    code: 'estimated_kv_architecture',
+    severity: 'warning',
+    summary: 'KV architecture guessed from parameter count',
+    detail: `numLayers/kvHeads/headDim were bucketed from parameter count (${arch ? `${arch.numLayers} layers × ${arch.kvHeads} KV heads × ${arch.headDim} dim` : 'unknown'}), not read from the model config. Pass numLayers/kvHeads/headDim explicitly for exact KV math.`
+  };
+}
+
+export function heuristicFlagDeltasCaveat() {
+  return {
+    code: 'heuristic_flag_deltas',
+    severity: 'warning',
+    summary: 'Engine-flag deltas are heuristics',
+    detail: 'Launch-flag speedups are documented heuristic multipliers with a source note each — not measurements on your rig.'
+  };
+}
+
+export function referenceWorkloadCaveat(promptTokens, outputTokens) {
+  return {
+    code: 'reference_workload_normalization',
+    severity: 'info',
+    summary: 'Time metrics normalized to a reference workload',
+    detail: `TTFT/TPOT/walltime are recomputed at a shared reference workload (${promptTokens}-token prompt, ${outputTokens}-token output) so runs measured at different lengths stay comparable; raw tok/s are untouched.`
+  };
+}
+
+export function projectedFromMediansCaveat(workload) {
+  const wl = workload || {};
+  return {
+    code: 'projected_from_medians',
+    severity: 'info',
+    summary: 'Walltime projected from group medians',
+    detail: `Walltime/TTFT/decode-split fields are interpolated from measured median speeds at a ${wl.promptTokens ?? '?'}-prompt / ${wl.outputTokens ?? '?'}-output workload — not measured end-to-end.`
+  };
+}
+
+export function fileSizeWeightsCaveat() {
+  return {
+    code: 'weights_from_file_size',
+    severity: 'info',
+    summary: 'Weight size taken from file size',
+    detail: 'The repo exposes no parameter count, so weight size equals the quantized GGUF file size. It includes any embedded metadata/overhead and assumes the whole file must be resident.'
+  };
+}
+
+export function maxContextUpperBoundCaveat() {
+  return {
+    code: 'max_context_upper_bound',
+    severity: 'warning',
+    summary: 'maxContextTokens ignores runtime overhead',
+    detail: 'The fitted-context figure divides the budget purely between weights and KV cache; engine runtime, activations and fragmentation are not subtracted. Treat it as an upper bound.'
+  };
+}
+

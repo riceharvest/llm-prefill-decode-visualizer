@@ -139,6 +139,7 @@ test('walltime results carry share-of-time breakdown', async () => {
   assert.ok(r.effectiveThroughputTokPerSec > 0);
 });
 
+<<<<<<< HEAD
 test('every result carries a one-sentence explain string (#73)', async () => {
   const { json } = await call({ by: 'decode', contextLength: '32768' });
   for (const r of json.results) {
@@ -165,7 +166,11 @@ test('by=cost results also carry explain (#73)', async () => {
   assert.equal(status, 200);
   for (const r of json.results) assert.equal(typeof r.explain, 'string');
 });
+<<<<<<< HEAD
 
+=======
+=======
+>>>>>>> 654c11a (feat: basis + caveat annotations on compute/presets/best results (#69))
 test('every ranked row carries a power block (#69), null when no anchor', async () => {
   const { json } = await call({ by: 'decode' });
   // The mock rigs use made-up GPUs — the key must exist but stay null
@@ -176,3 +181,7 @@ test('every ranked row carries a power block (#69), null when no anchor', async 
   }
 });
 
+<<<<<<< HEAD
+=======
+>>>>>>> 1a8ca79 (feat: basis + caveat annotations on compute/presets/best results (#69))
+>>>>>>> 654c11a (feat: basis + caveat annotations on compute/presets/best results (#69))
