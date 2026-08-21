@@ -13,6 +13,25 @@ export default function SingleTurnVisualizer({
 }) {
   const [promptTokens, setPromptTokens] = useState(() => readParamNum('prompt', 2048));
   const [outputTokens, setOutputTokens] = useState(() => readParamNum('output', 512));
+  // Speculative decoding: draft model proposes k tokens per step, target verifies.
+  // Effective tok/s ≈ decodeSpeed × (k+1) × acceptance / (1 + k × acceptance × draftCost)
+  // where draftCost is draft-model TPOT as a fraction of target TPOT (~0.15-0.3 typical).
+  const [specEnabled, setSpecEnabled] = useState(() => readParamBool('spec', false));
+  const [draftTokens, setDraftTokens] = useState(() => Math.max(2, Math.round(readParamNum('draftK', 4))));
+  const [acceptance, setAcceptance] = useState(() => {
+    const v = readParamNum('acc', 0.7);
+    return Math.min(0.95, Math.max(0.3, v));
+  });
+
+  const effectiveDecodeSpeed = (() => {
+    if (!specEnabled) return decodeSpeed;
+    const k = draftTokens;
+    const alpha = acceptance;
+    const draftCost = 0.2; // draft model step costs ~20% of a target step
+    const tokensPerStep = 1 + k * alpha;           // accepted drafts + the bonus token
+    const stepsPerSecond = decodeSpeed / (1 + k * draftCost);
+    return stepsPerSecond * tokensPerStep;
+  })();
 
   const activeScenario = SCENARIO_PRESETS.find(s => s.promptTokens === promptTokens && s.outputTokens === outputTokens);
 
@@ -32,8 +51,14 @@ export default function SingleTurnVisualizer({
 
   // Shareable per-tab settings
   useEffect(() => {
-    writeParams({ prompt: promptTokens, output: outputTokens });
-  }, [promptTokens, outputTokens]);
+    writeParams({
+      prompt: promptTokens,
+      output: outputTokens,
+      spec: specEnabled ? '1' : '',
+      draftK: specEnabled ? draftTokens : '',
+      acc: specEnabled ? acceptance : ''
+    });
+  }, [promptTokens, outputTokens, specEnabled, draftTokens, acceptance]);
 
   // Simulation state
   const [phase, setPhase] = useState('idle'); // 'idle' | 'prefilling' | 'decoding' | 'completed'
@@ -45,9 +70,9 @@ export default function SingleTurnVisualizer({
   const safePromptTokens = Math.max(0, promptTokens || 0);
   const safeOutputTokens = Math.max(0, outputTokens || 0);
   const expectedTTFT = safePromptTokens / prefillSpeed; // seconds
-  const expectedDecodeTime = safeOutputTokens / decodeSpeed; // seconds
+  const expectedDecodeTime = safeOutputTokens / effectiveDecodeSpeed; // seconds (spec-aware)
   const expectedTotalTime = expectedTTFT + expectedDecodeTime;
-  const tpotMs = decodeSpeed > 0 ? 1000 / decodeSpeed : Infinity;
+  const tpotMs = effectiveDecodeSpeed > 0 ? 1000 / effectiveDecodeSpeed : Infinity;
 
   const sampleWords = [
     "The", "architecture", "of", "modern", "Large", "Language", "Models", "relies",
@@ -149,7 +174,7 @@ export default function SingleTurnVisualizer({
         setPhase('decoding');
         setCurrentPrefillProgress(safePromptTokens);
         const decodeProgressTime = newTime - expectedTTFT;
-        const decodeCount = Math.max(0, Math.min(safeOutputTokens, Math.floor(decodeProgressTime * decodeSpeed)));
+        const decodeCount = Math.max(0, Math.min(safeOutputTokens, Math.floor(decodeProgressTime * effectiveDecodeSpeed)));
         setCurrentDecodeTokens(decodeCount);
       } else {
         // Completed
@@ -169,7 +194,7 @@ export default function SingleTurnVisualizer({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isPlaying, simSpeedMultiplier, promptTokens, outputTokens, prefillSpeed, decodeSpeed, expectedTTFT, expectedTotalTime]);
+  }, [isPlaying, simSpeedMultiplier, promptTokens, outputTokens, prefillSpeed, decodeSpeed, effectiveDecodeSpeed, expectedTTFT, expectedTotalTime]);
 
   const prefillPct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedTTFT / expectedTotalTime) * 100 : 0;
   const decodePct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedDecodeTime / expectedTotalTime) * 100 : 0;
@@ -216,6 +241,72 @@ export default function SingleTurnVisualizer({
               {s.icon} {s.label}
             </button>
           ))}
+        </div>
+
+        {/* Speculative decoding toggle */}
+        <div className="panel-inset" style={{ marginBottom: '14px', borderColor: specEnabled ? 'var(--agent-border)' : 'var(--border)' }}>
+          <div className="field-head" style={{ marginBottom: specEnabled ? '10px' : '0' }}>
+            <button
+              onClick={() => setSpecEnabled(!specEnabled)}
+              className={`seg${specEnabled ? ' active' : ''}`}
+              aria-pressed={specEnabled}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '4px 12px', cursor: 'pointer',
+                borderRadius: 'var(--radius-sm)',
+                border: `1px solid ${specEnabled ? 'var(--agent-border)' : 'var(--border)'}`,
+                background: specEnabled ? 'var(--agent-dim)' : 'var(--bg-inset)',
+                color: specEnabled ? 'var(--agent)' : 'var(--text-muted)'
+              }}
+            >
+              ⚡ Speculative Decoding: {specEnabled ? 'ON' : 'OFF'}
+            </button>
+            {specEnabled && (
+              <span className="tag tag-decode">
+                effective {Math.round(effectiveDecodeSpeed).toLocaleString()} tok/s
+                {' '}({(effectiveDecodeSpeed / decodeSpeed).toFixed(2)}× vs vanilla)
+              </span>
+            )}
+          </div>
+          {specEnabled && (
+            <div className="grid-auto" style={{ '--grid-min': '220px' }}>
+              <div className="field">
+                <div className="field-head">
+                  <span className="field-label">Draft tokens / step (k)</span>
+                  <span className="field-value" style={{ color: 'var(--agent)' }}>{draftTokens}</span>
+                </div>
+                <input
+                  type="range"
+                  min="2"
+                  max="8"
+                  step="1"
+                  value={draftTokens}
+                  aria-label="Draft tokens proposed per step"
+                  onChange={(e) => setDraftTokens(Number(e.target.value))}
+                />
+              </div>
+              <div className="field">
+                <div className="field-head">
+                  <span className="field-label">Acceptance rate (α)</span>
+                  <span className="field-value" style={{ color: 'var(--agent)' }}>{acceptance.toFixed(2)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.3"
+                  max="0.95"
+                  step="0.05"
+                  value={acceptance}
+                  aria-label="Draft token acceptance rate"
+                  onChange={(e) => setAcceptance(Number(e.target.value))}
+                />
+              </div>
+            </div>
+          )}
+          {specEnabled && (
+            <p className="hint-text" style={{ marginTop: '8px' }}>
+              Draft model proposes k tokens, target verifies in one pass. Effective speed ≈ base ÷ (1 + k·c_draft) × (1 + k·α), draft cost c≈0.2. Higher α or smaller k → bigger win.
+            </p>
+          )}
         </div>
 
         <div className="grid-auto" style={{ '--grid-min': '280px' }}>
