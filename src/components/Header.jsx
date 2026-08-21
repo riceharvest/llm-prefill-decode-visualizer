@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cpu, Bot, MessageSquare, HelpCircle, BarChart3, Columns2, HardDrive, Link2, Check, GitCompare, ListFilter } from 'lucide-react';
+import { Cpu, Bot, MessageSquare, HelpCircle, BarChart3, Columns2, HardDrive, Link2, Check, GitCompare, ListFilter, GraduationCap } from 'lucide-react';
 import { HARDWARE_PRESETS } from '../utils/presets';
 import { t } from '../i18n/strings';
 import AnalogyToggle from './AnalogyToggle';
@@ -28,7 +28,8 @@ export default function Header({
     { id: 'ab', label: t('tabs.ab.label'), icon: Columns2, hint: t('tabs.ab.hint') },
     { id: 'diff', label: t('tabs.diff.label'), icon: GitCompare, hint: t('tabs.diff.hint') },
     { id: 'kvcache', label: t('tabs.kvcache.label'), icon: HardDrive, hint: t('tabs.kvcache.hint') },
-    { id: 'theory', label: t('tabs.theory.label'), icon: HelpCircle, hint: t('tabs.theory.hint') }
+    { id: 'theory', label: t('tabs.theory.label'), icon: HelpCircle, hint: t('tabs.theory.hint') },
+    { id: 'curriculum', label: t('tabs.curriculum.label'), icon: GraduationCap, hint: t('tabs.curriculum.hint') }
   ];
 
   return (
@@ -112,7 +113,8 @@ export default function Header({
           { id: 'diff', label: 'Run Diff', icon: GitCompare, hint: 'RUN IDS' },
           { id: 'shortlist', label: 'Find Hardware', icon: ListFilter, hint: 'SHORTLIST' },
           { id: 'kvcache', label: 'KV Cache', icon: HardDrive, hint: 'VRAM' },
-          { id: 'theory', label: 'Theory', icon: HelpCircle, hint: 'FLOPS vs BW' }
+          { id: 'theory', label: 'Theory', icon: HelpCircle, hint: 'FLOPS vs BW' },
+          { id: 'curriculum', label: 'Curriculum', icon: GraduationCap, hint: 'LESSONS' }
         ].map(tab => {
           const IconComponent = tab.icon;
           const isActive = activeTab === tab.id;

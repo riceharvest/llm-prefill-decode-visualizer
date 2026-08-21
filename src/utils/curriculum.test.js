@@ -1,0 +1,98 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  LESSONS,
+  checkAnswer,
+  isComplete,
+  loadProgress,
+  saveProgress,
+  nextIncompleteLesson
+} from './curriculum.js';
+
+// In-memory localStorage stand-in (no globals touched).
+function fakeStorage(initial = {}) {
+  const map = new Map(Object.entries(initial));
+  return {
+    getItem: k => (map.has(k) ? map.get(k) : null),
+    setItem: (k, v) => map.set(k, String(v))
+  };
+}
+
+test('curriculum covers the six ordered lessons from issue #89', () => {
+  assert.deepEqual(
+    LESSONS.map(l => l.title),
+    [
+      'TTFT basics',
+      'TPOT',
+      'Why prefill ≠ decode',
+      'Prefix caching',
+      'Speculative decoding',
+      'KV memory math'
+    ]
+  );
+});
+
+test('every lesson is well-formed: unique ids, valid correctIndex, demo targeting its backend', () => {
+  const ids = new Set();
+  for (const l of LESSONS) {
+    assert.ok(l.id && !ids.has(l.id), `duplicate/empty id: ${l.id}`);
+    ids.add(l.id);
+    assert.ok(l.question.length > 0);
+    assert.ok(l.options.length >= 3);
+    assert.ok(l.correctIndex >= 0 && l.correctIndex < l.options.length, `${l.id}: bad correctIndex`);
+    assert.ok(['single', 'agentic', 'kvcache'].includes(l.backendTab), `${l.id}: unknown backend`);
+    assert.equal(l.demo.tab, l.backendTab, `${l.id}: demo must open its own backend tab`);
+    assert.ok(l.explanation.length > 0 && l.verify.length > 0);
+  }
+});
+
+test('checkAnswer agrees with correctIndex', () => {
+  for (const l of LESSONS) {
+    assert.equal(checkAnswer(l.id, l.correctIndex), true, l.id);
+    assert.equal(checkAnswer(l.id, (l.correctIndex + 1) % l.options.length), false, l.id);
+  }
+  assert.equal(checkAnswer('nope', 0), false);
+});
+
+test('progress persists via injected storage and survives reload', () => {
+  const store = fakeStorage();
+  let progress = loadProgress(store);
+  assert.equal(isComplete(progress, 'ttft-basics'), false);
+
+  progress = saveProgress({ ...progress, completed: { ...progress.completed, 'ttft-basics': Date.now() } }, store);
+  assert.equal(isComplete(progress, 'ttft-basics'), true);
+
+  const reloaded = loadProgress(store);
+  assert.equal(isComplete(reloaded, 'ttft-basics'), true);
+  assert.equal(isComplete(reloaded, 'kv-memory-math'), false);
+});
+
+test('loadProgress tolerates corrupt/missing storage entries', () => {
+  assert.deepEqual(loadProgress(fakeStorage()), { completed: {} });
+  assert.deepEqual(loadProgress(fakeStorage({ 'llmpd-curriculum-progress': '{oops' })), { completed: {} });
+  assert.deepEqual(loadProgress(fakeStorage({ 'llmpd-curriculum-progress': '"stray"' })), { completed: {} });
+  // storage throwing (quota/private mode) degrades to session-only
+  const throwing = { getItem: () => { throw new Error('nope'); }, setItem: () => { throw new Error('nope'); } };
+  assert.deepEqual(loadProgress(throwing), { completed: {} });
+  const p = saveProgress({ completed: { x: 1 } }, throwing);
+  assert.deepEqual(p, { completed: { x: 1 } });
+});
+
+test('nextIncompleteLesson finds the first unfinished slot and returns -1 when done', () => {
+  const store = fakeStorage();
+  let progress = loadProgress(store);
+  assert.equal(nextIncompleteLesson(progress), 0);
+
+  const doneIds = ['ttft-basics', 'tpot'];
+  progress = saveProgress(
+    { completed: Object.fromEntries(doneIds.map(id => [id, 1])) },
+    store
+  );
+  assert.equal(nextIncompleteLesson(progress), 2);
+
+  const allDone = saveProgress(
+    { completed: Object.fromEntries(LESSONS.map(l => [l.id, 1])) },
+    store
+  );
+  assert.equal(nextIncompleteLesson(allDone), -1);
+});
