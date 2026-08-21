@@ -9,6 +9,7 @@ from ...types import Response, UNSET
 from ... import errors
 
 from ...models.get_api_best_by import GetApiBestBy
+from ...models.get_api_best_context_band import GetApiBestContextBand
 from ...models.get_api_best_hw_class import GetApiBestHwClass
 from ...models.get_api_best_response_429 import GetApiBestResponse429
 from ...types import UNSET, Unset
@@ -30,6 +31,7 @@ def _get_kwargs(
     quant: str | Unset = UNSET,
     hw_class: GetApiBestHwClass | Unset = UNSET,
     hardware: str | Unset = UNSET,
+    context_band: GetApiBestContextBand | Unset = UNSET,
     fit_check: bool | Unset = UNSET,
     context_length: int | Unset = 32768,
     precision_bytes: float | Unset = 2.0,
@@ -75,6 +77,12 @@ def _get_kwargs(
     params["hwClass"] = json_hw_class
 
     params["hardware"] = hardware
+
+    json_context_band: str | Unset = UNSET
+    if not isinstance(context_band, Unset):
+        json_context_band = context_band.value
+
+    params["context_band"] = json_context_band
 
     params["fitCheck"] = fit_check
 
@@ -145,6 +153,7 @@ def sync_detailed(
     quant: str | Unset = UNSET,
     hw_class: GetApiBestHwClass | Unset = UNSET,
     hardware: str | Unset = UNSET,
+    context_band: GetApiBestContextBand | Unset = UNSET,
     fit_check: bool | Unset = UNSET,
     context_length: int | Unset = 32768,
     precision_bytes: float | Unset = 2.0,
@@ -173,6 +182,7 @@ def sync_detailed(
         quant (str | Unset):
         hw_class (GetApiBestHwClass | Unset):
         hardware (str | Unset):
+        context_band (GetApiBestContextBand | Unset):
         fit_check (bool | Unset):
         context_length (int | Unset):  Default: 32768.
         precision_bytes (float | Unset):  Default: 2.0.
@@ -202,6 +212,7 @@ max_params_b=max_params_b,
 quant=quant,
 hw_class=hw_class,
 hardware=hardware,
+context_band=context_band,
 fit_check=fit_check,
 context_length=context_length,
 precision_bytes=precision_bytes,
@@ -232,6 +243,7 @@ def sync(
     quant: str | Unset = UNSET,
     hw_class: GetApiBestHwClass | Unset = UNSET,
     hardware: str | Unset = UNSET,
+    context_band: GetApiBestContextBand | Unset = UNSET,
     fit_check: bool | Unset = UNSET,
     context_length: int | Unset = 32768,
     precision_bytes: float | Unset = 2.0,
@@ -260,6 +272,7 @@ def sync(
         quant (str | Unset):
         hw_class (GetApiBestHwClass | Unset):
         hardware (str | Unset):
+        context_band (GetApiBestContextBand | Unset):
         fit_check (bool | Unset):
         context_length (int | Unset):  Default: 32768.
         precision_bytes (float | Unset):  Default: 2.0.
@@ -290,6 +303,7 @@ max_params_b=max_params_b,
 quant=quant,
 hw_class=hw_class,
 hardware=hardware,
+context_band=context_band,
 fit_check=fit_check,
 context_length=context_length,
 precision_bytes=precision_bytes,
@@ -314,6 +328,7 @@ async def asyncio_detailed(
     quant: str | Unset = UNSET,
     hw_class: GetApiBestHwClass | Unset = UNSET,
     hardware: str | Unset = UNSET,
+    context_band: GetApiBestContextBand | Unset = UNSET,
     fit_check: bool | Unset = UNSET,
     context_length: int | Unset = 32768,
     precision_bytes: float | Unset = 2.0,
@@ -342,6 +357,7 @@ async def asyncio_detailed(
         quant (str | Unset):
         hw_class (GetApiBestHwClass | Unset):
         hardware (str | Unset):
+        context_band (GetApiBestContextBand | Unset):
         fit_check (bool | Unset):
         context_length (int | Unset):  Default: 32768.
         precision_bytes (float | Unset):  Default: 2.0.
@@ -371,6 +387,7 @@ max_params_b=max_params_b,
 quant=quant,
 hw_class=hw_class,
 hardware=hardware,
+context_band=context_band,
 fit_check=fit_check,
 context_length=context_length,
 precision_bytes=precision_bytes,
@@ -401,6 +418,7 @@ async def asyncio(
     quant: str | Unset = UNSET,
     hw_class: GetApiBestHwClass | Unset = UNSET,
     hardware: str | Unset = UNSET,
+    context_band: GetApiBestContextBand | Unset = UNSET,
     fit_check: bool | Unset = UNSET,
     context_length: int | Unset = 32768,
     precision_bytes: float | Unset = 2.0,
@@ -429,6 +447,7 @@ async def asyncio(
         quant (str | Unset):
         hw_class (GetApiBestHwClass | Unset):
         hardware (str | Unset):
+        context_band (GetApiBestContextBand | Unset):
         fit_check (bool | Unset):
         context_length (int | Unset):  Default: 32768.
         precision_bytes (float | Unset):  Default: 2.0.
@@ -459,6 +478,7 @@ max_params_b=max_params_b,
 quant=quant,
 hw_class=hw_class,
 hardware=hardware,
+context_band=context_band,
 fit_check=fit_check,
 context_length=context_length,
 precision_bytes=precision_bytes,

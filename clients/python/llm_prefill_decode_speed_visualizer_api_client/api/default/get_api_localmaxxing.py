@@ -8,6 +8,7 @@ from ...client import AuthenticatedClient, Client
 from ...types import Response, UNSET
 from ... import errors
 
+from ...models.get_api_localmaxxing_context_band import GetApiLocalmaxxingContextBand
 from ...models.get_api_localmaxxing_response_429 import GetApiLocalmaxxingResponse429
 from ...types import UNSET, Unset
 from typing import cast
@@ -19,6 +20,7 @@ def _get_kwargs(
     hardware: str | Unset = UNSET,
     model: str | Unset = UNSET,
     quant: str | Unset = UNSET,
+    context_band: GetApiLocalmaxxingContextBand | Unset = UNSET,
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
@@ -35,6 +37,12 @@ def _get_kwargs(
     params["model"] = model
 
     params["quant"] = quant
+
+    json_context_band: str | Unset = UNSET
+    if not isinstance(context_band, Unset):
+        json_context_band = context_band.value
+
+    params["context_band"] = json_context_band
 
     params["limit"] = limit
 
@@ -90,6 +98,7 @@ def sync_detailed(
     hardware: str | Unset = UNSET,
     model: str | Unset = UNSET,
     quant: str | Unset = UNSET,
+    context_band: GetApiLocalmaxxingContextBand | Unset = UNSET,
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
@@ -105,6 +114,7 @@ def sync_detailed(
         hardware (str | Unset):
         model (str | Unset):
         quant (str | Unset):
+        context_band (GetApiLocalmaxxingContextBand | Unset):
         limit (int | Unset):  Default: 50.
         cursor (str | Unset):
         snapshot (str | Unset):
@@ -122,6 +132,7 @@ def sync_detailed(
         hardware=hardware,
 model=model,
 quant=quant,
+context_band=context_band,
 limit=limit,
 cursor=cursor,
 snapshot=snapshot,
@@ -140,6 +151,7 @@ def sync(
     hardware: str | Unset = UNSET,
     model: str | Unset = UNSET,
     quant: str | Unset = UNSET,
+    context_band: GetApiLocalmaxxingContextBand | Unset = UNSET,
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
@@ -155,6 +167,7 @@ def sync(
         hardware (str | Unset):
         model (str | Unset):
         quant (str | Unset):
+        context_band (GetApiLocalmaxxingContextBand | Unset):
         limit (int | Unset):  Default: 50.
         cursor (str | Unset):
         snapshot (str | Unset):
@@ -173,6 +186,7 @@ def sync(
 hardware=hardware,
 model=model,
 quant=quant,
+context_band=context_band,
 limit=limit,
 cursor=cursor,
 snapshot=snapshot,
@@ -185,6 +199,7 @@ async def asyncio_detailed(
     hardware: str | Unset = UNSET,
     model: str | Unset = UNSET,
     quant: str | Unset = UNSET,
+    context_band: GetApiLocalmaxxingContextBand | Unset = UNSET,
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
@@ -200,6 +215,7 @@ async def asyncio_detailed(
         hardware (str | Unset):
         model (str | Unset):
         quant (str | Unset):
+        context_band (GetApiLocalmaxxingContextBand | Unset):
         limit (int | Unset):  Default: 50.
         cursor (str | Unset):
         snapshot (str | Unset):
@@ -217,6 +233,7 @@ async def asyncio_detailed(
         hardware=hardware,
 model=model,
 quant=quant,
+context_band=context_band,
 limit=limit,
 cursor=cursor,
 snapshot=snapshot,
@@ -235,6 +252,7 @@ async def asyncio(
     hardware: str | Unset = UNSET,
     model: str | Unset = UNSET,
     quant: str | Unset = UNSET,
+    context_band: GetApiLocalmaxxingContextBand | Unset = UNSET,
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
@@ -250,6 +268,7 @@ async def asyncio(
         hardware (str | Unset):
         model (str | Unset):
         quant (str | Unset):
+        context_band (GetApiLocalmaxxingContextBand | Unset):
         limit (int | Unset):  Default: 50.
         cursor (str | Unset):
         snapshot (str | Unset):
@@ -268,6 +287,7 @@ async def asyncio(
 hardware=hardware,
 model=model,
 quant=quant,
+context_band=context_band,
 limit=limit,
 cursor=cursor,
 snapshot=snapshot,

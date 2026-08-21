@@ -8,6 +8,7 @@ from ...client import AuthenticatedClient, Client
 from ...types import Response, UNSET
 from ... import errors
 
+from ...models.get_api_benchmarks_context_band import GetApiBenchmarksContextBand
 from ...models.get_api_benchmarks_group_by import GetApiBenchmarksGroupBy
 from ...models.get_api_benchmarks_hw_class import GetApiBenchmarksHwClass
 from ...models.get_api_benchmarks_response_429 import GetApiBenchmarksResponse429
@@ -23,6 +24,7 @@ def _get_kwargs(
     model: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     hw_class: GetApiBenchmarksHwClass | Unset = UNSET,
+    context_band: GetApiBenchmarksContextBand | Unset = UNSET,
     limit: int | Unset = 25,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
@@ -51,6 +53,12 @@ def _get_kwargs(
         json_hw_class = hw_class.value
 
     params["hwClass"] = json_hw_class
+
+    json_context_band: str | Unset = UNSET
+    if not isinstance(context_band, Unset):
+        json_context_band = context_band.value
+
+    params["context_band"] = json_context_band
 
     params["limit"] = limit
 
@@ -108,6 +116,7 @@ def sync_detailed(
     model: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     hw_class: GetApiBenchmarksHwClass | Unset = UNSET,
+    context_band: GetApiBenchmarksContextBand | Unset = UNSET,
     limit: int | Unset = 25,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
@@ -129,6 +138,7 @@ def sync_detailed(
         model (str | Unset):
         quant (str | Unset):
         hw_class (GetApiBenchmarksHwClass | Unset):
+        context_band (GetApiBenchmarksContextBand | Unset):
         limit (int | Unset):  Default: 25.
         cursor (str | Unset):
         snapshot (str | Unset):
@@ -148,6 +158,7 @@ hardware=hardware,
 model=model,
 quant=quant,
 hw_class=hw_class,
+context_band=context_band,
 limit=limit,
 cursor=cursor,
 snapshot=snapshot,
@@ -168,6 +179,7 @@ def sync(
     model: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     hw_class: GetApiBenchmarksHwClass | Unset = UNSET,
+    context_band: GetApiBenchmarksContextBand | Unset = UNSET,
     limit: int | Unset = 25,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
@@ -189,6 +201,7 @@ def sync(
         model (str | Unset):
         quant (str | Unset):
         hw_class (GetApiBenchmarksHwClass | Unset):
+        context_band (GetApiBenchmarksContextBand | Unset):
         limit (int | Unset):  Default: 25.
         cursor (str | Unset):
         snapshot (str | Unset):
@@ -209,6 +222,7 @@ hardware=hardware,
 model=model,
 quant=quant,
 hw_class=hw_class,
+context_band=context_band,
 limit=limit,
 cursor=cursor,
 snapshot=snapshot,
@@ -223,6 +237,7 @@ async def asyncio_detailed(
     model: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     hw_class: GetApiBenchmarksHwClass | Unset = UNSET,
+    context_band: GetApiBenchmarksContextBand | Unset = UNSET,
     limit: int | Unset = 25,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
@@ -244,6 +259,7 @@ async def asyncio_detailed(
         model (str | Unset):
         quant (str | Unset):
         hw_class (GetApiBenchmarksHwClass | Unset):
+        context_band (GetApiBenchmarksContextBand | Unset):
         limit (int | Unset):  Default: 25.
         cursor (str | Unset):
         snapshot (str | Unset):
@@ -263,6 +279,7 @@ hardware=hardware,
 model=model,
 quant=quant,
 hw_class=hw_class,
+context_band=context_band,
 limit=limit,
 cursor=cursor,
 snapshot=snapshot,
@@ -283,6 +300,7 @@ async def asyncio(
     model: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     hw_class: GetApiBenchmarksHwClass | Unset = UNSET,
+    context_band: GetApiBenchmarksContextBand | Unset = UNSET,
     limit: int | Unset = 25,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
@@ -304,6 +322,7 @@ async def asyncio(
         model (str | Unset):
         quant (str | Unset):
         hw_class (GetApiBenchmarksHwClass | Unset):
+        context_band (GetApiBenchmarksContextBand | Unset):
         limit (int | Unset):  Default: 25.
         cursor (str | Unset):
         snapshot (str | Unset):
@@ -324,6 +343,7 @@ hardware=hardware,
 model=model,
 quant=quant,
 hw_class=hw_class,
+context_band=context_band,
 limit=limit,
 cursor=cursor,
 snapshot=snapshot,

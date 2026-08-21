@@ -53,6 +53,8 @@ export interface paths {
                     precisionBytes?: 2 | 1 | 0.5;
                     /** @description flagged: comma-separated engine flag ids (flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3). Documented heuristic deltas; response carries a per-flag audit trail. */
                     flags?: string;
+                    /** @description Validate + echo parsed params (defaults filled in) without executing any math. Returns { dry_run: true, model, inputs, id?, note }; the id matches the real call. Also applies per-item inside a batch via "dry_run": true in the POST body. */
+                    dry_run?: boolean;
                 };
                 header?: never;
                 path?: never;
@@ -273,6 +275,8 @@ export interface paths {
                     model?: string;
                     /** @description exact quantization, e.g. q4_k_m */
                     quant?: string;
+                    /** @description only runs measured at this context length (<1000, 1000–7999, 8000–31999, ≥32000 tokens) */
+                    context_band?: "lt1k" | "1k-8k" | "8k-32k" | "32k+";
                     /** @description page size */
                     limit?: number;
                     /** @description opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts) */
@@ -323,6 +327,8 @@ export interface paths {
                     model?: string;
                     quant?: string;
                     hwClass?: "discrete_gpu" | "unified" | "cpu_only";
+                    /** @description only runs measured at this context length; groups mixing bands carry mixedContextBands + a warning */
+                    context_band?: "lt1k" | "1k-8k" | "8k-32k" | "32k+";
                     /** @description page size */
                     limit?: number;
                     /** @description opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts) */
@@ -387,6 +393,8 @@ export interface paths {
                     quant?: string;
                     hwClass?: "discrete_gpu" | "unified" | "cpu_only";
                     hardware?: string;
+                    /** @description only runs measured at this context length (<1000, 1000–7999, 8000–31999, ≥32000 tokens) */
+                    context_band?: "lt1k" | "1k-8k" | "8k-32k" | "32k+";
                     /** @description exclude rigs whose memory cannot hold the model at the given context (estimated) */
                     fitCheck?: boolean;
                     /** @description context for fitCheck; providing it implies fitCheck=true */
@@ -405,7 +413,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns. Each result includes a `pricing` object: USD street-price estimate with low/high range, perGpu breakdown for multi-GPU rigs, asOf date, and eBay (new + used) and Craigslist search links to verify against live listings. `pricing` is null when no anchor exists (cpu_only, unknown GPUs). */
+                /** @description Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns. Each result includes a `pricing` object: USD street-price estimate with low/high range, perGpu breakdown for multi-GPU rigs, asOf date, and eBay (new + used) and Craigslist search links to verify against live listings. `pricing` is null when no anchor exists (cpu_only, unknown GPUs). Each result also carries `explain`: a one-sentence human-readable explanation combining the VRAM-fit math (weights + KV estimates) with the measured source, e.g. '24GB fits 8B q4_k_m weights ~5GB + 32k KV ~4GB with 14GB headroom; measured 100 tok/s decode from run #a1' — pass-through ready for agent chat pipelines. */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -512,7 +520,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description workload echo, assumptions, and ranked recommendations with vramFit, expected, confidence, meetsSlo */
+                /** @description workload echo, assumptions, and ranked recommendations with vramFit, expected, confidence, meetsSlo, and a one-sentence human-readable `explain` string combining fit math with the measured source (#73) */
                 200: {
                     headers: {
                         [name: string]: unknown;
