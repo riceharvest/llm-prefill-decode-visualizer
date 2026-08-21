@@ -93,6 +93,36 @@ export const WHY_TERMS = {
     meaning: 'Decode tok/s lost to cross-GPU synchronization. Tensor parallel all-reduces over the bus every step (PCIe ≈ −10%, NVLink ≈ −3%); pipeline parallel only pays a bubble (≈ −2%).',
     formula: 'effective decode = single-GPU tok/s × (1 − penalty)',
     anchor: 'theory-decode'
+  },
+  batchMakespan: {
+    label: 'Batch makespan',
+    meaning: 'Walltime from the first arrival until the last request finishes. Continuous batching shortens it because new requests join as soon as a slot frees instead of waiting for a whole cohort.',
+    formula: 'makespan = finish time of last request − first arrival',
+    anchor: 'theory-agentic'
+  },
+  batchAvgTtft: {
+    label: 'Average TTFT across the batch',
+    meaning: 'Mean wait from request arrival to first token. Queuing behind other requests inflates TTFT even when prefill itself is fast.',
+    formula: 'avg TTFT = Σ (first token time − arrival time) ÷ requests',
+    anchor: 'theory-prefill'
+  },
+  batchWorstItl: {
+    label: 'Worst inter-token latency',
+    meaning: 'Largest gap between two consecutively decoded tokens of any request. Spikes happen when a step also carries a big prefill chunk — chunked prefill caps them.',
+    formula: 'ITL = duration between successive decode steps',
+    anchor: 'theory-decode'
+  },
+  batchThroughput: {
+    label: 'Aggregate decode throughput',
+    meaning: 'Total output tokens per second of walltime across all concurrent requests. This is the headline win of continuous batching over serving one request at a time.',
+    formula: 'throughput = total output tokens ÷ makespan',
+    anchor: 'theory-decode'
+  },
+  batchOccupancy: {
+    label: 'Batch occupancy',
+    meaning: 'Average fraction of the max batch slots that hold a running sequence. Low occupancy means the engine is paying for capacity it is not using.',
+    formula: 'occupancy = avg running sequences ÷ max batch size',
+    anchor: 'theory-agentic'
   }
 };
 

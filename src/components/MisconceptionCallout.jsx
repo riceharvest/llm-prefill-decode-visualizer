@@ -16,6 +16,10 @@ export const MISCONCEPTIONS = {
   'prefix-caching-first-turn': {
     title: 'Prefix caching does NOT help turn 1',
     text: 'Before the first request there is nothing cached, so turn 1 always prefills the full context at full price. Caching only pays off from turn 2 onward, when turns reuse the accumulated prefix.'
+  },
+  'chunked-prefill-stall': {
+    title: 'An unchunked prefill stalls the WHOLE batch',
+    text: 'With chunked prefill off, one prompt ingests in a single engine step that lasts hundreds of milliseconds — every decoding sequence in the batch waits for it. That is exactly the ITL spike chunked prefill exists to prevent.'
   }
 };
 
