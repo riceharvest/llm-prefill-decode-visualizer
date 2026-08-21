@@ -1,8 +1,10 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { HARDWARE_PRESETS, formatTime, formatTokens } from '../utils/presets';
-import { BarChart3, Users, PlugZap, ClipboardCopy } from 'lucide-react';
+import { BarChart3, Users, PlugZap, ClipboardCopy, FileDown } from 'lucide-react';
 import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
 import { methodologyMismatch } from '../utils/localMaxxing';
+import { buildSizingReport, buildSizingReportJson, buildSizingReportYaml, buildSizingReportMarkdown, downloadSizingReport } from '../utils/sizingReport';
+import { buildDeepLink } from '../utils/exportMarkdown';
 import Metric from './Metric';
 import { estimateFromLabel } from '../utils/streetPricing';
 import { exportNodeAsPng } from '../utils/exportPng';
@@ -232,6 +234,82 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   };
 
   const exportBtnStyle = { padding: '2px 8px', fontSize: '0.68rem' };
+
+  // ---- Sizing report export (issue #49) ------------------------------------
+  // One canonical snapshot of the current scenario feeds all three formats
+  // (JSON / YAML / Markdown), so they can never disagree about a number.
+  const sizingSystem = (role, preset, m) => {
+    const run = preset.run || {};
+    const hw = run.hardware || {};
+    return {
+      id: role,
+      name: preset.name,
+      engine: run.engine?.engineName || null,
+      engineVersion: preset.engineVersion || null,
+      measuredAt: preset.measuredAt || null,
+      ageDays: Number.isFinite(preset.ageDays) ? preset.ageDays : undefined,
+      staleness: preset.staleness || null,
+      prefillSpeed: preset.prefillSpeed,
+      decodeSpeed: preset.decodeSpeed,
+      batchedPerUserDecode: m.batchedPerUserDecode,
+      aggregateDecode: m.aggregateDecode,
+      ttftSeconds: m.ttft,
+      decodeSeconds: m.decodeTime,
+      totalWalltimeSeconds: m.totalTime,
+      hwClass: hw.hwClass || null,
+      gpuName: hw.gpuName || null,
+      gpuCount: hw.gpuCount,
+      totalVramGb: hw.vramGb,
+      unifiedMemoryGb: hw.unifiedMemoryGb,
+      vramNote: preset.localMaxxing ? null : 'curated profile — memory not tracked per model; see the KV cache tab',
+      costPerRequestUsd: m.cost ?? undefined,
+      streetPriceUsd: m.pricing?.estimateUsd,
+      streetPriceRangeUsd: m.pricing ? [m.pricing.lowUsd, m.pricing.highUsd] : undefined,
+      sourceUrl: preset.sourceUrl || null
+    };
+  };
+
+  const primaryRun = presetA.run || {};
+  const handleExportSizingReport = (format) => {
+    const report = buildSizingReport({
+      generatedAt: new Date().toISOString(),
+      deepLink: buildDeepLink('compare'),
+      scenario: {
+        modelId: localMaxxingContext?.modelId || primaryRun.model?.displayName || primaryRun.model?.hfId || null,
+        quantization: localMaxxingContext?.quantization || primaryRun.engine?.quantization || null,
+        contextTokens: safeCp,
+        outputTokens: safeCo,
+        concurrency: batchSize
+      },
+      systemA: sizingSystem('A', presetA, {
+        ttft: ttftA, decodeTime: decodeTimeA, totalTime: totalTimeA,
+        batchedPerUserDecode: batchedPerUserDecodeA, aggregateDecode: aggregateTokPerSecA,
+        cost: costA, pricing: pricingA
+      }),
+      systemB: sizingSystem('B', presetB, {
+        ttft: ttftB, decodeTime: decodeTimeB, totalTime: totalTimeB,
+        batchedPerUserDecode: batchedPerUserDecodeB, aggregateDecode: aggregateTokPerSecB,
+        cost: costB, pricing: pricingB
+      }),
+      tco: tcoValid ? {
+        rigName: tcoPreset.name,
+        watts: tcoWattsNum,
+        kwh: tcoKwhNum,
+        cloudPerMtok: tcoCloudNum,
+        monthlyElectricity: tcoMonthlyElectricity,
+        monthlyCapex: tcoMonthlyCapex,
+        localPerMtok: tcoLocalPerMtok,
+        breakEvenTokens: tcoBreakEven
+      } : null,
+      notes: [
+        ...(mismatchReasons.length ? [`Methodology mismatch: ${mismatchReasons.join('; ')}.`] : []),
+        `Batched decode applies a B^0.25 bandwidth-sharing penalty to measured single-stream speed at concurrency ${batchSize}.`
+      ]
+    });
+    if (format === 'json') downloadSizingReport(buildSizingReportJson(report), 'sizing-report.json', 'application/json;charset=utf-8');
+    else if (format === 'yaml') downloadSizingReport(buildSizingReportYaml(report), 'sizing-report.yaml', 'application/yaml;charset=utf-8');
+    else downloadSizingReport(buildSizingReportMarkdown(report), 'sizing-report.md', 'text/markdown;charset=utf-8');
+  };
 
   return (
     <div className="stack">
@@ -605,6 +683,37 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               </Metric>
             </div>
           </div>
+        </div>
+
+        {/* Sizing report export (issue #49): the full scenario config as a
+            machine-readable artifact for infra-as-code repos, procurement
+            tickets, and deployment runbooks. */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginTop: '16px' }}>
+          <span className="section-label" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginInlineEnd: '4px' }}>
+            <FileDown size={15} />
+            <span>Export sizing report</span>
+          </span>
+          <button
+            className="btn"
+            onClick={() => handleExportSizingReport('json')}
+            title="Download the current scenario as a machine-readable JSON sizing report"
+          >
+            JSON
+          </button>
+          <button
+            className="btn"
+            onClick={() => handleExportSizingReport('yaml')}
+            title="Download the current scenario as a YAML sizing report"
+          >
+            YAML
+          </button>
+          <button
+            className="btn"
+            onClick={() => handleExportSizingReport('markdown')}
+            title="Download the current scenario as a Markdown sizing report"
+          >
+            Markdown
+          </button>
         </div>
 
       </section>
