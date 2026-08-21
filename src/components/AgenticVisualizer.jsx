@@ -6,6 +6,7 @@ import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMat
 import { exportNodeAsPng } from '../utils/exportPng';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
+import ConceptCheck from './ConceptCheck';
 import Metric from './Metric';
 import Analogy from './Analogy';
 import SloBadge from './SloBadge';
@@ -1104,6 +1105,18 @@ export default function AgenticVisualizer({
         </div>
 
       </section>
+
+      {/* Concept-check quizzes: prediction-then-reveal wired to live sim state */}
+      <ConceptCheck
+        tab="agentic"
+        context={{
+          turns: numTurns,
+          cachingOn: enablePrefixCaching,
+          walltime: totalAgentWalltime,
+          noCacheWalltime: turnBreakdownNoCache,
+          savedPct: cachingPercentSaved
+        }}
+      />
 
     </div>
   );
