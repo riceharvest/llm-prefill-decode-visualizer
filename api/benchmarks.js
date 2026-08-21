@@ -94,7 +94,7 @@ export default async function handler(req, res) {
       caveats: rowCaveats(g),
       engines: g.engines,
       mixedEngines: g.mixedEngines,
-      confidence: confidence(members.get(g.key) || []),
+      confidence: { ...confidence(members.get(g.key) || []), ...(g.confidence || {}) },
       crossCheck: crossCheck(members.get(g.key) || []),
       bestRun: {
         runId: g.bestRun.runId,
@@ -126,7 +126,7 @@ export default async function handler(req, res) {
         includeOutliers,
         note: `runs more than ${outlierIqrs} IQRs from their group median carry an outlier flag with a z-score-style deviation field${includeOutliers ? ' and are included in the stats' : ' and are excluded from the stats; pass ?include_outliers=true to include them'}`
       },
-      note: 'medians are outlier-resistant; use bestRun for the single fastest measured run in each group and confidence.grade to judge how much a ranking is backed by data',
+      note: 'medians are outlier-resistant; use bestRun for the single fastest measured run in each group; confidence.grade judges how much a ranking is backed by data and confidence.score (0-100) combines sample size, IQR width and outlier density',
       items: groups,
       has_more: page.has_more,
       next_cursor: page.next_cursor,

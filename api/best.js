@@ -11,7 +11,7 @@ import { confidence } from './_crosscheck.js';
 
 export const config = { runtime: 'nodejs' };
 
-const BY_MODES = ['decode', 'prefill', 'efficiency', 'walltime'];
+const BY_MODES = ['decode', 'prefill', 'efficiency', 'walltime', 'confidence'];
 // Default workload shape when no tokens or scenario are given: standard chat.
 const CHAT_PRESET = SCENARIO_PRESETS.find(s => s.id === 'chat');
 
@@ -55,13 +55,15 @@ export function projectWalltime(medianPrefill, medianDecode, workload) {
  * synthetic runs without hitting the upstream leaderboard.
  */
 export function rankGroups(groups, by, workload, limit) {
+  // workload is optional for non-walltime rankings (e.g. ?by=confidence).
+  const wl = workload ?? { promptTokens: 0, outputTokens: 0 };
   return groups
     .map(g => {
       const sample = g.bestRun;
       // Raw (unrounded) walltime for stable sorting even on near-ties.
       const rawWalltime =
-        workload.promptTokens / g.prefill.median + workload.outputTokens / g.decode.median;
-      const projection = projectWalltime(g.prefill.median, g.decode.median, workload);
+        wl.promptTokens / g.prefill.median + wl.outputTokens / g.decode.median;
+      const projection = projectWalltime(g.prefill.median, g.decode.median, wl);
       return {
         hardware: sample.hardware,
         hardwareKey: sample.hardwareKey,
@@ -77,6 +79,7 @@ export function rankGroups(groups, by, workload, limit) {
         quantization: sample.quantization,
         engine: sample.engine,
         runsInGroup: g.runs,
+        confidence: g.confidence,
         medianPrefillTokPerSec: g.prefill.median,
         medianDecodeTokPerSec: g.decode.median,
         bestDecodeTokPerSec: g.decode.max,
@@ -92,6 +95,7 @@ export function rankGroups(groups, by, workload, limit) {
     })
     .sort((a, b) =>
       by === 'walltime' ? a._rawWalltime - b._rawWalltime
+      : by === 'confidence' ? (b.confidence?.score ?? 0) - (a.confidence?.score ?? 0)
       : by === 'prefill' ? b.medianPrefillTokPerSec - a.medianPrefillTokPerSec
       : by === 'efficiency' ? (b.medianDecodeTokPerSec / Math.max(1, b.exampleModel ? 1 : 1)) - (a.medianDecodeTokPerSec / Math.max(1, a.exampleModel ? 1 : 1))
       : b.medianDecodeTokPerSec - a.medianDecodeTokPerSec
@@ -116,7 +120,8 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
 /**
  * GET /api/best — ranked answers to natural benchmark questions.
  *
- * ?by=decode|prefill|efficiency|walltime|cost  rank metric (default decode)
+ * ?by=decode|prefill|efficiency|walltime|cost|confidence  rank metric (default decode)
+ * ?sort_by=<metric>                                        alias for ?by
  * ?scenario=<preset-id>                    workload shape for by=walltime
  *                                          (chat|rag|longdoc|codegen|reasoning)
  * ?promptTokens=N&outputTokens=M           explicit workload shape for by=walltime
@@ -139,12 +144,14 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  * ?amortizationMonths=M           spread hardware price over this many months (default 36)
  * ?promptTokens=&outputTokens=    scenario shape (defaults 2048/512)
  */
+const RANK_BY = ['decode', 'prefill', 'efficiency', 'confidence'];
+
 export default async function handler(req, res) {
   if (!enforceRateLimit(req, res)) return;
   try {
     const q = req.query || {};
     const limit = Math.min(50, Math.max(1, Number(q.limit) || 10));
-    const by = [...BY_MODES, 'cost'].includes(q.by) ? q.by : 'decode';
+    const by = [...BY_MODES, 'cost'].includes(q.sort_by) ? q.sort_by : [...BY_MODES, 'cost'].includes(q.by) ? q.by : 'decode';
     const workload = resolveWorkload(q);
     const costInputs = {
       hardwarePriceUsd: num(q.hardwarePriceUsd ?? q.price, 0),
@@ -190,6 +197,8 @@ export default async function handler(req, res) {
     }
 
     // Rank per hardware rig × model family using the group's medians,
+    // so one lucky run doesn't top the chart. confidence shows how much to
+    // trust each median (sample size, IQR width, outlier density).
     // so one lucky run doesn't top the chart.
     const keyFn = r => `${r.hardwareKey}|${r.modelFamily}`;
     const groups = aggregate(runs, keyFn);
@@ -250,7 +259,12 @@ export default async function handler(req, res) {
         .slice(0, limit);
     } else {
       ranked = rankGroups(groups, by, workload, limit);
-    }
+      if (by === 'confidence') {
+        // rankGroups doesn't know the confidence metric — sort here (#36).
+        const confByKey = new Map(groups.map(g => [g.key, g.confidence ?? 0]));
+        ranked = ranked.slice().sort((x, y) =>
+          (confByKey.get(`${y.hardwareKey}|${y.modelFamily}`)?.score ?? 0) - (confByKey.get(`${x.hardwareKey}|${x.modelFamily}`)?.score ?? 0));
+      }    }
     if (fitCheck) {
       // Attach the estimated fit verdict for each ranked group's best run.
       const bestByKey = new Map(groups.map(g => [g.key, g.bestRun]));
@@ -273,7 +287,7 @@ export default async function handler(req, res) {
         row.engines = g.engines;
         row.mixedEngines = g.mixedEngines;
       }
-      row.confidence = confidence(members.get(`${row.hardwareKey}|${row.modelFamily}`) || []);
+      row.confidence = { ...confidence(members.get(`${row.hardwareKey}|${row.modelFamily}`) || []), ...(g?.confidence || {}) };
     }
 
     const warnings = groups.filter(g => g.mixedEngines)
