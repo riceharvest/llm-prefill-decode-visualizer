@@ -88,6 +88,22 @@ export function invalidateCache() {
   cache = { rows: null, fetchedAt: 0, promise: null };
 }
 
+/**
+ * Cache-freshness snapshot for /api/health. Cheap: no network calls.
+ */
+export function getCacheInfo() {
+  const now = Date.now();
+  return {
+    hasData: cache.rows != null,
+    fresh: !!(cache.rows && now - cache.fetchedAt < CACHE_TTL_MS),
+    fetchedAt: cache.rows ? new Date(cache.fetchedAt).toISOString() : null,
+    ageMs: cache.rows ? now - cache.fetchedAt : null,
+    rowCount: cache.rows ? cache.rows.length : 0,
+    ttlMs: CACHE_TTL_MS,
+    upstream: UPSTREAM
+  };
+}
+
 // ---------- Aggregation ----------
 
 function median(sorted) {
