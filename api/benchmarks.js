@@ -8,6 +8,7 @@ import { engineTag, matchesEngineQuery } from './_engine.js';
 import { confidence, crossCheck } from './_crosscheck.js';
 import { sendProblem, sendProblemFromError } from './_errors.js';
 import { filterByMaxAge, parseMaxAgeParam } from './_freshness.js';
+import { parseContextBandParam, filterByContextBand } from './_contextbands.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -37,6 +38,7 @@ export default async function handler(req, res) {
 
     const snapshotAt = new Date();
     const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
+    const contextBand = parseContextBandParam(q.context_band ?? q.contextBand);
 
     const { runs: liveRuns, snapshot } = await resolveRuns(q);
     let runs = liveRuns;
@@ -47,6 +49,7 @@ export default async function handler(req, res) {
     if (hwClass) runs = runs.filter(r => r.hwClass?.toLowerCase() === hwClass);
     if (engineQ) runs = runs.filter(r => matchesEngineQuery(r, engineQ));
     if (maxAgeDays) runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
+    runs = filterByContextBand(runs, contextBand);
 
     const crossEngine = ['1', 'true', 'yes'].includes(String(q.crossEngine).toLowerCase());
 
@@ -118,12 +121,15 @@ export default async function handler(req, res) {
 
     const warnings = groups.filter(g => g.mixedEngines)
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
+    warnings.push(...groups.filter(g => g.mixedContextBands)
+      .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
 
     return json(res, {
-      description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=; regroup with ?groupBy=hardware|model|quant|hardwareModel; exclude old measurements with ?max_age=<days>. Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false. Each group carries a confidence block (run count, IQR spread %, outlier count, recency, grade) and a cross_check comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.',
+      description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=&context_band=lt1k|1k-8k|8k-32k|32k+; regroup with ?groupBy=hardware|model|quant|hardwareModel; exclude old measurements with ?max_age=<days>. Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false. Each group carries a confidence block (run count, IQR spread %, outlier count, recency, grade) and a cross_check comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.',
       snapshot,
       snapshotAt: snapshotAt.toISOString(),
       maxAgeDays: maxAgeDays || null,
+      contextBand: contextBand || null,
       freshnessTiers: 'fresh <90d · aging <1y · stale ≥1y (per-group: staleness of newest run)',
       total: allGroups.length,
       matchedRuns: runs.length,

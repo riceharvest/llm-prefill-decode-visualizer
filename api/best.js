@@ -11,6 +11,7 @@ import { confidence } from './_crosscheck.js';
 import { sendProblemFromError } from './_errors.js';
 import { computeCalcId } from './_calc_id.js';
 import { filterByMaxAge, parseMaxAgeParam } from './_freshness.js';
+import { parseContextBandParam, filterByContextBand } from './_contextbands.js';
 import { estimateStreetPrice } from '../src/utils/streetPricing.js';
 
 export const config = { runtime: 'nodejs' };
@@ -185,6 +186,7 @@ export async function bestBody(query = {}) {
 
     const snapshotAt = new Date();
     const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
+    const contextBand = parseContextBandParam(q.context_band ?? q.contextBand);
 
     const { runs: liveRuns, snapshot } = await resolveRuns(q);
     let runs = liveRuns;
@@ -205,6 +207,7 @@ export async function bestBody(query = {}) {
     }
     if (q.engine) runs = runs.filter(r => matchesEngineQuery(r, String(q.engine)));
     if (maxAgeDays) runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
+    runs = filterByContextBand(runs, contextBand);
     if (q.minDecode) {
       const minD = Number(q.minDecode);
       if (Number.isFinite(minD)) runs = runs.filter(r => r.decodeTokPerSec >= minD);
@@ -321,6 +324,10 @@ export async function bestBody(query = {}) {
         row.engineVersion = g.bestRun?.engineVersion ?? null;
         row.engines = g.engines;
         row.mixedEngines = g.mixedEngines;
+        // Context-band annotation (issue #39): rows whose runs were measured
+        // across different context bands aren't apples-to-apples.
+        row.contextBands = g.contextBands;
+        row.mixedContextBands = g.mixedContextBands;
       }
       row.confidence = { ...confidence(members.get(`${row.hardwareKey}|${row.modelFamily}`) || []), ...(g?.confidence || {}) };
     }
@@ -352,6 +359,8 @@ export async function bestBody(query = {}) {
 
     const warnings = groups.filter(g => g.mixedEngines)
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
+    warnings.push(...groups.filter(g => g.mixedContextBands)
+      .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
 
     const filters = { by, limit };
     if (q.model) filters.model = String(q.model).toLowerCase();
@@ -359,6 +368,7 @@ export async function bestBody(query = {}) {
     if (q.quant) filters.quant = String(q.quant).toLowerCase();
     if (q.hwClass) filters.hwClass = String(q.hwClass).toLowerCase();
     if (q.hardware) filters.hardware = String(q.hardware).toLowerCase();
+    if (contextBand) filters.contextBand = contextBand;
 
     // Attach effective VRAM (discrete, falling back to unified) per row (#53).
     const sampleByKey = new Map(groups.map(g => [g.key, g.bestRun]));
@@ -383,11 +393,12 @@ export async function bestBody(query = {}) {
         ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant and carry a 95% percentile bootstrap CI (medianXxxCi95 + medianXxxLabel); overlapping intervals mean statistical ties. runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), ?engine=<substr> restricts to same-engine builds only, and staleness/newestRunAt flag how old the newest measurement is; ?max_age=<days> drops older runs.`
         : by === 'cost'
         ? 'Ranked hardware×model groups by cost-efficiency: $/1M tokens from hardware price (amortized) + electricity at measured median speeds for the given scenario shape. Lower is better.'
-        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), ?engine=<substr> restricts to same-engine builds only, and staleness/newestRunAt flag how old the newest measurement is; ?max_age=<days> drops older runs.',
+        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), ?engine=<substr> restricts to same-engine builds only, ?context_band=lt1k|1k-8k|8k-32k|32k+ restricts to one measured-context regime, and staleness/newestRunAt flag how old the newest measurement is; ?max_age=<days> drops older runs.',
       rankedBy: by,
       snapshot,
       snapshotAt: snapshotAt.toISOString(),
       maxAgeDays: maxAgeDays || null,
+      contextBand: contextBand || null,
       matchedRuns: runs.length,
       caveats: buildCaveats(runs, groups),
       warnings,

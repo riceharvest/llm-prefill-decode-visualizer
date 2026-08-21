@@ -8,6 +8,7 @@ import { enforceRateLimit } from './_ratelimit.js';
 import { sendJson } from './_schema.js';
 import { sendProblem, sendProblemFromError } from './_errors.js';
 import { decorateRun, filterByMaxAge, groupFreshness, parseMaxAgeParam } from './_freshness.js';
+import { parseContextBandParam, filterByContextBand } from './_contextbands.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -70,7 +71,7 @@ async function handlePost(req, res) {
 /**
  * GET /api/localmaxxing — raw comparable runs (flattened, normalized).
  * POST /api/localmaxxing — submit a run for review (validated, queued).
- * GET: ?hardware=<substr> &model=<substr> &quant=<exact> &limit=N (default 50, max 500) &cursor=<opaque>
+ * GET: ?hardware=<substr> &model=<substr> &quant=<exact> &context_band=lt1k|1k-8k|8k-32k|32k+ &limit=N (default 50, max 500) &cursor=<opaque>
  * &max_age=<days> excludes runs measured longer than N days ago (undated runs dropped)
  * Bare call returns the hardware-group summary.
  */
@@ -98,6 +99,7 @@ export default async function handler(req, res) {
 
     const snapshotAt = new Date();
     const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
+    const contextBand = parseContextBandParam(q.context_band ?? q.contextBand);
 
     const resolved = await resolveRuns(q);
     let runs = resolved.runs;
@@ -111,6 +113,7 @@ export default async function handler(req, res) {
     if (model) runs = runs.filter(r => r.modelFamily.includes(model) || r.modelId?.toLowerCase().includes(model));
     if (quant) runs = runs.filter(r => r.quantization?.toLowerCase() === quant);
     if (maxAgeDays) runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
+    runs = filterByContextBand(runs, contextBand);
 
     if (!hardware && !model && !quant) {
       // Summary: hardware groups with run counts and freshness metadata
@@ -127,10 +130,11 @@ export default async function handler(req, res) {
         g.modelFamilies.add(r.modelFamily);
       }
       return json(res, {
-        description: 'Community-measured single-stream LLM benchmark runs. Filter with ?hardware=&model=&quant=&max_age=&limit=&cursor= for paginated runs. Aggregated stats: /api/benchmarks. Ranked answers: /api/best.',
+        description: 'Community-measured single-stream LLM benchmark runs. Filter with ?hardware=&model=&quant=&context_band=&max_age=&limit=&cursor= for paginated runs. Aggregated stats: /api/benchmarks. Ranked answers: /api/best.',
         snapshot,
         snapshotAt: snapshotAt.toISOString(),
         maxAgeDays: maxAgeDays || null,
+        contextBand: contextBand || null,
         totalComparableRuns: runs.length,
         caveats: runsCaveats(runs),
         hardwareGroups: [...groups.values()]
@@ -155,10 +159,11 @@ export default async function handler(req, res) {
     const page = paginate({ items: runs, limit, cursor, keyOf: RUN_KEY, cmp: descNumAscStrCmp });
 
     return json(res, {
-      description: 'Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false. Each run carries createdAt/ageDays/staleness and engineVersion.',
+      description: 'Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false. Each run carries createdAt/ageDays/staleness, engineVersion and its contextBand (<1k, 1k–8k, 8k–32k or 32k+; null when the run reports no context length).',
       snapshot,
       snapshotAt: snapshotAt.toISOString(),
       maxAgeDays: maxAgeDays || null,
+      contextBand: contextBand || null,
       total: runs.length,
       caveats: runsCaveats(runs),
       items: page.items.map(r => decorateRun(r, snapshotAt)),

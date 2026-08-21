@@ -5,6 +5,7 @@ import { normalizeModelId } from './_normalize.js';
 import { engineTags } from './_engine.js';
 import { ApiError } from './_errors.js';
 import { groupFreshness } from './_freshness.js';
+import { contextBandOf, contextBandMix } from './_contextbands.js';
 
 const UPSTREAM = 'https://www.localmaxxing.com/api';
 const PAGE = 200;
@@ -95,6 +96,9 @@ function slim(r) {
     promptTokens: r.promptTokens,
     outputTokens: r.outputTokens,
     contextLength: r.contextLength,
+    // Context-length band (issue #39): null when the run reports no usable
+    // contextLength — comparisons annotate the mix instead of assuming.
+    contextBand: contextBandOf(r.contextLength)?.id ?? null,
     createdAt: r.createdAt || null,
     engineVersion: r.engine?.engineVersion || null,
     source: `https://localmaxxing.com/en/runs/${r.id}`
@@ -354,6 +358,10 @@ export function aggregate(runs, keyFn, { outlierIqrs = DEFAULT_OUTLIER_IQRS, inc
       decode: { ...statsOf(statsRuns.map(r => r.decodeTokPerSec)), ci95: dCI, label: null },
       engines: engineTags(group),
       mixedEngines: engineTags(group).length > 1,
+      // Context-band mix (issue #39): groups that blend context bands are
+      // annotated so cross-band comparisons aren't read as apples-to-apples.
+      contextBands: contextBandMix(group),
+      mixedContextBands: contextBandMix(group).mixed,
       confidence: confidenceFor(group),
       freshness: groupFreshness(group),
       bestRun: group.reduce((best, r) => (r.decodeTokPerSec > best.decodeTokPerSec ? r : best), group[0]),

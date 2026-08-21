@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cpu, Bot, MessageSquare, HelpCircle, BarChart3, Columns2, HardDrive, Link2, Check, GitCompare, ListFilter } from 'lucide-react'; (feat: hardware shortlist flow from workload constraints (#53))
+import { Cpu, Bot, MessageSquare, HelpCircle, BarChart3, Columns2, HardDrive, Link2, Check, GitCompare, ListFilter } from 'lucide-react';
 import { HARDWARE_PRESETS } from '../utils/presets';
 import { t } from '../i18n/strings';
 
@@ -106,7 +106,7 @@ export default function Header({
           { id: 'compare', label: 'Hardware Compare', icon: BarChart3, hint: 'A / B' },
           { id: 'ab', label: 'A/B Replay', icon: Columns2, hint: 'SYNC' },
           { id: 'diff', label: 'Run Diff', icon: GitCompare, hint: 'RUN IDS' },
-          { id: 'shortlist', label: 'Find Hardware', icon: ListFilter, hint: 'SHORTLIST' }, (feat: hardware shortlist flow from workload constraints (#53))
+          { id: 'shortlist', label: 'Find Hardware', icon: ListFilter, hint: 'SHORTLIST' },
           { id: 'kvcache', label: 'KV Cache', icon: HardDrive, hint: 'VRAM' },
           { id: 'theory', label: 'Theory', icon: HelpCircle, hint: 'FLOPS vs BW' }
         ].map(tab => {
