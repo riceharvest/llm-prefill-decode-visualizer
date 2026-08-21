@@ -10,6 +10,7 @@ import { matchesEngineQuery } from './_engine.js';
 import { confidence } from './_crosscheck.js';
 import { sendProblemFromError } from './_errors.js';
 import { computeCalcId } from './_calc_id.js';
+import { filterByMaxAge, parseMaxAgeParam } from './_freshness.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -137,6 +138,7 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  * ?precisionBytes=2               KV cache dtype for fitCheck (fp16 default)
  * ?batchSize=1                    KV cache batch for fitCheck
  * ?engine=<substr>                restrict to engine name/version tag substring (e.g. llama.cpp, b4523)
+ * ?max_age=<days>                 exclude runs measured longer than N days ago
  * ?limit=N                        default 10
  *
  * Cost ranking (?by=cost) inputs:
@@ -170,7 +172,11 @@ export async function bestBody(query = {}) {
       outputTokens: num(q.outputTokens, 512)
     };
 
-    const { runs, snapshot } = await resolveRuns(q);
+    const snapshotAt = new Date();
+    const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
+
+    const { runs: liveRuns, snapshot } = await resolveRuns(q);
+    let runs = liveRuns;
 
     if (q.model) {
       const m = String(q.model).toLowerCase();
@@ -187,6 +193,7 @@ export async function bestBody(query = {}) {
       runs = runs.filter(r => r.hardwareKey?.toLowerCase().includes(h) || r.hardware?.toLowerCase().includes(h));
     }
     if (q.engine) runs = runs.filter(r => matchesEngineQuery(r, String(q.engine)));
+    if (maxAgeDays) runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
 
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
     // plus KV cache at the requested context. Estimates only — see _vramfit.js.
@@ -310,6 +317,20 @@ export async function bestBody(query = {}) {
       }
     }
 
+    // Attach per-group freshness metadata (#38): staleness of the newest run,
+    // engine versions seen in the group, and mixed-build warnings.
+    const freshByKey = new Map(groups.map(g => [g.key, g.freshness]));
+    for (const row of ranked) {
+      const f = freshByKey.get(`${row.hardwareKey}|${row.modelFamily}`);
+      if (f) {
+        row.newestRunAt = f.newestRunAt;
+        row.newestAgeDays = f.newestAgeDays;
+        row.staleness = f.staleness;
+        row.engineVersions = f.engineVersions;
+        row.majorReleaseWarnings = f.majorReleaseWarnings;
+      }
+    }
+
     const warnings = groups.filter(g => g.mixedEngines)
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
 
@@ -325,12 +346,14 @@ export async function bestBody(query = {}) {
       body: {
         id: computeCalcId('best', filters),
       description: by === 'walltime'
-        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant and carry a 95% percentile bootstrap CI (medianXxxCi95 + medianXxxLabel); overlapping intervals mean statistical ties. runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), and ?engine=<substr> restricts to same-engine builds only.`
+        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant and carry a 95% percentile bootstrap CI (medianXxxCi95 + medianXxxLabel); overlapping intervals mean statistical ties. runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), ?engine=<substr> restricts to same-engine builds only, and staleness/newestRunAt flag how old the newest measurement is; ?max_age=<days> drops older runs.`
         : by === 'cost'
         ? 'Ranked hardware×model groups by cost-efficiency: $/1M tokens from hardware price (amortized) + electricity at measured median speeds for the given scenario shape. Lower is better.'
-        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), and ?engine=<substr> restricts to same-engine builds only.',
+        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), ?engine=<substr> restricts to same-engine builds only, and staleness/newestRunAt flag how old the newest measurement is; ?max_age=<days> drops older runs.',
       rankedBy: by,
       snapshot,
+      snapshotAt: snapshotAt.toISOString(),
+      maxAgeDays: maxAgeDays || null,
       matchedRuns: runs.length,
       caveats: buildCaveats(runs, groups),
       warnings,

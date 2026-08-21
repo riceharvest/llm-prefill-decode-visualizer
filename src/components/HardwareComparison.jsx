@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { HARDWARE_PRESETS, formatTime, formatTokens } from '../utils/presets';
 import { BarChart3, Users, PlugZap } from 'lucide-react';
 import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
+import { methodologyMismatch } from '../utils/localMaxxing';
 
 // Typical whole-rig wattage under inference load (GPU + rest-of-system overhead).
 // Used as the default for the TCO section; the user can always override it.
@@ -156,6 +157,17 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   const rowDivider = { paddingTop: '8px', borderTop: '1px solid var(--border)' };
   const numStyle = { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 };
 
+  // Freshness tiers match the API contract (issue #38): fresh <90d, aging <1y,
+  // stale ≥1y. Measured presets carry the source run's date + engine version.
+  const tierColors = { fresh: 'var(--decode)', aging: 'var(--agent)', stale: 'var(--danger)' };
+  const measuredLabel = preset => {
+    if (!preset?.localMaxxing) return null;
+    if (!preset.measuredAt) return 'date unknown';
+    const version = preset.engineVersion ? ` · ${preset.run?.engine?.engineName || ''} ${preset.engineVersion}` : '';
+    return `${preset.measuredAt.slice(0, 10)} · ${preset.ageDays}d (${preset.staleness})${version}`;
+  };
+  const mismatchReasons = methodologyMismatch(presetA, presetB);
+
   return (
     <div className="stack">
 
@@ -285,6 +297,14 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 <span>Prefill speed</span>
                 <span style={{ ...numStyle, color: 'var(--prefill)' }}>{presetA.prefillSpeed.toLocaleString()} tok/s</span>
               </div>
+              {measuredLabel(presetA) && (
+                <div style={rowStyle}>
+                  <span>Measured</span>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: tierColors[presetA.staleness] || 'var(--text-muted)' }}>
+                    {measuredLabel(presetA)}
+                  </span>
+                </div>
+              )}
               {presetA.sourceUrl && <a href={presetA.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600 }}>View LocalMaxxing source run ↗</a>}
               <div style={rowStyle}>
                 <span>Decode speed <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>(per user)</em></span>
@@ -364,6 +384,14 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 <span>Prefill speed</span>
                 <span style={{ ...numStyle, color: 'var(--prefill)' }}>{presetB.prefillSpeed.toLocaleString()} tok/s</span>
               </div>
+              {measuredLabel(presetB) && (
+                <div style={rowStyle}>
+                  <span>Measured</span>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: tierColors[presetB.staleness] || 'var(--text-muted)' }}>
+                    {measuredLabel(presetB)}
+                  </span>
+                </div>
+              )}
               {presetB.sourceUrl && <a href={presetB.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600 }}>View LocalMaxxing source run ↗</a>}
               <div style={rowStyle}>
                 <span>Decode speed <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>(per user)</em></span>
@@ -423,6 +451,18 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
           </div>
 
         </div>
+
+        {mismatchReasons.length > 0 && (
+          <div
+            className="panel-inset"
+            role="note"
+            aria-label="Methodology mismatch warning"
+            style={{ marginTop: '16px', borderColor: 'var(--danger)', color: 'var(--text-muted)', fontSize: '0.76rem' }}
+          >
+            <strong style={{ color: 'var(--danger)' }}>Methodology mismatch:</strong>{' '}
+            System A and System B differ in {mismatchReasons.join('; ')}. The speedup ratios below compare numbers that may not be directly comparable.
+          </div>
+        )}
 
         {/* Speedup Ratio Summary */}
         <div className="metric-grid" style={{ marginTop: '16px' }}>

@@ -4,6 +4,7 @@
 import { normalizeModelId } from './_normalize.js';
 import { engineTags } from './_engine.js';
 import { ApiError } from './_errors.js';
+import { groupFreshness } from './_freshness.js';
 
 const UPSTREAM = 'https://www.localmaxxing.com/api';
 const PAGE = 200;
@@ -94,6 +95,8 @@ function slim(r) {
     promptTokens: r.promptTokens,
     outputTokens: r.outputTokens,
     contextLength: r.contextLength,
+    createdAt: r.createdAt || null,
+    engineVersion: r.engine?.engineVersion || null,
     source: `https://localmaxxing.com/en/runs/${r.id}`
   };
 }
@@ -352,6 +355,7 @@ export function aggregate(runs, keyFn, { outlierIqrs = DEFAULT_OUTLIER_IQRS, inc
       engines: engineTags(group),
       mixedEngines: engineTags(group).length > 1,
       confidence: confidenceFor(group),
+      freshness: groupFreshness(group),
       bestRun: group.reduce((best, r) => (r.decodeTokPerSec > best.decodeTokPerSec ? r : best), group[0]),
       outliers
     });

@@ -7,6 +7,7 @@ import { sendJson } from './_schema.js';
 import { engineTag, matchesEngineQuery } from './_engine.js';
 import { confidence, crossCheck } from './_crosscheck.js';
 import { sendProblem, sendProblemFromError } from './_errors.js';
+import { filterByMaxAge, parseMaxAgeParam } from './_freshness.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -34,6 +35,9 @@ export default async function handler(req, res) {
     const hwClass = q.hwClass ? String(q.hwClass).toLowerCase() : null; // discrete_gpu | unified | cpu_only
     const engineQ = q.engine ? String(q.engine) : null;             // matches "name version" tag substring
 
+    const snapshotAt = new Date();
+    const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
+
     const { runs: liveRuns, snapshot } = await resolveRuns(q);
     let runs = liveRuns;
 
@@ -42,6 +46,7 @@ export default async function handler(req, res) {
     if (quant) runs = runs.filter(r => r.quantization?.toLowerCase() === quant);
     if (hwClass) runs = runs.filter(r => r.hwClass?.toLowerCase() === hwClass);
     if (engineQ) runs = runs.filter(r => matchesEngineQuery(r, engineQ));
+    if (maxAgeDays) runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
 
     const crossEngine = ['1', 'true', 'yes'].includes(String(q.crossEngine).toLowerCase());
 
@@ -106,6 +111,7 @@ export default async function handler(req, res) {
         quantization: g.bestRun.quantization,
         prefillTokPerSec: g.bestRun.prefillTokPerSec,
         decodeTokPerSec: g.bestRun.decodeTokPerSec,
+        createdAt: g.bestRun.createdAt,
         source: g.bestRun.source
       }
     }));
@@ -114,8 +120,11 @@ export default async function handler(req, res) {
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
 
     return json(res, {
-      description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=; regroup with ?groupBy=hardware|model|quant|hardwareModel. Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false. Each group carries a confidence block (run count, IQR spread %, outlier count, recency, grade) and a cross_check comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.',
+      description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=; regroup with ?groupBy=hardware|model|quant|hardwareModel; exclude old measurements with ?max_age=<days>. Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false. Each group carries a confidence block (run count, IQR spread %, outlier count, recency, grade) and a cross_check comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.',
       snapshot,
+      snapshotAt: snapshotAt.toISOString(),
+      maxAgeDays: maxAgeDays || null,
+      freshnessTiers: 'fresh <90d · aging <1y · stale ≥1y (per-group: staleness of newest run)',
       total: allGroups.length,
       matchedRuns: runs.length,
       distinctModelFamilies: [...new Set(runs.map(r => r.modelFamily))].length,
@@ -127,10 +136,8 @@ export default async function handler(req, res) {
         includeOutliers,
         note: `runs more than ${outlierIqrs} IQRs from their group median carry an outlier flag with a z-score-style deviation field${includeOutliers ? ' and are included in the stats' : ' and are excluded from the stats; pass ?include_outliers=true to include them'}`
       },
-      note: 'medians are outlier-resistant; ci95 is the 95% percentile bootstrap interval (2,000 resamples) over the group\'s runs and label renders it as "median [lo–hi]"; overlapping intervals mean two groups are statistically tied; use bestRun for the single fastest measured run in each group; confidence.grade judges how much a ranking is backed by data and confidence.score (0-100) combines sample size, IQR width and outlier density',
-      items: groups,
-      has_more: page.has_more,
-      next_cursor: page.next_cursor,
+      note: 'medians are outlier-resistant; ci95 is the 95% percentile bootstrap interval (2,000 resamples) over the group\'s runs and label renders it as "median [lo–hi]"; overlapping intervals mean two groups are statistically tied; use bestRun for the single fastest measured run in each group; confidence.grade judges how much a ranking is backed by data and confidence.score (0-100) combines sample size, IQR width and outlier density; check freshness.majorReleaseWarnings before comparing across engine generations',
+r: page.next_cursor,
       caveats: buildCaveats(runs, allGroups)
     });
   } catch (err) {

@@ -7,6 +7,7 @@ import { validateSubmission, checkDuplicates, queueSubmission } from './_submit.
 import { enforceRateLimit } from './_ratelimit.js';
 import { sendJson } from './_schema.js';
 import { sendProblem, sendProblemFromError } from './_errors.js';
+import { decorateRun, filterByMaxAge, groupFreshness, parseMaxAgeParam } from './_freshness.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -70,6 +71,7 @@ async function handlePost(req, res) {
  * GET /api/localmaxxing — raw comparable runs (flattened, normalized).
  * POST /api/localmaxxing — submit a run for review (validated, queued).
  * GET: ?hardware=<substr> &model=<substr> &quant=<exact> &limit=N (default 50, max 500) &cursor=<opaque>
+ * &max_age=<days> excludes runs measured longer than N days ago (undated runs dropped)
  * Bare call returns the hardware-group summary.
  */
 export default async function handler(req, res) {
@@ -94,6 +96,9 @@ export default async function handler(req, res) {
   try {
     const q = req.query || {};
 
+    const snapshotAt = new Date();
+    const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
+
     const resolved = await resolveRuns(q);
     let runs = resolved.runs;
     const { snapshot } = resolved;
@@ -105,32 +110,40 @@ export default async function handler(req, res) {
     if (hardware) runs = runs.filter(r => r.hardwareKey?.toLowerCase().includes(hardware) || r.hardware?.toLowerCase().includes(hardware));
     if (model) runs = runs.filter(r => r.modelFamily.includes(model) || r.modelId?.toLowerCase().includes(model));
     if (quant) runs = runs.filter(r => r.quantization?.toLowerCase() === quant);
+    if (maxAgeDays) runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
 
     if (!hardware && !model && !quant) {
-      // Summary: hardware groups with run counts
+      // Summary: hardware groups with run counts and freshness metadata
       const groups = new Map();
       for (const r of runs) {
         if (!groups.has(r.hardwareKey)) {
           groups.set(r.hardwareKey, {
             hardware: r.hardware, hardwareKey: r.hardwareKey, hwClass: r.hwClass,
-            runs: 0, modelFamilies: new Set()
+            runs: [], modelFamilies: new Set()
           });
         }
         const g = groups.get(r.hardwareKey);
-        g.runs += 1;
+        g.runs.push(r);
         g.modelFamilies.add(r.modelFamily);
       }
       return json(res, {
-        description: 'Community-measured single-stream LLM benchmark runs. Filter with ?hardware=&model=&quant=&limit=&cursor= for paginated runs. Aggregated stats: /api/benchmarks. Ranked answers: /api/best.',
+        description: 'Community-measured single-stream LLM benchmark runs. Filter with ?hardware=&model=&quant=&max_age=&limit=&cursor= for paginated runs. Aggregated stats: /api/benchmarks. Ranked answers: /api/best.',
         snapshot,
+        snapshotAt: snapshotAt.toISOString(),
+        maxAgeDays: maxAgeDays || null,
         totalComparableRuns: runs.length,
         caveats: runsCaveats(runs),
         hardwareGroups: [...groups.values()]
-          .sort((a, b) => b.runs - a.runs)
-          .map(g => ({
-            hardware: g.hardware, hardwareKey: g.hardwareKey, hwClass: g.hwClass,
-            runs: g.runs, distinctModelFamilies: g.modelFamilies.size
-          }))
+          .sort((a, b) => b.runs.length - a.runs.length)
+          .map(g => {
+            const freshness = groupFreshness(g.runs, snapshotAt);
+            return {
+              hardware: g.hardware, hardwareKey: g.hardwareKey, hwClass: g.hwClass,
+              runs: g.runs.length, distinctModelFamilies: g.modelFamilies.size,
+              staleness: freshness.staleness,
+              newestRunAt: freshness.newestRunAt
+            };
+          })
       });
     }
 
@@ -142,11 +155,13 @@ export default async function handler(req, res) {
     const page = paginate({ items: runs, limit, cursor, keyOf: RUN_KEY, cmp: descNumAscStrCmp });
 
     return json(res, {
-      description: 'Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false.',
+      description: 'Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false. Each run carries createdAt/ageDays/staleness and engineVersion.',
       snapshot,
+      snapshotAt: snapshotAt.toISOString(),
+      maxAgeDays: maxAgeDays || null,
       total: runs.length,
       caveats: runsCaveats(runs),
-      items: page.items,
+      items: page.items.map(r => decorateRun(r, snapshotAt)),
       has_more: page.has_more,
       next_cursor: page.next_cursor
     });
