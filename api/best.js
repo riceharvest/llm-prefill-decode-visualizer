@@ -14,7 +14,11 @@ import { computeCalcId } from './_calc_id.js';
 import { filterByMaxAge, parseMaxAgeParam } from './_freshness.js';
 import { parseContextBandParam, filterByContextBand } from './_contextbands.js';
 import { estimateStreetPrice } from '../src/utils/streetPricing.js';
+<<<<<<< HEAD
 import { explainRecommendation } from './_explain.js';
+=======
+import { estimatePower } from '../src/utils/powerThermal.js';
+>>>>>>> 1a8ca79 (feat: basis + caveat annotations on compute/presets/best results (#69))
 
 export const config = { runtime: 'nodejs' };
 
@@ -389,6 +393,7 @@ export async function bestBody(query = {}) {
       row.pricing = sample ? estimateStreetPrice(sample) : null;
     }
 
+<<<<<<< HEAD
     // Attach a one-sentence human-readable explanation per row (#73):
     // fit math + measured source, pass-through ready for agent chat
     // pipelines. Weight/KV figures are estimates (see _vramfit.js); the
@@ -405,6 +410,16 @@ export async function bestBody(query = {}) {
         runId: sample?.runId,
         runsInGroup: row.runsInGroup
       });
+=======
+    // Attach power/thermal feasibility per row (#69): board power (TDP),
+    // whole-rig inference wattage and PSU guidance — null when unknown
+    // (cpu_only rigs, unmatched GPUs). The point: a dual-GPU recommendation
+    // must never silently assume the user owns a 1600W PSU.
+    const powerByKey = new Map(groups.map(g => [g.key, g.bestRun]));
+    for (const row of ranked) {
+      const sample = powerByKey.get(`${row.hardwareKey}|${row.modelFamily}`);
+      row.power = sample ? estimatePower(sample) : null;
+>>>>>>> 1a8ca79 (feat: basis + caveat annotations on compute/presets/best results (#69))
     }
 
     return {
