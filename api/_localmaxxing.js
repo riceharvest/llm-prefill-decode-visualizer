@@ -3,6 +3,7 @@
 
 import { normalizeModelId } from './_normalize.js';
 import { engineTags } from './_engine.js';
+import { ApiError } from './_errors.js';
 
 const UPSTREAM = 'https://www.localmaxxing.com/api';
 const PAGE = 200;
@@ -46,7 +47,7 @@ export async function getDataset() {
       const res = await fetch(`${UPSTREAM}/leaderboard?limit=${PAGE}&offset=${offset}`, {
         headers: { accept: 'application/json' }
       });
-      if (!res.ok) throw new Error(`upstream ${res.status}`);
+      if (!res.ok) throw new ApiError('UPSTREAM_UNAVAILABLE', `localmaxxing.com leaderboard returned HTTP ${res.status}`);
       const data = await res.json();
       const batch = data.rows || [];
       rows.push(...batch);
