@@ -97,7 +97,29 @@ export default function handler(req, res) {
             { name: 'flags', in: 'query', schema: { type: 'string' }, description: 'flagged: comma-separated engine flag ids (flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3). Documented heuristic deltas; response carries a per-flag audit trail.' },
             { name: 'dry_run', in: 'query', schema: { type: 'boolean' }, description: 'Validate + echo parsed params (defaults filled in) without executing any math. Returns { dry_run: true, model, inputs, id?, note }; the id matches the real call. Also applies per-item inside a batch via "dry_run": true in the POST body.' }
           ],
-          responses: { '200': { description: 'Computed metrics object' }, '400': { description: 'Invalid parameters (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } }, '500': { description: 'Internal server error (code INTERNAL)', content: { 'application/problem+json': { schema: PROBLEM } } } },
+          responses: {
+            '200': {
+              description: 'Computed metrics object',
+              content: {
+                'application/json': {
+                  example: {
+                    id: 'calc_9536a8f7358a',
+                    inputs: { promptTokens: 4096, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 },
+                    warnings: [],
+                    ttftSeconds: 1.077895,
+                    tpotMs: 9.52381,
+                    decodeSeconds: 4.87619,
+                    totalWalltimeSeconds: 5.954085,
+                    effectiveThroughputTokPerSec: 773.922414,
+                    prefillSharePct: 18.103448,
+                    decodeSharePct: 81.896552,
+                    schema_version: '1'
+                  }
+                }
+              }
+            },
+            '400': { description: 'Invalid parameters (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } }, '500': { description: 'Internal server error (code INTERNAL)', content: { 'application/problem+json': { schema: PROBLEM } } }
+          },
           '429': { $ref: '#/components/responses/RateLimited' }
         }
       },
@@ -136,8 +158,29 @@ export default function handler(req, res) {
       '/api/presets': {
         get: {
           summary: 'Built-in hardware speed presets and workload scenarios',
-          responses: { '200': { description: '{hardware[], scenarios[]}; each hardware entry carries power/thermal guidance (#69): tdpWatts (board power), loadWatts (typical whole-rig wattage under inference), psuWatts (recommended PSU size) and powerNote — null where not applicable (cloud/edge/custom).' } },
-          '429': { $ref: '#/components/responses/RateLimited' }
+          responses: {
+            '200': {
+              description: '{hardware[], scenarios[]}; each hardware entry carries power/thermal guidance (#69): tdpWatts (board power), loadWatts (typical whole-rig wattage under inference), psuWatts (recommended PSU size) and powerNote — null where not applicable (cloud/edge/custom).',
+              content: {
+                'application/json': {
+                  example: {
+                    description: 'Built-in hardware speed presets and workload scenario presets. Use these values as inputs to /api/compute.',
+                    hardware: [
+                      { id: 'rtx4090_exl2', name: 'RTX 4090 24GB (ExLlamaV2 EXL2)', prefillSpeedTokPerSec: 3800, decodeSpeedTokPerSec: 105, vramBandwidth: '1.01 TB/s (GDDR6X)', badge: 'Localmaxxing #1 Consumer' },
+                      { id: 'dual_rtx3090', name: 'Dual RTX 3090 48GB (TP2 ExLlamaV2 70B)', prefillSpeedTokPerSec: 4600, decodeSpeedTokPerSec: 78, vramBandwidth: '1.87 TB/s Combined', badge: 'Localmaxxing 70B Rig' },
+                      { id: 'rtx3090_llamacpp', name: 'RTX 3090 24GB (llama.cpp Q4_K_M)', prefillSpeedTokPerSec: 2400, decodeSpeedTokPerSec: 65, vramBandwidth: '936 GB/s (GDDR6X)', badge: 'Localmaxxing Budget King' }
+                    ],
+                    scenarios: [
+                      { id: 'chat', label: 'Standard chat', promptTokens: 2048, outputTokens: 512 },
+                      { id: 'rag', label: 'RAG query', promptTokens: 4096, outputTokens: 512 }
+                    ],
+                    schema_version: '1'
+                  }
+                }
+              }
+            },
+            '429': { $ref: '#/components/responses/RateLimited' }
+          }
         }
       },
       '/api/localmaxxing': {
@@ -153,7 +196,52 @@ export default function handler(req, res) {
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' },
             SNAPSHOT_PARAM
           ],
-          responses: { '200': { description: 'Hardware summary, or paginated run list { total, items[], has_more, next_cursor }; both carry a machine-readable `caveats` array (single-stream-only, self-reported data, engine mix)' }, '429': { $ref: '#/components/responses/RateLimited' } }
+          responses: {
+            '200': {
+              description: 'Hardware summary, or paginated run list { total, items[], has_more, next_cursor }; both carry a machine-readable `caveats` array (single-stream-only, self-reported data, engine mix)',
+              content: {
+                'application/json': {
+                  example: {
+                    description: 'Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false.',
+                    snapshot: { id: 'snapshot-2026-08-21-a1b2c3d4', createdAt: '2026-08-21T09:14:03.000Z', runCount: 3642 },
+                    snapshotAt: '2026-08-21T09:14:03.512Z',
+                    schema_version: '1',
+                    total: 214,
+                    caveats: [
+                      { code: 'single_stream_only', severity: 'medium', summary: 'Dataset only contains batchSize=1 runs — not batched-serving throughput.', detail: 'All 3642 runs report concurrency ≤ 1.' },
+                      { code: 'self_reported_unvalidated', severity: 'medium', summary: 'Community-submitted runs, not independently verified; trust medians over single runs.', detail: 'Submissions are sanity-bounded and deduplicated but not lab-measured.' }
+                    ],
+                    items: [
+                      {
+                        runId: 58213,
+                        createdAt: '2026-07-30T18:22:41.000Z',
+                        modelFamily: 'qwen3.6-27b',
+                        modelName: 'unsloth/Qwen3.6-27B-MTP-GGUF',
+                        hardwareKey: 'rtx4090',
+                        hardware: 'RTX 4090 24GB',
+                        hwClass: 'discrete_gpu',
+                        gpu: 'RTX 4090',
+                        gpuCount: 1,
+                        engine: 'llama.cpp',
+                        engineVersion: 'b6123',
+                        quantization: 'q4_k_m',
+                        prefillTokPerSec: 3820,
+                        decodeTokPerSec: 108,
+                        contextLength: 8192,
+                        contextBand: '8k-32k',
+                        ageDays: 23,
+                        staleness: 'recent',
+                        source: 'https://localmaxxing.com/en/runs/58213'
+                      }
+                    ],
+                    has_more: true,
+                    next_cursor: 'MTA4fCI1ODIxMyI'
+                  }
+                }
+              }
+            },
+            '429': { $ref: '#/components/responses/RateLimited' }
+          }
         }
       },
       '/api/benchmarks': {
@@ -171,7 +259,54 @@ export default function handler(req, res) {
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' },
             SNAPSHOT_PARAM
           ],
-          responses: { '200': { description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode with 95% bootstrap CIs on each median, bestRun, a confidence block and crossCheck. Top-level and per-group `caveats` arrays flag n=1 groups and mixed engine versions.' }, '429': { $ref: '#/components/responses/RateLimited' } }
+          responses: {
+            '200': {
+              description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode with 95% bootstrap CIs on each median, bestRun, a confidence block and crossCheck. Top-level and per-group `caveats` arrays flag n=1 groups and mixed engine versions.',
+              content: {
+                'application/json': {
+                  example: {
+                    description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group).',
+                    snapshot: { id: 'snapshot-2026-08-21-a1b2c3d4', createdAt: '2026-08-21T09:14:03.000Z', runCount: 3642 },
+                    snapshotAt: '2026-08-21T09:14:03.512Z',
+                    schema_version: '1',
+                    total: 187,
+                    caveats: [
+                      { code: 'n1_groups', severity: 'medium', summary: '22% of groups rest on a single run — treat as anecdotal.', detail: '18 of 82 returned groups have runs=1.', pct: 22, groupsWithOneRun: 18, totalGroups: 82 }
+                    ],
+                    items: [
+                      {
+                        key: 'rtx4090|qwen3.6-27b',
+                        runs: 14,
+                        prefill: { q1: 3601, median: 3800, q3: 3950, min: 3210, max: 4102, ci95: { lo: 3701, hi: 3902 }, label: '3800 [3701–3902]' },
+                        decode: { q1: 99, median: 105, q3: 112, min: 88, max: 118, ci95: { lo: 101, hi: 110 }, label: '105 [101–110]' },
+                        modelFamilies: ['qwen3.6-27b'],
+                        engines: ['llama.cpp'],
+                        mixedEngines: false,
+                        caveats: [],
+                        confidence: { runs: 14, iqrSpreadPct: 12.38, outliers: 0, newestRunAgeDays: 3, grade: 'high' },
+                        crossCheck: { relatedRigComparisons: [], contradictions: [] },
+                        bestRun: {
+                          runId: 58213,
+                          modelName: 'unsloth/Qwen3.6-27B-MTP-GGUF',
+                          hardware: 'RTX 4090 24GB',
+                          engine: 'llama.cpp',
+                          engineVersion: 'b6123',
+                          quantization: 'q4_k_m',
+                          prefillTokPerSec: 3820,
+                          decodeTokPerSec: 108,
+                          createdAt: '2026-07-30T18:22:41.000Z',
+                          source: 'https://localmaxxing.com/en/runs/58213'
+                        }
+                      }
+                    ],
+                    has_more: true,
+                    next_cursor: 'MTA1fCJydDQwOTB8cXdlbjMuNi0yN2Ii'
+                  }
+                }
+              }
+            },
+            '429': { $ref: '#/components/responses/RateLimited' }
+          }
         }
       },
       '/api/best': {
@@ -199,7 +334,67 @@ export default function handler(req, res) {
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
             SNAPSHOT_PARAM
           ],
-          responses: { '200': { description: 'Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns. Each result includes a `pricing` object: USD street-price estimate with low/high range, perGpu breakdown for multi-GPU rigs, asOf date, and eBay (new + used) and Craigslist search links to verify against live listings. `pricing` is null when no anchor exists (cpu_only, unknown GPUs). Each result also carries `explain`: a one-sentence human-readable explanation combining the VRAM-fit math (weights + KV estimates) with the measured source, e.g. \'24GB fits 8B q4_k_m weights ~5GB + 32k KV ~4GB with 14GB headroom; measured 100 tok/s decode from run #a1\' — pass-through ready for agent chat pipelines. Each result also includes a `power` object (#69): board power (TDP, per card and total), typical whole-rig wattage under sustained inference, and a recommended PSU size with transient-headroom notes — so a dual-GPU recommendation can be sanity-checked against the user\'s actual electrical setup. `power` is null when no anchor exists (cpu_only, unknown GPUs).' }, '429': { $ref: '#/components/responses/RateLimited' } }
+          responses: {
+            '200': {
+              description: 'Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns. Each result includes a `pricing` object: USD street-price estimate with low/high range, perGpu breakdown for multi-GPU rigs, asOf date, and eBay (new + used) and Craigslist search links to verify against live listings. `pricing` is null when no anchor exists (cpu_only, unknown GPUs). Each result also carries `explain`: a one-sentence human-readable explanation combining the VRAM-fit math (weights + KV estimates) with the measured source, e.g. \'24GB fits 8B q4_k_m weights ~5GB + 32k KV ~4GB with 14GB headroom; measured 100 tok/s decode from run #a1\' — pass-through ready for agent chat pipelines. Each result also includes a `power` object (#69): board power (TDP, per card and total), typical whole-rig wattage under sustained inference, and a recommended PSU size with transient-headroom notes — so a dual-GPU recommendation can be sanity-checked against the user\'s actual electrical setup. `power` is null when no anchor exists (cpu_only, unknown GPUs).',
+              content: {
+                'application/json': {
+                  example: {
+                    id: 'calc_7f2c91b04da3',
+                    description: 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant.',
+                    rankedBy: 'decode',
+                    snapshot: { id: 'snapshot-2026-08-21-a1b2c3d4', createdAt: '2026-08-21T09:14:03.000Z', runCount: 3642 },
+                    snapshotAt: '2026-08-21T09:14:03.512Z',
+                    matchedRuns: 214,
+                    schema_version: '1',
+                    caveats: [
+                      { code: 'single_stream_only', severity: 'medium', summary: 'Dataset only contains batchSize=1 runs — not batched-serving throughput.', detail: 'All 3642 runs report concurrency ≤ 1.' }
+                    ],
+                    warnings: [],
+                    results: [
+                      {
+                        hardware: 'RTX 4090 24GB',
+                        hardwareKey: 'rtx4090',
+                        hwClass: 'discrete_gpu',
+                        gpu: 'RTX 4090',
+                        gpuCount: 1,
+                        vramGb: 24,
+                        modelFamily: 'qwen3.6-27b',
+                        exampleModel: 'unsloth/Qwen3.6-27B-MTP-GGUF',
+                        quantization: 'q4_k_m',
+                        engine: 'llama.cpp',
+                        runsInGroup: 14,
+                        confidence: { runs: 14, iqrSpreadPct: 12.38, outliers: 0, newestRunAgeDays: 3, grade: 'high' },
+                        medianPrefillTokPerSec: 3800,
+                        medianDecodeTokPerSec: 105,
+                        bestDecodeTokPerSec: 118,
+                        medianPrefillCi95: { lo: 3701, hi: 3902 },
+                        medianPrefillLabel: '3800 [3701–3902]',
+                        medianDecodeCi95: { lo: 101, hi: 110 },
+                        medianDecodeLabel: '105 [101–110]',
+                        caveats: [],
+                        effectiveVramGb: 24,
+                        pricing: {
+                          estimateUsd: 1650,
+                          lowUsd: 1400,
+                          highUsd: 1900,
+                          perGpu: [{ gpu: 'RTX 4090', estimateUsd: 1650 }],
+                          asOf: '2026-08-01',
+                          links: {
+                            ebay: 'https://www.ebay.com/sch/i.html?_nkw=rtx+4090',
+                            ebayUsed: 'https://www.ebay.com/sch/i.html?_nkw=rtx+4090&LH_ItemCondition=3000',
+                            craigslist: 'https://craigslist.org/search/sss?query=rtx+4090'
+                          }
+                        },
+                        explain: '24GB VRAM fits qwen3.6-27b q4_k_m weights ~16GB + 32k KV ~7GB with ~1GB headroom; measured 105 tok/s decode median across 14 community runs.'
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            '429': { $ref: '#/components/responses/RateLimited' } }
+
         }
       },
       '/api/health': {
