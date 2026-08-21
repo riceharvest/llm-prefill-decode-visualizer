@@ -263,6 +263,44 @@ a { color: var(--accent); }
 }
 .btn-warn:hover { background: #FBBF24; border-color: #FBBF24; }
 
+/* Implausible-input warning banner (issue #44 sanity checks) */
+.sanity-warnings {
+  background: var(--agent-dim);
+  border: 1px solid var(--agent-border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 0.78rem;
+  color: var(--text-main);
+}
+
+.sanity-warnings-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--agent);
+}
+
+.sanity-warnings ul {
+  margin: 8px 0 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 4px;
+}
+
+.sanity-warnings code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--agent);
+}
+
+.sanity-warnings-note {
+  margin: 8px 0 0;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
 .btn-icon { padding: 7px 10px; }
 
 /* Segmented control (time-scale, precision pickers) */

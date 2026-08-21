@@ -1,5 +1,7 @@
 import React from 'react';
 import { Play, Pause, RotateCcw, FastForward, Gauge, Zap } from 'lucide-react';
+import { sanityWarnings } from '../../api/_math.js';
+import SanityWarnings from './SanityWarnings';
 
 export default function SpeedControls({
   prefillSpeed,
@@ -12,8 +14,13 @@ export default function SpeedControls({
   setIsPlaying,
   onReset
 }) {
+  // Same physical-bounds checks the /api/compute API applies — surfaced
+  // inline so impossible speed inputs are flagged before running a sim.
+  const speedWarnings = sanityWarnings({ prefillSpeed, decodeSpeed });
+
   return (
     <section className="panel" aria-label="Simulation speed controls">
+      <SanityWarnings warnings={speedWarnings} />
       <div className="grid-auto" style={{ '--grid-min': '280px', alignItems: 'stretch' }}>
 
         {/* Prefill Speed Input */}

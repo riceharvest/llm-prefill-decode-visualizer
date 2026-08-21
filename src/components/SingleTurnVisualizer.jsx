@@ -10,6 +10,8 @@ import {
 import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
+import { sanityWarnings } from '../../api/_math.js';
+import SanityWarnings from './SanityWarnings';
 
 export default function SingleTurnVisualizer({
   prefillSpeed,
@@ -110,6 +112,14 @@ export default function SingleTurnVisualizer({
   const expectedDecodeTime = safeOutputTokens / effectiveDecodeSpeed; // seconds (spec-aware)
   const expectedTotalTime = expectedTTFT + expectedDecodeTime;
   const tpotMs = effectiveDecodeSpeed > 0 ? 1000 / effectiveDecodeSpeed : Infinity;
+
+  // TTFT-below-kernel-launch-floor check (speed rooflines are already flagged
+  // globally in SpeedControls; this one needs this tab's prompt length).
+  const ttftFloorWarnings = sanityWarnings({
+    promptTokens: safePromptTokens,
+    prefillSpeed,
+    decodeSpeed
+  }).filter(w => w.code === 'ttft_below_kernel_launch_floor');
 
   const sampleWords = [
     "The", "architecture", "of", "modern", "Large", "Language", "Models", "relies",
@@ -763,6 +773,7 @@ export default function SingleTurnVisualizer({
         </div>
 
         {/* Walltime & Performance Breakdown Cards */}
+        <SanityWarnings warnings={ttftFloorWarnings} />
         <div className="metric-grid">
 
           <div className="metric" style={{ borderLeftColor: 'var(--prefill)' }}>

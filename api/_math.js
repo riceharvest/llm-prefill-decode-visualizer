@@ -2,12 +2,59 @@
 // Mirrors the formulas the visualizer UI uses — single source of truth so
 // agents get exactly the numbers the page shows.
 
+// ---- Sanity bounds (issue #44: implausible-output warnings) ---------------
+// Decode is memory-bandwidth bound: one token per step means streaming every
+// model weight from VRAM each forward pass. Even a ~1 TB/s GPU running a
+// ~1B-param Q4 model tops out around ~2000 tok/s single-stream, so anything
+// above this cannot be a real single-stream measurement.
+export const MAX_PLAUSIBLE_DECODE_TOK_PER_SEC = 2000;
+// Prefill is compute-bound. The fastest measured single-GPU prefill for any
+// model people actually simulate stays orders of magnitude below 500k tok/s;
+// above this the input is almost certainly a unit mixup (e.g. tok/s vs ms).
+export const MAX_PLAUSIBLE_PREFILL_TOK_PER_SEC = 500000;
+// A single forward pass can never complete faster than kernel-launch +
+// framework overhead (~2 ms). A computed TTFT below this floor means the
+// prefill speed / prompt length combination is physically impossible.
+export const MIN_PLAUSIBLE_TTFT_SECONDS = 0.002;
+
+// Non-blocking sanity checks. Returns an array of { code, message } — empty
+// when every input sits inside plausible bounds. Never throws, never alters
+// the math; consumers surface the warnings alongside the results.
+export function sanityWarnings({ promptTokens = 0, prefillSpeed = 0, decodeSpeed = 0 } = {}) {
+  const warnings = [];
+
+  if (decodeSpeed > MAX_PLAUSIBLE_DECODE_TOK_PER_SEC) {
+    warnings.push({
+      code: 'decode_above_bandwidth_roofline',
+      message: `Decode speed ${decodeSpeed} tok/s exceeds the memory-bandwidth roofline (~${MAX_PLAUSIBLE_DECODE_TOK_PER_SEC} tok/s single-stream on ~1 TB/s hardware with a ~1B Q4 model) — no real single-stream run is this fast.`
+    });
+  }
+
+  if (prefillSpeed > MAX_PLAUSIBLE_PREFILL_TOK_PER_SEC) {
+    warnings.push({
+      code: 'prefill_above_compute_roofline',
+      message: `Prefill speed ${prefillSpeed} tok/s exceeds any known single-GPU compute roofline (~${MAX_PLAUSIBLE_PREFILL_TOK_PER_SEC} tok/s) — check for a unit mixup (tok/s vs ms/tok).`
+    });
+  }
+
+  const ttft = promptTokens > 0 && prefillSpeed > 0 ? promptTokens / prefillSpeed : null;
+  if (ttft !== null && ttft < MIN_PLAUSIBLE_TTFT_SECONDS) {
+    warnings.push({
+      code: 'ttft_below_kernel_launch_floor',
+      message: `TTFT ${(ttft * 1000).toFixed(3)} ms is below the kernel-launch overhead floor (~${MIN_PLAUSIBLE_TTFT_SECONDS * 1000} ms per forward pass) — this prompt/speed combination cannot happen on real hardware.`
+    });
+  }
+
+  return warnings;
+}
+
 export function singleTurn({ promptTokens = 2048, outputTokens = 512, prefillSpeed = 3800, decodeSpeed = 105 } = {}) {
   const ttft = promptTokens / prefillSpeed;
   const decodeTime = outputTokens / decodeSpeed;
   const total = ttft + decodeTime;
   return {
     inputs: { promptTokens, outputTokens, prefillSpeed, decodeSpeed },
+    warnings: sanityWarnings({ promptTokens, prefillSpeed, decodeSpeed }),
     ttftSeconds: round(ttft),
     tpotMs: round(decodeSpeed > 0 ? 1000 / decodeSpeed : Infinity),
     decodeSeconds: round(decodeTime),
@@ -26,6 +73,7 @@ export function speculative({ baseDecodeSpeed = 105, draftTokens = 4, acceptance
   const effective = stepsPerSecond * tokensPerStep;
   return {
     inputs: { baseDecodeSpeed, draftTokens: k, acceptanceRate: alpha, draftCostFraction },
+    warnings: sanityWarnings({ decodeSpeed: baseDecodeSpeed }),
     effectiveDecodeTokPerSec: round(effective),
     speedupVsVanilla: round(effective / baseDecodeSpeed),
     tokensPerVerifyStep: round(tokensPerStep),
@@ -43,6 +91,7 @@ export function batched({ prefillSpeed = 3800, decodeSpeed = 105, batchSize = 1,
   const decodeTime = outputTokens / perUserDecode;
   return {
     inputs: { prefillSpeed, decodeSpeed, batchSize: b, promptTokens, outputTokens, decodeDecayExponent },
+    warnings: sanityWarnings({ promptTokens, prefillSpeed, decodeSpeed }),
     perUserDecodeTokPerSec: round(perUserDecode),
     aggregateDecodeTokPerSec: round(b * perUserDecode),
     ttftSeconds: round(ttft),
@@ -94,6 +143,7 @@ export function agentic(options = {}) {
 
   return {
     inputs: options,
+    warnings: sanityWarnings({ promptTokens: basePromptTokens, prefillSpeed, decodeSpeed }),
     turns,
     finalContextTokens: turns.length ? turns[turns.length - 1].totalPromptTokens + decodeTokensPerTurn : 0,
     totalWalltimeSeconds: round(cumulativeWalltime),
