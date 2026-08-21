@@ -226,6 +226,19 @@ a { color: var(--accent); }
 .tag-agent   { color: var(--agent);   border-color: var(--agent-border);   background: var(--agent-dim); }
 .tag-accent  { color: var(--accent);  border-color: var(--prefill-border); background: var(--accent-dim); }
 
+/* Inline everyday-analogy chip (issue #84) — sits next to technical terms
+   when analogy mode is on. Muted + italic so it reads as an aside, never as
+   a value or label. */
+.analogy-chip {
+  font-size: 0.68rem;
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-muted);
+  white-space: normal;
+}
+
 /* ---------- Buttons ---------- */
 
 .btn {

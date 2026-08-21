@@ -6,6 +6,7 @@ import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMat
 import { exportNodeAsPng } from '../utils/exportPng';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import Metric from './Metric';
+import Analogy from './Analogy';
 
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { t } from '../i18n/strings';
@@ -365,7 +366,10 @@ export default function AgenticVisualizer({
               : undefined}
           >
             {enablePrefixCaching ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-            <span>Prefix caching: <strong>{enablePrefixCaching ? t('agentic.prefixCachingOn') : t('agentic.prefixCachingOff')}</strong></span>
+            <span>
+              Prefix caching: <strong>{enablePrefixCaching ? t('agentic.prefixCachingOn') : t('agentic.prefixCachingOff')}</strong>
+              <Analogy term="prefixCaching" />
+            </span>
           </button>
         </div>
 

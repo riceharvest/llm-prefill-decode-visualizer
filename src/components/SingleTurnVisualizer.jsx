@@ -13,6 +13,7 @@ import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } 
 import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
 import Metric from './Metric';
+import Analogy from './Analogy';
 
 import { buildSingleTurnMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { t } from '../i18n/strings';
@@ -713,6 +714,7 @@ export default function SingleTurnVisualizer({
               <span className="panel-title" style={{ color: 'var(--prefill)' }}>
                 <Zap size={15} style={{ color: 'var(--prefill)' }} />
                 {t('singleTurn.prefillPhaseTitle')}
+                <Analogy term="prefill" />
               </span>
               <span className="tag tag-prefill">{prefillSpeed.toLocaleString()} tok/s</span>
             </div>
@@ -761,6 +763,7 @@ export default function SingleTurnVisualizer({
               <span className="panel-title" style={{ color: 'var(--decode)' }}>
                 <Gauge size={15} style={{ color: 'var(--decode)' }} />
                 {t('singleTurn.decodePhaseTitle')}
+                <Analogy term="decode" />
               </span>
               <span className="tag tag-decode">
                 {decodeSpeed.toLocaleString()} tok/s · {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms/tok` : '∞ ms/tok'}

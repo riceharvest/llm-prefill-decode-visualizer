@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, Pause, RotateCcw, FastForward, Gauge, Zap } from 'lucide-react';
 import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
+import Analogy from './Analogy';
 import { t } from '../i18n/strings';
 
 export default function SpeedControls({
@@ -29,6 +30,7 @@ export default function SpeedControls({
             <span className="panel-title" style={{ color: 'var(--prefill)' }}>
               <Zap size={15} style={{ color: 'var(--prefill)' }} />
               {t('speedControls.prefillSpeed')}
+              <Analogy term="prefill" />
             </span>
             <span className="tag tag-prefill">{t('speedControls.computeBound')}</span>
           </div>
@@ -63,6 +65,7 @@ export default function SpeedControls({
             <span className="panel-title" style={{ color: 'var(--decode)' }}>
               <Gauge size={15} style={{ color: 'var(--decode)' }} />
               {t('speedControls.decodeSpeed')}
+              <Analogy term="decode" />
             </span>
             <span className="tag tag-decode">{t('speedControls.bandwidthBound')}</span>
           </div>

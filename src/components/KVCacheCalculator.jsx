@@ -3,6 +3,7 @@ import { HardDrive } from 'lucide-react';
 import { formatTokens } from '../utils/presets';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
 import Metric from './Metric';
+import Analogy from './Analogy';
 import { t } from '../i18n/strings';
 
 // KV-cache geometry pulled from each model's actual config.json on HuggingFace
@@ -241,6 +242,7 @@ export default function KVCacheCalculator() {
         <h2 className="panel-title" style={{ marginBottom: '12px' }}>
           <HardDrive size={16} />
           <span>{t('kvCache.panelTitle')}</span>
+          <Analogy term="kvCache" />
         </h2>
 
         <p className="hint-text" style={{ marginBottom: '18px', maxWidth: '900px' }}>

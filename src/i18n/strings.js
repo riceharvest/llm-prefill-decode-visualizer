@@ -51,6 +51,19 @@ export const locales = {
       navAriaLabel: 'Visualizer sections'
     },
 
+    // Real-world analogy mode (issue #84) — everyday phrasings shown inline
+    // next to technical terms when the header toggle is on.
+    analogies: {
+      toggleLabel: 'Analogies',
+      toggleTooltip: 'Show everyday analogies next to technical terms',
+      items: {
+        prefill: 'reading the whole book before answering',
+        decode: 'speaking one word at a time',
+        prefixCaching: 'remembering what you already read',
+        kvCache: 'keeping notes on every page you read'
+      }
+    },
+
     tabs: {
       single: { label: 'Single-Turn Chat', hint: 'TTFT / TPOT' },
       agentic: { label: 'Agentic Loop', hint: 'WALLTIME' },

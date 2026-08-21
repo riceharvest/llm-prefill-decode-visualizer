@@ -2,6 +2,7 @@ import React from 'react';
 import { HelpCircle, Gauge, Zap, Play, Bot } from 'lucide-react';
 import { demoUrl } from '../utils/urlState';
 import { t, tArray } from '../i18n/strings';
+import Analogy from './Analogy';
 
 // Demo deep-links per FAQ entry (index-aligned with theory.faq in strings.js).
 const FAQ_DEMOS = [
@@ -57,6 +58,7 @@ export default function TheoryGuide() {
               <Zap size={16} style={{ color: 'var(--prefill)' }} />
               <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--prefill)' }}>
                 {t('theory.prefillHeading')}
+                <Analogy term="prefill" />
               </h3>
             </div>
 
@@ -81,6 +83,7 @@ export default function TheoryGuide() {
               <Gauge size={16} style={{ color: 'var(--decode)' }} />
               <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--decode)' }}>
                 {t('theory.decodeHeading')}
+                <Analogy term="decode" />
               </h3>
             </div>
 
@@ -113,13 +116,18 @@ export default function TheoryGuide() {
 
           <div className="grid-auto" style={{ '--grid-min': '260px' }}>
             <div className="panel-inset">
-              <strong style={{ fontSize: '0.8rem', color: 'var(--text-main)' }}>{t('theory.withoutCaching')}</strong>
+              <strong style={{ fontSize: '0.8rem', color: 'var(--text-main)' }}>
+                {t('theory.withoutCaching')}
+              </strong>
               <p className="hint-text" style={{ marginTop: '4px' }}>
                 {t('theory.withoutCachingBodyBefore')}P<sub>{t('theory.subK')}</sub>{t('theory.withoutCachingBodyAfter')}
               </p>
             </div>
             <div className="panel-inset">
-              <strong style={{ fontSize: '0.8rem', color: 'var(--text-main)' }}>{t('theory.withCaching')}</strong>
+              <strong style={{ fontSize: '0.8rem', color: 'var(--text-main)' }}>
+                {t('theory.withCaching')}
+                <Analogy term="prefixCaching" />
+              </strong>
               <p className="hint-text" style={{ marginTop: '4px' }}>
                 {t('theory.withCachingBodyBefore')}ΔP<sub>{t('theory.subK')}</sub>{t('theory.withCachingBodyAfter')}
               </p>
