@@ -5,6 +5,7 @@ import SpeedControls from './components/SpeedControls';
 import SingleTurnVisualizer from './components/SingleTurnVisualizer';
 import AgenticVisualizer from './components/AgenticVisualizer';
 import HardwareComparison from './components/HardwareComparison';
+import ABReplay from './components/ABReplay';
 import KVCacheCalculator from './components/KVCacheCalculator';
 import TheoryGuide from './components/TheoryGuide';
 import { HARDWARE_PRESETS } from './utils/presets';
@@ -90,8 +91,8 @@ export default function App() {
         setIsPlaying(p => !p);
       } else if (e.key === 'r' || e.key === 'R') {
         handleReset();
-      } else if (/^[1-5]$/.test(e.key)) {
-        const tabs = ['single', 'agentic', 'compare', 'kvcache', 'theory'];
+      } else if (/^[1-6]$/.test(e.key)) {
+        const tabs = ['single', 'agentic', 'compare', 'ab', 'kvcache', 'theory'];
         setActiveTab(tabs[Number(e.key) - 1]);
       }
     };
@@ -167,6 +168,16 @@ export default function App() {
           <HardwareComparison
             presets={comparisonPresets}
             localMaxxingContext={localMaxxingContext}
+          />
+        )}
+
+        {activeTab === 'ab' && (
+          <ABReplay
+            presets={comparisonPresets}
+            simSpeedMultiplier={simSpeedMultiplier}
+            isPlaying={isPlaying}
+            setIsPlaying={setIsPlaying}
+            resetKey={resetKey}
           />
         )}
 

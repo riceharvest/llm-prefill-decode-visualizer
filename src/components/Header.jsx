@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cpu, Bot, MessageSquare, HelpCircle, BarChart3, HardDrive, Link2, Check } from 'lucide-react';
+import { Cpu, Bot, MessageSquare, HelpCircle, BarChart3, Columns2, HardDrive, Link2, Check } from 'lucide-react';
 import { HARDWARE_PRESETS } from '../utils/presets';
 
 export default function Header({
@@ -80,6 +80,7 @@ export default function Header({
           { id: 'single', label: 'Single-Turn Chat', icon: MessageSquare, hint: 'TTFT / TPOT' },
           { id: 'agentic', label: 'Agentic Loop', icon: Bot, hint: 'WALLTIME' },
           { id: 'compare', label: 'Hardware Compare', icon: BarChart3, hint: 'A / B' },
+          { id: 'ab', label: 'A/B Replay', icon: Columns2, hint: 'SYNC' },
           { id: 'kvcache', label: 'KV Cache', icon: HardDrive, hint: 'VRAM' },
           { id: 'theory', label: 'Theory', icon: HelpCircle, hint: 'FLOPS vs BW' }
         ].map(tab => {
