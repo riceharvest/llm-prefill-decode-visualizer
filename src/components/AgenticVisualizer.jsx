@@ -8,6 +8,8 @@ import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } 
 import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
 import Metric from './Metric';
 import Analogy from './Analogy';
+import SloBadge from './SloBadge';
+import { evaluateAgenticSlo, evaluateMetric } from '../utils/slo.js';
 
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { t } from '../i18n/strings';
@@ -18,7 +20,8 @@ export default function AgenticVisualizer({
   simSpeedMultiplier,
   isPlaying,
   setIsPlaying,
-  resetKey
+  resetKey,
+  sloBudgets
 }) {
   // Agent configuration parameters
   const [numTurns, setNumTurns] = useState(() => readParamNum('turns', 4));
@@ -181,6 +184,38 @@ export default function AgenticVisualizer({
 
   const cachingTimeSaved = turnBreakdownNoCache - totalAgentWalltime;
   const cachingPercentSaved = Number.isFinite(turnBreakdownNoCache) && turnBreakdownNoCache > 0 ? (cachingTimeSaved / turnBreakdownNoCache) * 100 : 0;
+
+  // SLO check (issue #64): evaluate every turn against the persisted budgets
+  // so the UI can flag exactly which turn blows the budget.
+  const agenticSlo = evaluateAgenticSlo(turnBreakdown, sloBudgets);
+  const sloEnabled = Boolean(sloBudgets?.ttftMs || sloBudgets?.tpotMs || sloBudgets?.walltimeSec);
+  const worstSloTurn = agenticSlo.turns.find(t => t.turn === agenticSlo.worstTurn);
+
+  // Human-readable summary of a turn's failing checks, e.g.
+  // "TTFT 900 ms vs 500 ms (+80% over) · TPOT ∞".
+  const fmtPct = (r) => Number.isFinite(r.marginPct) ? `${Math.abs(r.marginPct).toFixed(0)}%` : '∞';
+  const fmtMs = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${Math.round(ms)} ms`);
+  const turnSloDetail = (triple) => (
+    [
+      ['TTFT', triple.ttft],
+      ['TPOT', triple.tpot],
+      ['Walltime', triple.walltime]
+    ]
+      .filter(([, r]) => r && !r.pass)
+      .map(([label, r]) => {
+        const val = label === 'TTFT' || label === 'TPOT' ? fmtMs(r.value) : formatTime(r.value);
+        return `${label} ${val} vs ${label === 'TTFT' || label === 'TPOT' ? fmtMs(r.budget) : formatTime(r.budget)} (+${fmtPct(r)} over)`;
+      })
+      .join(' · ')
+  );
+  // Combined per-row verdict for the waterfall: worst margin across checks.
+  const turnSloVerdict = (triple) => {
+    const checks = [triple.ttft, triple.tpot, triple.walltime].filter(Boolean);
+    if (!checks.length) return null;
+    return { pass: checks.every(r => r.pass), marginPct: Math.min(...checks.map(r => r.marginPct)) };
+  };
+  // Whole-loop walltime vs the walltime budget (header badge).
+  const evaluateAgenticSloWalltime = evaluateMetric(totalAgentWalltime, sloBudgets?.walltimeSec);
 
   // Markdown walkthrough export (download + clipboard)
   const [mdCopied, setMdCopied] = useState(false);
@@ -521,6 +556,7 @@ export default function AgenticVisualizer({
               >
                 <strong style={{ color: 'var(--text-main)', fontSize: '1rem' }}>{formatTime(totalAgentWalltime)}</strong>
               </Metric>
+              <SloBadge result={evaluateAgenticSloWalltime} label={t('slo.shortWalltime')} />
             </span>
           </div>
 
@@ -608,6 +644,43 @@ export default function AgenticVisualizer({
             }}
           >
             <strong>{t('agentic.cachingDisabledPrefix')}</strong> {t('agentic.cachingDisabledBody')}
+          </div>
+        )}
+
+        {/* SLO offender banner (issue #64): name the turn that blows the budget */}
+        {sloEnabled && agenticSlo.failingTurns.length > 0 && worstSloTurn && (
+          <div
+            className="panel-inset"
+            role="alert"
+            aria-label={t('slo.agenticOffender', { turn: worstSloTurn.turn, detail: turnSloDetail(worstSloTurn) })}
+            style={{
+              borderColor: 'var(--danger)',
+              background: 'rgba(248, 113, 113, 0.08)',
+              marginBottom: '18px',
+              fontSize: '0.8rem',
+              color: 'var(--text-muted)'
+            }}
+          >
+            <strong style={{ color: 'var(--danger)' }}>
+              {t('slo.agenticOffender', { turn: agenticSlo.worstTurn, detail: turnSloDetail(worstSloTurn) })}
+            </strong>
+            {agenticSlo.failingTurns.length > 1 && (
+              <span> {t('slo.agenticOffenderSuffix', { turns: agenticSlo.failingTurns.join(', ') })}</span>
+            )}
+          </div>
+        )}
+        {sloEnabled && agenticSlo.failingTurns.length === 0 && (
+          <div
+            className="panel-inset"
+            style={{
+              borderColor: 'var(--decode-border)',
+              background: 'var(--decode-dim)',
+              marginBottom: '18px',
+              fontSize: '0.8rem',
+              color: 'var(--decode)'
+            }}
+          >
+            {t('slo.agenticAllPass')}
           </div>
         )}
 
@@ -962,9 +1035,16 @@ export default function AgenticVisualizer({
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>
                       {formatTime(turnItem.turnWalltime)}
                     </div>
-                    <div style={{ fontSize: '0.64rem', color: turnItem.isCached ? 'var(--prefill)' : 'var(--text-subtle)' }}>
+                    <div style={{ fontSize: '0.64rem', color: turnItem.isCached ? 'var(--prefill)' : 'var(--text-subtle)', marginBottom: sloEnabled ? '3px' : undefined }}>
                       {turnItem.isCached ? t('agentic.cachedLabel') : t('agentic.fullIngestLabel')}
                     </div>
+                    {/* Per-turn SLO verdict (issue #64): worst margin across this turn's checks */}
+                    {sloEnabled && (
+                      <SloBadge
+                        result={turnSloVerdict(agenticSlo.turns[turnIndex] || {})}
+                        label={`T${turnItem.turn}`}
+                      />
+                    )}
                   </div>
                 </div>
               );

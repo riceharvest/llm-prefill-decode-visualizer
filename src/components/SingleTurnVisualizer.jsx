@@ -17,6 +17,8 @@ import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
 import Metric from './Metric';
 import Analogy from './Analogy';
+import SloBadge from './SloBadge';
+import { evaluateSlo } from '../utils/slo.js';
 
 import { buildSingleTurnMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { t } from '../i18n/strings';
@@ -27,7 +29,8 @@ export default function SingleTurnVisualizer({
   simSpeedMultiplier,
   isPlaying,
   setIsPlaying,
-  resetKey
+  resetKey,
+  sloBudgets
 }) {
   const [promptTokens, setPromptTokens] = useState(() => readParamNum('prompt', 2048));
   const [outputTokens, setOutputTokens] = useState(() => readParamNum('output', 512));
@@ -130,6 +133,7 @@ export default function SingleTurnVisualizer({
   const expectedTTFT = totalPrefillTokens / prefillSpeed; // seconds
   const tpotMs = effectiveDecodeSpeed > 0 ? 1000 / effectiveDecodeSpeed : Infinity;
 
+<<<<<<< HEAD
   // Per-token ITL draws (seeded ⇒ stable across re-renders and share links).
   // Mean-preserving lognormal: the average TPOT is unchanged, only the tail
   // grows with the variance slider — the p99/mean ratio is the story.
@@ -157,6 +161,16 @@ export default function SingleTurnVisualizer({
     ? itlSchedule[itlSchedule.length - 1] / 1000 // spec-aware + jittered: sum of drawn per-token gaps
     : safeOutputTokens / effectiveDecodeSpeed; // seconds (spec-aware)
   const expectedTotalTime = expectedTTFT + expectedDecodeTime;
+
+  // SLO check (issue #64): compare this run's TTFT / TPOT / walltime against
+  // the user's persisted budgets. Disabled budgets evaluate to null → no badge.
+  const sloResults = evaluateSlo(
+    { ttftSec: expectedTTFT, tpotMs, walltimeSec: expectedTotalTime },
+    sloBudgets
+  );
+
+  // TTFT-below-kernel-launch-floor check (speed rooflines are already flagged
+  // globally in SpeedControls; this one needs this tab's prompt length).
   const ttftFloorWarnings = sanityWarnings({
     promptTokens: safePromptTokens,
     prefillSpeed,
@@ -1066,7 +1080,10 @@ export default function SingleTurnVisualizer({
         <div className="metric-grid">
 
           <div className="metric" style={{ borderLeftColor: 'var(--prefill)' }}>
-            <div className="metric-label">{t('singleTurn.metricTtft')}</div>
+            <div className="metric-label">
+              {t('singleTurn.metricTtft')}
+              <SloBadge result={sloResults.ttft} label={t('slo.shortTtft')} />
+            </div>
             <div className="metric-value" style={{ color: 'var(--prefill)' }}>
               <Metric term="ttft" substitution={ttftSub}>
                 {formatTime(expectedTTFT)}
@@ -1081,7 +1098,10 @@ export default function SingleTurnVisualizer({
           </div>
 
           <div className="metric" style={{ borderLeftColor: 'var(--decode)' }}>
-            <div className="metric-label">{t('singleTurn.metricTpot')}</div>
+            <div className="metric-label">
+              {t('singleTurn.metricTpot')}
+              <SloBadge result={sloResults.tpot} label={t('slo.shortTpot')} />
+            </div>
             <div className="metric-value" style={{ color: 'var(--decode)' }}>
               <Metric term="tpot" substitution={tpotSub}>
                 {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms'}
@@ -1092,7 +1112,10 @@ export default function SingleTurnVisualizer({
           </div>
 
           <div className="metric" style={{ borderLeftColor: 'var(--accent)' }}>
-            <div className="metric-label">{t('singleTurn.metricTotalWalltime')}</div>
+            <div className="metric-label">
+              {t('singleTurn.metricTotalWalltime')}
+              <SloBadge result={sloResults.walltime} label={t('slo.shortWalltime')} />
+            </div>
             <div className="metric-value">
               <Metric term="walltime" substitution={walltimeSub}>
                 {formatTime(expectedTotalTime)}
@@ -1123,7 +1146,11 @@ export default function SingleTurnVisualizer({
         {/* Stacked Walltime Percentage Bar */}
         <div style={{ marginTop: '20px', paddingTop: '14px', borderTop: '1px solid var(--border)' }}>
           <div className="field-head" style={{ marginBottom: '8px' }}>
-            <span className="section-label">{t('singleTurn.distributionLabel')}</span>
+            <span className="section-label" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              {t('singleTurn.distributionLabel')}
+              {/* Waterfall SLO verdict (issue #64): overall run vs walltime budget */}
+              <SloBadge result={sloResults.walltime} label={t('slo.shortWalltime')} />
+            </span>
             <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
               Prefill{' '}
               <Metric term="walltimePctPrefill" substitution={prefillPctSub} align="left">
