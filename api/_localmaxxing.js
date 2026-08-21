@@ -7,6 +7,9 @@ const UPSTREAM = 'https://www.localmaxxing.com/api';
 const PAGE = 200;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
+/** Runs further than this many IQRs from their group median are flagged as outliers. */
+export const DEFAULT_OUTLIER_IQRS = 2.5;
+
 let cache = { rows: null, fetchedAt: 0, promise: null };
 
 function comparable(r) {
@@ -122,11 +125,84 @@ function quartiles(sorted) {
   return { q1: median(lower), median: median(sorted), q3: median(upper) };
 }
 
+/** Median + IQR + range over an unsorted array of speeds. */
+function statsOf(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const q = quartiles(sorted);
+  return {
+    median: q.median,
+    q1: q.q1,
+    q3: q.q3,
+    min: sorted[0] ?? null,
+    max: sorted[sorted.length - 1] ?? null
+  };
+}
+
+/**
+ * Flag runs whose prefill or decode tok/s sits more than `threshold` IQRs from
+ * their group median (a robust z-score: |value − median| / IQR). A run is
+ * flagged if either metric trips the fence.
+ *
+ * The fences are refit iteratively (up to 5 passes): each pass recomputes
+ * median/IQR over the runs not yet flagged, so one wildly misconfigured rig
+ * cannot inflate its own IQR and slip under the fence. A metric whose IQR is 0
+ * (e.g. many identical rounded values) can never flag on that metric, so
+ * quantized data doesn't mass-flag. Returns one entry per flagged run,
+ * worst deviation first.
+ */
+export function flagOutliers(group, threshold = DEFAULT_OUTLIER_IQRS) {
+  if (!group.length || !(threshold > 0)) return [];
+
+  const flagged = new Map();
+  let pool = group;
+  for (let pass = 0; pass < 5 && pool.length; pass++) {
+    const pStats = statsOf(pool.map(r => r.prefillTokPerSec));
+    const dStats = statsOf(pool.map(r => r.decodeTokPerSec));
+    const pIqr = pStats.q3 - pStats.q1;
+    const dIqr = dStats.q3 - dStats.q1;
+
+    let newFlags = 0;
+    for (const r of group) {
+      if (flagged.has(r.runId)) continue;
+      const pDev = pIqr > 0 ? Math.abs(r.prefillTokPerSec - pStats.median) / pIqr : 0;
+      const dDev = dIqr > 0 ? Math.abs(r.decodeTokPerSec - dStats.median) / dIqr : 0;
+      const fields = [];
+      if (pDev > threshold) fields.push('prefill');
+      if (dDev > threshold) fields.push('decode');
+      if (!fields.length) continue;
+      flagged.set(r.runId, {
+        runId: r.runId,
+        source: r.source,
+        engine: r.engine,
+        quantization: r.quantization,
+        hardware: r.hardware ?? r.hardwareKey,
+        modelFamily: r.modelFamily,
+        prefillTokPerSec: r.prefillTokPerSec,
+        decodeTokPerSec: r.decodeTokPerSec,
+        prefillIqrDeviations: round6(pDev),
+        decodeIqrDeviations: round6(dDev),
+        maxIqrDeviations: round6(Math.max(pDev, dDev)),
+        fields
+      });
+      newFlags++;
+    }
+    if (!newFlags) break;
+    pool = group.filter(r => !flagged.has(r.runId));
+  }
+  return [...flagged.values()].sort((a, b) => b.maxIqrDeviations - a.maxIqrDeviations);
+}
+
 /**
  * Group runs by an arbitrary key function and aggregate speeds with
  * outlier-resistant stats (median + IQR).
+ *
+ * Every group also carries a provenance-reviewed outlier report: runs further
+ * than `outlierIqrs` IQRs from the group median are listed in `outliers`.
+ * Pass `includeOutliers: false` to compute the stats without them — this stops
+ * one misconfigured rig from dragging a group median while the raw data stays
+ * queryable via the `outliers` array.
  */
-export function aggregate(runs, keyFn) {
+export function aggregate(runs, keyFn, { outlierIqrs = DEFAULT_OUTLIER_IQRS, includeOutliers = true } = {}) {
   const groups = new Map();
   for (const run of runs) {
     const k = keyFn(run);
@@ -137,18 +213,26 @@ export function aggregate(runs, keyFn) {
 
   const out = [];
   for (const [key, group] of groups) {
-    const prefills = group.map(r => r.prefillTokPerSec).sort((a, b) => a - b);
-    const decodes = group.map(r => r.decodeTokPerSec).sort((a, b) => a - b);
-    const pq = quartiles(prefills);
-    const dq = quartiles(decodes);
+    const outliers = flagOutliers(group, outlierIqrs);
+    const outlierIds = new Set(outliers.map(o => o.runId));
+    const statsRuns = includeOutliers ? group : group.filter(r => !outlierIds.has(r.runId));
     out.push({
       key,
       runs: group.length,
+      runsInStats: statsRuns.length,
+      outliersExcludedFromStats: includeOutliers ? 0 : outlierIds.size,
       models: [...new Set(group.map(r => r.modelFamily))],
-      prefill: { median: pq.median, q1: pq.q1, q3: pq.q3, min: prefills[0], max: prefills[prefills.length - 1] },
-      decode: { median: dq.median, q1: dq.q1, q3: dq.q3, min: decodes[0], max: decodes[decodes.length - 1] },
-      bestRun: group.reduce((best, r) => (r.decodeTokPerSec > best.decodeTokPerSec ? r : best), group[0])
+      outlierIqrs,
+      includeOutliers,
+      prefill: statsOf(statsRuns.map(r => r.prefillTokPerSec)),
+      decode: statsOf(statsRuns.map(r => r.decodeTokPerSec)),
+      bestRun: group.reduce((best, r) => (r.decodeTokPerSec > best.decodeTokPerSec ? r : best), group[0]),
+      outliers
     });
   }
   return out.sort((a, b) => b.decode.median - a.decode.median);
+}
+
+function round6(x) {
+  return Number.isFinite(x) ? Math.round(x * 1e6) / 1e6 : null;
 }

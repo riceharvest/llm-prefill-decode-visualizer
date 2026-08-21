@@ -1,4 +1,4 @@
-import { getAllRuns, aggregate } from './_localmaxxing.js';
+import { getAllRuns, aggregate, DEFAULT_OUTLIER_IQRS } from './_localmaxxing.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from './_pagination.js';
 
 export const config = { runtime: 'nodejs' };
@@ -39,6 +39,15 @@ export default async function handler(req, res) {
       : q.groupBy === 'quant' ? 'quant'
       : 'hardwareModel'; // default: hardware × model family
 
+    // Outlier policy: runs further than N IQRs from their group median are
+    // flagged and excluded from the stats by default; pass
+    // ?include_outliers=true to compute stats over every run.
+    const includeOutliers = q.include_outliers === 'true' || q.includeOutliers === 'true';
+    const outlierIqrsRaw = Number(q.outlierIqrs);
+    const outlierIqrs = Number.isFinite(outlierIqrsRaw) && outlierIqrsRaw > 0
+      ? Math.min(10, Math.max(1, outlierIqrsRaw))
+      : DEFAULT_OUTLIER_IQRS;
+
     const keyFns = {
       hardware: r => r.hardwareKey,
       model: r => r.modelFamily,
@@ -49,7 +58,7 @@ export default async function handler(req, res) {
     const { limit, cursor } = parsePagination(q, { defaultLimit: 25, maxLimit: 200 });
 
     // aggregate() sorts by median decode desc; enforce the full stable order
-    const allGroups = aggregate(runs, keyFns[groupBy])
+    const allGroups = aggregate(runs, keyFns[groupBy], { outlierIqrs, includeOutliers })
       .sort((a, b) => descNumAscStrCmp(GROUP_KEY(a), GROUP_KEY(b)));
 
     const page = paginate({ items: allGroups, limit, cursor, keyOf: GROUP_KEY, cmp: descNumAscStrCmp });
@@ -75,6 +84,11 @@ export default async function handler(req, res) {
       total: allGroups.length,
       matchedRuns: runs.length,
       distinctModelFamilies: [...new Set(runs.map(r => r.modelFamily))].length,
+      outlierPolicy: {
+        thresholdIqrs: outlierIqrs,
+        includeOutliers,
+        note: `runs more than ${outlierIqrs} IQRs from their group median carry an outlier flag with a z-score-style deviation field${includeOutliers ? ' and are included in the stats' : ' and are excluded from the stats; pass ?include_outliers=true to include them'}`
+      },
       note: 'medians are outlier-resistant; use bestRun for the single fastest measured run in each group',
       items: groups,
       has_more: page.has_more,
