@@ -111,7 +111,10 @@ export function formatTime(seconds) {
 }
 
 export function formatTokens(num) {
+  if (!Number.isFinite(num)) return '∞';
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
+  if (num >= 10000) return `${(num / 1000).toFixed(1)}k`;
+  // Below 10k show the exact number with thousands separators — "4,096" is
+  // clearer than "4.1k" for benchmark values people recognize.
   return num.toLocaleString();
 }
