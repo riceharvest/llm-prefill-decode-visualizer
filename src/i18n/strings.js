@@ -38,8 +38,28 @@ export const locales = {
       shortcutsPrefix: 'Shortcuts:',
       shortcutPlay: 'play/pause',
       shortcutReset: 'reset',
+      shortcutUndo: 'undo',
+      shortcutRedo: 'redo',
       shortcutTabs: 'switch tabs',
       agentsLinePrefix: 'AI agents: all data available as JSON —'
+    },
+
+    history: {
+      undoTooltip: 'Undo (Ctrl+Z)',
+      redoTooltip: 'Redo (Ctrl+Shift+Z)'
+    },
+
+    snapshots: {
+      title: 'Snapshots',
+      namePlaceholder: 'e.g. 4090 fp16 32k ctx',
+      nameAria: 'Snapshot name',
+      save: 'Save snapshot of current settings',
+      restore: 'Restore snapshot',
+      delete: 'Delete snapshot',
+      copyLink: 'Copy share link for snapshot',
+      empty: 'No snapshots yet — tweak the settings above and save one.',
+      emptySummary: 'Saved configuration',
+      defaultName: 'Untitled snapshot'
     },
 
     header: {

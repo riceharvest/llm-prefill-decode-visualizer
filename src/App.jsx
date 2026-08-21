@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import LocalMaxxingPresetPicker from './components/LocalMaxxingPresetPicker';
 import EngineFlagPicker from './components/EngineFlagPicker';
@@ -15,7 +15,12 @@ import GuidedTour, { hasSeenTour } from './components/GuidedTour';
 import { HARDWARE_PRESETS } from './utils/presets';
 import { toLocalPreset } from './utils/localMaxxing';
 import { readParam, writeParams } from './utils/urlState';
-import { setLocale, getLocale, getDirection } from './i18n/strings';
+import {
+  serializeSettings, parseSettings,
+  createHistory, recordChange, undo as historyUndo, redo as historyRedo
+} from './utils/settingsHistory';
+import SnapshotsSidebar from './components/SnapshotsSidebar';
+import { setLocale, getLocale, getDirection, t } from './i18n/strings';
 import { installTouchTooltips } from './utils/touchTooltips';
 
 export default function App() {
@@ -72,6 +77,75 @@ export default function App() {
     ...HARDWARE_PRESETS
   ], [localMaxxingContext.runs]);
 
+  // Settings history + named snapshots (#96). Every change to the shareable
+  // settings (preset, prefill, decode, sim multiplier, engine flags) is
+  // recorded on an undo stack; snapshots are explicit named restore points
+  // serialized to the same URL query format the share button uses.
+  const [settingsHistory, setSettingsHistory] = useState(createHistory);
+  const currentQs = useMemo(() => serializeSettings({
+    preset: selectedPreset,
+    prefill: prefillSpeed,
+    decode: decodeSpeed,
+    sim: simSpeedMultiplier,
+    flags: selectedFlags
+  }), [selectedPreset, prefillSpeed, decodeSpeed, simSpeedMultiplier, selectedFlags]);
+  // Last state the history stack knows about; null until the first effect run.
+  const lastCommittedQsRef = useRef(null);
+  // Set while undo/redo/snapshot-restore is applying values so the recording
+  // effect treats the resulting state as the new baseline instead of pushing.
+  const applyingFromHistoryRef = useRef(false);
+
+  // Record every out-of-history settings transition (batched updates collapse
+  // into a single entry because the effect runs once per committed render).
+  useEffect(() => {
+    if (lastCommittedQsRef.current === null) {
+      lastCommittedQsRef.current = currentQs;
+      return;
+    }
+    if (applyingFromHistoryRef.current) {
+      applyingFromHistoryRef.current = false;
+      lastCommittedQsRef.current = currentQs;
+      return;
+    }
+    if (currentQs === lastCommittedQsRef.current) return;
+    const previousQs = lastCommittedQsRef.current;
+    lastCommittedQsRef.current = currentQs;
+    setSettingsHistory(h => recordChange(h, previousQs));
+  }, [currentQs]);
+
+  // Apply a serialized settings entry (from undo/redo or a snapshot). Unknown
+  // hardware ids fall back like the URL loader instead of blanking the picker.
+  const applySettingsQs = useCallback((qs, { record = false } = {}) => {
+    const s = parseSettings(qs);
+    if (!record) applyingFromHistoryRef.current = true;
+    if (s.preset && (s.preset.startsWith('lmx:') || HARDWARE_PRESETS.some(p => p.id === s.preset))) {
+      setSelectedPreset(s.preset);
+    }
+    if (s.prefill !== null) setPrefillSpeed(s.prefill);
+    if (s.decode !== null) setDecodeSpeed(s.decode);
+    setSimSpeedMultiplier(s.sim);
+    setSelectedFlags(s.flags);
+    setIsPlaying(false);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    const res = historyUndo(settingsHistory, currentQs);
+    if (!res) return;
+    applySettingsQs(res.qs);
+    setSettingsHistory(res.history);
+  }, [settingsHistory, currentQs, applySettingsQs]);
+
+  const handleRedo = useCallback(() => {
+    const res = historyRedo(settingsHistory, currentQs);
+    if (!res) return;
+    applySettingsQs(res.qs);
+    setSettingsHistory(res.history);
+  }, [settingsHistory, currentQs, applySettingsQs]);
+
+  const handleRestoreSnapshot = useCallback((qs) => {
+    applySettingsQs(qs, { record: true });
+  }, [applySettingsQs]);
+
   // Keep shareable settings in the URL
   useEffect(() => {
     writeParams({
@@ -120,10 +194,16 @@ export default function App() {
     setIsPlaying(false);
   }, []);
 
-  // Keyboard shortcuts: Space = play/pause, R = reset, 1-5 = tabs.
-  // Ignored while typing in inputs/selects or with modifier keys held.
+  // Keyboard shortcuts: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z redo, Space =
+  // play/pause, R = reset, 1-8 = tabs. Plain-key shortcuts are ignored while
+  // typing in inputs/selects or with modifier keys held.
   useEffect(() => {
     const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) handleRedo(); else handleUndo();
+        return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
@@ -139,7 +219,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [handleUndo, handleRedo]);
 
   const handleShare = async () => {
     try {
@@ -190,6 +270,16 @@ export default function App() {
           selectedFlags={selectedFlags}
           onToggleFlag={handleToggleFlag}
           onApplyFlags={handleApplyFlags}
+        />
+
+        {/* Settings history + named snapshots (#96) */}
+        <SnapshotsSidebar
+          currentQs={currentQs}
+          onRestore={handleRestoreSnapshot}
+          canUndo={settingsHistory.past.length > 0}
+          canRedo={settingsHistory.future.length > 0}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
         />
 
       {/* Tab Content */}
@@ -266,7 +356,7 @@ export default function App() {
           <strong>{t('header.brandTitle')}</strong> · {t('app.footerTagline')}
         </p>
         <p style={{ fontSize: '0.7rem', marginTop: '4px', color: 'var(--text-subtle)' }}>
-          Shortcuts: <kbd>Space</kbd> play/pause · <kbd>R</kbd> reset · <kbd>1</kbd>–<kbd>8</kbd> switch tabs
+          {t('app.shortcutsPrefix')} <kbd>Space</kbd> {t('app.shortcutPlay')} · <kbd>R</kbd> {t('app.shortcutReset')} · <kbd>Ctrl</kbd>+<kbd>Z</kbd> {t('app.shortcutUndo')} · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> {t('app.shortcutRedo')} · <kbd>1</kbd>–<kbd>8</kbd> {t('app.shortcutTabs')}
         </p>
         <p style={{ fontSize: '0.7rem', marginTop: '4px', color: 'var(--text-subtle)' }}>
           {t('app.agentsLinePrefix')} <a href="/llms.txt">/llms.txt</a> · <a href="/api/spec">OpenAPI</a> · <a href="/api/compute">/api/compute</a> · <a href="/api/best">/api/best</a> · <a href="/api/localmaxxing">/api/localmaxxing</a> · <a href="/api/diff">/api/diff</a>        </p>
