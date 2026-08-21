@@ -8,6 +8,7 @@ function mockRes() {
     headers: {},
     body: null,
     setHeader(k, v) { this.headers[k] = v; },
+    getHeader(k) { return this.headers[k]; },
     end(b) { this.body = b; }
   };
 }

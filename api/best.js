@@ -1,5 +1,6 @@
 import { aggregate } from './_localmaxxing.js';
 import { resolveRuns } from './_snapshots.js';
+import { sendJson } from './_schema.js';
 import { singleTurn, cost } from './_math.js';
 import { SCENARIO_PRESETS } from '../src/utils/presets.js';
 import { fitsInMemory } from './_vramfit.js';
@@ -98,11 +99,7 @@ export function rankGroups(groups, by, workload, limit) {
 }
 
 function json(res, body, status = 200) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, max-age=600');
-  res.end(JSON.stringify(body, null, 2));
+  return sendJson(res, body, { status, cacheTtl: 600 });
 }
 
 function num(v, fallback) {

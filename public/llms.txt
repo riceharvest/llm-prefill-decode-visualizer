@@ -78,20 +78,13 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 
 ### Typical agent workflow
 
-<<<<<<< HEAD
 1. `GET /api/sizing?model=<family>&contextLength=…&concurrency=…&maxTpotMs=…` → ranked hardware recommendations with VRAM fit and expected latency, in one call.
 1. `GET /api/vram?hfId=<model>&context=<tokens>&vramGb=<budget>` → will it fit, and at what max context? (no model internals needed).
 2. `GET /api/best?by=decode&maxParamsB=8` → find the fastest measured hardware for a model class.
 3. `GET /api/presets` for canonical speed numbers, or take medians from `/api/benchmarks` for real-world numbers.
 4. `GET /api/compute?model=singleTurn&prefillSpeed=...&decodeSpeed=...&promptTokens=...&outputTokens=...` → walltime/TTFT/TPOT for a specific request shape.
 5. Compare variants with one call: `POST /api/compute` with `{"batch": [{...}, {...}]}` (up to 50 parameter sets, per-item ok/error status).
-=======
-1. `GET /api/best?by=decode&maxParamsB=8` → find the fastest measured hardware for a model class.
-2. `GET /api/presets` for canonical speed numbers, or take medians from `/api/benchmarks` for real-world numbers.
-3. `GET /api/compute?model=singleTurn&prefillSpeed=...&decodeSpeed=...&promptTokens=...&outputTokens=...` → walltime/TTFT/TPOT for a specific request shape.
-4. Compare variants by re-calling `/api/compute` with different parameters.
-5. Citing an answer? Quote the `snapshot.id` from the data response (and re-pin with `?snapshot=<id>`) so the numbers are reproducible later.
->>>>>>> 49ce4d6 (feat: versioned content-addressed dataset snapshots with ?snapshot= pinning (#20))
+6. Citing an answer? Quote the `snapshot.id` from the data response (and re-pin with `?snapshot=<id>`) so the numbers are reproducible later.
 
 All endpoints return JSON, support CORS, need no auth, and set cache headers (10 min on data endpoints).
 
@@ -106,6 +99,9 @@ Every `/api/*` response carries rate-limit headers so agents can self-throttle:
 
 Budget: 120 requests/min per client IP. Note this is enforced best-effort **per serverless instance**: Vercel functions share no memory across invocations, so concurrent warm instances each allow 120/min and cold starts reset counters — treat the limit as a floor on good behavior, not a hard global cap.
 
+### Schema versioning
+
+Every JSON response carries a top-level `schema_version` field (currently `"1"`) and an `X-Schema-Version: 1` header (also on errors and OPTIONS). Additive changes never bump the version; breaking changes bump the major version and are announced ≥90 days ahead via `Deprecation`, `Sunset`, and `Link; rel="deprecation"` headers. Policy + changelog: /CHANGELOG-API.md in the repo.
 
 ### Interactive page
 
