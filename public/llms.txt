@@ -9,6 +9,14 @@ Everything on the page is available as plain JSON over HTTP. No browser needed.
 Base URL: https://llm-prefill-decode-visualizer.vercel.app
 OpenAPI spec: /api/spec (machine-readable, derive all endpoints from it)
 
+### URL versioning (/v1/)
+
+Every endpoint below is also served under a versioned prefix: replace `/api/` with `/v1/` (e.g. `/v1/compute?model=singleTurn&…`, `/v1/benchmarks`, `/v1/spec`). The two prefixes are identical — same handlers, same responses, same rate limits.
+
+- **External consumers should harden onto `/v1/`.** It gives us room to ship breaking changes under a new prefix without silently breaking your integration.
+- The unversioned `/api/*` paths keep working and remain where the docs live (`/api/spec`).
+- Policy: additive changes never break existing clients; breaking changes ship under a new version prefix and the previous one is kept for at least 90 days with `Deprecation`/`Sunset` headers (see CHANGELOG-API.md in the repo for the full schema-versioning policy).
+
 **GET /api/health** — liveness + upstream data freshness ({ok, upstreamFreshness, cacheAge}). Human status page at /status.html.
 
 ### Endpoints
