@@ -6,6 +6,7 @@ import { buildCaveats, rowCaveats } from './_caveats.js';
 import { sendJson } from './_schema.js';
 import { engineTag, matchesEngineQuery } from './_engine.js';
 import { confidence, crossCheck } from './_crosscheck.js';
+import { auditRuns, dataQuality } from './_unit_audit.js';
 import { sendProblem, sendProblemFromError } from './_errors.js';
 import { filterByMaxAge, parseMaxAgeParam } from './_freshness.js';
 
@@ -102,6 +103,7 @@ export default async function handler(req, res) {
       mixedEngines: g.mixedEngines,
       confidence: { ...confidence(members.get(g.key) || []), ...(g.confidence || {}) },
       crossCheck: crossCheck(members.get(g.key) || []),
+      dataQuality: dataQuality(members.get(g.key) || []),
       bestRun: {
         runId: g.bestRun.runId,
         modelName: g.bestRun.modelName,
@@ -115,6 +117,10 @@ export default async function handler(req, res) {
         source: g.bestRun.source
       }
     }));
+
+    // Unit-consistency audit across every matched run (issue #43): summary
+    // goes in the payload, per-group detail rides on each group's dataQuality.
+    const auditSummary = auditRuns(runs);
 
     const warnings = groups.filter(g => g.mixedEngines)
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
@@ -135,6 +141,12 @@ export default async function handler(req, res) {
         thresholdIqrs: outlierIqrs,
         includeOutliers,
         note: `runs more than ${outlierIqrs} IQRs from their group median carry an outlier flag with a z-score-style deviation field${includeOutliers ? ' and are included in the stats' : ' and are excluded from the stats; pass ?include_outliers=true to include them'}`
+      },
+      unitAudit: {
+        runsAudited: auditSummary.runsAudited,
+        flaggedRuns: auditSummary.flaggedRuns,
+        flagCounts: auditSummary.flagCounts,
+        note: 'unit-consistency audit per run: decode_above_roofline / decode_below_floor / prefill_below_floor / prefill_below_decode; each group carries a data_quality block (status ok|flagged) listing affected runIds'
       },
       note: 'medians are outlier-resistant; ci95 is the 95% percentile bootstrap interval (2,000 resamples) over the group\'s runs and label renders it as "median [lo–hi]"; overlapping intervals mean two groups are statistically tied; use bestRun for the single fastest measured run in each group; confidence.grade judges how much a ranking is backed by data and confidence.score (0-100) combines sample size, IQR width and outlier density; check freshness.majorReleaseWarnings before comparing across engine generations',
 r: page.next_cursor,

@@ -8,6 +8,7 @@ import { enforceRateLimit } from './_ratelimit.js';
 import { buildCaveats, rowCaveats } from './_caveats.js';
 import { matchesEngineQuery } from './_engine.js';
 import { confidence } from './_crosscheck.js';
+import { dataQuality } from './_unit_audit.js';
 import { sendProblemFromError } from './_errors.js';
 import { computeCalcId } from './_calc_id.js';
 import { filterByMaxAge, parseMaxAgeParam } from './_freshness.js';
@@ -323,6 +324,8 @@ export async function bestBody(query = {}) {
         row.mixedEngines = g.mixedEngines;
       }
       row.confidence = { ...confidence(members.get(`${row.hardwareKey}|${row.modelFamily}`) || []), ...(g?.confidence || {}) };
+      // Unit-consistency audit over the group's runs (issue #43).
+      row.dataQuality = dataQuality(members.get(`${row.hardwareKey}|${row.modelFamily}`) || []);
     }
 
     // Attach 95% percentile bootstrap CIs per row (#43).
