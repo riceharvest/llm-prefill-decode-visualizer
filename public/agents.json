@@ -14,7 +14,7 @@
     {
       "path": "/api/compute",
       "method": "GET",
-      "description": "Run inference math. ?model=singleTurn|speculative|batched|agentic|kvCache plus parameters. No model param returns a self-describing capability list.",
+      "description": "Run inference math. ?model=singleTurn|speculative|batched|agentic|kvCache plus parameters. No model param returns a self-describing capability list. Batching: POST {\"batch\": [up to 50 parameter sets]} returns per-index results with per-item ok/error status.",
       "returns": "application/json"
     },
     {
