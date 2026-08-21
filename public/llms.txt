@@ -43,6 +43,7 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 - `/api/best?by=decode&maxParamsB=8&quant=q4_k_m` → top rigs for ≤8B models at Q4_K_M
 - `/api/best?by=prefill&hwClass=unified` → fastest prefill on unified-memory systems
 - `/api/best?model=qwen3.6-27b` → fastest rigs for that model family
+- `/api/best?model=qwen3.6-27b&fitCheck=true&contextLength=65536` → fastest rigs whose VRAM can actually hold it at 64k context (estimated: weights from params × quant bits + KV cache + 10% overhead)
 
 ### Typical agent workflow
 

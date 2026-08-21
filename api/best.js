@@ -1,6 +1,7 @@
 import { getAllRuns, aggregate } from './_localmaxxing.js';
 import { singleTurn } from './_math.js';
 import { SCENARIO_PRESETS } from '../src/utils/presets.js';
+import { fitsInMemory } from './_vramfit.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -113,6 +114,10 @@ function json(res, body, status = 200) {
  * ?quant=q4_k_m                   exact quantization match (case-insensitive)
  * ?hwClass=discrete_gpu|unified|cpu_only
  * ?hardware=<substr>              restrict rigs by name substring
+ * ?fitCheck=true                  exclude rigs whose memory can't hold the model
+ * ?contextLength=N                context for fitCheck (default 32768; implies fitCheck)
+ * ?precisionBytes=2               KV cache dtype for fitCheck (fp16 default)
+ * ?batchSize=1                    KV cache batch for fitCheck
  * ?limit=N                        default 10
  */
 export default async function handler(req, res) {
@@ -139,11 +144,38 @@ export default async function handler(req, res) {
       runs = runs.filter(r => r.hardwareKey?.toLowerCase().includes(h) || r.hardware?.toLowerCase().includes(h));
     }
 
+    // VRAM-fit filter: drop rigs whose memory can't hold the model weights
+    // plus KV cache at the requested context. Estimates only — see _vramfit.js.
+    const fitCtx = Number(q.contextLength);
+    const fitCheck = q.fitCheck === 'true' || (Number.isFinite(fitCtx) && fitCtx > 0);
+    const fitContextLength = Math.min(1e6, Math.max(256, fitCtx > 0 ? Math.round(fitCtx) : 32768));
+    const fitPrecisionBytes = Number(q.precisionBytes) > 0 ? Number(q.precisionBytes) : 2;
+    const fitBatchSize = Math.max(1, Math.round(Number(q.batchSize)) || 1);
+    let excludedByFit = 0;
+    if (fitCheck) {
+      const before = runs.length;
+      runs = runs.filter(r => {
+        const fit = fitsInMemory({ ...r, contextLength: fitContextLength, precisionBytes: fitPrecisionBytes, batchSize: fitBatchSize });
+        return fit?.fits === true;
+      });
+      excludedByFit = before - runs.length;
+    }
+
     // Rank per hardware rig × model family using the group's medians,
     // so one lucky run doesn't top the chart.
     const groups = aggregate(runs, r => `${r.hardwareKey}|${r.modelFamily}`);
 
     const ranked = rankGroups(groups, by, workload, limit);
+    if (fitCheck) {
+      // Attach the estimated fit verdict for each ranked group's best run.
+      const bestByKey = new Map(groups.map(g => [g.key, g.bestRun]));
+      for (const row of ranked) {
+        const sample = bestByKey.get(`${row.hardwareKey}|${row.modelFamily}`);
+        if (sample) {
+          row.vramFit = fitsInMemory({ ...sample, contextLength: fitContextLength, precisionBytes: fitPrecisionBytes, batchSize: fitBatchSize });
+        }
+      }
+    }
 
     return json(res, {
       description: by === 'walltime'
@@ -157,6 +189,15 @@ export default async function handler(req, res) {
           outputTokens: workload.outputTokens,
           source: workload.source,
           ...(workload.scenarioLabel ? { scenario: workload.scenarioLabel } : {})
+        }
+      } : {}),
+      ...(fitCheck ? {
+        fitCheck: {
+          contextLength: fitContextLength,
+          precisionBytes: fitPrecisionBytes,
+          batchSize: fitBatchSize,
+          excludedRuns: excludedByFit,
+          note: 'Fit is ESTIMATED: weights from params × assumed bits-per-weight (from quant tag, else q4-ish 4.5), KV cache from a param-count-based architecture guess, plus 10% overhead; unified memory assumes 75% usable. See api/_vramfit.js.'
         }
       } : {}),
       results: ranked
