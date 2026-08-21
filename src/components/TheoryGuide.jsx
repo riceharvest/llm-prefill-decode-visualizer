@@ -3,6 +3,17 @@ import { HelpCircle, Gauge, Zap, Play, Bot } from 'lucide-react';
 import { demoUrl } from '../utils/urlState';
 
 export default function TheoryGuide() {
+  // Glossary popovers across the app deep-link here via ?tab=theory#<anchor>;
+  // scroll to the anchored section once this tab has mounted.
+  React.useEffect(() => {
+    const id = window.location.hash.replace('#', '');
+    if (!id) return;
+    // Wait a frame so the tab content is laid out before scrolling.
+    const t = requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(t);
+  }, []);
   const bulletStyle = { fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '18px', lineHeight: 1.55 };
   const formulaStyle = {
     fontFamily: 'var(--font-mono)',
@@ -28,7 +39,7 @@ export default function TheoryGuide() {
         <div className="grid-auto" style={{ '--grid-min': '320px', marginBottom: '16px' }}>
 
           {/* Prefill Explanation */}
-          <div className="panel-inset" style={{ borderLeft: '2px solid var(--prefill)' }}>
+          <div id="theory-prefill" className="panel-inset theory-anchor" style={{ borderLeft: '2px solid var(--prefill)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
               <Zap size={16} style={{ color: 'var(--prefill)' }} />
               <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--prefill)' }}>
@@ -52,7 +63,7 @@ export default function TheoryGuide() {
           </div>
 
           {/* Decode Explanation */}
-          <div className="panel-inset" style={{ borderLeft: '2px solid var(--decode)' }}>
+          <div id="theory-decode" className="panel-inset theory-anchor" style={{ borderLeft: '2px solid var(--decode)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
               <Gauge size={16} style={{ color: 'var(--decode)' }} />
               <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--decode)' }}>
@@ -78,7 +89,7 @@ export default function TheoryGuide() {
         </div>
 
         {/* Agentic Loop Theory Section */}
-        <div className="panel-inset" style={{ borderLeft: '2px solid var(--agent)', marginBottom: '16px' }}>
+        <div id="theory-agentic" className="panel-inset theory-anchor" style={{ borderLeft: '2px solid var(--agent)', marginBottom: '16px' }}>
           <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--agent)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Bot size={16} />
             Why agentic loops require per-turn walltime measurement
