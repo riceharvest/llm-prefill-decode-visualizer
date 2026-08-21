@@ -68,6 +68,8 @@ Every `/api/compute` and `/api/best` response carries a deterministic `id` (`cal
 
 **GET /api/diff?runA=<id>&runB=<id>** — diff two measured runs in one call: both runs' metrics plus per-metric deltas, ratios (B ÷ A) and a plain-language summary. Time metrics are normalized to a 2048-token prompt / 512-token output.
 
+**GET /api/diff?mode=whatif&a=<constraints>&b=<constraints>** — what-if decision diffing: pass two /api/best-style constraint sets and get back only the deltas — options entering/leaving the feasible set (`entered` / `left`, with rank positions) and per-option VRAM headroom change (`headroom`, from the estimated fit math; enable `fitCheck`/`contextLength` in the sets). Constraint sets accept JSON (`?a={"fitCheck":"true","contextLength":8192}`) or URL-encoded query strings (`?a=fitCheck=true&contextLength=8192`), or a POST body `{"mode":"whatif","a":{...},"b":{...}}`. Example: `/api/diff?mode=whatif&a=fitCheck=true&contextLength=8192&model=qwen&b=fitCheck=true&contextLength=65536&model=qwen` shows which rigs survive a 64k-context requirement and how much headroom the survivors lose.
+
 **GET /api/best** — ranked answers to natural questions:
 - `/api/best?by=decode&maxParamsB=8&quant=q4_k_m` → top rigs for ≤8B models at Q4_K_M
 - `/api/best?by=prefill&hwClass=unified` → fastest prefill on unified-memory systems
