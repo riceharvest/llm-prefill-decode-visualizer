@@ -110,6 +110,35 @@ export default function AgenticVisualizer({
   const waterfallLayout = waterfallGeometry(turnBreakdown);
   const activeTurnItem = activeTurn ? turnBreakdown.find(t => t.turn === activeTurn) : null;
 
+  // Context growth: KV-cache token count over the loop. During a turn's prefill
+  // the context grows from the previous turn's end to this turn's full prompt;
+  // during decode it grows by generated tokens. Final context = last turn's
+  // totalPromptTokens + its decodeTokens.
+  const finalContextTokens = turnBreakdown.length
+    ? turnBreakdown[turnBreakdown.length - 1].totalPromptTokens + turnBreakdown[turnBreakdown.length - 1].decodeTokens
+    : 0;
+  const currentContextTokens = (() => {
+    if (!activeTurn || !Number.isFinite(totalAgentWalltime) || totalAgentWalltime <= 0) return 0;
+    let accumulated = 0;
+    for (const item of turnBreakdown) {
+      const turnStart = accumulated;
+      const prefillEnd = turnStart + item.prefillTime;
+      const turnEnd = turnStart + item.turnWalltime;
+      const prevContext = item.totalPromptTokens - (item.isCached ? item.newTokensPrefilled : 0) - item.decodeTokens;
+      if (elapsedSim < prefillEnd) {
+        const frac = item.prefillTime > 0 ? (elapsedSim - turnStart) / item.prefillTime : 1;
+        return Math.round(prevContext + frac * (item.totalPromptTokens - prevContext));
+      }
+      if (elapsedSim < turnEnd) {
+        const frac = item.decodeTime > 0 ? (elapsedSim - prefillEnd) / item.decodeTime : 1;
+        return Math.round(item.totalPromptTokens + frac * item.decodeTokens);
+      }
+      accumulated = turnEnd;
+    }
+    return finalContextTokens;
+  })();
+  const contextGrowthPct = finalContextTokens > 0 ? Math.min(100, (currentContextTokens / finalContextTokens) * 100) : 0;
+
   // Compare walltime if caching was turned off
   const turnBreakdownNoCache = calculateAgenticTimeline({
     ...timelineInputs,
@@ -676,6 +705,29 @@ export default function AgenticVisualizer({
               >
                 PNG
               </button>
+            </div>
+          </div>
+
+          {/* Live KV-cache context growth bar */}
+          <div style={{ marginBottom: '14px' }}>
+            <div className="field-head" style={{ marginBottom: '4px', fontSize: '0.74rem' }}>
+              <span className="section-label" style={{ fontSize: '0.7rem' }}>
+                Context (KV cache) growth
+              </span>
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--agent)', fontVariantNumeric: 'tabular-nums' }}>
+                {currentContextTokens.toLocaleString()} / {finalContextTokens.toLocaleString()} tok
+                {' '}· {(currentContextTokens / 1000).toFixed(1)}k accumulated
+              </span>
+            </div>
+            <div className="progress-track">
+              <div
+                className="progress-fill"
+                style={{
+                  width: `${contextGrowthPct}%`,
+                  background: 'linear-gradient(90deg, var(--agent), var(--decode))',
+                  transition: 'width 0.1s linear'
+                }}
+              />
             </div>
           </div>
 

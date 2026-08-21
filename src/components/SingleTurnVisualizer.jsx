@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Zap, Gauge, FileText, RotateCcw } from 'lucide-react';
 import { formatTime, formatTokens, SCENARIO_PRESETS } from '../utils/presets';
-import { readParamNum, readParam, writeParams } from '../utils/urlState';
+import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
 
 export default function SingleTurnVisualizer({
   prefillSpeed,
