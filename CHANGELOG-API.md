@@ -65,3 +65,14 @@ migrate before `Sunset`. Agents can discover the current policy at
   against.
 - Affected endpoints: `/api/compute`, `/api/presets`, `/api/localmaxxing`,
   `/api/benchmarks`, `/api/best`, `/api/spec`.
+
+### 1 — 2026-08-22 (additive, no version bump)
+
+- Context-length banding (#39): every run now carries a `contextBand` field
+  (`lt1k`, `1k-8k`, `8k-32k`, `32k+`, or `null` when the run reports no usable
+  contextLength). Aggregated groups carry a `contextBands` mix block and a
+  `mixedContextBands` boolean; mixed groups surface a `mixed_context_bands`
+  caveat and warning so cross-band comparisons aren't read as apples-to-apples.
+- New optional query parameter `?context_band=lt1k|1k-8k|8k-32k|32k+` on
+  `/api/localmaxxing`, `/api/benchmarks` and `/api/best`. Unknown values
+  return 400 (`INVALID_PARAMS`).

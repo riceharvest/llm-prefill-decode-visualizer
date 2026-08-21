@@ -148,6 +148,7 @@ export default function handler(req, res) {
             { name: 'hardware', in: 'query', schema: { type: 'string' }, description: 'substring match on rig name/key' },
             { name: 'model', in: 'query', schema: { type: 'string' }, description: 'substring match on normalized family or hfId' },
             { name: 'quant', in: 'query', schema: { type: 'string' }, description: 'exact quantization, e.g. q4_k_m' },
+            { name: 'context_band', in: 'query', schema: { type: 'string', enum: ['lt1k', '1k-8k', '8k-32k', '32k+'] }, description: 'only runs measured at this context length (<1000, 1000–7999, 8000–31999, ≥32000 tokens)' },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 500 }, description: 'page size' },
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' },
             SNAPSHOT_PARAM
@@ -165,6 +166,7 @@ export default function handler(req, res) {
             { name: 'model', in: 'query', schema: { type: 'string' } },
             { name: 'quant', in: 'query', schema: { type: 'string' } },
             { name: 'hwClass', in: 'query', schema: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] } },
+            { name: 'context_band', in: 'query', schema: { type: 'string', enum: ['lt1k', '1k-8k', '8k-32k', '32k+'] }, description: 'only runs measured at this context length; groups mixing bands carry mixedContextBands + a warning' },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 25, maximum: 200 }, description: 'page size' },
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' },
             SNAPSHOT_PARAM
@@ -189,6 +191,7 @@ export default function handler(req, res) {
             { name: 'quant', in: 'query', schema: { type: 'string' } },
             { name: 'hwClass', in: 'query', schema: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] } },
             { name: 'hardware', in: 'query', schema: { type: 'string' } },
+            { name: 'context_band', in: 'query', schema: { type: 'string', enum: ['lt1k', '1k-8k', '8k-32k', '32k+'] }, description: 'only runs measured at this context length (<1000, 1000–7999, 8000–31999, ≥32000 tokens)' },
             { name: 'fitCheck', in: 'query', schema: { type: 'boolean' }, description: 'exclude rigs whose memory cannot hold the model at the given context (estimated)' },
             { name: 'contextLength', in: 'query', schema: { type: 'integer', default: 32768 }, description: 'context for fitCheck; providing it implies fitCheck=true' },
             { name: 'precisionBytes', in: 'query', schema: { type: 'number', default: 2 }, description: 'KV cache dtype bytes for fitCheck (2 = fp16)' },

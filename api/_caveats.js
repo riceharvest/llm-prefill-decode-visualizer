@@ -3,6 +3,8 @@
 // array so consumers see the dataset's known limitations inline, not just in
 // the docs (issue #19).
 
+import { contextBandMix } from './_contextbands.js';
+
 /**
  * Caveats that apply to any payload derived from the community dataset.
  * The comparable-run filter (batchSize=1, concurrency<=1) lives in
@@ -61,6 +63,19 @@ export function groupCaveats(groups) {
         examples: mixed.slice(0, 5).map(g => g.key)
       });
     }
+
+    const mixedBands = groups.filter(g => g.mixedContextBands);
+    if (mixedBands.length > 0) {
+      out.push({
+        code: 'mixed_context_bands',
+        severity: 'warning',
+        summary: `Mixed context-length bands in ${mixedBands.length} of ${total} groups`,
+        detail: 'Some groups blend runs measured at different context lengths (<1k, 1k–8k, 8k–32k, 32k+). Speeds depend on context length, so compare like with like via ?context_band=.',
+        affectedGroups: mixedBands.length,
+        totalGroups: total,
+        examples: mixedBands.slice(0, 5).map(g => g.key)
+      });
+    }
   }
 
   return out.sort((a, b) => a.code.localeCompare(b.code));
@@ -81,6 +96,16 @@ export function runsCaveats(runs) {
         summary: `Runs span ${engines.length} engine versions`,
         detail: 'The matched runs were measured on different inference engines; compare like with like via ?quant= and per-run engine fields.',
         engines: engines.sort()
+      });
+    }
+    const bandMix = contextBandMix(runs);
+    if (bandMix.mixed) {
+      out.push({
+        code: 'mixed_context_bands',
+        severity: 'warning',
+        summary: `Runs span ${bandMix.distinctBands} context-length bands (${bandMix.bands.map(b => b.label).join(', ')})`,
+        detail: 'The matched runs were measured at different context lengths. Measured tok/s depends on context, so compare like with like via ?context_band=.',
+        bands: bandMix.bands
       });
     }
   }
@@ -105,6 +130,14 @@ export function rowCaveats(group) {
       severity: 'warning',
       summary: 'Mixed engine versions',
       detail: 'This group blends runs from different inference engines.'
+    });
+  }
+  if (group.mixedContextBands) {
+    out.push({
+      code: 'mixed_context_bands',
+      severity: 'warning',
+      summary: 'Mixed context-length bands',
+      detail: 'This group blends runs measured at different context lengths (<1k, 1k–8k, 8k–32k, 32k+); its medians mix regimes.'
     });
   }
   return out.sort((a, b) => a.code.localeCompare(b.code));
