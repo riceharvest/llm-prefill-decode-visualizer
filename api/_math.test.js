@@ -7,6 +7,8 @@ import {
   batched,
   agentic,
   cost,
+  kvCache,
+  memoryLedger,
   MAX_PLAUSIBLE_DECODE_TOK_PER_SEC,
   MAX_PLAUSIBLE_PREFILL_TOK_PER_SEC,
   MIN_PLAUSIBLE_TTFT_SECONDS
@@ -155,5 +157,47 @@ test('implausible inputs flow through to the compute results', () => {
 
   const agent = agentic({ basePromptTokens: 10, prefillSpeed: 800000 });
   assert.ok(agent.warnings.some(w => w.code === 'ttft_below_kernel_launch_floor'));
+});
+
+test('memoryLedger: LLaMA-70B FP16 + 32k KV vs RTX 4090 24GB — fail', () => {
+  const kv = kvCache({ numLayers: 80, kvHeads: 8, headDim: 128, contextLength: 32768, precisionBytes: 2 });
+  const r = memoryLedger({
+    paramsB: 70, precisionBytes: 2,
+    kvBytes: kv.bytesPerToken * 32768,
+    gpuVramGb: 24
+  });
+
+  // Weights: 70e9 × 2B / GiB ≈ 130.39 GB; KV: 2×80×8×128×2 × 32768 = exactly 10 GiB
+  approx(r.weightsGb, 130.39, 0.05);
+  approx(r.kvCacheGb, 10, 0.001);
+  // Framework overhead at the default 15%
+  approx(r.frameworkOverheadGb, (r.weightsGb + r.kvCacheGb) * 0.15, 0.001);
+  assert.equal(r.verdict, 'fail');
+  assert.equal(r.utilizationPct > 100, true);
+});
+
+test('memoryLedger: pass / warn / fail boundaries against VRAM', () => {
+  const base = { paramsB: 8, precisionBytes: 0.5, kvBytes: 1 * 1024 ** 3 };
+
+  // ~5.5 GB total on a 24 GB card — comfortable pass
+  const pass = memoryLedger({ ...base, gpuVramGb: 24 });
+  assert.equal(pass.verdict, 'pass');
+  assert.ok(pass.freeAfterReserveGb > 0);
+
+  // Same ledger on a card where it fits but eats the 5% safety reserve — warn.
+  // total ≈ (8e9·0.5 + 1GiB)·1.15 ≈ 5.43 GB → fits 5.6 GB but not within 95% of it
+  const warn = memoryLedger({ ...base, gpuVramGb: 5.6 });
+  assert.equal(warn.verdict, 'warn');
+  assert.ok(warn.freeAfterReserveGb <= 0);
+  assert.ok(warn.utilizationPct <= 100);
+
+  const fail = memoryLedger({ ...base, gpuVramGb: 4 });
+  assert.equal(fail.verdict, 'fail');
+});
+
+test('memoryLedger: no GPU selected → null verdict, math still returned', () => {
+  const r = memoryLedger({ paramsB: 8, precisionBytes: 2, kvBytes: 2 * 1024 ** 3, gpuVramGb: 0 });
+  assert.equal(r.verdict, null);
+  assert.ok(r.totalGb > 0);
 });
 });
