@@ -169,3 +169,31 @@ test('unknown model gets an RFC 9457 INVALID_PARAMS problem served as applicatio
   assert.match(json.detail, /Unknown model/);
   assert.deepEqual(json.available, ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost']);
 });
+
+test('implausible inputs return 200 with a non-blocking warnings array', () => {
+  const { status, json } = call({
+    method: 'POST',
+    body: { model: 'singleTurn', promptTokens: 64, prefillSpeed: 900000, decodeSpeed: 5000 }
+  });
+  assert.equal(status, 200); // warnings never fail the request
+  const codes = json.warnings.map(w => w.code);
+  assert.ok(codes.includes('decode_above_bandwidth_roofline'));
+  assert.ok(codes.includes('prefill_above_compute_roofline'));
+  assert.ok(codes.includes('ttft_below_kernel_launch_floor'));
+  // math is still computed and untouched
+  assert.equal(typeof json.totalWalltimeSeconds, 'number');
+});
+
+test('plausible inputs return an empty warnings array', () => {
+  const { json } = call({
+    method: 'POST',
+    body: { model: 'singleTurn', promptTokens: 4096, outputTokens: 512 }
+  });
+  assert.deepEqual(json.warnings, []);
+});
+
+test('capability list documents the sanity warnings', () => {
+  const { json } = call({ query: {} });
+  assert.equal(json.sanity.codes.length, 3);
+  assert.match(json.sanity.description, /warnings/);
+});

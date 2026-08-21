@@ -1,6 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cost } from './_math.js';
+import {
+  sanityWarnings,
+  singleTurn,
+  speculative,
+  batched,
+  agentic,
+  cost,
+  MAX_PLAUSIBLE_DECODE_TOK_PER_SEC,
+  MAX_PLAUSIBLE_PREFILL_TOK_PER_SEC,
+  MIN_PLAUSIBLE_TTFT_SECONDS
+} from './_math.js';
 
 function approx(actual, expected, tol = 0.01) {
   assert.ok(
@@ -70,4 +80,80 @@ test('cost: degenerate speeds yield null instead of Infinity/NaN', () => {
   assert.equal(noDecode.costUsdPerMillionTokens, null);
   assert.equal(noDecode.requestsPerHour, 0);
   assert.equal(noDecode.costUsdPerThousandRequests, null);
+
+
+test('plausible inputs produce an empty warnings array', () => {
+  assert.deepEqual(sanityWarnings({ promptTokens: 2048, prefillSpeed: 3800, decodeSpeed: 105 }), []);
+  // boundary values are still plausible
+  assert.deepEqual(sanityWarnings({
+    promptTokens: 4096,
+    prefillSpeed: MAX_PLAUSIBLE_PREFILL_TOK_PER_SEC,
+    decodeSpeed: MAX_PLAUSIBLE_DECODE_TOK_PER_SEC
+  }), []);
+});
+
+test('decode above the memory-bandwidth roofline is flagged', () => {
+  const [w] = sanityWarnings({ decodeSpeed: MAX_PLAUSIBLE_DECODE_TOK_PER_SEC + 1 });
+  assert.equal(w.code, 'decode_above_bandwidth_roofline');
+  assert.match(w.message, /memory-bandwidth roofline/);
+});
+
+test('prefill above the compute roofline is flagged', () => {
+  const [w] = sanityWarnings({ prefillSpeed: MAX_PLAUSIBLE_PREFILL_TOK_PER_SEC + 1 });
+  assert.equal(w.code, 'prefill_above_compute_roofline');
+  assert.match(w.message, /compute roofline/);
+});
+
+test('TTFT below the kernel-launch floor is flagged', () => {
+  // 64 tokens at 500k tok/s → 0.128 ms TTFT, far under the ~2 ms floor
+  const ttft = 64 / MAX_PLAUSIBLE_PREFILL_TOK_PER_SEC;
+  assert.ok(ttft < MIN_PLAUSIBLE_TTFT_SECONDS);
+  const [w] = sanityWarnings({ promptTokens: 64, prefillSpeed: MAX_PLAUSIBLE_PREFILL_TOK_PER_SEC });
+  assert.equal(w.code, 'ttft_below_kernel_launch_floor');
+  assert.match(w.message, /kernel-launch/);
+});
+
+test('multiple violations are all reported', () => {
+  const warnings = sanityWarnings({ promptTokens: 32, prefillSpeed: 900000, decodeSpeed: 9000 });
+  assert.deepEqual(
+    warnings.map(w => w.code).sort(),
+    ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor']
+  );
+});
+
+test('warnings never throw on missing or degenerate inputs', () => {
+  assert.doesNotThrow(() => sanityWarnings());
+  assert.doesNotThrow(() => sanityWarnings({ promptTokens: 0, prefillSpeed: 0, decodeSpeed: 0 }));
+  // zero speeds must not trigger the TTFT floor (division guard)
+  assert.deepEqual(sanityWarnings({ promptTokens: 100, prefillSpeed: 0 }), []);
+});
+
+test('every successful compute result carries a warnings array', () => {
+  for (const result of [
+    singleTurn({}),
+    speculative({}),
+    batched({}),
+    agentic({})
+  ]) {
+    assert.ok(Array.isArray(result.warnings), `${result.inputs} result should carry a warnings array`);
+  }
+  // defaults are plausible — arrays start empty
+  assert.deepEqual(singleTurn({}).warnings, []);
+  assert.deepEqual(agentic({}).warnings, []);
+});
+
+test('implausible inputs flow through to the compute results', () => {
+  const st = singleTurn({ promptTokens: 64, prefillSpeed: 900000, decodeSpeed: 5000 });
+  assert.ok(st.warnings.length >= 3);
+  assert.ok(st.ttftSeconds !== null); // math is untouched by warnings
+
+  const spec = speculative({ baseDecodeSpeed: 99999 });
+  assert.equal(spec.warnings[0].code, 'decode_above_bandwidth_roofline');
+
+  const batchedResult = batched({ decodeSpeed: 4000 });
+  assert.equal(batchedResult.warnings[0].code, 'decode_above_bandwidth_roofline');
+
+  const agent = agentic({ basePromptTokens: 10, prefillSpeed: 800000 });
+  assert.ok(agent.warnings.some(w => w.code === 'ttft_below_kernel_launch_floor'));
+});
 });
