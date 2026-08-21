@@ -91,6 +91,15 @@ export const HARDWARE_PRESETS = [
   }
 ];
 
+// Workload scenario presets: common prompt/output shapes for quick demos.
+export const SCENARIO_PRESETS = [
+  { id: 'chat', label: 'Standard chat', icon: '💬', promptTokens: 2048, outputTokens: 512 },
+  { id: 'rag', label: 'RAG query', icon: '📚', promptTokens: 4096, outputTokens: 512 },
+  { id: 'longdoc', label: 'Summarize doc', icon: '📄', promptTokens: 32768, outputTokens: 256 },
+  { id: 'codegen', label: 'Code generation', icon: '💻', promptTokens: 2048, outputTokens: 4096 },
+  { id: 'reasoning', label: 'Deep reasoning', icon: '🧠', promptTokens: 1024, outputTokens: 2048 }
+];
+
 export function formatTime(seconds) {
   if (!Number.isFinite(seconds)) return '∞';
   if (seconds < 0.001) return `${(seconds * 1000000).toFixed(0)} µs`;

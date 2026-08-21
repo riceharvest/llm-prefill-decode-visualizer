@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Zap, Gauge, FileText, RotateCcw } from 'lucide-react';
-import { formatTime, formatTokens } from '../utils/presets';
+import { formatTime, formatTokens, SCENARIO_PRESETS } from '../utils/presets';
 import { readParamNum, readParam, writeParams } from '../utils/urlState';
 
 export default function SingleTurnVisualizer({
@@ -13,6 +13,14 @@ export default function SingleTurnVisualizer({
 }) {
   const [promptTokens, setPromptTokens] = useState(() => readParamNum('prompt', 2048));
   const [outputTokens, setOutputTokens] = useState(() => readParamNum('output', 512));
+
+  const activeScenario = SCENARIO_PRESETS.find(s => s.promptTokens === promptTokens && s.outputTokens === outputTokens);
+
+  const applyScenario = (scenario) => {
+    setPromptTokens(scenario.promptTokens);
+    setOutputTokens(scenario.outputTokens);
+    handleReset();
+  };
 
   // Auto-start the simulation when the page was opened via a "try it" demo link
   useEffect(() => {
@@ -194,6 +202,21 @@ export default function SingleTurnVisualizer({
           <FileText size={16} />
           <span>Single-Turn Chat Parameters</span>
         </h2>
+
+        {/* Workload scenario presets */}
+        <div className="seg" role="group" aria-label="Workload scenario presets" style={{ marginBottom: '14px', flexWrap: 'wrap' }}>
+          {SCENARIO_PRESETS.map(s => (
+            <button
+              key={s.id}
+              onClick={() => applyScenario(s)}
+              className={activeScenario?.id === s.id ? 'active' : ''}
+              aria-pressed={activeScenario?.id === s.id}
+              title={`${s.promptTokens.toLocaleString()} prompt → ${s.outputTokens.toLocaleString()} output tokens`}
+            >
+              {s.icon} {s.label}
+            </button>
+          ))}
+        </div>
 
         <div className="grid-auto" style={{ '--grid-min': '280px' }}>
           {/* Prompt Tokens Slider */}
