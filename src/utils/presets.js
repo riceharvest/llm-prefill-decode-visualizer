@@ -7,6 +7,10 @@ export const HARDWARE_PRESETS = [
     icon: '⚡',
     badge: 'Localmaxxing #1 Consumer',
     vramBandwidth: '1.01 TB/s (GDDR6X)',
+    tdpWatts: 450,
+    loadWatts: 450,
+    psuWatts: 850,
+    powerNote: 'Transient spikes exceed 600W — use a native ATX 3.x / 12V-2x6 PSU connection.',
     description: 'Top single consumer GPU on Localmaxxing running ExLlamaV2 with FlashAttention-2 & EXL2 4.0bpw.'
   },
   {
@@ -17,6 +21,10 @@ export const HARDWARE_PRESETS = [
     icon: '🖥️',
     badge: 'Localmaxxing 70B Rig',
     vramBandwidth: '1.87 TB/s Combined',
+    tdpWatts: 350,
+    loadWatts: 700,
+    psuWatts: 1200,
+    powerNote: 'Two cards: 4×8-pin PCIe connectors, and check the top card can breathe — dual axial coolers starve in most towers.',
     description: 'The go-to Localmaxxing dual 24GB rig running 70B parameter models in 4-bit with Tensor Parallelism.'
   },
   {
@@ -27,6 +35,10 @@ export const HARDWARE_PRESETS = [
     icon: '🔥',
     badge: 'Localmaxxing Budget King',
     vramBandwidth: '936 GB/s (GDDR6X)',
+    tdpWatts: 350,
+    loadWatts: 350,
+    psuWatts: 850,
+    powerNote: 'Power-limiting to ~280W costs ~5% token speed for ~20% less heat and fan noise.',
     description: 'Most popular community budget workstation GPU setup on Localmaxxing for 8B-32B models.'
   },
   {
@@ -37,6 +49,10 @@ export const HARDWARE_PRESETS = [
     icon: '🍏',
     badge: 'Localmaxxing High VRAM',
     vramBandwidth: '800 GB/s Unified',
+    tdpWatts: 140,
+    loadWatts: 180,
+    psuWatts: null,
+    powerNote: 'Fixed internal supply — no PSU sizing needed; sustains full package power 24/7 within its acoustic envelope.',
     description: 'High-VRAM Apple Silicon workstation running large 70B-120B models completely in RAM.'
   },
   {
@@ -47,6 +63,10 @@ export const HARDWARE_PRESETS = [
     icon: '💻',
     badge: 'Localmaxxing Entry',
     vramBandwidth: '360 GB/s',
+    tdpWatts: 170,
+    loadWatts: 220,
+    psuWatts: 550,
+    powerNote: 'Single 8-pin connector — fits almost any existing build without a PSU upgrade.',
     description: 'Standard entry-level desktop GPU running 8B quantized models via Ollama / LM Studio.'
   },
   {
@@ -57,6 +77,10 @@ export const HARDWARE_PRESETS = [
     icon: '🚀',
     badge: 'Cloud LPU',
     vramBandwidth: 'Ultra (SRAM Direct)',
+    tdpWatts: null,
+    loadWatts: null,
+    psuWatts: null,
+    powerNote: 'Hosted cloud — power and cooling are the provider\'s problem, not your electricity bill.',
     description: 'SRAM-based Language Processing Units delivering instantaneous prefill & lightning decoding.'
   },
   {
@@ -67,6 +91,10 @@ export const HARDWARE_PRESETS = [
     icon: '🏢',
     badge: 'Enterprise Cloud',
     vramBandwidth: '3.35 TB/s (HBM3)',
+    tdpWatts: 700,
+    loadWatts: 700,
+    psuWatts: null,
+    powerNote: 'Datacenter SXM5 module on a managed cluster — no desktop PSU applies.',
     description: 'Datacenter GPU cluster using PagedAttention and FP8 Tensor Cores.'
   },
   {
@@ -77,6 +105,10 @@ export const HARDWARE_PRESETS = [
     icon: '🍓',
     badge: 'Edge CPU',
     vramBandwidth: '17 GB/s (LPDDR4X)',
+    tdpWatts: 12,
+    loadWatts: 12,
+    psuWatts: null,
+    powerNote: 'Runs off the official 27W (5V/5A) USB-PD supply — active cooling recommended for long runs.',
     description: 'Edge ARM processor constrained by CPU memory bandwidth during decode.'
   },
   {
@@ -87,6 +119,10 @@ export const HARDWARE_PRESETS = [
     icon: '⚙️',
     badge: 'User Defined',
     vramBandwidth: 'User Configurable',
+    tdpWatts: null,
+    loadWatts: null,
+    psuWatts: null,
+    powerNote: null,
     description: 'Set custom prefill and decode speeds for your own server benchmark.'
   }
 ];

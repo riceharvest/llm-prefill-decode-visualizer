@@ -12,22 +12,44 @@ import { estimateFromLabel } from '../utils/streetPricing';
 import { exportNodeAsPng } from '../utils/exportPng';
 import { buildCompareBatchBody, buildSnippet } from '../utils/copyAsCode';
 import { evaluateSlo } from '../utils/slo.js';
+import { estimatePower } from '../utils/powerThermal';
 import { t } from '../i18n/strings';
 
 
-// Typical whole-rig wattage under inference load (GPU + rest-of-system overhead).
-// Used as the default for the TCO section; the user can always override it.
-const DEFAULT_WATTS = {
-  rtx4090_exl2: 450,
-  dual_rtx3090: 700,
-  rtx3090_llamacpp: 350,
-  mac_ultra: 180,
-  rtx3060_entry: 220,
-  h100: 700,
-  rpi5: 12,
-  custom: 400
-};
-const defaultWattsFor = (id) => DEFAULT_WATTS[id] ?? 400;
+// Fallback whole-rig wattage under inference load for profiles without
+// measured/curated power data (LocalMaxxing runs, custom profiles). Curated
+// presets carry their own `loadWatts` (issue #69).
+const DEFAULT_LOAD_WATTS = 400;
+const defaultWattsFor = (preset) =>
+  (Number.isFinite(preset?.loadWatts) ? preset.loadWatts : DEFAULT_LOAD_WATTS);
+
+/**
+ * Power/thermal facts for a compare card (#69). Built-in presets carry the
+ * fields directly; LocalMaxxing community runs are estimated from the run's
+ * own hardware fields via the shared estimator. Returns null when nothing
+ * is known — we never invent a wattage.
+ */
+function powerInfoFor(preset) {
+  if (Number.isFinite(preset?.tdpWatts) || Number.isFinite(preset?.loadWatts)
+    || Number.isFinite(preset?.psuWatts) || preset?.powerNote) {
+    const perCard = /\bdual\b|\b2\s*[x×]\b/i.test(preset.name || '') ? 2 : 1;
+    return {
+      tdpWatts: Number.isFinite(preset.tdpWatts) ? preset.tdpWatts : null,
+      perCard,
+      loadWatts: Number.isFinite(preset.loadWatts) ? preset.loadWatts : null,
+      psuWatts: Number.isFinite(preset.psuWatts) ? preset.psuWatts : null,
+      note: preset.powerNote || null
+    };
+  }
+  const hw = preset?.run?.hardware;
+  if (!hw) return null;
+  return estimatePower({
+    gpu: hw.gpuName,
+    hwClass: hw.hwClass,
+    gpuCount: hw.gpuCount,
+    chip: hw.chipVariant || hw.chipFamily
+  });
+}
 
 export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMaxxingContext, sloBudgets, onApplySpeeds }) {
   const [hardwareA, setHardwareA] = useState(() => readParam('hwA') || 'groq');
@@ -50,7 +72,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   // TCO: local electricity vs cloud pricing. Marginal cost of a local rig is
   // watts-under-load × $/kWh; cloud cost is a single blended $/M token input.
   const [tcoHw, setTcoHw] = useState(() => readParam('tcoHw') || 'rtx4090_exl2');
-  const [tcoWatts, setTcoWatts] = useState(() => readParam('tcoW') ?? String(defaultWattsFor(readParam('tcoHw') || 'rtx4090_exl2')));
+  const [tcoWatts, setTcoWatts] = useState(() => readParam('tcoW') ?? String(defaultWattsFor(presets.find(p => p.id === (readParam('tcoHw') || 'rtx4090_exl2')))));
   const [tcoKwh, setTcoKwh] = useState(() => readParam('tcoKwh') ?? '0.30');
   const [tcoCloud, setTcoCloud] = useState(() => readParam('tcoCloud') ?? '');
   const [tcoCapex, setTcoCapex] = useState(() => readParam('tcoCapex') ?? '2500');
@@ -58,7 +80,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
 
   const handleTcoHwChange = (id) => {
     setTcoHw(id);
-    setTcoWatts(String(defaultWattsFor(id)));
+    setTcoWatts(String(defaultWattsFor(presets.find(p => p.id === id))));
   };
 
   // Shareable per-tab settings
@@ -139,6 +161,39 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   // single-GPU curves reasonably in the 1-64 range.
   const decodeEffA = Math.pow(batchSize, -0.25);
   const decodeEffB = decodeEffA; // same relative penalty for both systems
+  // Power/thermal rows (#69): board power (TDP), whole-rig inference draw
+  // and PSU guidance — hidden entirely when nothing is known about the
+  // hardware, so cloud/edge/custom cards stay clean.
+  const renderPower = (preset) => {
+    const p = powerInfoFor(preset);
+    if (!p) return null;
+    return (
+      <>
+        {p.tdpWatts != null && (
+          <div style={rowStyle}>
+            <span>GPU TDP{p.perCard > 1 ? ` × ${p.perCard}` : ''}</span>
+            <span style={numStyle}>{p.tdpWatts} W{p.perCard > 1 ? ' / card' : ''}</span>
+          </div>
+        )}
+        {p.loadWatts != null && (
+          <div style={rowStyle}>
+            <span>Rig draw under load</span>
+            <span style={numStyle}>{p.loadWatts} W</span>
+          </div>
+        )}
+        {p.psuWatts != null && (
+          <div style={rowStyle}>
+            <span>PSU guidance</span>
+            <span style={numStyle}>≥ {p.psuWatts} W</span>
+          </div>
+        )}
+        {p.note && (
+          <p className="hint-text" style={{ margin: 0 }} aria-label={`Power notes for ${preset.name}`}>{p.note}</p>
+        )}
+      </>
+    );
+  };
+
   const batchedPerUserDecodeA = presetA.decodeSpeed * decodeEffA;
   const batchedPerUserDecodeB = presetB.decodeSpeed * decodeEffA;
 
@@ -503,6 +558,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               )}
               {presetA.sourceUrl && <a href={presetA.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600 }}>View LocalMaxxing source run ↗</a>}
               {renderPricing(presetA, pricingA)}
+              {renderPower(presetA)}
               <div style={rowStyle}>
                 <span>{t('compare.decodeSpeed')} <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>({t('compare.perUserSuffix')})</em></span>
                 <span style={{ ...numStyle, color: 'var(--decode)' }}>{Math.round(batchedPerUserDecodeA).toLocaleString()} tok/s</span>
@@ -600,6 +656,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               )}
               {presetB.sourceUrl && <a href={presetB.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600 }}>View LocalMaxxing source run ↗</a>}
               {renderPricing(presetB, pricingB)}
+              {renderPower(presetB)}
               <div style={rowStyle}>
                 <span>{t('compare.decodeSpeed')} <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>({t('compare.perUserSuffix')})</em></span>
                 <span style={{ ...numStyle, color: 'var(--decode)' }}>{Math.round(batchedPerUserDecodeB).toLocaleString()} tok/s</span>
