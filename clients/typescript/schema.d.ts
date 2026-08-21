@@ -238,7 +238,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description {hardware[], scenarios[]} */
+                /** @description {hardware[], scenarios[]}; each hardware entry carries power/thermal guidance (#69): tdpWatts (board power), loadWatts (typical whole-rig wattage under inference), psuWatts (recommended PSU size) and powerNote — null where not applicable (cloud/edge/custom). */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -413,7 +413,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns. Each result includes a `pricing` object: USD street-price estimate with low/high range, perGpu breakdown for multi-GPU rigs, asOf date, and eBay (new + used) and Craigslist search links to verify against live listings. `pricing` is null when no anchor exists (cpu_only, unknown GPUs). Each result also carries `explain`: a one-sentence human-readable explanation combining the VRAM-fit math (weights + KV estimates) with the measured source, e.g. '24GB fits 8B q4_k_m weights ~5GB + 32k KV ~4GB with 14GB headroom; measured 100 tok/s decode from run #a1' — pass-through ready for agent chat pipelines. */
+                /** @description Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns. Each result includes a `pricing` object: USD street-price estimate with low/high range, perGpu breakdown for multi-GPU rigs, asOf date, and eBay (new + used) and Craigslist search links to verify against live listings. `pricing` is null when no anchor exists (cpu_only, unknown GPUs). Each result also carries `explain`: a one-sentence human-readable explanation combining the VRAM-fit math (weights + KV estimates) with the measured source, e.g. '24GB fits 8B q4_k_m weights ~5GB + 32k KV ~4GB with 14GB headroom; measured 100 tok/s decode from run #a1' — pass-through ready for agent chat pipelines. Each result also includes a `power` object (#69): board power (TDP, per card and total), typical whole-rig wattage under sustained inference, and a recommended PSU size with transient-headroom notes — so a dual-GPU recommendation can be sanity-checked against the user's actual electrical setup. `power` is null when no anchor exists (cpu_only, unknown GPUs). */
                 200: {
                     headers: {
                         [name: string]: unknown;
