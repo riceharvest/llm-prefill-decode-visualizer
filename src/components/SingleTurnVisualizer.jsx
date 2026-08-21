@@ -8,6 +8,7 @@ import {
   estimateImageTokens
 } from '../utils/multimodal';
 import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
+import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import { sanityWarnings } from '../../api/_math.js';
@@ -261,6 +262,16 @@ export default function SingleTurnVisualizer({
   const throughputSub = `(${(safePromptTokens + safeOutputTokens).toLocaleString()} tok) ÷ ${formatTime(expectedTotalTime)}`;
   const prefillPctSub = `${formatTime(expectedTTFT)} ÷ ${formatTime(expectedTotalTime)} × 100 = ${prefillPct.toFixed(1)}%`;
   const decodePctSub = `${formatTime(expectedDecodeTime)} ÷ ${formatTime(expectedTotalTime)} × 100 = ${decodePct.toFixed(1)}%`;
+  // Human-reading-speed anchors (issue #86): calibrated comparisons that turn
+  // abstract tok/s / latency figures into embodied intuition. Each returns
+  // null on degenerate inputs so no bogus comparison is rendered.
+  const ttftAnchorText = ttftAnchor(expectedTTFT, totalPrefillTokens);
+  const tpotAnchorText = tpotAnchor(tpotMs);
+  const walltimeAnchorText = walltimeAnchor(expectedTotalTime, outputTokens);
+  const throughputNow = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0
+    ? (totalPrefillTokens + outputTokens) / expectedTotalTime
+    : NaN;
+  const throughputAnchorText = throughputAnchor(throughputNow);
   // Markdown walkthrough export (download + clipboard)
   const [mdCopied, setMdCopied] = useState(false);
   const buildMarkdown = () => buildSingleTurnMarkdown({
@@ -857,7 +868,9 @@ export default function SingleTurnVisualizer({
               {totalImageTokens > 0
                 ? `Prefill ${totalPrefillTokens.toLocaleString()} tok (incl. images)`
                 : 'Prompt prefill latency'}
-            </div>          </div>
+            </div>
+            {ttftAnchorText && <div className="metric-anchor">⏱ {ttftAnchorText}</div>}
+          </div>
 
           <div className="metric" style={{ borderLeftColor: 'var(--decode)' }}>
             <div className="metric-label">{t('singleTurn.metricTpot')}</div>
@@ -867,6 +880,7 @@ export default function SingleTurnVisualizer({
               </Metric>
             </div>
             <div className="metric-sub">{t('singleTurn.tokensPerSecSub', { speed: decodeSpeed })}</div>
+            {tpotAnchorText && <div className="metric-anchor">📖 {tpotAnchorText}</div>}
           </div>
 
           <div className="metric" style={{ borderLeftColor: 'var(--accent)' }}>
@@ -877,6 +891,7 @@ export default function SingleTurnVisualizer({
               </Metric>
             </div>
             <div className="metric-sub">{t('singleTurn.metricTotalSub')}</div>
+            {walltimeAnchorText && <div className="metric-anchor">📖 {walltimeAnchorText}</div>}
           </div>
 
           <div className="metric" style={{ borderLeftColor: 'var(--agent)' }}>
@@ -891,7 +906,9 @@ export default function SingleTurnVisualizer({
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>tok/s</span>
               </Metric>
             </div>
-            <div className="metric-sub">Total tokens ÷ walltime{totalImageTokens > 0 ? ' (incl. vision tokens)' : ''}</div>          </div>
+            <div className="metric-sub">Total tokens ÷ walltime{totalImageTokens > 0 ? ' (incl. vision tokens)' : ''}</div>
+            {throughputAnchorText && <div className="metric-anchor">⚡ {throughputAnchorText}</div>}
+          </div>
 
         </div>
 

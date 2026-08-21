@@ -483,6 +483,15 @@ input[type="range"]::-moz-range-thumb {
   margin-top: 3px;
 }
 
+/* Human-reading-speed anchor line (issue #86): the calibrated "≈2× faster
+   than a fast human reader" comparison under each time metric. */
+.metric-anchor {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+  font-style: italic;
+}
+
 /* ---------- Progress bars (width driven by requestAnimationFrame — no width transitions) ---------- */
 
 .progress-track {
