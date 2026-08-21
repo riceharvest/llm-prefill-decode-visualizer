@@ -6,9 +6,11 @@ import { methodologyMismatch } from '../utils/localMaxxing';
 import { buildSizingReport, buildSizingReportJson, buildSizingReportYaml, buildSizingReportMarkdown, downloadSizingReport } from '../utils/sizingReport';
 import { buildDeepLink } from '../utils/exportMarkdown';
 import Metric from './Metric';
+import SloBadge from './SloBadge';
 import { estimateFromLabel } from '../utils/streetPricing';
 import { exportNodeAsPng } from '../utils/exportPng';
 import { buildCompareBatchBody, buildSnippet } from '../utils/copyAsCode';
+import { evaluateSlo } from '../utils/slo.js';
 import { t } from '../i18n/strings';
 
 
@@ -26,7 +28,7 @@ const DEFAULT_WATTS = {
 };
 const defaultWattsFor = (id) => DEFAULT_WATTS[id] ?? 400;
 
-export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMaxxingContext }) {
+export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMaxxingContext, sloBudgets }) {
   const [hardwareA, setHardwareA] = useState(() => readParam('hwA') || 'groq');
   const [hardwareB, setHardwareB] = useState(() => readParam('hwB') || 'rtx4090_exl2');
   const [batchSize, setBatchSize] = useState(() => Math.max(1, Math.round(readParamNum('batch', 1))));
@@ -190,6 +192,25 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   const speedupTotal = totalTimeA > 0 ? totalTimeB / totalTimeA : 0;
   const speedupPrefill = ttftA > 0 ? ttftB / ttftA : 0;
   const speedupDecode = decodeTimeA > 0 ? decodeTimeB / decodeTimeA : 0;
+
+  // SLO check (issue #64): badge each system's TTFT / TPOT / walltime against
+  // the user's persisted budgets. Disabled budgets → null → no badge.
+  const sloResultsA = evaluateSlo(
+    {
+      ttftSec: ttftA,
+      tpotMs: batchedPerUserDecodeA > 0 ? 1000 / batchedPerUserDecodeA : Infinity,
+      walltimeSec: totalTimeA
+    },
+    sloBudgets
+  );
+  const sloResultsB = evaluateSlo(
+    {
+      ttftSec: ttftB,
+      tpotMs: batchedPerUserDecodeB > 0 ? 1000 / batchedPerUserDecodeB : Infinity,
+      walltimeSec: totalTimeB
+    },
+    sloBudgets
+  );
 
   const rowStyle = { display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '0.82rem' };
   const rowDivider = { paddingTop: '8px', borderTop: '1px solid var(--border)' };
@@ -497,15 +518,20 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                   <Metric term="ttft" substitution={`${presetA.name}: ${safeCp.toLocaleString()} tok ÷ ${presetA.prefillSpeed.toLocaleString()} tok/s = ${formatTime(ttftA)}`} align="left">
                     {formatTime(ttftA)}
                   </Metric>
+                  {' '}<SloBadge result={sloResultsA.ttft} label={t('slo.shortTtft')} />
                 </span>
               </div>
               <div style={rowStyle}>
                 <span>{t('compare.decodeTime')}</span>
-                <span style={{ ...numStyle, color: 'var(--decode)' }}>{formatTime(decodeTimeA)}</span>
+                <span style={{ ...numStyle, color: 'var(--decode)' }}>
+                  {formatTime(decodeTimeA)} <SloBadge result={sloResultsA.tpot} label={t('slo.shortTpot')} />
+                </span>
               </div>
               <div style={{ ...rowStyle, ...rowDivider, fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)' }}>
                 <span>{t('compare.totalWalltime')}</span>
-                <span style={{ ...numStyle, color: 'var(--accent)' }}>{formatTime(totalTimeA)}</span>
+                <span style={{ ...numStyle, color: 'var(--accent)' }}>
+                  {formatTime(totalTimeA)} <SloBadge result={sloResultsA.walltime} label={t('slo.shortWalltime')} />
+                </span>
               </div>
               {/* Optional per-request cost */}
               <div style={{ ...rowStyle, marginTop: '6px', alignItems: 'center' }}>
@@ -589,15 +615,20 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                   <Metric term="ttft" substitution={`${presetB.name}: ${safeCp.toLocaleString()} tok ÷ ${presetB.prefillSpeed.toLocaleString()} tok/s = ${formatTime(ttftB)}`} align="left">
                     {formatTime(ttftB)}
                   </Metric>
+                  {' '}<SloBadge result={sloResultsB.ttft} label={t('slo.shortTtft')} />
                 </span>
               </div>
               <div style={rowStyle}>
                 <span>{t('compare.decodeTime')}</span>
-                <span style={{ ...numStyle, color: 'var(--decode)' }}>{formatTime(decodeTimeB)}</span>
+                <span style={{ ...numStyle, color: 'var(--decode)' }}>
+                  {formatTime(decodeTimeB)} <SloBadge result={sloResultsB.tpot} label={t('slo.shortTpot')} />
+                </span>
               </div>
               <div style={{ ...rowStyle, ...rowDivider, fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)' }}>
                 <span>{t('compare.totalWalltime')}</span>
-                <span style={numStyle}>{formatTime(totalTimeB)}</span>
+                <span style={numStyle}>
+                  {formatTime(totalTimeB)} <SloBadge result={sloResultsB.walltime} label={t('slo.shortWalltime')} />
+                </span>
               </div>
               {/* Optional per-request cost */}
               <div style={{ ...rowStyle, marginTop: '6px', alignItems: 'center' }}>

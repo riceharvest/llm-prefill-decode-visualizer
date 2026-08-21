@@ -13,6 +13,7 @@ import HardwareShortlist from './components/HardwareShortlist';
 import KVCacheCalculator from './components/KVCacheCalculator';
 import TheoryGuide from './components/TheoryGuide';
 import CurriculumMode from './components/CurriculumMode';
+import SloBudgetsPanel, { useSloBudgets } from './components/SloBudgetsPanel';
 import GuidedTour, { hasSeenTour } from './components/GuidedTour';
 import { HARDWARE_PRESETS } from './utils/presets';
 import { toLocalPreset } from './utils/localMaxxing';
@@ -67,6 +68,10 @@ export default function App() {
   // Incremented by the global Reset button; visualizers watch it and clear
   // ALL sim state (phase, token progress, streams, elapsed time).
   const [resetKey, setResetKey] = useState(0);
+
+  // SLO budgets (issue #64): user-defined TTFT/TPOT/walltime targets persisted
+  // in localStorage, checked against every simulation via pass/fail badges.
+  const [sloBudgets, setSloBudgets] = useSloBudgets();
   const [localMaxxingContext, setLocalMaxxingContext] = useState({
     modelId: '',
     quantization: '',
@@ -283,6 +288,8 @@ export default function App() {
           onUndo={handleUndo}
           onRedo={handleRedo}
         />
+        {/* SLO budgets (issue #64): persisted targets checked on every tab */}
+        <SloBudgetsPanel budgets={sloBudgets} onChange={setSloBudgets} />
 
       {/* Tab Content */}
         {activeTab === 'single' && (
@@ -293,6 +300,7 @@ export default function App() {
             isPlaying={isPlaying}
             setIsPlaying={setIsPlaying}
             resetKey={resetKey}
+            sloBudgets={sloBudgets}
           />
         )}
 
@@ -304,6 +312,7 @@ export default function App() {
             isPlaying={isPlaying}
             setIsPlaying={setIsPlaying}
             resetKey={resetKey}
+            sloBudgets={sloBudgets}
           />
         )}
 
@@ -322,6 +331,7 @@ export default function App() {
           <HardwareComparison
             presets={comparisonPresets}
             localMaxxingContext={localMaxxingContext}
+            sloBudgets={sloBudgets}
           />
         )}
 
