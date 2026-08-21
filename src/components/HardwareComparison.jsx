@@ -14,11 +14,21 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   });
   const [testPromptTokens, setTestPromptTokens] = useState(() => readParamNum('cp', 4096));
   const [testOutputTokens, setTestOutputTokens] = useState(() => readParamNum('co', 512));
+  // Optional pricing: $ per 1M tokens (input/output) per system. Leave blank
+  // for local hardware where marginal cost is electricity, not tokens.
+  const [priceAIn, setPriceAIn] = useState(() => readParam('piA') ?? '');
+  const [priceAOut, setPriceAOut] = useState(() => readParam('poA') ?? '');
+  const [priceBIn, setPriceBIn] = useState(() => readParam('piB') ?? '');
+  const [priceBOut, setPriceBOut] = useState(() => readParam('poB') ?? '');
 
   // Shareable per-tab settings
   useEffect(() => {
-    writeParams({ hwA: hardwareA, hwB: hardwareB, cp: testPromptTokens, co: testOutputTokens, batch: batchSize === 1 ? '' : batchSize });
-  }, [hardwareA, hardwareB, testPromptTokens, testOutputTokens, batchSize]);
+    writeParams({
+      hwA: hardwareA, hwB: hardwareB, cp: testPromptTokens, co: testOutputTokens,
+      batch: batchSize === 1 ? '' : batchSize,
+      piA: priceAIn, poA: priceAOut, piB: priceBIn, poB: priceBOut
+    });
+  }, [hardwareA, hardwareB, testPromptTokens, testOutputTokens, batchSize, priceAIn, priceAOut, priceBIn, priceBOut]);
 
   useEffect(() => {
     const localPresets = presets.filter(preset => preset.localMaxxing);
@@ -72,6 +82,16 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   // Aggregate throughput across the batch
   const aggregateTokPerSecA = batchSize * safeCo / (decodeTimeA || 1);
   const aggregateTokPerSecB = batchSize * safeCo / (decodeTimeB || 1);
+
+  // Cost per request: (prompt/1M × $in) + (output/1M × $out). Blank prices → null.
+  const costPerRequest = (pIn, pOut) => {
+    const inP = parseFloat(pIn), outP = parseFloat(pOut);
+    if (!Number.isFinite(inP) && !Number.isFinite(outP)) return null;
+    return (safeCp / 1e6) * (Number.isFinite(inP) ? inP : 0)
+         + (safeCo / 1e6) * (Number.isFinite(outP) ? outP : 0);
+  };
+  const costA = costPerRequest(priceAIn, priceAOut);
+  const costB = costPerRequest(priceBIn, priceBOut);
 
   const speedupTotal = totalTimeA > 0 ? totalTimeB / totalTimeA : 0;
   const speedupPrefill = ttftA > 0 ? ttftB / ttftA : 0;
@@ -233,6 +253,38 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 <span>Total walltime</span>
                 <span style={{ ...numStyle, color: 'var(--accent)' }}>{formatTime(totalTimeA)}</span>
               </div>
+              {/* Optional per-request cost */}
+              <div style={{ ...rowStyle, marginTop: '6px', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.72rem' }}>$ / 1M tok (in · out)</span>
+                <span style={{ display: 'flex', gap: '4px' }}>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="in"
+                    value={priceAIn}
+                    aria-label="System A input price per million tokens"
+                    onChange={(e) => setPriceAIn(e.target.value)}
+                    style={{ width: '58px', padding: '3px 5px', fontSize: '0.72rem' }}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="out"
+                    value={priceAOut}
+                    aria-label="System A output price per million tokens"
+                    onChange={(e) => setPriceAOut(e.target.value)}
+                    style={{ width: '58px', padding: '3px 5px', fontSize: '0.72rem' }}
+                  />
+                </span>
+              </div>
+              {costA !== null && (
+                <div style={rowStyle}>
+                  <span>Cost per request</span>
+                  <span style={{ ...numStyle, color: 'var(--agent)' }}>${costA.toFixed(4)}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -280,6 +332,38 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 <span>Total walltime</span>
                 <span style={numStyle}>{formatTime(totalTimeB)}</span>
               </div>
+              {/* Optional per-request cost */}
+              <div style={{ ...rowStyle, marginTop: '6px', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.72rem' }}>$ / 1M tok (in · out)</span>
+                <span style={{ display: 'flex', gap: '4px' }}>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="in"
+                    value={priceBIn}
+                    aria-label="System B input price per million tokens"
+                    onChange={(e) => setPriceBIn(e.target.value)}
+                    style={{ width: '58px', padding: '3px 5px', fontSize: '0.72rem' }}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="out"
+                    value={priceBOut}
+                    aria-label="System B output price per million tokens"
+                    onChange={(e) => setPriceBOut(e.target.value)}
+                    style={{ width: '58px', padding: '3px 5px', fontSize: '0.72rem' }}
+                  />
+                </span>
+              </div>
+              {costB !== null && (
+                <div style={rowStyle}>
+                  <span>Cost per request</span>
+                  <span style={{ ...numStyle, color: 'var(--agent)' }}>${costB.toFixed(4)}</span>
+                </div>
+              )}
             </div>
           </div>
 
