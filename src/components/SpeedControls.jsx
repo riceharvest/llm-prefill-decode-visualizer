@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, Pause, RotateCcw, FastForward, Gauge, Zap } from 'lucide-react';
 import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
+import { t } from '../i18n/strings';
 
 export default function SpeedControls({
   prefillSpeed,
@@ -24,13 +25,12 @@ export default function SpeedControls({
       <div className="grid-auto" style={{ '--grid-min': '280px', alignItems: 'stretch' }}>
 
         {/* Prefill Speed Input */}
-        <div className="panel-inset" data-tour="prefill-slider" style={{ borderLeft: '2px solid var(--prefill)' }}>
-          <div className="field-head" style={{ marginBottom: '10px' }}>
+        <div className="panel-inset" data-tour="prefill-slider" style={{ borderInlineStart: '2px solid var(--prefill)' }}>          <div className="field-head" style={{ marginBottom: '10px' }}>
             <span className="panel-title" style={{ color: 'var(--prefill)' }}>
               <Zap size={15} style={{ color: 'var(--prefill)' }} />
-              Prefill Speed
+              {t('speedControls.prefillSpeed')}
             </span>
-            <span className="tag tag-prefill">compute bound</span>
+            <span className="tag tag-prefill">{t('speedControls.computeBound')}</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -40,32 +40,31 @@ export default function SpeedControls({
               max="50000"
               step="50"
               value={prefillSpeed}
-              aria-label="Prefill speed in tokens per second"
+              aria-label={t('speedControls.prefillAria')}
               onChange={(e) => setPrefillSpeed(Number(e.target.value))}
               style={{ flex: 1 }}
             />
             <input
               type="number"
               value={prefillSpeed}
-              aria-label="Prefill speed value"
+              aria-label={t('speedControls.prefillValueAria')}
               onChange={(e) => setPrefillSpeed(Number(e.target.value))}
               style={{ width: '88px' }}
             />
-            <span className="field-label">tok/s</span>
+            <span className="field-label">{t('common.tokPerSec')}</span>
           </div>
           <p className="hint-text" style={{ marginTop: '8px' }}>
-            Prompt processing — parallel ingestion of all prompt tokens into the KV cache (sets TTFT)
+            {t('speedControls.prefillHint')}
           </p>
         </div>
 
         {/* Decode Speed Input */}
-        <div className="panel-inset" data-tour="decode-slider" style={{ borderLeft: '2px solid var(--decode)' }}>
-          <div className="field-head" style={{ marginBottom: '10px' }}>
+        <div className="panel-inset" data-tour="decode-slider" style={{ borderInlineStart: '2px solid var(--decode)' }}>          <div className="field-head" style={{ marginBottom: '10px' }}>
             <span className="panel-title" style={{ color: 'var(--decode)' }}>
               <Gauge size={15} style={{ color: 'var(--decode)' }} />
-              Decode Speed
+              {t('speedControls.decodeSpeed')}
             </span>
-            <span className="tag tag-decode">bandwidth bound</span>
+            <span className="tag tag-decode">{t('speedControls.bandwidthBound')}</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -75,21 +74,23 @@ export default function SpeedControls({
               max="1000"
               step="1"
               value={decodeSpeed}
-              aria-label="Decode speed in tokens per second"
+              aria-label={t('speedControls.decodeAria')}
               onChange={(e) => setDecodeSpeed(Number(e.target.value))}
               style={{ flex: 1 }}
             />
             <input
               type="number"
               value={decodeSpeed}
-              aria-label="Decode speed value"
+              aria-label={t('speedControls.decodeValueAria')}
               onChange={(e) => setDecodeSpeed(Number(e.target.value))}
               style={{ width: '88px' }}
             />
-            <span className="field-label">tok/s</span>
+            <span className="field-label">{t('common.tokPerSec')}</span>
           </div>
           <p className="hint-text" style={{ marginTop: '8px' }}>
-            Token generation — 1 token per step (TPOT = {decodeSpeed > 0 ? (1000 / decodeSpeed).toFixed(1) : '∞'} ms/tok)
+            {t('speedControls.decodeHint', {
+              tpot: decodeSpeed > 0 ? (1000 / decodeSpeed).toFixed(1) : '∞'
+            })}
           </p>
         </div>
 
@@ -98,9 +99,9 @@ export default function SpeedControls({
           <div className="field-head">
             <span className="panel-title">
               <FastForward size={15} />
-              Time Scale
+              {t('speedControls.timeScale')}
             </span>
-            <div className="seg" role="group" aria-label="Visual time scale">
+            <div className="seg" role="group" aria-label={t('speedControls.timeScaleAria')}>
               {[1, 2, 5, 20, 'instant'].map(mult => (
                 <button
                   key={mult}
@@ -108,7 +109,7 @@ export default function SpeedControls({
                   className={simSpeedMultiplier === mult ? 'active' : ''}
                   aria-pressed={simSpeedMultiplier === mult}
                 >
-                  {mult === 'instant' ? 'INST' : `${mult}x`}
+                  {mult === 'instant' ? t('common.instant') : `${mult}x`}
                 </button>
               ))}
             </div>
@@ -121,13 +122,13 @@ export default function SpeedControls({
               style={{ flex: 1 }}
             >
               {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-              <span>{isPlaying ? 'Pause Simulation' : 'Start Simulation'}</span>
+              <span>{isPlaying ? t('common.pauseSimulation') : t('common.startSimulation')}</span>
             </button>
 
             <button
               onClick={onReset}
-              title="Reset visualizer"
-              aria-label="Reset visualizer"
+              title={t('speedControls.resetTooltip')}
+              aria-label={t('speedControls.resetTooltip')}
               className="btn btn-icon"
             >
               <RotateCcw size={16} />

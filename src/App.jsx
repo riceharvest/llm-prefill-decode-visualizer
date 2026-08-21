@@ -15,6 +15,8 @@ import GuidedTour, { hasSeenTour } from './components/GuidedTour';
 import { HARDWARE_PRESETS } from './utils/presets';
 import { toLocalPreset } from './utils/localMaxxing';
 import { readParam, writeParams } from './utils/urlState';
+import { setLocale, getLocale, getDirection } from './i18n/strings';
+import { installTouchTooltips } from './utils/touchTooltips';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => readParam('tab') || 'single');
@@ -22,6 +24,15 @@ export default function App() {
   // First-run guided tour: shown once, skippable, re-launchable from the header '?' button.
   const [tourOpen, setTourOpen] = useState(() => !hasSeenTour());
 
+  // Locale + touch tooltips: one-time setup. `?lang=` overrides the default
+  // locale; direction is applied to <html> so RTL locales flip the layout.
+  useEffect(() => {
+    const lang = readParam('lang');
+    if (lang) setLocale(lang);
+    document.documentElement.lang = getLocale();
+    document.documentElement.dir = getDirection();
+    installTouchTooltips();
+  }, []);
   // Preset from the URL drives both the dropdown label AND the default speeds,
   // unless explicit prefill/decode params override them.
   const initialPreset = (() => {
@@ -252,14 +263,13 @@ export default function App() {
       {/* Footer */}
       <footer className="site-footer">
         <p>
-          <strong>LLM Prefill &amp; Decode Speed Visualizer</strong> · Open source inference benchmark instrument
+          <strong>{t('header.brandTitle')}</strong> · {t('app.footerTagline')}
         </p>
         <p style={{ fontSize: '0.7rem', marginTop: '4px', color: 'var(--text-subtle)' }}>
           Shortcuts: <kbd>Space</kbd> play/pause · <kbd>R</kbd> reset · <kbd>1</kbd>–<kbd>8</kbd> switch tabs
         </p>
         <p style={{ fontSize: '0.7rem', marginTop: '4px', color: 'var(--text-subtle)' }}>
-          AI agents: all data available as JSON — <a href="/llms.txt">/llms.txt</a> · <a href="/api/spec">OpenAPI</a> · <a href="/api/compute">/api/compute</a> · <a href="/api/best">/api/best</a> · <a href="/api/localmaxxing">/api/localmaxxing</a> · <a href="/api/diff">/api/diff</a>
-        </p>
+          {t('app.agentsLinePrefix')} <a href="/llms.txt">/llms.txt</a> · <a href="/api/spec">OpenAPI</a> · <a href="/api/compute">/api/compute</a> · <a href="/api/best">/api/best</a> · <a href="/api/localmaxxing">/api/localmaxxing</a> · <a href="/api/diff">/api/diff</a>        </p>
       </footer>
 
     </div>

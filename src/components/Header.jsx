@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Cpu, Bot, MessageSquare, HelpCircle, BarChart3, Columns2, HardDrive, Link2, Check, GitCompare, ListFilter } from 'lucide-react'; (feat: hardware shortlist flow from workload constraints (#53))
 import { HARDWARE_PRESETS } from '../utils/presets';
+import { t } from '../i18n/strings';
 
 export default function Header({
   activeTab,
@@ -19,6 +20,16 @@ export default function Header({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const tabs = [
+    { id: 'single', label: t('tabs.single.label'), icon: MessageSquare, hint: t('tabs.single.hint') },
+    { id: 'agentic', label: t('tabs.agentic.label'), icon: Bot, hint: t('tabs.agentic.hint') },
+    { id: 'compare', label: t('tabs.compare.label'), icon: BarChart3, hint: t('tabs.compare.hint') },
+    { id: 'ab', label: t('tabs.ab.label'), icon: Columns2, hint: t('tabs.ab.hint') },
+    { id: 'diff', label: t('tabs.diff.label'), icon: GitCompare, hint: t('tabs.diff.hint') },
+    { id: 'kvcache', label: t('tabs.kvcache.label'), icon: HardDrive, hint: t('tabs.kvcache.hint') },
+    { id: 'theory', label: t('tabs.theory.label'), icon: HelpCircle, hint: t('tabs.theory.hint') }
+  ];
+
   return (
     <header className="site-header">
       <div className="app-frame">
@@ -30,16 +41,16 @@ export default function Header({
               <Cpu size={19} />
             </div>
             <div>
-              <h1 className="brand-title">LLM Prefill &amp; Decode Speed Visualizer</h1>
+              <h1 className="brand-title">{t('header.brandTitle')}</h1>
               <p className="brand-sub">
-                Measure walltime, TTFT &amp; TPOT across single-turn chat and multi-turn agentic loops
+                {t('header.brandSubtitle')}
               </p>
             </div>
           </div>
 
           {/* Preset Hardware Selector */}
           <div className="header-controls">
-            <label htmlFor="hw-preset" className="field-label" style={{ marginRight: '-4px' }}>Preset</label>
+            <label htmlFor="hw-preset" className="field-label" style={{ marginInlineEnd: '-4px' }}>{t('header.presetLabel')}</label>
             <select
               id="hw-preset"
               value={selectedPreset}
@@ -51,7 +62,7 @@ export default function Header({
               }}
             >
               {selectedPreset.startsWith('lmx:') && (
-                <option value={selectedPreset}>LocalMaxxing measured run</option>
+                <option value={selectedPreset}>{t('header.localMaxxingRun')}</option>
               )}
               {HARDWARE_PRESETS.map(p => (
                 <option key={p.id} value={p.id}>
@@ -73,12 +84,14 @@ export default function Header({
             {/* Share exact settings */}
             <button
               onClick={handleShare}
-              title="Copy share link with current settings"
+              title={t('header.shareTooltip')}
+              aria-label={t('header.shareTooltip')}
+              data-tooltip={t('header.shareTooltip')}
               className="btn"
               style={copied ? { borderColor: 'var(--decode-border)', color: 'var(--decode)' } : undefined}
             >
               {copied ? <Check size={15} /> : <Link2 size={15} />}
-              {copied ? 'Copied' : 'Share'}
+              {copied ? t('common.copied') : t('common.share')}
             </button>
           </div>
 
