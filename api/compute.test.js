@@ -197,3 +197,103 @@ test('capability list documents the sanity warnings', () => {
   assert.equal(json.sanity.codes.length, 3);
   assert.match(json.sanity.description, /warnings/);
 });
+
+// ---------------------------------------------------------------------------
+// dry_run mode (#17): validate + echo parsed params without executing
+// ---------------------------------------------------------------------------
+
+test('dry_run=true validates and echoes parsed params without executing', () => {
+  const { status, json } = call({
+    query: { model: 'singleTurn', promptTokens: '4096', dry_run: 'true' }
+  });
+  assert.equal(status, 200);
+  assert.equal(json.dry_run, true);
+  assert.equal(json.model, 'singleTurn');
+  // explicit params echoed with type coercion...
+  assert.equal(json.inputs.promptTokens, 4096);
+  // ...and defaults filled in
+  assert.equal(json.inputs.outputTokens, 512);
+  assert.equal(json.inputs.decodeSpeed, 105);
+  assert.match(json.id, /^calc_[0-9a-f]{12}$/);
+  assert.match(json.note, /nothing was computed/i);
+  // none of the computed fields appear — no math ran
+  assert.equal(json.totalWalltimeSeconds, undefined);
+  assert.equal(json.warnings, undefined);
+});
+
+test('a dry_run request returns the SAME id as the real execution', () => {
+  const dry = call({ query: { model: 'singleTurn', promptTokens: '4096', outputTokens: '512', dry_run: '1' } });
+  const real = call({ query: { model: 'singleTurn', promptTokens: '4096', outputTokens: '512' } });
+  assert.equal(dry.status, 200);
+  assert.equal(real.status, 200);
+  assert.equal(typeof real.json.totalWalltimeSeconds, 'number');
+  assert.equal(dry.json.id, real.json.id);
+});
+
+test('dry_run still rejects unknown models with INVALID_PARAMS', () => {
+  const { status, json } = call({
+    query: { model: 'nope', dry_run: 'true' }
+  });
+  assert.equal(status, 400);
+  assert.equal(json.code, 'INVALID_PARAMS');
+  assert.match(json.detail, /Unknown model/);
+});
+
+test('dry_run works via POST body (boolean) and covers every model', () => {
+  for (const model of ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost']) {
+    const { status, json } = call({
+      method: 'POST',
+      body: { model, dry_run: true }
+    });
+    assert.equal(status, 200, model);
+    assert.equal(json.dry_run, true, model);
+    assert.equal(json.model, model);
+    assert.equal(json.warnings, undefined, model);
+    assert.ok(json.inputs && typeof json.inputs === 'object', model);
+    // flagged echoes raw flags; kvCache resolves its architecture
+    if (model === 'flagged') assert.equal(json.inputs.flags, '');
+    if (model === 'kvCache') assert.equal(json.inputs.architecture, 'generic');
+  }
+});
+
+test('dry_run inside a batch validates each item without executing any of them', () => {
+  const { status, json } = call({
+    method: 'POST',
+    body: {
+      dry_run: true,
+      batch: [
+        { model: 'singleTurn', promptTokens: 4096 },
+        { model: 'kvCache', architecture: 'llama70b', contextLength: 131072 },
+        { model: 'bogus' }
+      ]
+    }
+  });
+  assert.equal(status, 200);
+  assert.equal(json.okCount, 2);
+  assert.equal(json.errorCount, 1);
+  const [a, b, bad] = json.results;
+  assert.equal(a.result.dry_run, true);
+  assert.equal(a.result.inputs.promptTokens, 4096);
+  assert.equal(a.result.totalWalltimeSeconds, undefined);
+  assert.equal(b.result.dry_run, true);
+  assert.equal(b.result.inputs.contextLength, 131072);
+  assert.equal(bad.ok, false);
+  assert.match(bad.error, /Unknown model/);
+});
+
+test('dry_run=false or absent executes normally (no dry_run echo)', () => {
+  for (const flag of [undefined, 'false', '0']) {
+    const query = { model: 'singleTurn', promptTokens: '4096' };
+    if (flag !== undefined) query.dry_run = flag;
+    const { status, json } = call({ query });
+    assert.equal(status, 200);
+    assert.equal(json.dry_run, undefined);
+    assert.equal(typeof json.totalWalltimeSeconds, 'number');
+  }
+});
+
+test('capability list documents the dry-run mode', () => {
+  const { json } = call({ query: {} });
+  assert.match(json.dryRun.description, /dry_run/);
+  assert.match(json.dryRun.example, /dry_run=true/);
+});

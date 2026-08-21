@@ -35,8 +35,29 @@ function json(res, body, status = 200) {
 
 // Stamp a deterministic calc_<hash> id derived from the RESOLVED inputs,
 // so omitting an explicit default yields the identical id (#68).
-function withId(model, inputs, result) {
-  return { status: 200, body: { id: computeCalcId('compute', { model, ...normalizeParams(inputs) }), ...result } };
+// With dryRun, skip the math entirely and echo the parsed inputs instead
+// (#17): the id is the SAME hash a real call with these inputs would
+// return, so a dry run can be swapped for the real call 1:1.
+function withId(model, inputs, result, dryRun = false) {
+  const id = computeCalcId('compute', { model, ...normalizeParams(inputs) });
+  if (dryRun) return { status: 200, body: dryRunBody(model, inputs, id) };
+  return { status: 200, body: { id, ...result } };
+}
+
+// dry_run=true (or 1 / dryRun alias): validate + echo, never execute (#17).
+export function isDryRun(params = {}) {
+  const v = params.dry_run ?? params.dryRun;
+  return v === true || v === 'true' || v === '1' || v === 1;
+}
+
+function dryRunBody(model, inputs, id) {
+  return {
+    dry_run: true,
+    model,
+    inputs,
+    ...(id ? { id } : {}),
+    note: 'Validated only — nothing was computed. Resend without dry_run to execute; a dry_run request returns the same deterministic id as the real call.'
+  };
 }
 
 function num(v, fallback) {
@@ -46,7 +67,9 @@ function num(v, fallback) {
 
 // Run one parameter set. Returns { status, body } — never throws for
 // expected input problems; unexpected math errors bubble up to the caller.
-function computeOne(params) {
+// With dryRun, each branch validates + echoes its parsed inputs instead of
+// executing the simulation (#17).
+function computeOne(params, dryRun = false) {
   const model = params.model || params.m || '';
 
   switch (model) {
@@ -57,7 +80,7 @@ function computeOne(params) {
         prefillSpeed: num(params.prefillSpeed, 3800),
         decodeSpeed: num(params.decodeSpeed, 105)
       };
-      return withId('singleTurn', inputs, singleTurn(inputs));
+      return withId('singleTurn', inputs, singleTurn(inputs), dryRun);
     }
 
     case 'speculative': {
@@ -67,7 +90,7 @@ function computeOne(params) {
         acceptanceRate: num(params.acceptanceRate, 0.7),
         draftCostFraction: num(params.draftCostFraction, 0.2)
       };
-      return withId('speculative', inputs, speculative(inputs));
+      return withId('speculative', inputs, speculative(inputs), dryRun);
     }
 
     case 'batched': {
@@ -79,7 +102,7 @@ function computeOne(params) {
         outputTokens: num(params.outputTokens, 512),
         decodeDecayExponent: num(params.decodeDecayExponent, 0.25)
       };
-      return withId('batched', inputs, batched(inputs));
+      return withId('batched', inputs, batched(inputs), dryRun);
     }
 
     case 'agentic': {
@@ -92,7 +115,7 @@ function computeOne(params) {
         decodeSpeed: num(params.decodeSpeed, 105),
         enablePrefixCaching: params.enablePrefixCaching !== 'false' && params.enablePrefixCaching !== false
       };
-      return withId('agentic', inputs, agentic(inputs));
+      return withId('agentic', inputs, agentic(inputs), dryRun);
     }
 
     case 'kvCache': {
@@ -107,7 +130,7 @@ function computeOne(params) {
         precisionBytes: num(params.precisionBytes, 2),
         batchSize: num(params.batchSize, 1)
       };
-      return withId('kvCache', inputs, kvCache(inputs));
+      return withId('kvCache', inputs, kvCache(inputs), dryRun);
     }
 
     case 'flagged': {
@@ -115,31 +138,41 @@ function computeOne(params) {
       // flag deltas to base speeds, then simulate a single turn with them.
       // The response carries a per-flag audit trail (delta + source tag) so
       // agents can see exactly how each number was adjusted.
-      const flags = applyEngineFlags({
+      const flags = params.flags ?? '';
+      if (dryRun) {
+        return { status: 200, body: dryRunBody('flagged', {
+          prefillSpeed: num(params.prefillSpeed, 3800),
+          decodeSpeed: num(params.decodeSpeed, 105),
+          promptTokens: num(params.promptTokens, 2048),
+          outputTokens: num(params.outputTokens, 512),
+          flags
+        }) };
+      }
+      const flaggedInputs = applyEngineFlags({
         prefillSpeed: num(params.prefillSpeed, 3800),
         decodeSpeed: num(params.decodeSpeed, 105),
-        flags: params.flags ?? ''
+        flags
       });
       const promptTokens = num(params.promptTokens, 2048);
       const outputTokens = num(params.outputTokens, 512);
       return { status: 200, body: {
-        inputs: { ...flags.inputs, promptTokens, outputTokens },
-        adjusted: flags.adjusted,
-        totalPrefillDeltaPct: flags.totalPrefillDeltaPct,
-        totalDecodeDeltaPct: flags.totalDecodeDeltaPct,
-        adjustments: flags.adjustments,
-        warnings: flags.warnings,
+        inputs: { ...flaggedInputs.inputs, promptTokens, outputTokens },
+        adjusted: flaggedInputs.adjusted,
+        totalPrefillDeltaPct: flaggedInputs.totalPrefillDeltaPct,
+        totalDecodeDeltaPct: flaggedInputs.totalDecodeDeltaPct,
+        adjustments: flaggedInputs.adjustments,
+        warnings: flaggedInputs.warnings,
         simulation: singleTurn({
           promptTokens,
           outputTokens,
-          prefillSpeed: flags.adjusted.prefillSpeed,
-          decodeSpeed: flags.adjusted.decodeSpeed
+          prefillSpeed: flaggedInputs.adjusted.prefillSpeed,
+          decodeSpeed: flaggedInputs.adjusted.decodeSpeed
         })
       } };
     }
 
-    case 'cost':
-      return { status: 200, body: cost({
+    case 'cost': {
+      const costInputs = {
         hardwarePriceUsd: num(params.hardwarePriceUsd ?? params.price, 0),
         electricityRatePerKwh: num(params.electricityRatePerKwh ?? params.electricityRate, 0.15),
         powerDrawWatts: num(params.powerDrawWatts, 0),
@@ -148,7 +181,10 @@ function computeOne(params) {
         outputTokens: num(params.outputTokens, 512),
         prefillSpeed: num(params.prefillSpeed, 3800),
         decodeSpeed: num(params.decodeSpeed, 105)
-      }) };
+      };
+      if (dryRun) return { status: 200, body: dryRunBody('cost', costInputs) };
+      return { status: 200, body: cost(costInputs) };
+    }
 
     case '':
     case undefined:
@@ -188,6 +224,11 @@ function capabilityList() {
       codes: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor'],
       example: '/api/compute?model=singleTurn&promptTokens=64&prefillSpeed=900000&decodeSpeed=5000'
     },
+    dryRun: {
+      description: 'Add &dry_run=true (or "dry_run": true in a POST body) to validate a request and echo the parsed parameters (defaults filled in, numbers coerced) WITHOUT executing any math — a cheap sanity check for agents debugging malformed payloads. Works on GET and POST, and applies per-item inside a batch. The response carries the same deterministic id the real call would return. Unknown models and malformed batches fail exactly as they would for a real call.',
+      response: '{ dry_run: true, model, inputs, id?, note }',
+      example: '/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true&dry_run=true'
+    },
     otherEndpoints: ['/api/vram', '/api/presets', '/api/localmaxxing', '/llms.txt']
   };
 }
@@ -197,7 +238,7 @@ function capabilityList() {
 //   GET  /api/compute?batch=[{"model":"..."},...]   (URL-encoded JSON)
 // Returns 200 with per-item ok/error entries so one bad scenario
 // never fails the whole comparison.
-function runBatch(rawItems) {
+function runBatch(rawItems, dryRun = false) {
   let items = rawItems;
   if (typeof items === 'string') {
     try {
@@ -224,7 +265,7 @@ function runBatch(rawItems) {
       return { index, ok: false, code: 'INVALID_PARAMS', error: 'batch item must be an object with a "model" field' };
     }
     try {
-      const { status, body } = computeOne(item);
+      const { status, body } = computeOne(item, dryRun);
       // Stamp schema_version + the same deterministic calc id an individual
       // call would get, so batch results match standalone calls (#68).
       if (status === 200) return { index, ok: true, result: { id: computeCalcId('compute', { model: item.model || item.m || '', ...item }), ...withSchemaVersion(body) } };
@@ -252,16 +293,20 @@ function runBatch(rawItems) {
  * hashed from the raw request parameters.
  */
 export function computeBody(params = {}) {
+  // dry_run mode (#17): validate + echo parsed params without executing.
+  // Applies to single calls and per-item inside a batch alike.
+  const dryRun = isDryRun(params);
+
   // Batched mode: ?batch=[...] / POST {"batch":[...]} ("variants" alias)
   const rawBatch = params.batch ?? params.variants;
   if (rawBatch !== undefined) {
-    const out = runBatch(rawBatch);
+    const out = runBatch(rawBatch, dryRun);
     if (out.status === 200) out.body = { id: computeCalcId('compute', params), ...out.body };
     return out;
   }
 
   try {
-    const out = computeOne(params);
+    const out = computeOne(params, dryRun);
     if (out.status === 200 && out.body) {
       out.body = { id: computeCalcId('compute', { model: params.model || params.m || '', ...params }), ...out.body };
     }
