@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Zap, Gauge, FileText, RotateCcw, Image as ImageIcon } from 'lucide-react';
+import { Play, Pause, Zap, Gauge, FileText, RotateCcw, Image as ImageIcon, FileDown, Copy } from 'lucide-react';
 import { formatTime, formatTokens, SCENARIO_PRESETS } from '../utils/presets';
 import {
   IMAGE_RESOLUTION_PRESETS,
@@ -14,6 +14,7 @@ import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
 import Metric from './Metric';
 
+import { buildSingleTurnMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 
 export default function SingleTurnVisualizer({
   prefillSpeed,
@@ -258,6 +259,27 @@ export default function SingleTurnVisualizer({
   const throughputSub = `(${(safePromptTokens + safeOutputTokens).toLocaleString()} tok) ÷ ${formatTime(expectedTotalTime)}`;
   const prefillPctSub = `${formatTime(expectedTTFT)} ÷ ${formatTime(expectedTotalTime)} × 100 = ${prefillPct.toFixed(1)}%`;
   const decodePctSub = `${formatTime(expectedDecodeTime)} ÷ ${formatTime(expectedTotalTime)} × 100 = ${decodePct.toFixed(1)}%`;
+  // Markdown walkthrough export (download + clipboard)
+  const [mdCopied, setMdCopied] = useState(false);
+  const buildMarkdown = () => buildSingleTurnMarkdown({
+    promptTokens,
+    outputTokens,
+    prefillSpeed,
+    decodeSpeed,
+    specEnabled,
+    draftTokens,
+    acceptance,
+    effectiveDecodeSpeed,
+    deepLink: buildDeepLink('single')
+  });
+  const handleExportMd = () => downloadMarkdown(buildMarkdown(), 'single-turn-simulation.md');
+  const handleCopyMd = async () => {
+    const ok = await copyMarkdownToClipboard(buildMarkdown());
+    if (ok) {
+      setMdCopied(true);
+      setTimeout(() => setMdCopied(false), 2000);
+    }
+  };
 
   // Token stream windowing: derive the visible words from the real decode
   // counter (~2.5 tokens per word) so the stream always tracks the counter,
@@ -651,6 +673,25 @@ export default function SingleTurnVisualizer({
             >
               <RotateCcw size={15} />
               Reset
+            </button>
+
+            <button
+              onClick={handleExportMd}
+              title="Export this simulation as a step-by-step markdown walkthrough (download)"
+              className="btn"
+            >
+              <FileDown size={15} />
+              Export MD
+            </button>
+
+            <button
+              onClick={handleCopyMd}
+              title="Copy the markdown walkthrough to the clipboard"
+              className="btn"
+              aria-label="Copy markdown walkthrough to clipboard"
+            >
+              <Copy size={15} />
+              {mdCopied ? 'Copied!' : 'Copy MD'}
             </button>
           </div>
         </div>
