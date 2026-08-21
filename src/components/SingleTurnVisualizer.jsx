@@ -162,7 +162,6 @@ export default function SingleTurnVisualizer({
     : safeOutputTokens / effectiveDecodeSpeed;
   const tpotMs = ctxScaledDecodeTime > 0 ? (1000 * ctxScaledDecodeTime) / Math.max(1, safeOutputTokens) : Infinity;
 
-<<<<<<< HEAD
   // Per-token ITL draws (seeded ⇒ stable across re-renders and share links).
   // Mean-preserving lognormal: the average TPOT is unchanged, only the tail
   // grows with the variance slider — the p99/mean ratio is the story.
