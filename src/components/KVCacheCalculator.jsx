@@ -3,6 +3,7 @@ import { HardDrive } from 'lucide-react';
 import { formatTokens } from '../utils/presets';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
 import Metric from './Metric';
+import { t } from '../i18n/strings';
 
 // KV-cache geometry pulled from each model's actual config.json on HuggingFace
 // and its architecture paper. Four KV modes:
@@ -236,14 +237,14 @@ export default function KVCacheCalculator() {
   return (
     <div className="stack">
 
-      <section className="panel" aria-label="KV cache VRAM estimator">
+      <section className="panel" aria-label={t('kvCache.panelAria')}>
         <h2 className="panel-title" style={{ marginBottom: '12px' }}>
           <HardDrive size={16} />
-          <span>KV Cache Memory (VRAM) Estimator</span>
+          <span>{t('kvCache.panelTitle')}</span>
         </h2>
 
         <p className="hint-text" style={{ marginBottom: '18px', maxWidth: '900px' }}>
-          Every prompt and generated token creates Key and Value matrices stored in GPU VRAM during prefill and decode phases. Model geometry pulled from official HuggingFace config.json and each model's architecture paper. KV math respects the real attention type: GQA, MLA (compressed latent), sliding-window, and DeepSeek-V4's CSA/HCA compressed sparse attention.
+          {t('kvCache.intro')}
         </p>
 
         {/* Model Presets */}
@@ -252,7 +253,7 @@ export default function KVCacheCalculator() {
             <button
               key={p.id}
               onClick={() => setModelPreset(p.id)}
-              title={`${p.desc} · source: ${p.source}`}
+              data-tooltip={`${p.desc} · source: ${p.source}`}
               className={modelPreset === p.id ? 'active' : ''}
               aria-pressed={modelPreset === p.id}
               style={{ fontFamily: 'var(--font-sans)', fontSize: '0.76rem' }}
@@ -267,7 +268,7 @@ export default function KVCacheCalculator() {
 
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">Context Length</span>
+              <span className="field-label">{t('kvCache.contextLength')}</span>
               <span className="field-value" style={{ color: 'var(--accent)' }}>{formatTokens(contextLength)} tok</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -277,14 +278,14 @@ export default function KVCacheCalculator() {
                 max={Math.min(1048576, preset.maxContext)}
                 step="1024"
                 value={Math.min(contextLength, preset.maxContext)}
-                aria-label="Context length in tokens"
+                aria-label={t('kvCache.contextAria')}
                 onChange={(e) => setContextLength(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={contextLength}
-                aria-label="Context length value"
+                aria-label={t('kvCache.contextValueAria')}
                 onChange={(e) => setContextLength(Number(e.target.value))}
                 style={{ width: '90px' }}
               />
@@ -293,8 +294,8 @@ export default function KVCacheCalculator() {
 
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">Concurrent Batch Size</span>
-              <span className="field-value" style={{ color: 'var(--prefill)' }}>{batchSize} seq</span>
+              <span className="field-label">{t('kvCache.concurrentBatchSize')}</span>
+              <span className="field-value" style={{ color: 'var(--prefill)' }}>{batchSize} {t('kvCache.seqUnit')}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input
@@ -303,14 +304,14 @@ export default function KVCacheCalculator() {
                 max="64"
                 step="1"
                 value={batchSize}
-                aria-label="Concurrent batch size in sequences"
+                aria-label={t('kvCache.batchAria')}
                 onChange={(e) => setBatchSize(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={batchSize}
-                aria-label="Concurrent batch size value"
+                aria-label={t('kvCache.batchValueAria')}
                 onChange={(e) => setBatchSize(Number(e.target.value))}
                 style={{ width: '64px' }}
               />
@@ -319,16 +320,16 @@ export default function KVCacheCalculator() {
 
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">KV Cache Precision</span>
+              <span className="field-label">{t('kvCache.kvPrecision')}</span>
               <span className="field-value" style={{ color: 'var(--decode)' }}>
                 {precision === 2 ? 'FP16/BF16' : precision === 1 ? 'FP8/INT8' : 'INT4'}
               </span>
             </div>
-            <div className="seg" role="group" aria-label="KV cache precision" style={{ marginTop: '2px' }}>
+            <div className="seg" role="group" aria-label={t('kvCache.precisionGroupAria')} style={{ marginTop: '2px' }}>
               {[
-                { val: 2, label: 'FP16 · 2B' },
-                { val: 1, label: 'FP8 · 1B' },
-                { val: 0.5, label: 'INT4 · 0.5B' }
+                { val: 2, label: t('kvCache.precisionFp16') },
+                { val: 1, label: t('kvCache.precisionFp8') },
+                { val: 0.5, label: t('kvCache.precisionInt4') }
               ].map(opt => (
                 <button
                   key={opt.val}
@@ -347,8 +348,8 @@ export default function KVCacheCalculator() {
 
         {/* Results */}
         <div className="metric-grid">
-          <div className="metric" style={{ borderLeftColor: 'var(--accent)' }}>
-            <div className="metric-label">KV cache / token</div>
+          <div className="metric" style={{ borderInlineStartColor: 'var(--accent)' }}>
+            <div className="metric-label">{t('kvCache.metricKvPerToken')}</div>
             <div className="metric-value" style={{ color: 'var(--accent)' }}>
               <Metric
                 term="kvPerToken"
@@ -359,8 +360,8 @@ export default function KVCacheCalculator() {
             </div>
           </div>
 
-          <div className="metric" style={{ borderLeftColor: 'var(--prefill)' }}>
-            <div className="metric-label">Total KV cache VRAM</div>
+          <div className="metric" style={{ borderInlineStartColor: 'var(--prefill)' }}>
+            <div className="metric-label">{t('kvCache.metricTotalVram')}</div>
             <div className="metric-value" style={{ color: 'var(--prefill)', fontSize: '1.55rem' }}>
               <Metric
                 term="kvTotal"
@@ -372,9 +373,14 @@ export default function KVCacheCalculator() {
             </div>
           </div>
 
-          <div className="metric" style={{ borderLeftColor: 'var(--decode)' }}>
+          <div className="metric" style={{ borderInlineStartColor: 'var(--decode)' }}>
             <div className="metric-label">
-              Formula · {preset.kvMode === 'mla' ? 'MLA' : preset.kvMode === 'sliding' ? 'GQA + SWA' : preset.kvMode === 'csa_hca' ? 'CSA/HCA' : 'GQA'}
+              {t('kvCache.formulaLabel', {
+                mode: preset.kvMode === 'mla' ? t('kvCache.modeMla')
+                  : preset.kvMode === 'sliding' ? t('kvCache.modeGqaSwa')
+                  : preset.kvMode === 'csa_hca' ? t('kvCache.modeCsaHca')
+                  : t('kvCache.modeGqa')
+              })}
             </div>
             <div style={{ fontSize: '0.74rem', fontFamily: 'var(--font-mono)', color: 'var(--decode)', marginTop: '8px', lineHeight: 1.5 }}>
               {kvFormula(preset)}
@@ -385,15 +391,26 @@ export default function KVCacheCalculator() {
         {/* Context exceeds model maximum warning */}
         {contextLength > preset.maxContext && (
           <p style={{ fontSize: '0.76rem', color: 'var(--agent)', background: 'var(--agent-dim)', border: '1px solid var(--agent-border)', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginTop: '14px' }}>
-            {formatTokens(contextLength)} tokens exceeds {preset.name}'s maximum context of {formatTokens(preset.maxContext)} tokens — the estimate above is theoretical only.
+            {t('kvCache.exceedsMaxContext', {
+              tokens: `${formatTokens(contextLength)} tok`,
+              model: preset.name,
+              max: formatTokens(preset.maxContext)
+            })}
           </p>
         )}
 
         {/* Source footnote */}
         <p style={{ fontSize: '0.7rem', color: 'var(--text-subtle)', marginTop: '12px' }}>
           {preset.kvMode === 'csa_hca'
-            ? 'DeepSeek-V4-Flash uses compressed sparse attention (CSA m=4 / HCA m′=128, arXiv 2606.19348): the ~3.6 GB @ 1M figure is the paper’s measured KV at mixed BF16/FP8 storage, scaled here by precision and context (linear approximation).'
-            : `${preset.name} geometry from ${preset.source}. KV math follows the actual attention type: ${preset.kvMode === 'mla' ? 'MLA compresses KV into a latent vector per layer' : preset.kvMode === 'sliding' ? 'sliding-window layers cache only the last window tokens, so long-context KV is bounded' : preset.desc.includes('Hybrid') ? 'only full-attention layers cache per-token KV; linear layers are recurrent' : 'standard grouped-query attention'}.`}
+            ? t('kvCache.footnoteCsa')
+            : t('kvCache.footnoteGeneric', {
+              name: preset.name,
+              source: preset.source,
+              attentionType: preset.kvMode === 'mla' ? t('kvCache.attnMla')
+                : preset.kvMode === 'sliding' ? t('kvCache.attnSliding')
+                : preset.desc.includes('Hybrid') ? t('kvCache.attnHybrid')
+                : t('kvCache.attnGqa')
+            })}
         </p>
 
       </section>

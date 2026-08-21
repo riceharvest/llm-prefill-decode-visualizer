@@ -15,6 +15,7 @@ import SanityWarnings from './SanityWarnings';
 import Metric from './Metric';
 
 import { buildSingleTurnMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
+import { t } from '../i18n/strings';
 
 export default function SingleTurnVisualizer({
   prefillSpeed,
@@ -80,8 +81,8 @@ export default function SingleTurnVisualizer({
   // Auto-start the simulation when the page was opened via a "try it" demo link
   useEffect(() => {
     if (readParam('autoplay') === '1') {
-      const t = setTimeout(() => setIsPlaying(true), 250);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setIsPlaying(true), 250);
+      return () => clearTimeout(timer);
     }
   }, [setIsPlaying]);
 
@@ -293,10 +294,10 @@ export default function SingleTurnVisualizer({
     ? []
     : Array.from({ length: streamVisible }, (_, i) => sampleWords[(streamLap * 7 + i) % sampleWords.length]);
 
-  const phaseLabel = phase === 'idle' ? 'READY'
-    : phase === 'prefilling' ? 'PHASE 1 · PREFILL'
-    : phase === 'decoding' ? 'PHASE 2 · DECODE'
-    : 'COMPLETED';
+  const phaseLabel = phase === 'idle' ? t('singleTurn.phaseIdle')
+    : phase === 'prefilling' ? t('singleTurn.phasePrefill')
+    : phase === 'decoding' ? t('singleTurn.phaseDecode')
+    : t('singleTurn.phaseCompleted');
   const phaseTagClass = phase === 'prefilling' ? 'tag-prefill'
     : phase === 'decoding' || phase === 'completed' ? 'tag-decode' : '';
 
@@ -333,14 +334,14 @@ export default function SingleTurnVisualizer({
     <div className="stack">
 
       {/* Top Parameter Cards */}
-      <section className="panel" aria-label="Single-turn chat parameters">
+      <section className="panel" aria-label={t('singleTurn.paramsPanelAria')}>
         <h2 className="panel-title" style={{ marginBottom: '14px' }}>
           <FileText size={16} />
-          <span>Single-Turn Chat Parameters</span>
+          <span>{t('singleTurn.paramsPanelTitle')}</span>
         </h2>
 
         {/* Workload scenario presets */}
-        <div className="seg" role="group" aria-label="Workload scenario presets" style={{ marginBottom: '14px', flexWrap: 'wrap' }}>
+        <div className="seg" role="group" aria-label={t('singleTurn.scenarioGroupAria')} style={{ marginBottom: '14px', flexWrap: 'wrap' }}>
           {SCENARIO_PRESETS.map(s => (
             <button
               key={s.id}
@@ -370,12 +371,14 @@ export default function SingleTurnVisualizer({
                 color: specEnabled ? 'var(--agent)' : 'var(--text-muted)'
               }}
             >
-              ⚡ Speculative Decoding: {specEnabled ? 'ON' : 'OFF'}
+              ⚡ {t('singleTurn.speculativeDecoding')} {specEnabled ? t('singleTurn.specOn') : t('singleTurn.specOff')}
             </button>
             {specEnabled && (
               <span className="tag tag-decode">
-                effective {Math.round(effectiveDecodeSpeed).toLocaleString()} tok/s
-                {' '}({(effectiveDecodeSpeed / decodeSpeed).toFixed(2)}× vs vanilla)
+                {t('singleTurn.effectiveTag', {
+                  speed: Math.round(effectiveDecodeSpeed).toLocaleString(),
+                  multiplier: (effectiveDecodeSpeed / decodeSpeed).toFixed(2)
+                })}
               </span>
             )}
           </div>
@@ -383,7 +386,7 @@ export default function SingleTurnVisualizer({
             <div className="grid-auto" style={{ '--grid-min': '220px' }}>
               <div className="field">
                 <div className="field-head">
-                  <span className="field-label">Draft tokens / step (k)</span>
+                  <span className="field-label">{t('singleTurn.draftTokensPerStep')}</span>
                   <span className="field-value" style={{ color: 'var(--agent)' }}>{draftTokens}</span>
                 </div>
                 <input
@@ -392,24 +395,23 @@ export default function SingleTurnVisualizer({
                   max="8"
                   step="1"
                   value={draftTokens}
-                  aria-label="Draft tokens proposed per step"
+                  aria-label={t('singleTurn.draftTokensAria')}
                   onChange={(e) => setDraftTokens(Number(e.target.value))}
                 />
               </div>
               <div className="field">
                 <div className="field-head">
-                  <span className="field-label">Acceptance rate (α)</span>
+                  <span className="field-label">{t('singleTurn.acceptanceRate')}</span>
                   <span className="field-value" style={{ color: specHurts ? 'var(--prefill)' : 'var(--agent)' }}>
                     {acceptance.toFixed(2)}
-                  </span>
-                </div>
+                  </span>                </div>
                 <input
                   type="range"
                   min="0.3"
                   max="0.95"
                   step="0.05"
                   value={acceptance}
-                  aria-label="Draft token acceptance rate"
+                  aria-label={t('singleTurn.acceptanceAria')}
                   onChange={(e) => setAcceptance(Number(e.target.value))}
                 />
                 <div className="field-scale">
@@ -423,8 +425,7 @@ export default function SingleTurnVisualizer({
             <p className="hint-text" style={{ marginTop: '8px', color: specHurts ? 'var(--prefill)' : undefined }}>
               {specHurts
                 ? `⚠ α = ${acceptance.toFixed(2)} is at or below the breakeven (${breakevenAlpha.toFixed(2)}): the draft overhead outweighs the accepted tokens — speculation is slower than vanilla decode. Raise α or lower k.`
-                : `Draft model proposes k tokens, target verifies in one pass. Effective speed ≈ base ÷ (1 + k·c_draft) × (1 + k·α), draft cost c≈${DEFAULT_DRAFT_COST}. Breakeven α ≈ ${breakevenAlpha.toFixed(2)} — below it speculation hurts.`}
-            </p>
+                : `Draft model proposes k tokens, target verifies in one pass. Effective speed ≈ base ÷ (1 + k·c_draft) × (1 + k·α), draft cost c≈${DEFAULT_DRAFT_COST}. Breakeven α ≈ ${breakevenAlpha.toFixed(2)} — below it speculation hurts.`}            </p>
           )}
           {specEnabled && (
             <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
@@ -555,7 +556,7 @@ export default function SingleTurnVisualizer({
           {/* Prompt Tokens Slider */}
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">Input Prompt Length</span>
+              <span className="field-label">{t('singleTurn.inputPromptLength')}</span>
               <span className="field-value" style={{ color: 'var(--prefill)' }}>
                 {formatTokens(promptTokens)} tok
               </span>
@@ -567,7 +568,7 @@ export default function SingleTurnVisualizer({
                 max="32768"
                 step="128"
                 value={promptTokens}
-                aria-label="Input prompt length in tokens"
+                aria-label={t('singleTurn.promptLengthAria')}
                 onChange={(e) => {
                   setPromptTokens(Number(e.target.value));
                   handleReset();
@@ -577,7 +578,7 @@ export default function SingleTurnVisualizer({
               <input
                 type="number"
                 value={promptTokens}
-                aria-label="Input prompt length value"
+                aria-label={t('singleTurn.promptValueAria')}
                 onChange={(e) => {
                   setPromptTokens(Number(e.target.value));
                   handleReset();
@@ -586,16 +587,16 @@ export default function SingleTurnVisualizer({
               />
             </div>
             <div className="field-scale">
-              <span>128 · short</span>
-              <span>4,096 · RAG</span>
-              <span>32,768 · long doc</span>
+              <span>{t('singleTurn.scalePromptShort')}</span>
+              <span>{t('singleTurn.scalePromptRag')}</span>
+              <span>{t('singleTurn.scalePromptLongDoc')}</span>
             </div>
           </div>
 
           {/* Target Output Tokens Slider */}
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">Target Output Length</span>
+              <span className="field-label">{t('singleTurn.targetOutputLength')}</span>
               <span className="field-value" style={{ color: 'var(--decode)' }}>
                 {formatTokens(outputTokens)} tok
               </span>
@@ -607,7 +608,7 @@ export default function SingleTurnVisualizer({
                 max="4096"
                 step="32"
                 value={outputTokens}
-                aria-label="Target output generation length in tokens"
+                aria-label={t('singleTurn.outputLengthAria')}
                 onChange={(e) => {
                   setOutputTokens(Number(e.target.value));
                   handleReset();
@@ -617,7 +618,7 @@ export default function SingleTurnVisualizer({
               <input
                 type="number"
                 value={outputTokens}
-                aria-label="Target output generation length value"
+                aria-label={t('singleTurn.outputValueAria')}
                 onChange={(e) => {
                   setOutputTokens(Number(e.target.value));
                   handleReset();
@@ -626,9 +627,9 @@ export default function SingleTurnVisualizer({
               />
             </div>
             <div className="field-scale">
-              <span>32 · concise</span>
-              <span>512 · standard</span>
-              <span>4,096 · code / report</span>
+              <span>{t('singleTurn.scaleOutputConcise')}</span>
+              <span>{t('singleTurn.scaleOutputStandard')}</span>
+              <span>{t('singleTurn.scaleOutputCode')}</span>
             </div>
           </div>
         </div>
@@ -644,7 +645,7 @@ export default function SingleTurnVisualizer({
       ))}
 
       {/* Main Visualizer Stage */}
-      <section className="panel" aria-label="Simulation stage">
+      <section className="panel" aria-label={t('singleTurn.simStageAria')}>
 
         {/* Status Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
@@ -663,16 +664,16 @@ export default function SingleTurnVisualizer({
               className={`btn ${isPlaying ? 'btn-warn' : 'btn-accent'}`}
             >
               {isPlaying ? <Pause size={15} /> : <Play size={15} />}
-              {isPlaying ? 'Pause' : 'Simulate Run'}
+              {isPlaying ? t('common.pause') : t('common.simulateRun')}
             </button>
 
             <button
               onClick={handleReset}
-              title="Reset simulation (phase, token progress, stream, elapsed time)"
+              title={t('singleTurn.resetTooltip')}
               className="btn"
             >
               <RotateCcw size={15} />
-              Reset
+              {t('common.reset')}
             </button>
 
             <button
@@ -711,7 +712,7 @@ export default function SingleTurnVisualizer({
             <div className="field-head" style={{ marginBottom: '4px' }}>
               <span className="panel-title" style={{ color: 'var(--prefill)' }}>
                 <Zap size={15} style={{ color: 'var(--prefill)' }} />
-                Phase 1 · Prefill (TTFT)
+                {t('singleTurn.prefillPhaseTitle')}
               </span>
               <span className="tag tag-prefill">{prefillSpeed.toLocaleString()} tok/s</span>
             </div>
@@ -744,8 +745,7 @@ export default function SingleTurnVisualizer({
             )}
 
             <p className="hint-text" style={{ marginTop: '8px' }}>
-              Compute-bound parallel matrix multiplication. Builds the KV cache for all {totalPrefillTokens.toLocaleString()} prompt tokens{totalImageTokens > 0 ? ` (incl. ${totalImageTokens.toLocaleString()} image tokens)` : ''}.
-            </p>
+              Compute-bound parallel matrix multiplication. Builds the KV cache for all {totalPrefillTokens.toLocaleString()} prompt tokens{totalImageTokens > 0 ? ` (incl. ${totalImageTokens.toLocaleString()} image tokens)` : ''}.            </p>
           </div>
 
           {/* Decode Block Visualizer */}
@@ -760,7 +760,7 @@ export default function SingleTurnVisualizer({
             <div className="field-head" style={{ marginBottom: '4px' }}>
               <span className="panel-title" style={{ color: 'var(--decode)' }}>
                 <Gauge size={15} style={{ color: 'var(--decode)' }} />
-                Phase 2 · Decode (Generation)
+                {t('singleTurn.decodePhaseTitle')}
               </span>
               <span className="tag tag-decode">
                 {decodeSpeed.toLocaleString()} tok/s · {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms/tok` : '∞ ms/tok'}
@@ -789,7 +789,7 @@ export default function SingleTurnVisualizer({
             </div>
 
             <p className="hint-text" style={{ marginTop: '8px' }}>
-              Memory-bandwidth bound autoregressive loop. Reads all model weights &amp; KV cache per generated token.
+              {t('singleTurn.decodeHint')}
             </p>
           </div>
 
@@ -799,7 +799,7 @@ export default function SingleTurnVisualizer({
         <div className="panel-inset" style={{ marginBottom: '20px' }}>
           <div className="field-head" style={{ marginBottom: '10px' }}>
             <span className="section-label">
-              Decode stream · {currentDecodeTokens} tokens
+              {t('singleTurn.streamSectionLabel', { count: currentDecodeTokens })}
             </span>
             <span style={{ fontSize: '0.74rem', fontFamily: 'var(--font-mono)', color: 'var(--decode)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
               TPOT{' '}
@@ -813,10 +813,10 @@ export default function SingleTurnVisualizer({
             {streamWordsVisible.length === 0 ? (
               <span className="stream-placeholder">
                 {phase === 'prefilling'
-                  ? 'Ingesting prompt — prefill phase active…'
+                  ? t('singleTurn.placeholderPrefilling')
                   : totalStreamWords > 0
-                    ? `Window ${streamLap} complete — clearing & continuing…`
-                    : 'Press "Simulate Run" to watch the token stream.'}
+                    ? t('singleTurn.placeholderWindowDone', { lap: streamLap })
+                    : t('singleTurn.placeholderIdle')}
               </span>
             ) : (
               streamWordsVisible.map((word, idx) => (
@@ -844,7 +844,7 @@ export default function SingleTurnVisualizer({
         <div className="metric-grid">
 
           <div className="metric" style={{ borderLeftColor: 'var(--prefill)' }}>
-            <div className="metric-label">TTFT · time to first token</div>
+            <div className="metric-label">{t('singleTurn.metricTtft')}</div>
             <div className="metric-value" style={{ color: 'var(--prefill)' }}>
               <Metric term="ttft" substitution={ttftSub}>
                 {formatTime(expectedTTFT)}
@@ -854,31 +854,30 @@ export default function SingleTurnVisualizer({
               {totalImageTokens > 0
                 ? `Prefill ${totalPrefillTokens.toLocaleString()} tok (incl. images)`
                 : 'Prompt prefill latency'}
-            </div>
-          </div>
+            </div>          </div>
 
           <div className="metric" style={{ borderLeftColor: 'var(--decode)' }}>
-            <div className="metric-label">TPOT · time per output token</div>
+            <div className="metric-label">{t('singleTurn.metricTpot')}</div>
             <div className="metric-value" style={{ color: 'var(--decode)' }}>
               <Metric term="tpot" substitution={tpotSub}>
                 {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms'}
               </Metric>
             </div>
-            <div className="metric-sub">{decodeSpeed} tokens / sec</div>
+            <div className="metric-sub">{t('singleTurn.tokensPerSecSub', { speed: decodeSpeed })}</div>
           </div>
 
           <div className="metric" style={{ borderLeftColor: 'var(--accent)' }}>
-            <div className="metric-label">Total chat walltime</div>
+            <div className="metric-label">{t('singleTurn.metricTotalWalltime')}</div>
             <div className="metric-value">
               <Metric term="walltime" substitution={walltimeSub}>
                 {formatTime(expectedTotalTime)}
               </Metric>
             </div>
-            <div className="metric-sub">Prefill + decode combined</div>
+            <div className="metric-sub">{t('singleTurn.metricTotalSub')}</div>
           </div>
 
           <div className="metric" style={{ borderLeftColor: 'var(--agent)' }}>
-            <div className="metric-label">Effective throughput</div>
+            <div className="metric-label">{t('singleTurn.metricThroughput')}</div>
             <div className="metric-value">
               <Metric term="throughput" substitution={throughputSub} align="left">
                 {!Number.isFinite(expectedTotalTime)
@@ -889,15 +888,14 @@ export default function SingleTurnVisualizer({
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>tok/s</span>
               </Metric>
             </div>
-            <div className="metric-sub">Total tokens ÷ walltime{totalImageTokens > 0 ? ' (incl. vision tokens)' : ''}</div>
-          </div>
+            <div className="metric-sub">Total tokens ÷ walltime{totalImageTokens > 0 ? ' (incl. vision tokens)' : ''}</div>          </div>
 
         </div>
 
         {/* Stacked Walltime Percentage Bar */}
         <div style={{ marginTop: '20px', paddingTop: '14px', borderTop: '1px solid var(--border)' }}>
           <div className="field-head" style={{ marginBottom: '8px' }}>
-            <span className="section-label">Walltime distribution</span>
+            <span className="section-label">{t('singleTurn.distributionLabel')}</span>
             <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
               Prefill{' '}
               <Metric term="walltimePctPrefill" substitution={prefillPctSub} align="left">
@@ -923,9 +921,9 @@ export default function SingleTurnVisualizer({
                 fontWeight: '700',
                 fontFamily: 'var(--font-mono)'
               }}
-              title={`Prefill Time: ${formatTime(expectedTTFT)} (${prefillPct.toFixed(1)}%)`}
+              data-tooltip={t('singleTurn.segmentPrefillTooltip', { time: formatTime(expectedTTFT), pct: prefillPct.toFixed(1) })}
             >
-              {prefillPct > 8 && `PREFILL ${prefillPct.toFixed(0)}%`}
+              {prefillPct > 8 && `${t('singleTurn.distributionPrefill').toUpperCase()} ${prefillPct.toFixed(0)}%`}
             </div>
             <div
               style={{
@@ -939,9 +937,9 @@ export default function SingleTurnVisualizer({
                 fontWeight: '700',
                 fontFamily: 'var(--font-mono)'
               }}
-              title={`Decode Time: ${formatTime(expectedDecodeTime)} (${decodePct.toFixed(1)}%)`}
+              data-tooltip={t('singleTurn.segmentDecodeTooltip', { time: formatTime(expectedDecodeTime), pct: decodePct.toFixed(1) })}
             >
-              {decodePct > 8 && `DECODE ${decodePct.toFixed(0)}%`}
+              {decodePct > 8 && `${t('singleTurn.distributionDecode').toUpperCase()} ${decodePct.toFixed(0)}%`}
             </div>
           </div>
         </div>

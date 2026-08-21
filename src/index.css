@@ -440,7 +440,8 @@ input[type="range"]::-moz-range-thumb {
 .metric {
   background: var(--bg-inset);
   border: 1px solid var(--border);
-  border-left: 2px solid var(--border-strong);
+  /* Logical property: flips automatically under [dir="rtl"] */
+  border-inline-start: 2px solid var(--border-strong);
   border-radius: var(--radius-md);
   padding: 12px 14px;
 }
@@ -637,22 +638,48 @@ input[type="range"]::-moz-range-thumb {
 
 [data-tooltip] { position: relative; }
 
-[data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-bottom: 6px;
-  padding: 4px 8px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border-strong);
-  color: var(--text-main);
-  font-size: 0.72rem;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 100;
+@media (hover: hover) {
+  [data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 6px;
+    padding: 4px 8px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    color: var(--text-main);
+    font-size: 0.72rem;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 100;
+  }
+}
+
+@media not all and (hover: hover) {
+  [data-tooltip].tooltip-open::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 6px;
+    padding: 6px 10px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    color: var(--text-main);
+    font-size: 0.72rem;
+    border-radius: var(--radius-sm);
+    white-space: normal;
+    width: max-content;
+    max-width: min(260px, 80vw);
+    text-align: center;
+    box-shadow: var(--shadow-panel);
+    pointer-events: none;
+    z-index: 100;
+  }
 }
 
 /* ---------- Header / tab navigation ---------- */
@@ -763,14 +790,47 @@ input[type="range"]::-moz-range-thumb {
   font-size: 0.76rem;
 }
 
-/* ---------- Mobile ---------- */
+/* ---------- Mobile-first compact layout (#85 / #64) ----------
+   Base styles target phones; the desktop experience is layered back on via
+   min-width queries where needed. Layout uses logical properties throughout
+   so RTL locales flip without extra rules. */
+
+/* Waterfall collapses into a horizontally scrollable strip below 720px:
+   rows keep a readable minimum width instead of squeezing bars into noise. */
+.waterfall-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
 @media (max-width: 720px) {
   .app-frame { padding: 0 10px; }
   .panel { padding: 14px; }
   .brand-title { font-size: 0.88rem; white-space: normal; }
   .brand-sub { display: none; }
+
+  /* Metric cards stack into a compact two-up grid, then a single column */
+  .metric-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .metric-value { font-size: 1.15rem; }
+
+  .tab-btn { flex: 1 0 auto; justify-content: center; padding: 10px 10px; }
+
+  .waterfall-rows {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+  .waterfall-rows > * { min-width: 430px; }
+
+  /* Tables keep their horizontal scroll affordance visible */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 520px) {
+  .metric-grid { grid-template-columns: 1fr; }
 }
 
 /* Keyboard shortcut hints */

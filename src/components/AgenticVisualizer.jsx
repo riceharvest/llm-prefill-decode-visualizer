@@ -8,6 +8,7 @@ import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } 
 import Metric from './Metric';
 
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
+import { t } from '../i18n/strings';
 
 export default function AgenticVisualizer({
   prefillSpeed,
@@ -45,8 +46,8 @@ export default function AgenticVisualizer({
   // Auto-start the simulation when the page was opened via a "try it" demo link
   useEffect(() => {
     if (readParam('autoplay') === '1') {
-      const t = setTimeout(() => setIsPlaying(true), 250);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setIsPlaying(true), 250);
+      return () => clearTimeout(timer);
     }
   }, [setIsPlaying]);
 
@@ -106,12 +107,12 @@ export default function AgenticVisualizer({
   };
 
   const turnActions = [
-    { tool: 'user_query', label: 'User Task & Agent Plan Generation' },
-    { tool: 'database_query', label: 'Tool Call #1: Query Vector DB / RAG' },
-    { tool: 'execute_code', label: 'Tool Call #2: Run Data Analysis Code' },
-    { tool: 'web_search', label: 'Tool Call #3: Fetch Web Documentation' },
-    { tool: 'format_response', label: 'Tool Call #4: Structure Final Report' },
-    { tool: 'review_check', label: 'Tool Call #5: Verification & Double-Check' }
+    { tool: 'user_query', label: t('agentic.turnActions.0') },
+    { tool: 'database_query', label: t('agentic.turnActions.1') },
+    { tool: 'execute_code', label: t('agentic.turnActions.2') },
+    { tool: 'web_search', label: t('agentic.turnActions.3') },
+    { tool: 'format_response', label: t('agentic.turnActions.4') },
+    { tool: 'review_check', label: t('agentic.turnActions.5') }
   ];
   const timelineInputs = {
     numTurns,
@@ -337,20 +338,20 @@ export default function AgenticVisualizer({
     totalAgentWalltime
   ]);
 
-  const phaseStatusText = currentPhase === 'prefilling' ? 'Prefilling — ingesting prompt tokens'
-    : currentPhase === 'decoding' ? 'Decoding — generating tokens'
-    : currentPhase === 'completed' ? 'Loop complete'
-    : 'Run the simulation to see both phases side by side';
+  const phaseStatusText = currentPhase === 'prefilling' ? t('agentic.statusPrefilling')
+    : currentPhase === 'decoding' ? t('agentic.statusDecoding')
+    : currentPhase === 'completed' ? t('agentic.statusCompleted')
+    : t('agentic.statusIdle');
 
   return (
     <div className="stack">
 
       {/* Top Configuration Card */}
-      <section className="panel" aria-label="Agentic loop parameters">
+      <section className="panel" aria-label={t('agentic.paramsPanelAria')}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
           <h2 className="panel-title">
             <Bot size={16} style={{ color: 'var(--agent)' }} />
-            <span>Agentic Tool-Loop Parameters</span>
+            <span>{t('agentic.paramsPanelTitle')}</span>
           </h2>
 
           {/* Prefix Caching Toggle */}
@@ -364,7 +365,7 @@ export default function AgenticVisualizer({
               : undefined}
           >
             {enablePrefixCaching ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-            <span>Prefix caching: <strong>{enablePrefixCaching ? 'ON (KV reuse)' : 'OFF (full re-prefill)'}</strong></span>
+            <span>Prefix caching: <strong>{enablePrefixCaching ? t('agentic.prefixCachingOn') : t('agentic.prefixCachingOff')}</strong></span>
           </button>
         </div>
 
@@ -373,8 +374,8 @@ export default function AgenticVisualizer({
           {/* Number of Turns */}
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">Agent Turns</span>
-              <span className="field-value" style={{ color: 'var(--agent)' }}>{numTurns} turns</span>
+              <span className="field-label">{t('agentic.agentTurns')}</span>
+              <span className="field-value" style={{ color: 'var(--agent)' }}>{numTurns} {t('agentic.turnsUnit')}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input
@@ -383,14 +384,14 @@ export default function AgenticVisualizer({
                 max="200"
                 step="1"
                 value={numTurns}
-                aria-label="Number of agent turns"
+                aria-label={t('agentic.turnsAria')}
                 onChange={(e) => { setNumTurns(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={numTurns}
-                aria-label="Number of agent turns value"
+                aria-label={t('agentic.turnsValueAria')}
                 onChange={(e) => { setNumTurns(Number(e.target.value)); handleReset(); }}
                 style={{ width: '64px' }}
               />
@@ -400,7 +401,7 @@ export default function AgenticVisualizer({
           {/* Base System Prompt Tokens */}
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">Initial System Prompt</span>
+              <span className="field-label">{t('agentic.initialSystemPrompt')}</span>
               <span className="field-value" style={{ color: 'var(--prefill)' }}>{formatTokens(basePromptTokens)} tok</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -410,14 +411,14 @@ export default function AgenticVisualizer({
                 max="262144"
                 step="250"
                 value={basePromptTokens}
-                aria-label="Initial system prompt tokens"
+                aria-label={t('agentic.systemPromptAria')}
                 onChange={(e) => { setBasePromptTokens(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={basePromptTokens}
-                aria-label="Initial system prompt tokens value"
+                aria-label={t('agentic.systemPromptValueAria')}
                 onChange={(e) => { setBasePromptTokens(Number(e.target.value)); handleReset(); }}
                 style={{ width: '80px' }}
               />
@@ -427,7 +428,7 @@ export default function AgenticVisualizer({
           {/* Tool Output Tokens per Turn */}
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">Tool Result / Turn</span>
+              <span className="field-label">{t('agentic.toolResultPerTurn')}</span>
               <span className="field-value" style={{ color: 'var(--accent)' }}>+{formatTokens(toolOutputTokensPerTurn)} tok</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -437,14 +438,14 @@ export default function AgenticVisualizer({
                 max="50000"
                 step="100"
                 value={toolOutputTokensPerTurn}
-                aria-label="Tool output tokens per turn"
+                aria-label={t('agentic.toolOutputAria')}
                 onChange={(e) => { setToolOutputTokensPerTurn(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={toolOutputTokensPerTurn}
-                aria-label="Tool output tokens per turn value"
+                aria-label={t('agentic.toolOutputValueAria')}
                 onChange={(e) => { setToolOutputTokensPerTurn(Number(e.target.value)); handleReset(); }}
                 style={{ width: '80px' }}
               />
@@ -454,7 +455,7 @@ export default function AgenticVisualizer({
           {/* Decode Tokens per Turn */}
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">Agent Thought / Turn</span>
+              <span className="field-label">{t('agentic.agentThoughtPerTurn')}</span>
               <span className="field-value" style={{ color: 'var(--decode)' }}>{formatTokens(decodeTokensPerTurn)} tok</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -464,14 +465,14 @@ export default function AgenticVisualizer({
                 max="20000"
                 step="50"
                 value={decodeTokensPerTurn}
-                aria-label="Decode tokens per turn"
+                aria-label={t('agentic.thoughtAria')}
                 onChange={(e) => { setDecodeTokensPerTurn(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={decodeTokensPerTurn}
-                aria-label="Decode tokens per turn value"
+                aria-label={t('agentic.thoughtValueAria')}
                 onChange={(e) => { setDecodeTokensPerTurn(Number(e.target.value)); handleReset(); }}
                 style={{ width: '80px' }}
               />
@@ -491,12 +492,12 @@ export default function AgenticVisualizer({
       ))}
 
       {/* Main Agent Loop Simulation Stage */}
-      <section className="panel" aria-label="Agent loop simulation">
+      <section className="panel" aria-label={t('agentic.simStageAria')}>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span className="tag tag-agent" style={{ fontSize: '0.72rem', padding: '3px 9px' }}>
-              MULTI-TURN LOOP
+              {t('agentic.multiTurnLoop')}
             </span>
             <span className="hint-text" style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
               Total walltime{' '}
@@ -515,16 +516,16 @@ export default function AgenticVisualizer({
               className={`btn ${isPlaying ? 'btn-warn' : 'btn-accent'}`}
             >
               {isPlaying ? <Pause size={15} /> : <Play size={15} />}
-              {isPlaying ? 'Pause' : 'Simulate Agent Loop'}
+              {isPlaying ? t('common.pause') : t('agentic.simulateLoop')}
             </button>
 
             <button
               onClick={handleReset}
-              title="Reset turn state (active turn, phase, token progress)"
+              title={t('agentic.resetTooltip')}
               className="btn"
             >
               <RotateCcw size={15} />
-              Reset Loop
+              {t('agentic.resetLoop')}
             </button>
 
             <button
@@ -568,11 +569,17 @@ export default function AgenticVisualizer({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <CheckCircle size={16} />
               <span>
-                <strong>Prefix caching savings:</strong> walltime reduced from {formatTime(turnBreakdownNoCache)} to {formatTime(totalAgentWalltime)}
+                <strong>{t('agentic.cachingSavingsPrefix')}</strong> {t('agentic.cachingSavingsBody', {
+                  without: formatTime(turnBreakdownNoCache),
+                  with: formatTime(totalAgentWalltime)
+                })}
               </span>
             </div>
             <span className="tag tag-decode">
-              saved {formatTime(cachingTimeSaved)} ({cachingPercentSaved.toFixed(0)}%)
+              {t('agentic.savedTag', {
+                time: formatTime(cachingTimeSaved),
+                pct: cachingPercentSaved.toFixed(0)
+              })}
             </span>
           </div>
         ) : (
@@ -586,7 +593,7 @@ export default function AgenticVisualizer({
               color: 'var(--agent)'
             }}
           >
-            <strong>Prefix caching disabled:</strong> every turn re-prefills the entire accumulated context history. Turn walltimes grow as history expands.
+            <strong>{t('agentic.cachingDisabledPrefix')}</strong> {t('agentic.cachingDisabledBody')}
           </div>
         )}
 
@@ -594,7 +601,7 @@ export default function AgenticVisualizer({
         <div className="panel-inset" style={{ marginBottom: '20px' }}>
           <div className="field-head" style={{ marginBottom: '12px', flexWrap: 'wrap' }}>
             <span className="section-label">
-              Turn {activeTurn || '—'} stream · prefill ingestion vs decode generation
+              {t('agentic.turnStreamLabel', { turn: activeTurn || '—' })}
             </span>
             <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{phaseStatusText}</span>
           </div>
@@ -602,7 +609,7 @@ export default function AgenticVisualizer({
           {/* Overall agent loop progress: elapsed / total (rAF-driven — no transition) */}
           <div style={{ marginBottom: '14px' }}>
             <div className="field-head" style={{ marginBottom: '5px' }}>
-              <span className="field-label">Overall loop progress</span>
+              <span className="field-label">{t('agentic.overallProgress')}</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', fontWeight: 700, color: 'var(--agent)', fontVariantNumeric: 'tabular-nums' }}>
                 {formatTime(elapsedSim)} / {formatTime(totalAgentWalltime)}
               </span>
@@ -630,7 +637,7 @@ export default function AgenticVisualizer({
             >
               <div className="field-head" style={{ marginBottom: '6px' }}>
                 <span className="panel-title" style={{ color: 'var(--prefill)', fontSize: '0.74rem' }}>
-                  Prefill · prompt ingestion
+                  {t('agentic.prefillPanelTitle')}
                 </span>
                 <span className="tag tag-prefill">
                   {formatTokens(activeTurnItem ? activeTurnItem.newTokensPrefilled : 0)} tok
@@ -656,14 +663,17 @@ export default function AgenticVisualizer({
                   if (!activeTurnItem || totalWords === 0) {
                     return (
                       <span className="stream-placeholder">
-                        {currentPhase === 'prefilling' ? 'Ingesting prompt context…' : 'Waiting for prefill phase…'}
+                        {currentPhase === 'prefilling' ? t('agentic.placeholderPrefilling') : t('agentic.placeholderWaitingPrefill')}
                       </span>
                     );
                   }
                   if (visible === 0) {
                     return (
                       <span className="stream-placeholder">
-                        Window {lap} complete — {formatTokens(totalWords * TOKENS_PER_WORD)} tokens ingested, clearing & continuing…
+                        {t('agentic.windowDonePrefill', {
+                          lap,
+                          tokens: formatTokens(totalWords * TOKENS_PER_WORD)
+                        })}
                       </span>
                     );
                   }
@@ -684,8 +694,8 @@ export default function AgenticVisualizer({
               </div>
 
               <div className="field-head" style={{ marginTop: '8px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                <span>Ingested <strong style={{ color: 'var(--text-main)' }}>{prefillProgress.toLocaleString()}</strong> / {activeTurnItem ? activeTurnItem.newTokensPrefilled.toLocaleString() : '0'}</span>
-                <span>≈{TOKENS_PER_WORD} tok/word</span>
+                <span>{t('agentic.ingested')} <strong style={{ color: 'var(--text-main)' }}>{prefillProgress.toLocaleString()}</strong> / {activeTurnItem ? activeTurnItem.newTokensPrefilled.toLocaleString() : '0'}</span>
+                <span>{t('agentic.tokPerWord', { n: TOKENS_PER_WORD })}</span>
               </div>
             </div>
 
@@ -700,7 +710,7 @@ export default function AgenticVisualizer({
             >
               <div className="field-head" style={{ marginBottom: '6px' }}>
                 <span className="panel-title" style={{ color: 'var(--decode)', fontSize: '0.74rem' }}>
-                  Decode · token generation
+                  {t('agentic.decodePanelTitle')}
                 </span>
                 <span className="tag tag-decode">
                   {formatTokens(activeTurnItem ? activeTurnItem.decodeTokens : 0)} tok
@@ -726,14 +736,17 @@ export default function AgenticVisualizer({
                   if (!activeTurnItem || totalWords === 0) {
                     return (
                       <span className="stream-placeholder">
-                        {currentPhase === 'decoding' ? 'Generating tokens…' : 'Waiting for decode phase…'}
+                        {currentPhase === 'decoding' ? t('agentic.placeholderDecoding') : t('agentic.placeholderWaitingDecode')}
                       </span>
                     );
                   }
                   if (visible === 0) {
                     return (
                       <span className="stream-placeholder">
-                        Window {lap} complete — {formatTokens(totalWords * TOKENS_PER_WORD)} tokens generated, clearing & continuing…
+                        {t('agentic.windowDoneDecode', {
+                          lap,
+                          tokens: formatTokens(totalWords * TOKENS_PER_WORD)
+                        })}
                       </span>
                     );
                   }
@@ -754,8 +767,8 @@ export default function AgenticVisualizer({
               </div>
 
               <div className="field-head" style={{ marginTop: '8px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                <span>Generated <strong style={{ color: 'var(--text-main)' }}>{decodeProgress.toLocaleString()}</strong> / {activeTurnItem ? activeTurnItem.decodeTokens.toLocaleString() : '0'}</span>
-                <span>≈{TOKENS_PER_WORD} tok/word</span>
+                <span>{t('agentic.generated')} <strong style={{ color: 'var(--text-main)' }}>{decodeProgress.toLocaleString()}</strong> / {activeTurnItem ? activeTurnItem.decodeTokens.toLocaleString() : '0'}</span>
+                <span>{t('agentic.tokPerWord', { n: TOKENS_PER_WORD })}</span>
               </div>
             </div>
           </div>
@@ -764,19 +777,19 @@ export default function AgenticVisualizer({
         {/* Gantt / Waterfall Timeline Chart */}
         <div className="panel-inset" style={{ marginBottom: '20px' }} ref={waterfallRef}>
           <div className="field-head" style={{ marginBottom: '14px', flexWrap: 'wrap' }}>
-            <span className="section-label">Turn-by-turn walltime waterfall</span>
+            <span className="section-label">{t('agentic.waterfallLabel')}</span>
             <div style={{ display: 'flex', gap: '14px', fontSize: '0.72rem', fontWeight: 600, alignItems: 'center' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--prefill)' }}>
-                <span style={{ width: '10px', height: '10px', background: 'var(--prefill)', borderRadius: '2px' }} /> Prefill
+                <span style={{ width: '10px', height: '10px', background: 'var(--prefill)', borderRadius: '2px' }} /> {t('agentic.legendPrefill')}
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--decode)' }}>
-                <span style={{ width: '10px', height: '10px', background: 'var(--decode)', borderRadius: '2px' }} /> Decode
+                <span style={{ width: '10px', height: '10px', background: 'var(--decode)', borderRadius: '2px' }} /> {t('agentic.legendDecode')}
               </span>
               <button
                 onClick={() => exportNodeAsPng(waterfallRef.current, 'agentic-waterfall.png')}
                 className="btn"
                 style={{ padding: '2px 8px', fontSize: '0.68rem' }}
-                title="Export this chart as PNG"
+                title={t('agentic.exportPngTooltip')}
               >
                 PNG
               </button>
@@ -787,11 +800,11 @@ export default function AgenticVisualizer({
           <div style={{ marginBottom: '14px' }}>
             <div className="field-head" style={{ marginBottom: '4px', fontSize: '0.74rem' }}>
               <span className="section-label" style={{ fontSize: '0.7rem' }}>
-                Context (KV cache) growth
+                {t('agentic.contextGrowth')}
               </span>
               <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--agent)', fontVariantNumeric: 'tabular-nums' }}>
                 {currentContextTokens.toLocaleString()} / {finalContextTokens.toLocaleString()} tok
-                {' '}· {(currentContextTokens / 1000).toFixed(1)}k accumulated
+                {' '}· {t('agentic.accumulatedSuffix', { thousands: (currentContextTokens / 1000).toFixed(1) })}
               </span>
             </div>
             <div className="progress-track">
@@ -805,7 +818,8 @@ export default function AgenticVisualizer({
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {/* Scrollable strip on narrow viewports (see .waterfall-rows CSS) */}
+          <div className="waterfall-rows">
             {turnBreakdown.map((turnItem, turnIndex) => {
               const isCurrentTurn = activeTurn === turnItem.turn;
               const {
@@ -862,7 +876,11 @@ export default function AgenticVisualizer({
                           fontWeight: 700,
                           fontFamily: 'var(--font-mono)'
                         }}
-                        title={`Turn ${turnItem.turn} Prefill: ${formatTime(turnItem.prefillTime)} (${turnItem.newTokensPrefilled} tok)`}
+                        data-tooltip={t('agentic.segmentPrefillTooltip', {
+                          turn: turnItem.turn,
+                          time: formatTime(turnItem.prefillTime),
+                          tokens: turnItem.newTokensPrefilled
+                        })}
                       >
                         {prefillRatio > 15 && formatTime(turnItem.prefillTime)}
                       </div>
@@ -881,7 +899,11 @@ export default function AgenticVisualizer({
                           fontWeight: 700,
                           fontFamily: 'var(--font-mono)'
                         }}
-                        title={`Turn ${turnItem.turn} Decode: ${formatTime(turnItem.decodeTime)} (${turnItem.decodeTokens} tok)`}
+                        data-tooltip={t('agentic.segmentDecodeTooltip', {
+                          turn: turnItem.turn,
+                          time: formatTime(turnItem.decodeTime),
+                          tokens: turnItem.decodeTokens
+                        })}
                       >
                         {(100 - prefillRatio) > 15 && formatTime(turnItem.decodeTime)}
                       </div>
@@ -889,12 +911,12 @@ export default function AgenticVisualizer({
                   </div>
 
                   {/* Turn Walltime Total */}
-                  <div style={{ width: '86px', textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ width: '86px', textAlign: 'end', flexShrink: 0 }}>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>
                       {formatTime(turnItem.turnWalltime)}
                     </div>
                     <div style={{ fontSize: '0.64rem', color: turnItem.isCached ? 'var(--prefill)' : 'var(--text-subtle)' }}>
-                      {turnItem.isCached ? 'cached' : 'full ingest'}
+                      {turnItem.isCached ? t('agentic.cachedLabel') : t('agentic.fullIngestLabel')}
                     </div>
                   </div>
                 </div>
@@ -908,14 +930,14 @@ export default function AgenticVisualizer({
           <table className="data-table">
             <thead>
               <tr>
-                <th>Turn</th>
-                <th>Agent Tool Phase</th>
-                <th>History Context</th>
-                <th>Prefilled Tokens</th>
-                <th>Prefill Time</th>
-                <th>Decode Time</th>
-                <th>Turn Walltime</th>
-                <th>Cumulative</th>
+                <th>{t('agentic.tableHeaders.turn')}</th>
+                <th>{t('agentic.tableHeaders.agentPhase')}</th>
+                <th>{t('agentic.tableHeaders.historyContext')}</th>
+                <th>{t('agentic.tableHeaders.prefilledTokens')}</th>
+                <th>{t('agentic.tableHeaders.prefillTime')}</th>
+                <th>{t('agentic.tableHeaders.decodeTime')}</th>
+                <th>{t('agentic.tableHeaders.turnWalltime')}</th>
+                <th>{t('agentic.tableHeaders.cumulative')}</th>
               </tr>
             </thead>
             <tbody>

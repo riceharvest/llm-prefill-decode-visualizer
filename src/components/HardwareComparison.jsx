@@ -5,7 +5,8 @@ import { readParam, readParamNum, readParamBool, writeParams } from '../utils/ur
 import { methodologyMismatch } from '../utils/localMaxxing';
 import Metric from './Metric';
 import { estimateFromLabel } from '../utils/streetPricing';
- (feat: attach pricing and availability links to every recommended GPU (#66))
+import { t } from '../i18n/strings';
+
 
 // Typical whole-rig wattage under inference load (GPU + rest-of-system overhead).
 // Used as the default for the TCO section; the user can always override it.
@@ -204,15 +205,19 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   return (
     <div className="stack">
 
-      <section className="panel" aria-label="Hardware comparison">
+      <section className="panel" aria-label={t('compare.panelAria')}>
         <h2 className="panel-title" style={{ marginBottom: '14px' }}>
           <BarChart3 size={16} />
-          <span>Side-by-Side Hardware Benchmark</span>
+          <span>{t('compare.panelTitle')}</span>
         </h2>
 
         {localMaxxingContext?.runs?.length > 0 && (
           <div className="panel-inset" style={{ marginBottom: '14px', borderColor: 'var(--prefill-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: '0.76rem', fontWeight: 600 }}>
-            Comparing {localMaxxingContext.modelId} at {localMaxxingContext.quantization} across {localMaxxingContext.runs.length} measured single-stream runs. Select either system below to change hardware.
+            {t('compare.comparingBanner', {
+              model: localMaxxingContext.modelId,
+              quant: localMaxxingContext.quantization,
+              runs: localMaxxingContext.runs.length
+            })}
           </div>
         )}
 
@@ -220,7 +225,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
         <div className="grid-auto" style={{ '--grid-min': '240px', marginBottom: '16px' }}>
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">Test Prompt Length</span>
+              <span className="field-label">{t('compare.testPromptLength')}</span>
               <span className="field-value" style={{ color: 'var(--prefill)' }}>{formatTokens(testPromptTokens)} tok</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -230,14 +235,14 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 max="32768"
                 step="512"
                 value={testPromptTokens}
-                aria-label="Test prompt length in tokens"
+                aria-label={t('compare.testPromptAria')}
                 onChange={(e) => setTestPromptTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={testPromptTokens}
-                aria-label="Test prompt length value"
+                aria-label={t('compare.testPromptValueAria')}
                 onChange={(e) => setTestPromptTokens(Number(e.target.value))}
                 style={{ width: '80px' }}
               />
@@ -246,7 +251,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
 
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">Test Output Generation</span>
+              <span className="field-label">{t('compare.testOutputGeneration')}</span>
               <span className="field-value" style={{ color: 'var(--decode)' }}>{formatTokens(testOutputTokens)} tok</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -256,14 +261,14 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 max="4096"
                 step="64"
                 value={testOutputTokens}
-                aria-label="Test output generation length in tokens"
+                aria-label={t('compare.testOutputAria')}
                 onChange={(e) => setTestOutputTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={testOutputTokens}
-                aria-label="Test output generation length value"
+                aria-label={t('compare.testOutputValueAria')}
                 onChange={(e) => setTestOutputTokens(Number(e.target.value))}
                 style={{ width: '80px' }}
               />
@@ -274,8 +279,8 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
           <div className="panel-inset field">
             <div className="field-head">
               <span className="field-label">
-                <Users size={13} style={{ verticalAlign: '-2px', marginRight: '4px' }} />
-                Concurrent Users (batch)
+                <Users size={13} style={{ verticalAlign: '-2px', marginInlineEnd: '4px' }} />
+                {t('compare.concurrentUsers')}
               </span>
               <span className="field-value" style={{ color: 'var(--agent)' }}>{batchSize}×</span>
             </div>
@@ -286,22 +291,22 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 max="64"
                 step="1"
                 value={batchSize}
-                aria-label="Concurrent user batch size"
+                aria-label={t('compare.batchAria')}
                 onChange={(e) => setBatchSize(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
               <input
                 type="number"
                 value={batchSize}
-                aria-label="Concurrent user batch size value"
+                aria-label={t('compare.batchValueAria')}
                 onChange={(e) => setBatchSize(Math.max(1, Math.round(Number(e.target.value) || 1)))}
                 style={{ width: '80px' }}
               />
             </div>
             <p className="hint-text" style={{ marginTop: '6px' }}>
               {batchSize === 1
-                ? 'Single stream — per-user speeds are the raw benchmark numbers.'
-                : `Decode shared ${batchSize}-way: per-user speed drops ~B^0.25, aggregate tok/s still rises.`}
+                ? t('compare.batchHintSingle')
+                : t('compare.batchHintShared', { batch: batchSize })}
             </p>
           </div>
         </div>
@@ -310,14 +315,14 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
         <div className="grid-auto" style={{ '--grid-min': '300px' }}>
 
           {/* Hardware Config A */}
-          <div className="panel-inset" style={{ borderColor: 'var(--prefill-border)', borderLeft: '2px solid var(--accent)' }}>
+          <div className="panel-inset" style={{ borderColor: 'var(--prefill-border)', borderInlineStart: '2px solid var(--accent)' }}>
             <div className="section-label" style={{ color: 'var(--accent)', marginBottom: '8px' }}>
-              System A · primary
+              {t('compare.systemAPrimary')}
             </div>
             <select
               value={hardwareA}
               onChange={(e) => setHardwareA(e.target.value)}
-              aria-label="System A hardware profile"
+              aria-label={t('compare.systemAProfileAria')}
               style={{ width: '100%', marginBottom: '14px' }}
             >
               {presets.map(p => (
@@ -327,7 +332,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', color: 'var(--text-muted)' }}>
               <div style={rowStyle}>
-                <span>Prefill speed</span>
+                <span>{t('compare.prefillSpeed')}</span>
                 <span style={{ ...numStyle, color: 'var(--prefill)' }}>{presetA.prefillSpeed.toLocaleString()} tok/s</span>
               </div>
               {measuredLabel(presetA) && (
@@ -341,12 +346,12 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               {presetA.sourceUrl && <a href={presetA.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600 }}>View LocalMaxxing source run ↗</a>}
               {renderPricing(presetA, pricingA)}
               <div style={rowStyle}>
-                <span>Decode speed <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>(per user)</em></span>
+                <span>{t('compare.decodeSpeed')} <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>({t('compare.perUserSuffix')})</em></span>
                 <span style={{ ...numStyle, color: 'var(--decode)' }}>{Math.round(batchedPerUserDecodeA).toLocaleString()} tok/s</span>
               </div>
               {batchSize > 1 && (
                 <div style={rowStyle}>
-                  <span>Aggregate decode throughput</span>
+                  <span>{t('compare.aggregateDecodeThroughput')}</span>
                   <span style={{ ...numStyle, color: 'var(--agent)' }}>{Math.round(aggregateTokPerSecA).toLocaleString()} tok/s</span>
                 </div>
               )}
@@ -359,24 +364,24 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 </span>
               </div>
               <div style={rowStyle}>
-                <span>Decode time</span>
+                <span>{t('compare.decodeTime')}</span>
                 <span style={{ ...numStyle, color: 'var(--decode)' }}>{formatTime(decodeTimeA)}</span>
               </div>
               <div style={{ ...rowStyle, ...rowDivider, fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)' }}>
-                <span>Total walltime</span>
+                <span>{t('compare.totalWalltime')}</span>
                 <span style={{ ...numStyle, color: 'var(--accent)' }}>{formatTime(totalTimeA)}</span>
               </div>
               {/* Optional per-request cost */}
               <div style={{ ...rowStyle, marginTop: '6px', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.72rem' }}>$ / 1M tok (in · out)</span>
+                <span style={{ fontSize: '0.72rem' }}>{t('compare.priceLabel')}</span>
                 <span style={{ display: 'flex', gap: '4px' }}>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder="in"
+                    placeholder={t('compare.priceInPlaceholder')}
                     value={priceAIn}
-                    aria-label="System A input price per million tokens"
+                    aria-label={t('compare.priceInAria', { system: 'A' })}
                     onChange={(e) => setPriceAIn(e.target.value)}
                     style={{ width: '58px', padding: '3px 5px', fontSize: '0.72rem' }}
                   />
@@ -384,9 +389,9 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder="out"
+                    placeholder={t('compare.priceOutPlaceholder')}
                     value={priceAOut}
-                    aria-label="System A output price per million tokens"
+                    aria-label={t('compare.priceOutAria', { system: 'A' })}
                     onChange={(e) => setPriceAOut(e.target.value)}
                     style={{ width: '58px', padding: '3px 5px', fontSize: '0.72rem' }}
                   />
@@ -394,7 +399,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               </div>
               {costA !== null && (
                 <div style={rowStyle}>
-                  <span>Cost per request</span>
+                  <span>{t('compare.costPerRequest')}</span>
                   <span style={{ ...numStyle, color: 'var(--agent)' }}>${costA.toFixed(4)}</span>
                 </div>
               )}
@@ -402,14 +407,14 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
           </div>
 
           {/* Hardware Config B */}
-          <div className="panel-inset" style={{ borderLeft: '2px solid var(--border-strong)' }}>
+          <div className="panel-inset" style={{ borderInlineStart: '2px solid var(--border-strong)' }}>
             <div className="section-label" style={{ marginBottom: '8px' }}>
-              System B · comparison
+              {t('compare.systemBComparison')}
             </div>
             <select
               value={hardwareB}
               onChange={(e) => setHardwareB(e.target.value)}
-              aria-label="System B hardware profile"
+              aria-label={t('compare.systemBProfileAria')}
               style={{ width: '100%', marginBottom: '14px' }}
             >
               {presets.map(p => (
@@ -419,7 +424,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', color: 'var(--text-muted)' }}>
               <div style={rowStyle}>
-                <span>Prefill speed</span>
+                <span>{t('compare.prefillSpeed')}</span>
                 <span style={{ ...numStyle, color: 'var(--prefill)' }}>{presetB.prefillSpeed.toLocaleString()} tok/s</span>
               </div>
               {measuredLabel(presetB) && (
@@ -433,12 +438,12 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               {presetB.sourceUrl && <a href={presetB.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600 }}>View LocalMaxxing source run ↗</a>}
               {renderPricing(presetB, pricingB)}
               <div style={rowStyle}>
-                <span>Decode speed <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>(per user)</em></span>
+                <span>{t('compare.decodeSpeed')} <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>({t('compare.perUserSuffix')})</em></span>
                 <span style={{ ...numStyle, color: 'var(--decode)' }}>{Math.round(batchedPerUserDecodeB).toLocaleString()} tok/s</span>
               </div>
               {batchSize > 1 && (
                 <div style={rowStyle}>
-                  <span>Aggregate decode throughput</span>
+                  <span>{t('compare.aggregateDecodeThroughput')}</span>
                   <span style={{ ...numStyle, color: 'var(--agent)' }}>{Math.round(aggregateTokPerSecB).toLocaleString()} tok/s</span>
                 </div>
               )}
@@ -451,24 +456,24 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 </span>
               </div>
               <div style={rowStyle}>
-                <span>Decode time</span>
+                <span>{t('compare.decodeTime')}</span>
                 <span style={{ ...numStyle, color: 'var(--decode)' }}>{formatTime(decodeTimeB)}</span>
               </div>
               <div style={{ ...rowStyle, ...rowDivider, fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)' }}>
-                <span>Total walltime</span>
+                <span>{t('compare.totalWalltime')}</span>
                 <span style={numStyle}>{formatTime(totalTimeB)}</span>
               </div>
               {/* Optional per-request cost */}
               <div style={{ ...rowStyle, marginTop: '6px', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.72rem' }}>$ / 1M tok (in · out)</span>
+                <span style={{ fontSize: '0.72rem' }}>{t('compare.priceLabel')}</span>
                 <span style={{ display: 'flex', gap: '4px' }}>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder="in"
+                    placeholder={t('compare.priceInPlaceholder')}
                     value={priceBIn}
-                    aria-label="System B input price per million tokens"
+                    aria-label={t('compare.priceInAria', { system: 'B' })}
                     onChange={(e) => setPriceBIn(e.target.value)}
                     style={{ width: '58px', padding: '3px 5px', fontSize: '0.72rem' }}
                   />
@@ -476,9 +481,9 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder="out"
+                    placeholder={t('compare.priceOutPlaceholder')}
                     value={priceBOut}
-                    aria-label="System B output price per million tokens"
+                    aria-label={t('compare.priceOutAria', { system: 'B' })}
                     onChange={(e) => setPriceBOut(e.target.value)}
                     style={{ width: '58px', padding: '3px 5px', fontSize: '0.72rem' }}
                   />
@@ -486,7 +491,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               </div>
               {costB !== null && (
                 <div style={rowStyle}>
-                  <span>Cost per request</span>
+                  <span>{t('compare.costPerRequest')}</span>
                   <span style={{ ...numStyle, color: 'var(--agent)' }}>${costB.toFixed(4)}</span>
                 </div>
               )}
@@ -511,9 +516,9 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
         <div className="metric-grid" style={{ marginTop: '16px' }}>
           <div
             className="metric"
-            style={{ borderLeftColor: speedupTotal >= 1 ? 'var(--decode)' : 'var(--danger)', textAlign: 'center' }}
+            style={{ borderInlineStartColor: speedupTotal >= 1 ? 'var(--decode)' : 'var(--danger)', textAlign: 'center' }}
           >
-            <div className="metric-label">Overall walltime</div>
+            <div className="metric-label">{t('compare.metricOverall')}</div>
             <div className="metric-value" style={{ color: speedupTotal >= 1 ? 'var(--decode)' : 'var(--danger)', fontSize: '1.5rem' }}>
               <Metric
                 term="speedupTotal"
@@ -522,11 +527,11 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 {speedupTotal > 0 ? (speedupTotal >= 1 ? `${speedupTotal.toFixed(2)}x faster` : `${(1 / speedupTotal).toFixed(2)}x slower`) : '—'}
               </Metric>
             </div>
-            <div className="metric-sub">System A vs System B</div>
+            <div className="metric-sub">{t('compare.metricOverallSub')}</div>
           </div>
 
-          <div className="metric" style={{ borderLeftColor: 'var(--prefill)', textAlign: 'center' }}>
-            <div className="metric-label">Prefill TTFT advantage</div>
+          <div className="metric" style={{ borderInlineStartColor: 'var(--prefill)', textAlign: 'center' }}>
+            <div className="metric-label">{t('compare.metricPrefillAdvantage')}</div>
             <div className="metric-value" style={{ color: 'var(--prefill)' }}>
               <Metric term="speedupPrefill" substitution={`${formatTime(ttftB)} ÷ ${formatTime(ttftA)} = ${speedupPrefill.toFixed(2)}x`}>
                 {speedupPrefill.toFixed(2)}x
@@ -534,8 +539,8 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
             </div>
           </div>
 
-          <div className="metric" style={{ borderLeftColor: 'var(--decode)', textAlign: 'center' }}>
-            <div className="metric-label">Decode generation advantage</div>
+          <div className="metric" style={{ borderInlineStartColor: 'var(--decode)', textAlign: 'center' }}>
+            <div className="metric-label">{t('compare.metricDecodeAdvantage')}</div>
             <div className="metric-value" style={{ color: 'var(--decode)' }}>
               <Metric term="speedupDecode" substitution={`${formatTime(decodeTimeB)} ÷ ${formatTime(decodeTimeA)} = ${speedupDecode.toFixed(2)}x`}>
                 {speedupDecode.toFixed(2)}x

@@ -15,6 +15,7 @@ import {
   getQuantsForHardwareModel,
   setFetchProgressListener
 } from '../utils/hardwareFirst';
+import { t } from '../i18n/strings';
 
 const selectStyle = {
   width: '100%'
@@ -194,28 +195,28 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
   };
 
   return (
-    <section className="panel" aria-label="LocalMaxxing measured presets">
+    <section className="panel" aria-label={t('localMaxxing.panelAria')}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <Database size={16} style={{ color: 'var(--accent)' }} />
-            <strong style={{ color: 'var(--text-main)', fontSize: '0.9rem' }}>LocalMaxxing measured presets</strong>
-            <span className="tag tag-accent">live community runs</span>
+            <strong style={{ color: 'var(--text-main)', fontSize: '0.9rem' }}>{t('localMaxxing.title')}</strong>
+            <span className="tag tag-accent">{t('localMaxxing.liveRunsTag')}</span>
           </div>
           <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
             {pickOrder === 'hardware'
-              ? 'Hardware first: pick a rig, then a model and quant. Only single-stream measured runs are shown.'
-              : 'Pick one model and quant. Only single-stream runs with measured prefill and decode speeds are shown.'}
+              ? t('localMaxxing.introHardwareFirst')
+              : t('localMaxxing.introModelFirst')}
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button onClick={togglePickOrder} className="btn" style={{ fontSize: '0.72rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-            title={pickOrder === 'model' ? 'Switch to hardware → model → quant' : 'Switch to model → quant → hardware'}>
+            title={pickOrder === 'model' ? t('localMaxxing.switchToHardwareTitle') : t('localMaxxing.switchToModelTitle')}>
             <ArrowLeftRight size={13} />
-            {pickOrder === 'hardware' ? 'Model first' : 'Hardware first'}
+            {pickOrder === 'hardware' ? t('localMaxxing.modelFirst') : t('localMaxxing.hardwareFirst')}
           </button>
           <a href="https://localmaxxing.com/en/leaderboard" target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.76rem', fontWeight: 600 }}>
-            Open leaderboard <ExternalLink size={13} />
+            {t('localMaxxing.openLeaderboard')} <ExternalLink size={13} />
           </a>
         </div>
       </div>
@@ -223,7 +224,7 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
       {pickOrder === 'model' ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginTop: '14px' }}>
           <label className="field-label" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            Model repository
+            {t('localMaxxing.modelRepository')}
             <div style={{ display: 'flex', gap: '6px' }}>
               <input
                 type="text"
@@ -231,20 +232,20 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
                 value={modelInput}
                 onChange={event => setModelInput(event.target.value)}
                 onKeyDown={event => { if (event.key === 'Enter') loadModel(); }}
-                placeholder={loadingModels ? 'Loading models…' : 'Search or enter Hugging Face model ID'}
+                placeholder={loadingModels ? t('localMaxxing.loadingModelsPlaceholder') : t('localMaxxing.searchModelPlaceholder')}
                 style={{ ...selectStyle, minWidth: 0 }}
               />
-              <button onClick={loadModel} title="Load LocalMaxxing runs for this model" aria-label="Load runs for model" className="btn btn-icon" style={{ minHeight: '34px', flexShrink: 0 }}>
+              <button onClick={loadModel} title={t('localMaxxing.loadRunsTooltip')} aria-label={t('localMaxxing.loadRunsAria')} className="btn btn-icon" style={{ minHeight: '34px', flexShrink: 0 }}>
                 {loadingRuns ? <LoaderCircle size={16} className="spin" /> : <Search size={16} />}
               </button>
             </div>
             <datalist id="localmaxxing-models">
-              {models.map(model => <option key={model.hfId} value={model.hfId}>{model._count?.benchmarkRuns || 0} runs</option>)}
+              {models.map(model => <option key={model.hfId} value={model.hfId}>{model._count?.benchmarkRuns || 0} {t('localMaxxing.runsCountSuffix')}</option>)}
             </datalist>
           </label>
 
           <label className="field-label" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            Quantization
+            {t('localMaxxing.quantization')}
             <select
               value={quantization}
               onChange={event => {
@@ -254,15 +255,15 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
               disabled={!quantizations.length}
               style={selectStyle}
             >
-              {!quantizations.length && <option value="">Load a model first</option>}
+              {!quantizations.length && <option value="">{t('localMaxxing.loadModelFirst')}</option>}
               {quantizations.map(quant => <option key={quant} value={quant}>{quant}</option>)}
             </select>
           </label>
 
           <label className="field-label" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            Hardware run ({eligibleRuns.length} comparable)
+            {t('localMaxxing.hardwareRunLabel', { count: eligibleRuns.length })}
             <select value={selectedRunId} onChange={handleRunChange} disabled={!eligibleRuns.length} style={selectStyle}>
-              <option value="">Select hardware to prefill speeds</option>
+              <option value="">{t('localMaxxing.selectHardwareOption')}</option>
               {eligibleRuns.map(run => <option key={run.id} value={run.id}>{runLabel(run)}</option>)}
             </select>
           </label>
@@ -270,7 +271,7 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginTop: '14px' }}>
           <label className="field-label" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            Hardware ({hardwareGroups.length} rigs with comparable runs)
+            {t('localMaxxing.hardwareCountLabel', { count: hardwareGroups.length })}
             <select
               value={hardwareKey}
               onChange={event => {
@@ -287,9 +288,9 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
               <option value="">
                 {loadingAll
                   ? fetchProgress
-                    ? `Loading community runs… ${fetchProgress.rows.toLocaleString()} runs (${fetchProgress.pages} pages)`
-                    : 'Loading community runs…'
-                  : 'Select hardware'}
+                    ? t('localMaxxing.loadingCommunityRunsWithProgress', { rows: fetchProgress.rows.toLocaleString(), pages: fetchProgress.pages })
+                    : t('localMaxxing.loadingCommunityRuns')
+                  : t('localMaxxing.selectHardware')}
               </option>
               {hardwareGroups.map(key => (
                 <option key={key} value={key}>
@@ -300,7 +301,7 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
           </label>
 
           <label className="field-label" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            Model repository
+            {t('localMaxxing.modelRepository')}
             <select
               value={modelId}
               onChange={event => {
@@ -312,7 +313,7 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
               disabled={!hardwareKey || !hwModelIds.length}
               style={selectStyle}
             >
-              <option value="">{!hardwareKey ? 'Pick hardware first' : `Select model (${hwModelIds.length})`}</option>
+              <option value="">{!hardwareKey ? t('localMaxxing.pickHardwareFirst') : t('localMaxxing.selectModel', { count: hwModelIds.length })}</option>
               {hwModelIds.map(hfId => (
                 <option key={hfId} value={hfId}>
                   {hfId} ({allRuns.filter(r => r.hardwareGroupKey === hardwareKey && r.model?.hfId === hfId).length})
@@ -322,9 +323,9 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
           </label>
 
           <label className="field-label" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            Quantization / run ({hwEligibleRuns.length} comparable)
+            {t('localMaxxing.quantizationRunLabel', { count: hwEligibleRuns.length })}
             <select value={selectedRunId} onChange={handleRunChange} disabled={!hwEligibleRuns.length} style={selectStyle}>
-              <option value="">{!modelId ? 'Pick a model first' : 'Select measured run'}</option>
+              <option value="">{!modelId ? t('localMaxxing.pickModelFirst') : t('localMaxxing.selectMeasuredRun')}</option>
               {hwEligibleRuns.map(run => <option key={run.id} value={run.id}>{runLabel(run)}</option>)}
             </select>
           </label>
@@ -339,20 +340,20 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
             className="btn"
             style={{ padding: '3px 10px', fontSize: '0.7rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
           >
-            <RotateCcw size={12} /> Retry
+            <RotateCcw size={12} /> {t('common.retry')}
           </button>
         </p>
       )}
       {pickOrder === 'model' && modelId && !loadingRuns && runs.length === 0 && !error && (
-        <p style={{ margin: '10px 0 0', color: 'var(--agent)', fontSize: '0.76rem' }}>No single-stream runs contain both prefill and decode measurements for this model.</p>
+        <p style={{ margin: '10px 0 0', color: 'var(--agent)', fontSize: '0.76rem' }}>{t('localMaxxing.noRunsForModel')}</p>
       )}
       {pickOrder === 'hardware' && hardwareKey && modelId && !loadingAll && hwQuantRuns.length === 0 && !error && (
-        <p style={{ margin: '10px 0 0', color: 'var(--agent)', fontSize: '0.76rem' }}>No single-stream runs pair this model with the selected hardware.</p>
+        <p style={{ margin: '10px 0 0', color: 'var(--agent)', fontSize: '0.76rem' }}>{t('localMaxxing.noRunsForPair')}</p>
       )}
       {selectedRun && (
         <div className="panel-inset" style={{ marginTop: '10px', borderColor: active ? 'var(--decode-border)' : 'var(--border)', background: active ? 'var(--decode-dim)' : 'var(--bg-inset)', display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap', fontSize: '0.76rem' }}>
           <span style={{ color: active ? 'var(--decode)' : 'var(--text-muted)', fontWeight: 600 }}>
-            {active ? 'Applied' : 'Selected'}: {toLocalPreset(selectedRun).description}
+            {active ? t('common.applied') : t('common.selected')}: {toLocalPreset(selectedRun).description}
           </span>
           <a href={`https://localmaxxing.com/en/runs/${selectedRun.id}`} target="_blank" rel="noreferrer" style={{ fontWeight: 600 }}>View source run</a>
         </div>
