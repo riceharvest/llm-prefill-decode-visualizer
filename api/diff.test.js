@@ -1,7 +1,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { diffMetric, derivedTimes, computeRunDiff, REF_PROMPT_TOKENS, REF_OUTPUT_TOKENS } from './_diff.js';
-import handler from './diff.js';
+import handler, { parseConstraintSet } from './diff.js';
 import { invalidateCache } from './_localmaxxing.js';
 
 // ---------- Pure diff math ----------
@@ -178,4 +178,88 @@ test('handler diffs two known runs with deltas, ratios and summary', async () =>
   assert.equal(metrics.decode.winner, 'B');
   assert.equal(context.sameModelFamily, true);
   assert.match(summary, /decodes 2× faster/);
+});
+
+// ---------- What-if mode (#71): diff two decision requests ----------
+
+test('parseConstraintSet accepts objects, JSON strings and query strings', () => {
+  assert.deepEqual(parseConstraintSet({ fitCheck: 'true' }), { fitCheck: 'true' });
+  assert.deepEqual(parseConstraintSet('{"contextLength":8192}'), { contextLength: 8192 });
+  assert.deepEqual(parseConstraintSet('fitCheck=true&model=qwen'), { fitCheck: 'true', model: 'qwen' });
+  assert.equal(parseConstraintSet(null), null);
+  assert.equal(parseConstraintSet(''), null);
+  assert.throws(() => parseConstraintSet('{nope'), /not valid JSON/);
+});
+
+test('whatif mode rejects missing constraint sets with 400', async () => {
+  const missing = await call({ mode: 'whatif' });
+  assert.equal(missing.status, 400);
+  assert.match(missing.json.detail, /mode=whatif&a=<constraints>&b=<constraints>/);
+
+  const oneSided = await call({ mode: 'whatif', a: '{"fitCheck":"true"}' });
+  assert.equal(oneSided.status, 400);
+});
+
+test('whatif mode rejects malformed JSON constraint sets with 400', async () => {
+  const res = await call({ mode: 'whatif', a: '{nope', b: '{}' });
+  assert.equal(res.status, 400);
+  assert.match(res.json.error, /invalid constraint set|not valid JSON/);
+});
+
+test('whatif mode diffs two feasible-set queries and reports deltas', async () => {
+  // A: both rigs (discrete_gpu). B: hwClass=unified → nothing survives.
+  const a = 'fitCheck=true&contextLength=8192';
+  const b = 'fitCheck=true&contextLength=8192&hwClass=unified';
+  const { status, json } = await call({ mode: 'whatif', a, b });
+
+  assert.equal(status, 200);
+  assert.equal(json.mode, 'whatif');
+  assert.equal(json.a.resultCount, 2);
+  assert.equal(json.b.resultCount, 0);
+  assert.deepEqual(json.delta.counts, { aOnly: 2, bOnly: 0, shared: 0 });
+  assert.equal(json.delta.left.length, 2);
+  assert.equal(json.delta.entered.length, 0);
+  assert.ok(json.delta.left.every(o => o.hardwareKey.startsWith('rig-')));
+  assert.match(json.delta.summary, /2 option\(s\) leave/);
+});
+
+test('whatif mode reports headroom deltas when both sides share options', async () => {
+  const ctx = n => `fitCheck=true&contextLength=${n}`;
+  const { status, json } = await call({ mode: 'whatif', a: ctx(8192), b: ctx(65536) });
+
+  assert.equal(status, 200);
+  assert.equal(json.delta.counts.shared, 2);
+  assert.equal(json.delta.entered.length, 0);
+  assert.equal(json.delta.left.length, 0);
+
+  // Longer context → KV cache grows → headroom must not increase.
+  for (const h of json.delta.headroom) {
+    assert.equal(typeof h.headroomGbA, 'number');
+    assert.equal(typeof h.headroomGbB, 'number');
+    assert.equal(h.fitsA, true);
+    assert.equal(h.fitsB, true);
+  }
+});
+
+test('whatif mode treats identical constraint sets as zero-delta', async () => {
+  const same = 'fitCheck=true&contextLength=8192';
+  const { status, json } = await call({ mode: 'whatif', a: same, b: same });
+  assert.equal(status, 200);
+  assert.match(json.delta.summary, /no what-if deltas/);
+});
+
+test('whatif mode accepts POST with a JSON body', async () => {
+  const res = mockRes();
+  await handler({
+    method: 'POST',
+    query: {},
+    body: {
+      mode: 'whatif',
+      a: { fitCheck: 'true', contextLength: 8192 },
+      b: { fitCheck: 'true', contextLength: 8192, hwClass: 'unified' }
+    }
+  }, res);
+  const out = JSON.parse(res.body);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(out.delta.counts, { aOnly: 2, bOnly: 0, shared: 0 });
 });
