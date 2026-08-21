@@ -37,6 +37,14 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 
 **Batching (one round trip for N comparisons):** `POST /api/compute` with `{"batch": [{"model": "singleTurn", "promptTokens": 4096}, {"model": "kvCache", "architecture": "llama70b", "contextLength": 131072}]}` (also accepted as `variants`, or `?batch=[...]` as URL-encoded JSON on GET). Each item is a normal parameter set including its own `model` field; max 50 items. Response: `{batch: true, count, okCount, errorCount, results: [{index, ok, result | error}]}` — one bad scenario returns a per-item error instead of failing the whole batch.
 
+Every `/api/compute` and `/api/best` response carries a deterministic `id` (`calc_<12 hex chars>`) hashed from the resolved request. Cite it to reference a result across turns:
+
+**GET /api/calc/<id>?<original params>** — replay any computation from its id. Ids are pure content hashes, not database keys: resend the original parameters and the endpoint re-runs identical math and stamps `verified: true`. Example:
+- `/api/compute?model=singleTurn&promptTokens=4096` → `{ "id": "calc_x", ... }`
+- `/api/calc/calc_x?model=singleTurn&promptTokens=4096` → same numbers, `verified: true`
+- For `/api/best` results add `endpoint=best`: `/api/calc/calc_y?endpoint=best&by=decode&maxParamsB=8`
+- Altered parameters are rejected with `expected` = the id they actually hash to.
+
 **GET /api/presets** — built-in hardware speed presets (RTX 4090, dual 3090, M3 Ultra, Groq, H100, RPi5…) and workload scenarios (RAG query, code generation…). Use these as `/api/compute` inputs.
 
 **GET /api/localmaxxing** — community-measured single-stream benchmark runs (3,600+).
