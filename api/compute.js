@@ -6,6 +6,7 @@ import {
   agentic,
   kvCache
 } from './_math.js';
+import { ENGINE_FLAGS, applyEngineFlags } from '../src/utils/engineFlags.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -88,12 +89,40 @@ function computeOne(params) {
       }) };
     }
 
+    case 'flagged': {
+      // Engine flag modeling (issue #70): apply documented llama.cpp/vLLM
+      // flag deltas to base speeds, then simulate a single turn with them.
+      // The response carries a per-flag audit trail (delta + source tag) so
+      // agents can see exactly how each number was adjusted.
+      const flags = applyEngineFlags({
+        prefillSpeed: num(params.prefillSpeed, 3800),
+        decodeSpeed: num(params.decodeSpeed, 105),
+        flags: params.flags ?? ''
+      });
+      const promptTokens = num(params.promptTokens, 2048);
+      const outputTokens = num(params.outputTokens, 512);
+      return { status: 200, body: {
+        inputs: { ...flags.inputs, promptTokens, outputTokens },
+        adjusted: flags.adjusted,
+        totalPrefillDeltaPct: flags.totalPrefillDeltaPct,
+        totalDecodeDeltaPct: flags.totalDecodeDeltaPct,
+        adjustments: flags.adjustments,
+        warnings: flags.warnings,
+        simulation: singleTurn({
+          promptTokens,
+          outputTokens,
+          prefillSpeed: flags.adjusted.prefillSpeed,
+          decodeSpeed: flags.adjusted.decodeSpeed
+        })
+      } };
+    }
+
     case '':
     case undefined:
       return { status: 200, body: capabilityList() };
 
     default:
-      return { status: 400, body: { error: `Unknown model '${model}'`, available: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache'] } };
+      return { status: 400, body: { error: `Unknown model '${model}'`, available: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged'] } };
   }
 }
 
@@ -105,7 +134,13 @@ function capabilityList() {
       speculative: { params: ['baseDecodeSpeed', 'draftTokens', 'acceptanceRate', 'draftCostFraction'], example: '/api/compute?model=speculative&baseDecodeSpeed=105&draftTokens=4&acceptanceRate=0.7' },
       batched: { params: ['prefillSpeed', 'decodeSpeed', 'batchSize', 'promptTokens', 'outputTokens', 'decodeDecayExponent'], example: '/api/compute?model=batched&batchSize=16&decodeSpeed=105' },
       agentic: { params: ['numTurns', 'basePromptTokens', 'toolOutputTokensPerTurn', 'decodeTokensPerTurn', 'prefillSpeed', 'decodeSpeed', 'enablePrefixCaching'], example: '/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true' },
-      kvCache: { params: ['architecture|numLayers+kvHeads+headDim', 'contextLength', 'precisionBytes', 'batchSize'], architectures: Object.keys(MODEL_PRESETS), example: '/api/compute?model=kvCache&architecture=llama70b&contextLength=65536' }
+      kvCache: { params: ['architecture|numLayers+kvHeads+headDim', 'contextLength', 'precisionBytes', 'batchSize'], architectures: Object.keys(MODEL_PRESETS), example: '/api/compute?model=kvCache&architecture=llama70b&contextLength=65536' },
+      flagged: {
+        params: ['prefillSpeed', 'decodeSpeed', 'promptTokens', 'outputTokens', 'flags'],
+        flags: Object.fromEntries(ENGINE_FLAGS.map(f => [f.id, { flag: f.flag, engine: f.engine, prefillDeltaPct: Math.round((f.prefillMult - 1) * 100), decodeDeltaPct: Math.round((f.decodeMult - 1) * 100), kvBits: f.kvBits, source: f.source, sourceNote: f.sourceNote }])),
+        description: 'Applies documented engine launch-flag deltas to base speeds and simulates a single turn. All deltas are heuristics with a source note each — not measurements.',
+        example: '/api/compute?model=flagged&prefillSpeed=2400&decodeSpeed=65&flags=flash-attn,kv-q8'
+      }
     },
     batch: {
       description: 'Compare variants in one call: POST {"batch": [{"model": "singleTurn", "promptTokens": 4096}, ...]}. Each item is a normal parameter set including its own "model" field. Returns { results: [{ index, ok, result | error }] } — one bad item does not fail the batch.',
