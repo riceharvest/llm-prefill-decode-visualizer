@@ -2,6 +2,7 @@ import { getAllRuns, aggregate } from './_localmaxxing.js';
 import { singleTurn, cost } from './_math.js';
 import { SCENARIO_PRESETS } from '../src/utils/presets.js';
 import { fitsInMemory } from './_vramfit.js';
+import { enforceRateLimit } from './_ratelimit.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -137,6 +138,7 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  * ?promptTokens=&outputTokens=    scenario shape (defaults 2048/512)
  */
 export default async function handler(req, res) {
+  if (!enforceRateLimit(req, res)) return;
   try {
     const q = req.query || {};
     const limit = Math.min(50, Math.max(1, Number(q.limit) || 10));

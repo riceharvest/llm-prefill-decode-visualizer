@@ -2,6 +2,7 @@ import { getAllRuns } from './_localmaxxing.js';
 import { normalizeModelId } from './_normalize.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from './_pagination.js';
 import { validateSubmission, checkDuplicates, queueSubmission } from './_submit.js';
+import { enforceRateLimit } from './_ratelimit.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -87,6 +88,7 @@ export default async function handler(req, res) {
     return json(res, { error: `Method ${req.method} not allowed. Use GET to query runs or POST to submit one.` }, 405);
   }
 
+  if (!enforceRateLimit(req, res)) return;
   try {
     const q = req.query || {};
 

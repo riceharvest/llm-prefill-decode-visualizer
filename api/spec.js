@@ -1,14 +1,46 @@
+import { enforceRateLimit } from './_ratelimit.js';
+
 export const config = { runtime: 'nodejs' };
 
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
+// Shared rate-limit documentation (issue #14). Budget: RATE_LIMIT per
+// RATE_WINDOW_MS — see api/_ratelimit.js; keep in sync with /llms.txt.
+const RATE_LIMIT_HEADERS = {
+  'X-RateLimit-Limit': { description: 'Max requests per 60s window per client (best-effort, per serverless instance).', schema: { type: 'integer', example: 120 } },
+  'X-RateLimit-Remaining': { description: 'Requests left in the current window.', schema: { type: 'integer' } },
+  'X-RateLimit-Reset': { description: 'Unix epoch seconds when the current window resets.', schema: { type: 'integer' } }
+};
+const RATE_LIMITED_RESPONSE = {
+  description: 'Rate limit exhausted for this window. Back off for Retry-After seconds, then resume.',
+  headers: {
+    ...RATE_LIMIT_HEADERS,
+    'Retry-After': { description: 'Seconds until the window resets and requests are accepted again.', schema: { type: 'integer' } }
+  },
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        properties: {
+          error: { type: 'string' },
+          limit: { type: 'integer' },
+          remaining: { type: 'integer' },
+          reset: { type: 'integer', description: 'Unix epoch seconds' },
+          retryAfterSeconds: { type: 'integer' }
+        }
+      }
+    }
+  }
+};
+
 export default function handler(req, res) {
+  if (!enforceRateLimit(req, res)) return;
   const spec = {
     openapi: '3.1.0',
     info: {
       title: 'LLM Prefill & Decode Speed Visualizer API',
-      version: '2.1.0',
-      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. Human docs at /llms.txt.'
+      version: '2.2.0',
+      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. Human docs at /llms.txt. Rate limited to 120 requests/min per client (best-effort, per serverless instance); every response carries X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset, and exhaustion returns 429 with Retry-After.'
     },
     servers: [{ url: BASE }],
     paths: {
@@ -36,7 +68,8 @@ export default function handler(req, res) {
             { name: 'precisionBytes', in: 'query', schema: { type: 'number', enum: [2, 1, 0.5] }, description: 'kvCache: FP16/FP8/INT4' },
             { name: 'flags', in: 'query', schema: { type: 'string' }, description: 'flagged: comma-separated engine flag ids (flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3). Documented heuristic deltas; response carries a per-flag audit trail.' }
           ],
-          responses: { '200': { description: 'Computed metrics object' } }
+          responses: { '200': { description: 'Computed metrics object' } },
+          '429': { $ref: '#/components/responses/RateLimited' }
         }
       },
       '/api/vram': {
@@ -59,7 +92,8 @@ export default function handler(req, res) {
       '/api/presets': {
         get: {
           summary: 'Built-in hardware speed presets and workload scenarios',
-          responses: { '200': { description: '{hardware[], scenarios[]}' } }
+          responses: { '200': { description: '{hardware[], scenarios[]}' } },
+          '429': { $ref: '#/components/responses/RateLimited' }
         }
       },
       '/api/localmaxxing': {
@@ -73,64 +107,7 @@ export default function handler(req, res) {
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 500 }, description: 'page size' },
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' }
           ],
-          responses: { '200': { description: 'Hardware summary, or paginated run list { total, items[], has_more, next_cursor }' } }
-        },
-        post: {
-          summary: 'Submit a community benchmark run for review',
-          description: 'Validates required fields (model, quant, hardware, hwClass, prefillTokPerSec, decodeTokPerSec), applies per-hardware-class sanity bounds (e.g. rejects 99,999 tok/s claimed on an RPi5), and checks for duplicates against existing runs. Accepted submissions are queued for manual review — never published immediately. Optional: engine, promptTokens, outputTokens, contextLength, provenance {engineVersion, command, sourceUrl, notes}, submitter.',
-          requestBody: {
-            required: true,
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['model', 'quant', 'hardware', 'hwClass', 'prefillTokPerSec', 'decodeTokPerSec'],
-                  properties: {
-                    model: { type: 'string', description: 'HF id or family name, e.g. unsloth/Qwen3.6-27B-GGUF' },
-                    quant: { type: 'string', example: 'Q4_K_M' },
-                    hardware: { type: 'string', description: 'rig description, e.g. Raspberry Pi 5 (16GB)' },
-                    hwClass: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] },
-                    prefillTokPerSec: { type: 'number' },
-                    decodeTokPerSec: { type: 'number' },
-                    engine: { type: 'string', example: 'llama.cpp' },
-                    promptTokens: { type: 'integer' },
-                    outputTokens: { type: 'integer' },
-                    contextLength: { type: 'integer' },
-                    provenance: {
-                      type: 'object',
-                      properties: {
-                        engineVersion: { type: 'string', example: 'llama.cpp b6242' },
-                        command: { type: 'string', example: 'llama-bench -m model.gguf -p 512 -n 128' },
-                        sourceUrl: { type: 'string' },
-                        notes: { type: 'string' }
-                      }
-                    },
-                    submitter: { type: 'string' }
-                  }
-                }
-              }
-            }
-          },
-          responses: {
-            '202': { description: 'Queued for review — returns submissionId + status "queued"' },
-            '400': { description: 'Validation failed — machine-readable errors array [{field, code, message}]' },
-            '409': { description: 'Duplicate run — near-identical run already exists (error: duplicate_run)' }
-          }
-        }
-      },
-      '/api/diff': {
-        get: {
-          summary: 'Diff two measured runs: deltas, ratios and a plain-language summary',
-          description: 'Returns both runs plus per-metric comparison. delta = B − A, ratio = B ÷ A, winner is from A\'s point of view. Time metrics (ttft/tpot/walltime) are normalized to a 2048-token prompt / 512-token output so runs measured at different lengths stay comparable.',
-          parameters: [
-            { name: 'runA', in: 'query', required: true, schema: { type: 'string' }, description: 'first run id (alias: a)' },
-            { name: 'runB', in: 'query', required: true, schema: { type: 'string' }, description: 'second run id (alias: b)' }
-          ],
-          responses: {
-            '200': { description: '{ runA, runB, diff: { context, metrics: { prefill, decode, ttft, tpot, walltime }, summary } }' },
-            '400': { description: 'missing or identical run ids' },
-            '404': { description: 'unknown run id' }
-          }
+          responses: { '200': { description: 'Hardware summary, or paginated run list { total, items[], has_more, next_cursor }' }, '429': { $ref: '#/components/responses/RateLimited' } }
         }
       },
       '/api/benchmarks': {
@@ -146,7 +123,8 @@ export default function handler(req, res) {
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 25, maximum: 200 }, description: 'page size' },
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' }
           ],
-          responses: { '200': { description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode, plus bestRun' } }
+          responses: { '200': { description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode, plus bestRun' } },
+          '429': { $ref: '#/components/responses/RateLimited' }
         }
       },
       '/api/best': {
@@ -172,7 +150,7 @@ export default function handler(req, res) {
             { name: 'batchSize', in: 'query', schema: { type: 'integer', default: 1 }, description: 'batch size for fitCheck KV cache math' },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } }
           ],
-          responses: { '200': { description: 'Ranked groups with medians and source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns' } }
+          responses: { '200': { description: 'Ranked groups with medians and source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns' }, '429': { $ref: '#/components/responses/RateLimited' } }
         }
       },
       '/api/health': {
@@ -208,6 +186,10 @@ export default function handler(req, res) {
           responses: { '200': { description: 'workload echo, assumptions, and ranked recommendations with vramFit, expected, confidence, meetsSlo' } }
         }
       }
+    },
+    components: {
+      headers: RATE_LIMIT_HEADERS,
+      responses: { RateLimited: RATE_LIMITED_RESPONSE }
     }
   };
 

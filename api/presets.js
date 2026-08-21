@@ -1,8 +1,10 @@
 import { HARDWARE_PRESETS, SCENARIO_PRESETS } from '../src/utils/presets.js';
+import { enforceRateLimit } from './_ratelimit.js';
 
 export const config = { runtime: 'nodejs' };
 
 export default function handler(req, res) {
+  if (!enforceRateLimit(req, res)) return;
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Access-Control-Allow-Origin', '*');
