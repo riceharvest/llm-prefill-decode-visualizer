@@ -138,3 +138,30 @@ test('walltime results carry share-of-time breakdown', async () => {
   assert.ok(Math.abs(r.prefillSharePct + r.decodeSharePct - 100) < 0.01);
   assert.ok(r.effectiveThroughputTokPerSec > 0);
 });
+
+test('every result carries a one-sentence explain string (#73)', async () => {
+  const { json } = await call({ by: 'decode', contextLength: '32768' });
+  for (const r of json.results) {
+    assert.equal(typeof r.explain, 'string', `explain missing on ${r.hardwareKey}`);
+    assert.match(r.explain, /tok\/s decode from run #/);
+    assert.ok(!r.explain.includes('\n'), 'explanation must stay one line');
+  }
+  // Fit math + measured source in the same sentence (riga: 24GB card).
+  const first = json.results[0];
+  assert.match(first.explain, /24GB fits /);
+  assert.match(first.explain, /weights ~\d+GB \+ 32k KV ~\d+GB with \d+GB headroom/);
+});
+
+test('explain reflects fitCheck context and verdict (#73)', async () => {
+  const { json } = await call({ by: 'decode', fitCheck: 'true', contextLength: '131072' });
+  for (const r of json.results) {
+    assert.equal(typeof r.explain, 'string');
+    assert.match(r.explain, /128k KV/); // context echoed in the sentence
+  }
+});
+
+test('by=cost results also carry explain (#73)', async () => {
+  const { status, json } = await call({ by: 'cost', price: '700' });
+  assert.equal(status, 200);
+  for (const r of json.results) assert.equal(typeof r.explain, 'string');
+});
