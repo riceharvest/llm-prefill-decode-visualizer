@@ -17,6 +17,7 @@ const headers = {};
 const res = {
   statusCode: 200,
   setHeader(k, v) { headers[k.toLowerCase()] = v; },
+  getHeader(k) { return headers[String(k).toLowerCase()]; },
   end(body) { chunks.push(String(body)); },
 };
 
