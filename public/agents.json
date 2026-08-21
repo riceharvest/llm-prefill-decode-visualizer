@@ -6,6 +6,12 @@
   "docs": "/llms.txt",
   "endpoints": [
     {
+      "path": "/api/spec",
+      "method": "GET",
+      "description": "Full OpenAPI 3.1 spec — derive all endpoints from this.",
+      "returns": "application/json"
+    },
+    {
       "path": "/api/compute",
       "method": "GET",
       "description": "Run inference math. ?model=singleTurn|speculative|batched|agentic|kvCache plus parameters. No model param returns a self-describing capability list.",
@@ -20,7 +26,19 @@
     {
       "path": "/api/localmaxxing",
       "method": "GET",
-      "description": "Community-measured single-stream benchmark runs. No params = hardware summary; ?hardware=<substr> or ?model=<substr>&limit=N filters runs with measured prefill/decode tok/s.",
+      "description": "Community-measured single-stream benchmark runs with normalized model families. No params = hardware summary; ?hardware=&model=&quant=&limit=N filters.",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/benchmarks",
+      "method": "GET",
+      "description": "Aggregated median + IQR speeds per hardware×model group (outlier-resistant). ?groupBy=hardware|model|quant.",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/best",
+      "method": "GET",
+      "description": "Ranked answers: ?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M.",
       "returns": "application/json"
     }
   ],

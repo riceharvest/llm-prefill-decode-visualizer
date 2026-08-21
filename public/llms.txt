@@ -7,6 +7,7 @@ An interactive tool for understanding LLM inference performance: prefill (comput
 Everything on the page is available as plain JSON over HTTP. No browser needed.
 
 Base URL: https://llm-prefill-decode-visualizer.vercel.app
+OpenAPI spec: /api/spec (machine-readable, derive all endpoints from it)
 
 ### Endpoints
 
@@ -24,19 +25,27 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 
 **GET /api/presets** — built-in hardware speed presets (RTX 4090, dual 3090, M3 Ultra, Groq, H100, RPi5…) and workload scenarios (RAG query, code generation…). Use these as `/api/compute` inputs.
 
-**GET /api/localmaxxing** — community-measured single-stream benchmark runs.
+**GET /api/localmaxxing** — community-measured single-stream benchmark runs (3,600+).
 - No params: hardware-group summary (71 rigs, run counts).
-- `?hardware=rtx 3090`: all runs for rigs matching that substring.
-- `?model=qwen3&limit=20`: runs for models matching that substring.
-Each run carries measured `prefillTokPerSec` / `decodeTokPerSec` with a source link.
+- `?hardware=rtx 3090&limit=50`: runs for rigs matching that substring.
+- `?model=qwen3.6-27b&limit=20`: runs for a model. `model` matches the **normalized family** — repo/quant/finetune variants collapse (`unsloth/Qwen3.6-27B-MTP-GGUF` and `mlx-community/Qwen3.6-27B-4bit` are both `qwen3.6-27b`).
+- `?quant=q4_k_m`: exact quantization filter.
+
+**GET /api/benchmarks** — aggregated stats: median + IQR per group (outlier-resistant). Default groups by hardware×model-family; regroup with `?groupBy=hardware|model|quant`. Each group carries median/q1/q3/min/max for prefill and decode plus the single best measured run.
+
+**GET /api/best** — ranked answers to natural questions:
+- `/api/best?by=decode&maxParamsB=8&quant=q4_k_m` → top rigs for ≤8B models at Q4_K_M
+- `/api/best?by=prefill&hwClass=unified` → fastest prefill on unified-memory systems
+- `/api/best?model=qwen3.6-27b` → fastest rigs for that model family
 
 ### Typical agent workflow
 
-1. `GET /api/presets` → pick hardware speeds (or `GET /api/localmaxxing?hardware=...` for measured real-world numbers).
-2. `GET /api/compute?model=singleTurn&prefillSpeed=...&decodeSpeed=...&promptTokens=...&outputTokens=...` → walltime/TTFT/TPOT.
-3. Compare variants by calling `/api/compute` again with different parameters.
+1. `GET /api/best?by=decode&maxParamsB=8` → find the fastest measured hardware for a model class.
+2. `GET /api/presets` for canonical speed numbers, or take medians from `/api/benchmarks` for real-world numbers.
+3. `GET /api/compute?model=singleTurn&prefillSpeed=...&decodeSpeed=...&promptTokens=...&outputTokens=...` → walltime/TTFT/TPOT for a specific request shape.
+4. Compare variants by re-calling `/api/compute` with different parameters.
 
-All endpoints return JSON, support CORS, and need no auth.
+All endpoints return JSON, support CORS, need no auth, and set cache headers (10 min on data endpoints).
 
 ### Interactive page
 
