@@ -1,0 +1,45 @@
+# LLM Prefill & Decode Speed Visualizer
+
+An interactive tool for understanding LLM inference performance: prefill (compute-bound prompt ingestion, sets TTFT) vs decode (bandwidth-bound token generation, sets TPOT), across single-turn chat and multi-turn agentic loops.
+
+## For AI agents — read this first
+
+Everything on the page is available as plain JSON over HTTP. No browser needed.
+
+Base URL: https://llm-prefill-decode-visualizer.vercel.app
+
+### Endpoints
+
+**GET /api/compute?model=<name>&<params>** — run any simulator math and get exact numbers.
+
+Models:
+- `singleTurn` — TTFT, TPOT, total walltime for a chat request. Params: `promptTokens`, `outputTokens`, `prefillSpeed`, `decodeSpeed`.
+  Example: `/api/compute?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105`
+- `speculative` — effective decode speed with a draft model. Params: `baseDecodeSpeed`, `draftTokens`, `acceptanceRate`, `draftCostFraction`.
+- `batched` — per-user vs aggregate throughput at batch size B (per-user decode decays ~B^0.25). Params: `prefillSpeed`, `decodeSpeed`, `batchSize`, `promptTokens`, `outputTokens`.
+- `agentic` — turn-by-turn walltime for a tool-calling loop, with/without prefix caching savings. Params: `numTurns`, `basePromptTokens`, `toolOutputTokensPerTurn`, `decodeTokensPerTurn`, `prefillSpeed`, `decodeSpeed`, `enablePrefixCaching`.
+- `kvCache` — KV-cache VRAM for an architecture. Params: `architecture` (`llama70b|llama8b|qwen72b|mistral7b`) or explicit `numLayers`+`kvHeads`+`headDim`, plus `contextLength`, `precisionBytes` (2=FP16, 1=FP8, 0.5=INT4), `batchSize`.
+
+Calling `/api/compute` with no `model` returns a self-describing capability list.
+
+**GET /api/presets** — built-in hardware speed presets (RTX 4090, dual 3090, M3 Ultra, Groq, H100, RPi5…) and workload scenarios (RAG query, code generation…). Use these as `/api/compute` inputs.
+
+**GET /api/localmaxxing** — community-measured single-stream benchmark runs.
+- No params: hardware-group summary (71 rigs, run counts).
+- `?hardware=rtx 3090`: all runs for rigs matching that substring.
+- `?model=qwen3&limit=20`: runs for models matching that substring.
+Each run carries measured `prefillTokPerSec` / `decodeTokPerSec` with a source link.
+
+### Typical agent workflow
+
+1. `GET /api/presets` → pick hardware speeds (or `GET /api/localmaxxing?hardware=...` for measured real-world numbers).
+2. `GET /api/compute?model=singleTurn&prefillSpeed=...&decodeSpeed=...&promptTokens=...&outputTokens=...` → walltime/TTFT/TPOT.
+3. Compare variants by calling `/api/compute` again with different parameters.
+
+All endpoints return JSON, support CORS, and need no auth.
+
+### Interactive page
+
+The human-facing UI is this same site. Deep links carry state via URL params: `?tab=single|agentic|compare|kvcache|theory`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, 1–5 tabs.
+
+Source: https://github.com/riceharvest/llm-prefill-decode-visualizer

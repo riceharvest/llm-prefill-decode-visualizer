@@ -187,6 +187,9 @@ export default function App() {
         <p style={{ fontSize: '0.7rem', marginTop: '4px', color: 'var(--text-subtle)' }}>
           Shortcuts: <kbd>Space</kbd> play/pause · <kbd>R</kbd> reset · <kbd>1</kbd>–<kbd>5</kbd> switch tabs
         </p>
+        <p style={{ fontSize: '0.7rem', marginTop: '4px', color: 'var(--text-subtle)' }}>
+          AI agents: all data available as JSON — <a href="/llms.txt">/llms.txt</a> · <a href="/api/compute">/api/compute</a> · <a href="/api/presets">/api/presets</a> · <a href="/api/localmaxxing">/api/localmaxxing</a>
+        </p>
       </footer>
 
     </div>
