@@ -9,17 +9,10 @@ import QuantTradeoffMatrix from './QuantTradeoffMatrix';
 import Metric from './Metric';
 import SloBadge from './SloBadge';
 import { estimateFromLabel } from '../utils/streetPricing';
-<<<<<<< HEAD
 import { exportNodeAsPng } from '../utils/exportPng';
 import { buildCompareBatchBody, buildSnippet } from '../utils/copyAsCode';
 import { evaluateSlo } from '../utils/slo.js';
-<<<<<<< HEAD
 import { estimatePower } from '../utils/powerThermal';
-=======
-=======
-import { estimatePower } from '../utils/powerThermal';
->>>>>>> 1a8ca79 (feat: basis + caveat annotations on compute/presets/best results (#69))
->>>>>>> 654c11a (feat: basis + caveat annotations on compute/presets/best results (#69))
 import { t } from '../i18n/strings';
 
 
