@@ -122,11 +122,47 @@ function quartiles(sorted) {
   return { q1: median(lower), median: median(sorted), q3: median(upper) };
 }
 
+// Robust outlier rejection: a run is an outlier when its value sits more
+// than K × MAD away from the group's median (MAD = median absolute
+// deviation). Unlike IQR/z-score fences this needs no distributional
+// assumptions and is itself immune to the outliers it flags.
+const OUTLIER_K = 3;
+const MIN_GROUP_FOR_TRIM = 4; // never trim groups smaller than this
+
+function mad(sortedValues, med) {
+  return median(sortedValues.map(v => Math.abs(v - med)).sort((a, b) => a - b));
+}
+
+/**
+ * Split a group into inliers and outliers for one metric.
+ * Returns { inliers, outliers }; no trimming happens when the MAD is 0
+ * (degenerate spread) or the group is too small to trust the estimate.
+ */
+function splitOutliers(group, valueOf) {
+  if (group.length < MIN_GROUP_FOR_TRIM) return { inliers: group, outliers: [] };
+  const sorted = group.map(valueOf).sort((a, b) => a - b);
+  const med = median(sorted);
+  const m = mad(sorted, med);
+  if (!m) return { inliers: group, outliers: [] };
+  const cutoff = OUTLIER_K * m;
+  const inliers = [];
+  const outliers = [];
+  for (const run of group) {
+    (Math.abs(valueOf(run) - med) <= cutoff ? inliers : outliers).push(run);
+  }
+  return { inliers, outliers };
+}
+
 /**
  * Group runs by an arbitrary key function and aggregate speeds with
  * outlier-resistant stats (median + IQR).
+ *
+ * By default runs whose decode OR prefill speed deviates more than
+ * 3×MAD from their cohort's median are excluded before aggregating
+ * (they still count toward `runs`, and `excludedRuns` reports how many
+ * were trimmed). Pass `{ includeOutliers: true }` to keep every run.
  */
-export function aggregate(runs, keyFn) {
+export function aggregate(runs, keyFn, { includeOutliers = false } = {}) {
   const groups = new Map();
   for (const run of runs) {
     const k = keyFn(run);
@@ -137,17 +173,32 @@ export function aggregate(runs, keyFn) {
 
   const out = [];
   for (const [key, group] of groups) {
-    const prefills = group.map(r => r.prefillTokPerSec).sort((a, b) => a - b);
-    const decodes = group.map(r => r.decodeTokPerSec).sort((a, b) => a - b);
+    let excludedRuns = [];
+    let statGroup = group;
+    if (!includeOutliers) {
+      const dec = splitOutliers(group, r => r.decodeTokPerSec);
+      const pre = splitOutliers(group, r => r.prefillTokPerSec);
+      const flagged = new Set([...dec.outliers, ...pre.outliers]);
+      // Only trim when enough runs survive to keep the aggregate meaningful.
+      if (flagged.size && group.length - flagged.size >= MIN_GROUP_FOR_TRIM) {
+        excludedRuns = [...flagged];
+        statGroup = group.filter(r => !flagged.has(r));
+      }
+    }
+
+    const prefills = statGroup.map(r => r.prefillTokPerSec).sort((a, b) => a - b);
+    const decodes = statGroup.map(r => r.decodeTokPerSec).sort((a, b) => a - b);
     const pq = quartiles(prefills);
     const dq = quartiles(decodes);
     out.push({
       key,
       runs: group.length,
+      excludedRuns: excludedRuns.length,
+      sampleLabel: `n=${group.length}${excludedRuns.length ? `, ${excludedRuns.length} excluded` : ''}`,
       models: [...new Set(group.map(r => r.modelFamily))],
       prefill: { median: pq.median, q1: pq.q1, q3: pq.q3, min: prefills[0], max: prefills[prefills.length - 1] },
       decode: { median: dq.median, q1: dq.q1, q3: dq.q3, min: decodes[0], max: decodes[decodes.length - 1] },
-      bestRun: group.reduce((best, r) => (r.decodeTokPerSec > best.decodeTokPerSec ? r : best), group[0])
+      bestRun: statGroup.reduce((best, r) => (r.decodeTokPerSec > best.decodeTokPerSec ? r : best), statGroup[0])
     });
   }
   return out.sort((a, b) => b.decode.median - a.decode.median);

@@ -144,6 +144,10 @@ export default async function handler(req, res) {
       runs = runs.filter(r => r.hardwareKey?.toLowerCase().includes(h) || r.hardware?.toLowerCase().includes(h));
     }
 
+    // Robust aggregation: runs >3×MAD from their cohort median are excluded
+    // by default; ?include_outliers=true keeps every run.
+    const includeOutliers = q.include_outliers === 'true' || q.include_outliers === '1';
+
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
     // plus KV cache at the requested context. Estimates only — see _vramfit.js.
     const fitCtx = Number(q.contextLength);
@@ -163,7 +167,7 @@ export default async function handler(req, res) {
 
     // Rank per hardware rig × model family using the group's medians,
     // so one lucky run doesn't top the chart.
-    const groups = aggregate(runs, r => `${r.hardwareKey}|${r.modelFamily}`);
+    const groups = aggregate(runs, r => `${r.hardwareKey}|${r.modelFamily}`, { includeOutliers });
 
     const ranked = rankGroups(groups, by, workload, limit);
     if (fitCheck) {
@@ -177,10 +181,20 @@ export default async function handler(req, res) {
       }
     }
 
+    // Attach robust-aggregation audit fields (#41).
+    const statByKey = new Map(groups.map(g => [g.key, g]));
+    for (const row of ranked) {
+      const g = statByKey.get(`${row.hardwareKey}|${row.modelFamily}`);
+      if (g) {
+        row.excludedRuns = g.excludedRuns;
+        row.sampleLabel = g.sampleLabel;
+      }
+    }
+
     return json(res, {
       description: by === 'walltime'
-        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant; runsInGroup shows sample size.`
-        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size.',
+        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant (runs >3×MAD from cohort median trimmed; ?include_outliers=true keeps every run); runsInGroup shows sample size.`
+        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant (runs >3×MAD from cohort median trimmed; ?include_outliers=true keeps every run); runsInGroup shows sample size.',
       rankedBy: by,
       matchedRuns: runs.length,
       ...(by === 'walltime' ? {

@@ -46,10 +46,14 @@ export default async function handler(req, res) {
       hardwareModel: r => `${r.hardwareKey}|${r.modelFamily}`
     };
 
+    // Robust aggregation: runs >3×MAD from their cohort median are excluded
+    // by default; ?include_outliers=true keeps every run.
+    const includeOutliers = q.include_outliers === 'true' || q.include_outliers === '1';
+
     const { limit, cursor } = parsePagination(q, { defaultLimit: 25, maxLimit: 200 });
 
     // aggregate() sorts by median decode desc; enforce the full stable order
-    const allGroups = aggregate(runs, keyFns[groupBy])
+    const allGroups = aggregate(runs, keyFns[groupBy], { includeOutliers })
       .sort((a, b) => descNumAscStrCmp(GROUP_KEY(a), GROUP_KEY(b)));
 
     const page = paginate({ items: allGroups, limit, cursor, keyOf: GROUP_KEY, cmp: descNumAscStrCmp });
@@ -71,11 +75,12 @@ export default async function handler(req, res) {
     }));
 
     return json(res, {
-      description: 'Aggregated community benchmark speeds (median + IQR per group). Filter with ?hardware=&model=&quant=&hwClass=; regroup with ?groupBy=hardware|model|quant|hardwareModel. Cursor pagination: follow next_cursor until has_more is false.',
+      description: 'Aggregated community benchmark speeds (median + IQR per group, runs >3×MAD from cohort median excluded). Filter with ?hardware=&model=&quant=&hwClass=; regroup with ?groupBy=hardware|model|quant|hardwareModel; set ?include_outliers=true to keep every run. Cursor pagination: follow next_cursor until has_more is false.',
       total: allGroups.length,
       matchedRuns: runs.length,
       distinctModelFamilies: [...new Set(runs.map(r => r.modelFamily))].length,
-      note: 'medians are outlier-resistant; use bestRun for the single fastest measured run in each group',
+      includeOutliers,
+      note: 'medians are outlier-resistant; excludedRuns counts runs trimmed before aggregating (see sampleLabel); use bestRun for the single fastest retained run in each group',
       items: groups,
       has_more: page.has_more,
       next_cursor: page.next_cursor
