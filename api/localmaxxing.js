@@ -1,4 +1,5 @@
-import { getAllRuns, normalizeModelId } from './_localmaxxing.js';
+import { getAllRuns } from './_localmaxxing.js';
+import { normalizeModelId } from './_normalize.js';
 
 export const config = { runtime: 'nodejs' };
 

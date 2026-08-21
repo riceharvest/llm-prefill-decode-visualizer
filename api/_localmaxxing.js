@@ -1,6 +1,8 @@
 // Shared engine for the agent-facing LocalMaxxing API:
 // cached full-dataset fetch, model-name normalization, and aggregation.
 
+import { normalizeModelId } from './_normalize.js';
+
 const UPSTREAM = 'https://www.localmaxxing.com/api';
 const PAGE = 200;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -17,23 +19,8 @@ function comparable(r) {
 }
 
 /**
- * Model-name normalization: collapse repo/quant/finetune variants of the same
- * base model into one family key.
- *   "unsloth/Qwen3.6-27B-MTP-GGUF"      → "qwen3.6-27b"
- *   "mlx-community/Qwen3.6-35B-A3B-4bit" → "qwen3.6-35b-a3b"
- *   "bartowski/Llama-3.1-8B-Instruct-i1-GGUF" → "llama-3.1-8b" (hmm: keeps -instruct? no — stripped)
+ * Model-name normalization lives in ./_normalize.js (with tests).
  */
-export function normalizeModelId(hfId) {
-  const s = String(hfId || '').split('/').pop().toLowerCase();
-  // base token = family name + numeric version + size suffix (b)
-  const m = s.match(/^([a-z][\w.]*?)[-_]?(\d+(?:\.\d+)?)([a-z]*b)(?:-(.*))?$/);
-  if (!m) return s;
-  const [, fam, ver, size, rest = ''] = m;
-  // preserve MoE active-parameter tag (a3b, e4b, x25b) — it identifies a
-  // genuinely different architecture, not a quant variant
-  const moeMatch = (rest ? `-${rest}` : '').match(/-(a\d+(?:\.\d+)?b|e\d+(?:\.\d+)?b|x\d+(?:\.\d+)?b)\b/);
-  return `${fam}-${ver}${size}${moeMatch ? moeMatch[1] : ''}`;
-}
 
 /** Fetch all comparable runs, from cache when fresh. */
 export async function getAllRuns() {
