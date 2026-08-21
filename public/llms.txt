@@ -49,12 +49,17 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 - `/api/best?model=qwen3.6-27b` → fastest rigs for that model family
 - `/api/best?model=qwen3.6-27b&fitCheck=true&contextLength=65536` → fastest rigs whose VRAM can actually hold it at 64k context (estimated: weights from params × quant bits + KV cache + 10% overhead)
 
+**GET /api/sizing** — one-call deployment recommendation for agents. Pass a workload spec, get ranked hardware with the math attached:
+- `/api/sizing?model=qwen&contextLength=32768&concurrency=4&maxTtftSeconds=2&maxTpotMs=50&maxVramGb=48`
+- Each recommendation carries `vramFit` (weights from params × bits-per-weight + KV cache at target context × concurrency + overhead vs available VRAM/unified memory), `expected` TTFT/TPOT from aggregated benchmark medians with IQR, `confidence` from sample count, and `meetsSlo` flags. Ranked meet-SLO-first, then by median per-user decode.
+
 ### Typical agent workflow
 
-1. `GET /api/best?by=decode&maxParamsB=8` → find the fastest measured hardware for a model class.
-2. `GET /api/presets` for canonical speed numbers, or take medians from `/api/benchmarks` for real-world numbers.
-3. `GET /api/compute?model=singleTurn&prefillSpeed=...&decodeSpeed=...&promptTokens=...&outputTokens=...` → walltime/TTFT/TPOT for a specific request shape.
-4. Compare variants with one call: `POST /api/compute` with `{"batch": [{...}, {...}]}` (up to 50 parameter sets, per-item ok/error status).
+1. `GET /api/sizing?model=<family>&contextLength=…&concurrency=…&maxTpotMs=…` → ranked hardware recommendations with VRAM fit and expected latency, in one call.
+2. `GET /api/best?by=decode&maxParamsB=8` → find the fastest measured hardware for a model class.
+3. `GET /api/presets` for canonical speed numbers, or take medians from `/api/benchmarks` for real-world numbers.
+4. `GET /api/compute?model=singleTurn&prefillSpeed=...&decodeSpeed=...&promptTokens=...&outputTokens=...` → walltime/TTFT/TPOT for a specific request shape.
+5. Compare variants with one call: `POST /api/compute` with `{"batch": [{...}, {...}]}` (up to 50 parameter sets, per-item ok/error status).
 
 All endpoints return JSON, support CORS, need no auth, and set cache headers (10 min on data endpoints).
 
