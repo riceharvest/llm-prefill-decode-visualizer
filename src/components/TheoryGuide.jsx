@@ -44,7 +44,7 @@ export default function TheoryGuide() {
     <div className="stack">
 
       <section className="panel" aria-label={t('theory.panelAria')}>
-        <h2 className="panel-title" style={{ marginBottom: '16px' }}>
+        <h2 className="panel-title" style={{ marginBottom: '16px' }} tabIndex={-1} data-panel-heading>
           <HelpCircle size={16} />
           <span>{t('theory.panelTitle')}</span>
         </h2>
@@ -145,7 +145,7 @@ export default function TheoryGuide() {
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {faq.map((item, i) => (
+            {tArray('theory.faq').map((item, i) => (
               <details
                 key={i}
                 style={{
