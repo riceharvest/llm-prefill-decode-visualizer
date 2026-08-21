@@ -724,8 +724,7 @@ export default function AgenticVisualizer({
                 className="progress-fill"
                 style={{
                   width: `${contextGrowthPct}%`,
-                  background: 'linear-gradient(90deg, var(--agent), var(--decode))',
-                  transition: 'width 0.1s linear'
+                  background: 'linear-gradient(90deg, var(--agent), var(--decode))'
                 }}
               />
             </div>
