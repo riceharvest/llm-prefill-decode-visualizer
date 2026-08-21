@@ -81,6 +81,18 @@ export const WHY_TERMS = {
     meaning: 'VRAM the KV cache occupies at the chosen context length and batch size. It grows linearly with context and competes directly with model weights for memory.',
     formula: 'total = KV bytes/token × context × batch size',
     anchor: 'theory-agentic'
+  },
+  gpuSplitVram: {
+    label: 'Per-GPU VRAM share',
+    meaning: 'What one card in a multi-GPU layout must hold: its slice of the sharded weights plus its KV share (sharded, or fully replicated when tensor parallel cannot divide the KV heads) plus CUDA/activation overhead.',
+    formula: 'per GPU = weights ÷ N + KV share + ~1.5 GB overhead',
+    anchor: 'theory-decode'
+  },
+  gpuDecodePenalty: {
+    label: 'Interconnect decode penalty',
+    meaning: 'Decode tok/s lost to cross-GPU synchronization. Tensor parallel all-reduces over the bus every step (PCIe ≈ −10%, NVLink ≈ −3%); pipeline parallel only pays a bubble (≈ −2%).',
+    formula: 'effective decode = single-GPU tok/s × (1 − penalty)',
+    anchor: 'theory-decode'
   }
 };
 
