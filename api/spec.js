@@ -97,6 +97,21 @@ export default function handler(req, res) {
           }
         }
       },
+      '/api/diff': {
+        get: {
+          summary: 'Diff two measured runs: deltas, ratios and a plain-language summary',
+          description: 'Returns both runs plus per-metric comparison. delta = B − A, ratio = B ÷ A, winner is from A\'s point of view. Time metrics (ttft/tpot/walltime) are normalized to a 2048-token prompt / 512-token output so runs measured at different lengths stay comparable.',
+          parameters: [
+            { name: 'runA', in: 'query', required: true, schema: { type: 'string' }, description: 'first run id (alias: a)' },
+            { name: 'runB', in: 'query', required: true, schema: { type: 'string' }, description: 'second run id (alias: b)' }
+          ],
+          responses: {
+            '200': { description: '{ runA, runB, diff: { context, metrics: { prefill, decode, ttft, tpot, walltime }, summary } }' },
+            '400': { description: 'missing or identical run ids' },
+            '404': { description: 'unknown run id' }
+          }
+        }
+      },
       '/api/benchmarks': {
         get: {
           summary: 'Aggregated speeds: median + IQR per group',
