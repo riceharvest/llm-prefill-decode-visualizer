@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw } from 'lucide-react';
+import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, FileDown, Copy } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, readParamBool, readParam, writeParams } from '../utils/urlState';
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
@@ -7,6 +7,7 @@ import { exportNodeAsPng } from '../utils/exportPng';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import Metric from './Metric';
 
+import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 
 export default function AgenticVisualizer({
   prefillSpeed,
@@ -168,6 +169,27 @@ export default function AgenticVisualizer({
 
   const cachingTimeSaved = turnBreakdownNoCache - totalAgentWalltime;
   const cachingPercentSaved = Number.isFinite(turnBreakdownNoCache) && turnBreakdownNoCache > 0 ? (cachingTimeSaved / turnBreakdownNoCache) * 100 : 0;
+
+  // Markdown walkthrough export (download + clipboard)
+  const [mdCopied, setMdCopied] = useState(false);
+  const buildMarkdown = () => buildAgenticMarkdown({
+    numTurns,
+    basePromptTokens,
+    toolOutputTokensPerTurn,
+    decodeTokensPerTurn,
+    enablePrefixCaching,
+    prefillSpeed,
+    decodeSpeed,
+    deepLink: buildDeepLink('agentic')
+  });
+  const handleExportMd = () => downloadMarkdown(buildMarkdown(), 'agentic-loop-simulation.md');
+  const handleCopyMd = async () => {
+    const ok = await copyMarkdownToClipboard(buildMarkdown());
+    if (ok) {
+      setMdCopied(true);
+      setTimeout(() => setMdCopied(false), 2000);
+    }
+  };
 
   // Ref for timer
   const animFrameRef = useRef(null);
@@ -503,6 +525,25 @@ export default function AgenticVisualizer({
             >
               <RotateCcw size={15} />
               Reset Loop
+            </button>
+
+            <button
+              onClick={handleExportMd}
+              title="Export this simulation as a step-by-step markdown walkthrough (download)"
+              className="btn"
+            >
+              <FileDown size={15} />
+              Export MD
+            </button>
+
+            <button
+              onClick={handleCopyMd}
+              title="Copy the markdown walkthrough to the clipboard"
+              className="btn"
+              aria-label="Copy markdown walkthrough to clipboard"
+            >
+              <Copy size={15} />
+              {mdCopied ? 'Copied!' : 'Copy MD'}
             </button>
           </div>
         </div>
