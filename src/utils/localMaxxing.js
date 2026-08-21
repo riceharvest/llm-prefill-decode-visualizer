@@ -51,7 +51,51 @@ export function hardwareKey(run) {
 
 export function runLabel(run) {
   const engine = run.engine?.engineName || 'unknown engine';
-  return `${hardwareName(run)} · ${engine} · ${run.tokSPrefill.toLocaleString()} prefill / ${run.tokSOut.toLocaleString()} decode tok/s`;
+  const age = runAgeDays(run);
+  const ageTag = age === null ? '' : ` · ${age < 90 ? 'fresh' : age < 365 ? 'aging' : 'stale'} ${age}d`;
+  return `${hardwareName(run)} · ${engine}${ageTag} · ${run.tokSPrefill.toLocaleString()} prefill / ${run.tokSOut.toLocaleString()} decode tok/s`;
+}
+
+// ---------- Freshness (issue #38) ----------
+// Tiers match the API contract in api/_freshness.js:
+//   fresh <90d · aging <1y · stale ≥1y; null when the run has no usable date.
+
+const FRESH_DAYS = 90;
+const AGING_DAYS = 365;
+
+export function runAgeDays(run, now = new Date()) {
+  if (!run?.createdAt) return null;
+  const created = new Date(run.createdAt);
+  if (Number.isNaN(created.getTime())) return null;
+  return Math.max(0, Math.floor((now.getTime() - created.getTime()) / 86400000));
+}
+
+export function stalenessTier(ageDays) {
+  if (!Number.isFinite(ageDays)) return 'unknown';
+  if (ageDays < FRESH_DAYS) return 'fresh';
+  if (ageDays < AGING_DAYS) return 'aging';
+  return 'stale';
+}
+
+export function runFreshness(run, now = new Date()) {
+  const ageDays = runAgeDays(run, now);
+  return { ageDays, tier: stalenessTier(ageDays) };
+}
+
+/** True when two measured presets differ enough that their numbers may not be comparable. */
+export function methodologyMismatch(presetA, presetB) {
+  if (!presetA?.localMaxxing || !presetB?.localMaxxing) return [];
+  const reasons = [];
+  const runA = presetA.run || {};
+  const runB = presetB.run || {};
+  const engineA = runA.engine?.engineName;
+  const engineB = runB.engine?.engineName;
+  if (engineA && engineB && engineA !== engineB) reasons.push(`different engines (${engineA} vs ${engineB})`);
+  const tierA = stalenessTier(runAgeDays(runA));
+  const tierB = stalenessTier(runAgeDays(runB));
+  if (tierA !== tierB) reasons.push(`different data ages (${tierA} vs ${tierB})`);
+  else if (tierA === 'stale') reasons.push('both measurements are stale (>1 year old)');
+  return reasons;
 }
 
 export function getQuantizations(runs) {
@@ -66,10 +110,11 @@ export function getQuantizations(runs) {
     .map(([quant]) => quant);
 }
 
-export function toLocalPreset(run) {
+export function toLocalPreset(run, now = new Date()) {
   const quant = run.engine?.quantization || 'Unknown quant';
   const engine = run.engine?.engineName || 'Unknown engine';
   const modelName = run.model?.displayName || run.model?.hfId || 'Unknown model';
+  const freshness = runFreshness(run, now);
 
   return {
     id: `lmx:${run.id}`,
@@ -83,6 +128,12 @@ export function toLocalPreset(run) {
     sourceUrl: `https://localmaxxing.com/en/runs/${run.id}`,
     localMaxxing: true,
     hardwareKey: hardwareKey(run),
+    // Methodology metadata (issue #38): measurement date + staleness tier
+    // and engine version, surfaced next to every number derived from it.
+    measuredAt: run.createdAt || null,
+    ageDays: freshness.ageDays,
+    staleness: freshness.tier,
+    engineVersion: run.engine?.engineVersion || null,
     run
   };
 }
