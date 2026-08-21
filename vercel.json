@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/v1/:path*",
+      "destination": "/api/:path*"
+    },
+    {
       "source": "/localmaxxing-api/:path*",
       "destination": "https://www.localmaxxing.com/api/:path*"
     }
