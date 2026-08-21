@@ -3,6 +3,7 @@ import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw } fro
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, readParamBool, readParam, writeParams } from '../utils/urlState';
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
+import { exportNodeAsPng } from '../utils/exportPng';
 
 export default function AgenticVisualizer({
   prefillSpeed,
@@ -122,6 +123,7 @@ export default function AgenticVisualizer({
   const animFrameRef = useRef(null);
   const lastTickRef = useRef(null);
   const simTimeRef = useRef(0);
+  const waterfallRef = useRef(null);
 
   // Global Reset button (App resetKey) clears ALL sim state
   const resetKeyRef = useRef(resetKey);
@@ -656,16 +658,24 @@ export default function AgenticVisualizer({
         </div>
 
         {/* Gantt / Waterfall Timeline Chart */}
-        <div className="panel-inset" style={{ marginBottom: '20px' }}>
+        <div className="panel-inset" style={{ marginBottom: '20px' }} ref={waterfallRef}>
           <div className="field-head" style={{ marginBottom: '14px', flexWrap: 'wrap' }}>
             <span className="section-label">Turn-by-turn walltime waterfall</span>
-            <div style={{ display: 'flex', gap: '14px', fontSize: '0.72rem', fontWeight: 600 }}>
+            <div style={{ display: 'flex', gap: '14px', fontSize: '0.72rem', fontWeight: 600, alignItems: 'center' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--prefill)' }}>
                 <span style={{ width: '10px', height: '10px', background: 'var(--prefill)', borderRadius: '2px' }} /> Prefill
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--decode)' }}>
                 <span style={{ width: '10px', height: '10px', background: 'var(--decode)', borderRadius: '2px' }} /> Decode
               </span>
+              <button
+                onClick={() => exportNodeAsPng(waterfallRef.current, 'agentic-waterfall.png')}
+                className="btn"
+                style={{ padding: '2px 8px', fontSize: '0.68rem' }}
+                title="Export this chart as PNG"
+              >
+                PNG
+              </button>
             </div>
           </div>
 
