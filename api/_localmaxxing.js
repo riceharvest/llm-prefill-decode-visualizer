@@ -2,6 +2,7 @@
 // cached full-dataset fetch, model-name normalization, and aggregation.
 
 import { normalizeModelId } from './_normalize.js';
+import { engineBuild } from '../src/utils/engineVersion.js';
 
 const UPSTREAM = 'https://www.localmaxxing.com/api';
 const PAGE = 200;
@@ -74,6 +75,10 @@ function slim(r) {
     unifiedMemoryGb: h.unifiedMemoryGb,
     cpu: h.cpu,
     engine: r.engine?.engineName,
+    engineVersion: r.engine?.engineVersion || null,
+    // "llama.cpp b10470" style cohort tag (issue #29): structured
+    // engineVersion when present, else parsed from notes/command snippet.
+    engineTag: engineBuild(r),
     quantization: r.engine?.quantization,
     prefillTokPerSec: Math.round(r.tokSPrefill),
     decodeTokPerSec: Math.round(r.tokSOut),

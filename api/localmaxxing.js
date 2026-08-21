@@ -66,7 +66,7 @@ async function handlePost(req, res) {
 /**
  * GET /api/localmaxxing — raw comparable runs (flattened, normalized).
  * POST /api/localmaxxing — submit a run for review (validated, queued).
- * GET: ?hardware=<substr> &model=<substr> &quant=<exact> &limit=N (default 50, max 500) &cursor=<opaque>
+ * GET: ?hardware=<substr> &model=<substr> &quant=<exact> &engine=<substr> &limit=N (default 50, max 500) &cursor=<opaque>
  * Bare call returns the hardware-group summary.
  */
 export default async function handler(req, res) {
@@ -95,12 +95,14 @@ export default async function handler(req, res) {
     const hardware = q.hardware ? String(q.hardware).toLowerCase() : null;
     const model = q.model ? String(q.model).toLowerCase() : null;
     const quant = q.quant ? String(q.quant).toLowerCase() : null;
+    const engine = q.engine ? String(q.engine).toLowerCase() : null;
 
     if (hardware) runs = runs.filter(r => r.hardwareKey?.toLowerCase().includes(hardware) || r.hardware?.toLowerCase().includes(hardware));
     if (model) runs = runs.filter(r => r.modelFamily.includes(model) || r.modelId?.toLowerCase().includes(model));
     if (quant) runs = runs.filter(r => r.quantization?.toLowerCase() === quant);
+    if (engine) runs = runs.filter(r => r.engineTag?.toLowerCase().includes(engine));
 
-    if (!hardware && !model && !quant) {
+    if (!hardware && !model && !quant && !engine) {
       // Summary: hardware groups with run counts
       const groups = new Map();
       for (const r of runs) {

@@ -39,7 +39,7 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 
 **POST /api/localmaxxing** — submit a community benchmark run for review. JSON body with required `model`, `quant`, `hardware`, `hwClass` (`discrete_gpu|unified|cpu_only`), `prefillTokPerSec`, `decodeTokPerSec`; optional `engine`, token counts, `provenance` (`engineVersion`, `command`, `sourceUrl`, `notes`) and `submitter`. Server-side validation enforces sanity bounds per hardware class (a claimed 99,999 tok/s on an RPi5 is rejected) and rejects near-duplicates of existing runs (same model family + quant + rig within 10%). Valid submissions return `202` with a `submissionId` and are queued for manual review — they never publish immediately. Validation failures return `400` with machine-readable errors: `{"error":"validation_failed","errors":[{"field","code","message"}]}`.
 
-**GET /api/benchmarks** — aggregated stats: median + IQR per group (outlier-resistant). Default groups by hardware×model-family; regroup with `?groupBy=hardware|model|quant`. Each group carries median/q1/q3/min/max for prefill and decode plus the single best measured run. Cursor-paginated like /api/localmaxxing: `{ total, items[], has_more, next_cursor }`, sorted by median decode desc (group key tiebreak); page size `limit` (default 25, max 200).
+**GET /api/benchmarks** — aggregated stats: median + IQR per group (outlier-resistant). Default groups by hardware×model-family; regroup with `?groupBy=hardware|model|quant|engine`. Each group carries median/q1/q3/min/max for prefill and decode plus the single best measured run. Engine-version cohorts (issue #29): every response includes top-level `engineCohorts`; groups that span builds set `mixedEngines: true` with a `warning` ("comparing llama.cpp b4000 vs b4523 — treat delta with caution"). Pass `?engine=<tag substring>` to restrict a comparison to a same-engine cohort. Cursor-paginated like /api/localmaxxing: `{ total, items[], has_more, next_cursor }`, sorted by median decode desc (group key tiebreak); page size `limit` (default 25, max 200).
 
 **GET /api/diff?runA=<id>&runB=<id>** — diff two measured runs in one call: both runs' metrics plus per-metric deltas, ratios (B ÷ A) and a plain-language summary. Time metrics are normalized to a 2048-token prompt / 512-token output.
 
@@ -47,6 +47,7 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 - `/api/best?by=decode&maxParamsB=8&quant=q4_k_m` → top rigs for ≤8B models at Q4_K_M
 - `/api/best?by=prefill&hwClass=unified` → fastest prefill on unified-memory systems
 - `/api/best?model=qwen3.6-27b` → fastest rigs for that model family
+- `/api/best?engine=vllm` → same-engine cohort only; results carry `engineTag`, `engines[]`, and `warning` when the underlying group mixes builds
 - `/api/best?model=qwen3.6-27b&fitCheck=true&contextLength=65536` → fastest rigs whose VRAM can actually hold it at 64k context (estimated: weights from params × quant bits + KV cache + 10% overhead)
 
 **GET /api/sizing** — one-call deployment recommendation for agents. Pass a workload spec, get ranked hardware with the math attached:

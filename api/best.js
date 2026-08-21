@@ -2,8 +2,20 @@ import { getAllRuns, aggregate } from './_localmaxxing.js';
 import { singleTurn } from './_math.js';
 import { SCENARIO_PRESETS } from '../src/utils/presets.js';
 import { fitsInMemory } from './_vramfit.js';
+import { tagCohorts, engineTags, compareWarning } from '../src/utils/engineVersion.js';
 
 export const config = { runtime: 'nodejs' };
+
+/** True when a set of flattened runs spans more than one engine build. */
+function mixesEngineVersions(runs) {
+  return engineTags(runs).length > 1;
+}
+
+/** Issue #29 caution line for a mixed-version group, or null. */
+function mixedVersionWarning(runs) {
+  const tags = engineTags(runs);
+  return tags.length > 1 ? compareWarning(tags[0], tags[1]) : null;
+}
 
 const BY_MODES = ['decode', 'prefill', 'efficiency', 'walltime'];
 // Default workload shape when no tokens or scenario are given: standard chat.
@@ -143,6 +155,7 @@ export default async function handler(req, res) {
       const h = String(q.hardware).toLowerCase();
       runs = runs.filter(r => r.hardwareKey?.toLowerCase().includes(h) || r.hardware?.toLowerCase().includes(h));
     }
+    if (q.engine) runs = runs.filter(r => r.engineTag?.toLowerCase().includes(String(q.engine).toLowerCase()));
 
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
     // plus KV cache at the requested context. Estimates only — see _vramfit.js.
@@ -177,10 +190,29 @@ export default async function handler(req, res) {
       }
     }
 
+    // Engine-version cohorts per group (issue #29): flag mixed-version
+    // groups so cross-build deltas are visibly cautioned.
+    const runsByGroupKey = new Map();
+    for (const r of runs) {
+      const k = `${r.hardwareKey}|${r.modelFamily}`;
+      if (!runsByGroupKey.has(k)) runsByGroupKey.set(k, []);
+      runsByGroupKey.get(k).push(r);
+    }
+    const bestByKey2 = new Map(groups.map(g => [g.key, g.bestRun]));
+    for (const row of ranked) {
+      const key = `${row.hardwareKey}|${row.modelFamily}`;
+      const grows = runsByGroupKey.get(key) || [];
+      const cohort = tagCohorts(grows);
+      row.engineTag = bestByKey2.get(key)?.engineTag ?? null;
+      row.engines = cohort.cohorts;
+      row.mixedEngines = cohort.mixed;
+      row.warning = cohort.mixed ? compareWarning(cohort.tags[0], cohort.tags[1]) : null;
+    }
+
     return json(res, {
       description: by === 'walltime'
-        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant; runsInGroup shows sample size.`
-        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size.',
+        ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant; runsInGroup shows sample size; mixedEngines=true groups span engine versions — treat cross-version deltas with caution.`
+        : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size; mixedEngines=true groups span engine versions — treat cross-version deltas with caution.',
       rankedBy: by,
       matchedRuns: runs.length,
       ...(by === 'walltime' ? {

@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { HARDWARE_PRESETS, formatTime, formatTokens } from '../utils/presets';
 import { BarChart3, Users, PlugZap } from 'lucide-react';
 import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
+import { engineBuild, compareWarning } from '../utils/engineVersion';
 
 // Typical whole-rig wattage under inference load (GPU + rest-of-system overhead).
 // Used as the default for the TCO section; the user can always override it.
@@ -85,6 +86,12 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   const presetA = presets.find(p => p.id === hardwareA) || presets[0] || HARDWARE_PRESETS[0];
   const presetB = presets.find(p => p.id === hardwareB) || presets[1] || HARDWARE_PRESETS[2];
 
+  // Issue #29: warn visibly when a hardware compare mixes engine
+  // versions/builds ("comparing b4000 vs b4523 — treat delta with caution").
+  const engineTagA = presetA?.run ? engineBuild(presetA.run) : null;
+  const engineTagB = presetB?.run ? engineBuild(presetB.run) : null;
+  const engineWarning = compareWarning(engineTagA, engineTagB);
+
   const safeCp = Math.max(0, testPromptTokens || 0);
   const safeCo = Math.max(0, testOutputTokens || 0);
 
@@ -164,6 +171,12 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
           <BarChart3 size={16} />
           <span>Side-by-Side Hardware Benchmark</span>
         </h2>
+
+        {engineWarning && (
+          <div className="panel-inset" role="alert" style={{ marginBottom: '14px', borderColor: 'var(--danger)', color: 'var(--danger)', fontSize: '0.76rem', fontWeight: 600 }}>
+            ⚠️ {engineWarning}
+          </div>
+        )}
 
         {localMaxxingContext?.runs?.length > 0 && (
           <div className="panel-inset" style={{ marginBottom: '14px', borderColor: 'var(--prefill-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: '0.76rem', fontWeight: 600 }}>

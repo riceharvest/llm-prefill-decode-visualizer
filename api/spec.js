@@ -44,12 +44,13 @@ export default function handler(req, res) {
       '/api/localmaxxing': {
         get: {
           summary: 'Raw community benchmark runs (flattened, model-normalized)',
-          description: 'Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: { total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow next_cursor until has_more is false.',
+          description: 'Bare call returns a hardware-group summary. With any filter (?hardware=<substr>&model=<substr>&quant=<exact>&engine=<substr>&limit=N&cursor=), returns a cursor-paginated run list: { total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow next_cursor until has_more is false. Runs carry measured prefillTokPerSec / decodeTokPerSec plus an engineTag cohort label ("llama.cpp b10470") combining engine name with version/build.',
           parameters: [
             { name: 'hardware', in: 'query', schema: { type: 'string' }, description: 'substring match on rig name/key' },
             { name: 'model', in: 'query', schema: { type: 'string' }, description: 'substring match on normalized family or hfId' },
             { name: 'quant', in: 'query', schema: { type: 'string' }, description: 'exact quantization, e.g. q4_k_m' },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 500 }, description: 'page size' },
+            { name: 'engine', in: 'query', schema: { type: 'string' }, description: 'substring match on the engine cohort tag, e.g. b10470 or llama.cpp' },
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' }
           ],
           responses: { '200': { description: 'Hardware summary, or paginated run list { total, items[], has_more, next_cursor }' } }
@@ -115,23 +116,24 @@ export default function handler(req, res) {
       '/api/benchmarks': {
         get: {
           summary: 'Aggregated speeds: median + IQR per group',
-          description: 'Outlier-resistant stats per hardware×model-family group (default). Regroup with ?groupBy=hardware|model|quant. Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak).',
+          description: 'Outlier-resistant stats per hardware×model-family group (default). Regroup with ?groupBy=hardware|model|quant|engine. Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak). Each group reports its engine-version cohorts (engines[]) and sets mixedEngines/warning when a group spans engine builds — treat cross-version deltas with caution.',
           parameters: [
-            { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['hardwareModel', 'hardware', 'model', 'quant'] } },
+            { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['hardwareModel', 'hardware', 'model', 'quant', 'engine'] } },
             { name: 'hardware', in: 'query', schema: { type: 'string' } },
             { name: 'model', in: 'query', schema: { type: 'string' } },
             { name: 'quant', in: 'query', schema: { type: 'string' } },
             { name: 'hwClass', in: 'query', schema: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] } },
+            { name: 'engine', in: 'query', schema: { type: 'string' }, description: 'substring match on the engine cohort tag — use for same-engine comparisons' },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 25, maximum: 200 }, description: 'page size' },
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' }
           ],
-          responses: { '200': { description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode, plus bestRun' } }
+          responses: { '200': { description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode, engine cohorts, plus bestRun' } }
         }
       },
       '/api/best': {
         get: {
           summary: 'Ranked answers: fastest rigs for given constraints',
-          description: 'Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed.',
+          description: 'Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed. Each result carries engineTag plus engines[]/mixedEngines/warning when its group spans engine builds.',
           parameters: [
             { name: 'by', in: 'query', schema: { type: 'string', enum: ['decode', 'prefill'], default: 'decode' } },
             { name: 'model', in: 'query', schema: { type: 'string' } },
@@ -139,13 +141,14 @@ export default function handler(req, res) {
             { name: 'quant', in: 'query', schema: { type: 'string' } },
             { name: 'hwClass', in: 'query', schema: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] } },
             { name: 'hardware', in: 'query', schema: { type: 'string' } },
+            { name: 'engine', in: 'query', schema: { type: 'string' }, description: 'substring match on the engine cohort tag — use for same-engine comparisons' },
             { name: 'fitCheck', in: 'query', schema: { type: 'boolean' }, description: 'exclude rigs whose memory cannot hold the model at the given context (estimated)' },
             { name: 'contextLength', in: 'query', schema: { type: 'integer', default: 32768 }, description: 'context for fitCheck; providing it implies fitCheck=true' },
             { name: 'precisionBytes', in: 'query', schema: { type: 'number', default: 2 }, description: 'KV cache dtype bytes for fitCheck (2 = fp16)' },
             { name: 'batchSize', in: 'query', schema: { type: 'integer', default: 1 }, description: 'batch size for fitCheck KV cache math' },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } }
           ],
-          responses: { '200': { description: 'Ranked groups with medians and source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns' } }
+          responses: { '200': { description: 'Ranked groups with medians, engine cohorts and source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns' } }
         }
       },
       '/api/health': {
