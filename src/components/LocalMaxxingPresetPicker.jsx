@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftRight, Database, ExternalLink, LoaderCircle, Search } from 'lucide-react';
+import { ArrowLeftRight, Database, ExternalLink, LoaderCircle, RotateCcw, Search } from 'lucide-react';
 import { readParam, writeParams } from '../utils/urlState';
 import {
   fetchComparableRuns,
@@ -12,7 +12,8 @@ import {
   fetchAllComparableRuns,
   getHardwareGroups,
   getModelsForHardware,
-  getQuantsForHardwareModel
+  getQuantsForHardwareModel,
+  setFetchProgressListener
 } from '../utils/hardwareFirst';
 
 const selectStyle = {
@@ -54,6 +55,12 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
 
   // Hardware-first mode needs the full comparable-run index (fetched once,
   // ~150 KB gzipped; shared across mode switches via a module-level cache).
+  const [fetchProgress, setFetchProgress] = useState(null); // { pages, rows }
+  useEffect(() => setFetchProgressListener(setFetchProgress), []);
+
+  // Bumped by the Retry button to re-attempt a failed index fetch.
+  const [fetchAttempt, setFetchAttempt] = useState(0);
+
   useEffect(() => {
     if (pickOrder !== 'hardware') return undefined;
     if (allRuns.length) return undefined;
@@ -61,13 +68,17 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
     setLoadingAll(true);
     setError('');
     fetchAllComparableRuns(controller.signal)
-      .then(setAllRuns)
+      .then(rows => {
+        setAllRuns(rows);
+        setFetchProgress(null);
+      })
       .catch(err => {
-        if (err.name !== 'AbortError') setError(err.message);
+        setFetchProgress(null);
+        if (err.name !== 'AbortError') setError(`${err.message} — check your connection and retry.`);
       })
       .finally(() => setLoadingAll(false));
     return () => controller.abort();
-  }, [pickOrder, allRuns.length]);
+  }, [pickOrder, allRuns.length, fetchAttempt]);
 
   // Model-first flow: per-model run list from the API
   useEffect(() => {
@@ -273,7 +284,13 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
               disabled={loadingAll || !hardwareGroups.length}
               style={selectStyle}
             >
-              <option value="">{loadingAll ? 'Loading community runs…' : 'Select hardware'}</option>
+              <option value="">
+                {loadingAll
+                  ? fetchProgress
+                    ? `Loading community runs… ${fetchProgress.rows.toLocaleString()} runs (${fetchProgress.pages} pages)`
+                    : 'Loading community runs…'
+                  : 'Select hardware'}
+              </option>
               {hardwareGroups.map(key => (
                 <option key={key} value={key}>
                   {allRuns.find(r => r.hardwareGroupKey === key)?.hardwareGroupLabel || key} ({allRuns.filter(r => r.hardwareGroupKey === key).length})
@@ -314,7 +331,18 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
         </div>
       )}
 
-      {error && <p style={{ margin: '10px 0 0', color: 'var(--danger)', fontSize: '0.76rem', fontWeight: 600 }}>{error}</p>}
+      {error && (
+        <p style={{ margin: '10px 0 0', color: 'var(--danger)', fontSize: '0.76rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span>{error}</span>
+          <button
+            onClick={() => { setError(''); setFetchAttempt(a => a + 1); }}
+            className="btn"
+            style={{ padding: '3px 10px', fontSize: '0.7rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+          >
+            <RotateCcw size={12} /> Retry
+          </button>
+        </p>
+      )}
       {pickOrder === 'model' && modelId && !loadingRuns && runs.length === 0 && !error && (
         <p style={{ margin: '10px 0 0', color: 'var(--agent)', fontSize: '0.76rem' }}>No single-stream runs contain both prefill and decode measurements for this model.</p>
       )}

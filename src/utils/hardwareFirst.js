@@ -28,33 +28,44 @@ async function fetchJson(path, signal) {
 /**
  * Fetch every comparable single-stream run from the leaderboard, following
  * offset pagination until exhausted. Resolves once per page load; concurrent
- * callers share the same in-flight promise. Rejects if aborted mid-fetch.
+ * callers share the same in-flight promise.
+ *
+ * Failure semantics: a failed or aborted fetch clears the cached promise so
+ * the next call retries from scratch — a transient network error must never
+ * poison the cache and leave the picker stuck on "Loading…" forever.
  */
 export function fetchAllComparableRuns(signal) {
-  if (allRunsPromise) {
-    // If a previous attempt was aborted, start over.
-    return allRunsPromise.then(
-      rows => rows,
-      () => (signal?.aborted ? Promise.reject(new DOMException('Aborted', 'AbortError')) : restart(signal))
-    );
+  if (!allRunsPromise) {
+    allRunsPromise = paginate(signal).catch(err => {
+      allRunsPromise = null; // allow retry on next call
+      throw err;
+    });
   }
-  allRunsPromise = paginate(signal);
   return allRunsPromise;
+}
 
-  function restart(sig) {
-    allRunsPromise = null;
-    return fetchAllComparableRuns(sig);
-  }
+/** Progress callback for UI (pages done, rows so far). Optional. */
+export function setFetchProgressListener(fn) {
+  progressListener = typeof fn === 'function' ? fn : null;
+}
+
+let progressListener = null;
+
+function reportProgress(pagesDone, rows) {
+  if (progressListener) progressListener({ pages: pagesDone, rows });
 }
 
 async function paginate(signal) {
   const PAGE = 200;
   let offset = 0;
+  let pages = 0;
   const rows = [];
   for (;;) {
     const data = await fetchJson(`/localmaxxing-api/leaderboard?limit=${PAGE}&offset=${offset}`, signal);
     const batch = data.rows || [];
     rows.push(...batch);
+    pages += 1;
+    reportProgress(pages, rows.length);
     if (batch.length < PAGE) break;
     offset += PAGE;
     if (offset > 20000) break; // safety valve against runaway loops
