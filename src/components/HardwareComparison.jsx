@@ -1,10 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { HARDWARE_PRESETS, formatTime, formatTokens } from '../utils/presets';
-import { BarChart3, Users, PlugZap } from 'lucide-react';
+import { BarChart3, Users, PlugZap, ClipboardCopy } from 'lucide-react';
 import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
 import { methodologyMismatch } from '../utils/localMaxxing';
 import Metric from './Metric';
 import { estimateFromLabel } from '../utils/streetPricing';
+import { exportNodeAsPng } from '../utils/exportPng';
+import { buildCompareBatchBody, buildSnippet } from '../utils/copyAsCode';
 import { t } from '../i18n/strings';
 
 
@@ -202,14 +204,70 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   };
   const mismatchReasons = methodologyMismatch(presetA, presetB);
 
+  // Copy-as-code + PNG export (#17). The copied snippet is a runnable
+  // batched POST that reproduces this exact A/B comparison against
+  // /api/compute — the same request the API validates, and with
+  // "dry_run": true it previews without executing.
+  const chartRef = useRef(null);
+  const [copiedLang, setCopiedLang] = useState('');
+  const copyTimer = useRef(null);
+
+  const snippetBody = buildCompareBatchBody({
+    prefillSpeedA: presetA.prefillSpeed,
+    decodeSpeedA: presetA.decodeSpeed,
+    prefillSpeedB: presetB.prefillSpeed,
+    decodeSpeedB: presetB.decodeSpeed,
+    batchSize,
+    promptTokens: safeCp,
+    outputTokens: safeCo
+  });
+
+  const copySnippet = async (lang) => {
+    try {
+      await navigator.clipboard.writeText(buildSnippet(lang, { origin: window.location.origin, body: snippetBody }));
+      setCopiedLang(lang);
+      clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopiedLang(''), 2000);
+    } catch { /* clipboard unavailable (insecure context / denied) — no-op */ }
+  };
+
+  const exportBtnStyle = { padding: '2px 8px', fontSize: '0.68rem' };
+
   return (
     <div className="stack">
 
-      <section className="panel" aria-label={t('compare.panelAria')}>
-        <h2 className="panel-title" style={{ marginBottom: '14px' }}>
-          <BarChart3 size={16} />
-          <span>{t('compare.panelTitle')}</span>
-        </h2>
+      <section className="panel" aria-label={t('compare.panelAria')} ref={chartRef}>
+        <div className="field-head" style={{ marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+          <h2 className="panel-title" style={{ margin: 0 }}>
+            <BarChart3 size={16} />
+            <span>{t('compare.panelTitle')}</span>
+          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.68rem', fontWeight: 600, marginLeft: 'auto' }}>
+            <span style={{ color: 'var(--text-subtle)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <ClipboardCopy size={12} />
+              {t('compare.exportRowLabel')}
+            </span>
+            <button
+              onClick={() => chartRef.current && exportNodeAsPng(chartRef.current, 'hardware-compare.png')}
+              className="btn"
+              style={exportBtnStyle}
+              title={t('compare.exportPngTooltip')}
+            >
+              {t('compare.exportPng')}
+            </button>
+            {['curl', 'python', 'typescript'].map(lang => (
+              <button
+                key={lang}
+                onClick={() => copySnippet(lang)}
+                className="btn"
+                style={{ ...exportBtnStyle, color: copiedLang === lang ? 'var(--decode)' : undefined }}
+                title={copiedLang === lang ? t('compare.copiedFeedback') : t('compare.copySnippetTooltip')}
+              >
+                {copiedLang === lang ? `✓ ${t('compare.copiedFeedback')}` : t(`compare.copy${lang === 'curl' ? 'Curl' : lang === 'python' ? 'Python' : 'TypeScript'}`)}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {localMaxxingContext?.runs?.length > 0 && (
           <div className="panel-inset" style={{ marginBottom: '14px', borderColor: 'var(--prefill-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: '0.76rem', fontWeight: 600 }}>

@@ -46,6 +46,8 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 
 **Batching (one round trip for N comparisons):** `POST /api/compute` with `{"batch": [{"model": "singleTurn", "promptTokens": 4096}, {"model": "kvCache", "architecture": "llama70b", "contextLength": 131072}]}` (also accepted as `variants`, or `?batch=[...]` as URL-encoded JSON on GET). Each item is a normal parameter set including its own `model` field; max 50 items. Response: `{batch: true, count, okCount, errorCount, results: [{index, ok, result | error}]}` — one bad scenario returns a per-item error instead of failing the whole batch.
 
+**Dry-run / sandbox (`dry_run=true`):** add `&dry_run=true` to any `/api/compute` call (or `"dry_run": true` in the POST body; also applies per-item inside a batch) to validate the request and echo the parsed parameters — defaults filled in, numbers coerced — WITHOUT executing any math. Response: `{dry_run: true, model, inputs, id?, note}`. The `id` is the same deterministic hash the real call would return, and failures (unknown model, malformed batch) behave exactly as they would for a real call — use it as a cheap sanity check before spending a real computation. Example: `/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true&dry_run=true`.
+
 Every `/api/compute` and `/api/best` response carries a deterministic `id` (`calc_<12 hex chars>`) hashed from the resolved request. Cite it to reference a result across turns:
 
 **GET /api/calc/<id>?<original params>** — replay any computation from its id. Ids are pure content hashes, not database keys: resend the original parameters and the endpoint re-runs identical math and stamps `verified: true`. Example:

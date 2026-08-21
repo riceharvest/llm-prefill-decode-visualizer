@@ -284,7 +284,15 @@ export const locales = {
       slowerSuffix: '{factor}x slower',
       metricOverallSub: 'System A vs System B',
       metricPrefillAdvantage: 'Prefill TTFT advantage',
-      metricDecodeAdvantage: 'Decode generation advantage'
+      metricDecodeAdvantage: 'Decode generation advantage',
+      exportRowLabel: 'Export this comparison',
+      exportPng: 'PNG',
+      exportPngTooltip: 'Export this chart as PNG',
+      copyCurl: 'cURL',
+      copyPython: 'Python',
+      copyTypeScript: 'TypeScript',
+      copySnippetTooltip: 'Copy a runnable /api/compute request for this exact comparison — add "dry_run": true to preview without executing',
+      copiedFeedback: 'Copied!'
     },
 
     kvCache: {
