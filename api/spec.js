@@ -82,9 +82,13 @@ export default function handler(req, res) {
             { name: 'quant', in: 'query', schema: { type: 'string' } },
             { name: 'hwClass', in: 'query', schema: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] } },
             { name: 'hardware', in: 'query', schema: { type: 'string' } },
+            { name: 'fitCheck', in: 'query', schema: { type: 'boolean' }, description: 'exclude rigs whose memory cannot hold the model at the given context (estimated)' },
+            { name: 'contextLength', in: 'query', schema: { type: 'integer', default: 32768 }, description: 'context for fitCheck; providing it implies fitCheck=true' },
+            { name: 'precisionBytes', in: 'query', schema: { type: 'number', default: 2 }, description: 'KV cache dtype bytes for fitCheck (2 = fp16)' },
+            { name: 'batchSize', in: 'query', schema: { type: 'integer', default: 1 }, description: 'batch size for fitCheck KV cache math' },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } }
           ],
-          responses: { '200': { description: 'Ranked groups with medians and source links' } }
+          responses: { '200': { description: 'Ranked groups with medians and source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns' } }
         }
       },
       '/api/health': {
