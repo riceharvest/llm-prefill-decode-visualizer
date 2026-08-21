@@ -96,6 +96,29 @@ export default function handler(req, res) {
             '500': { description: 'Health handler itself failed' }
           }
         }
+      },
+      '/api/sizing': {
+        get: {
+          summary: 'Hardware sizing recommendation for a workload spec (VRAM fit + expected TTFT/TPOT)',
+          description: 'One canonical query for deployment planning: pass a workload spec, get ranked rigs with required-VRAM math (weights + KV cache at target context × concurrency + overhead) and expected TTFT/TPOT from aggregated benchmark medians, plus per-group sample confidence.',
+          parameters: [
+            { name: 'model', in: 'query', required: true, schema: { type: 'string' }, description: 'model family / hfId substring, e.g. qwen' },
+            { name: 'contextLength', in: 'query', schema: { type: 'integer', default: 8192 }, description: 'target context per request (drives KV-cache VRAM)' },
+            { name: 'concurrency', in: 'query', schema: { type: 'integer', default: 1 }, description: 'simultaneous requests; scales KV cache, decays per-user decode ~B^-0.25' },
+            { name: 'promptTokens', in: 'query', schema: { type: 'integer', default: 2048 }, description: 'tokens prefilled per request (TTFT input)' },
+            { name: 'outputTokens', in: 'query', schema: { type: 'integer', default: 512 }, description: 'tokens decoded per request' },
+            { name: 'maxTtftSeconds', in: 'query', schema: { type: 'number' }, description: 'SLO cap on expected TTFT' },
+            { name: 'maxTpotMs', in: 'query', schema: { type: 'number' }, description: 'SLO cap on expected TPOT' },
+            { name: 'maxVramGb', in: 'query', schema: { type: 'number' }, description: 'budget cap: rig memory (VRAM or unified) must fit under this' },
+            { name: 'numLayers', in: 'query', schema: { type: 'integer' }, description: 'explicit KV arch (with kvHeads+headDim skips the per-param-count estimate)' },
+            { name: 'kvHeads', in: 'query', schema: { type: 'integer' } },
+            { name: 'headDim', in: 'query', schema: { type: 'integer' } },
+            { name: 'quant', in: 'query', schema: { type: 'string' }, description: 'exact quantization match' },
+            { name: 'hwClass', in: 'query', schema: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] } },
+            { name: 'limit', in: 'query', schema: { type: 'integer', default: 5, maximum: 25 } }
+          ],
+          responses: { '200': { description: 'workload echo, assumptions, and ranked recommendations with vramFit, expected, confidence, meetsSlo' } }
+        }
       }
     }
   };
