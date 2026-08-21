@@ -11,6 +11,7 @@ import { confidence } from './_crosscheck.js';
 import { sendProblemFromError } from './_errors.js';
 import { computeCalcId } from './_calc_id.js';
 import { filterByMaxAge, parseMaxAgeParam } from './_freshness.js';
+import { estimateStreetPrice } from '../src/utils/streetPricing.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -364,6 +365,14 @@ export async function bestBody(query = {}) {
     for (const row of ranked) {
       const sample = sampleByKey.get(`${row.hardwareKey}|${row.modelFamily}`);
       row.effectiveVramGb = sample ? effectiveVramGb(sample) : null;
+    }
+
+    // Attach street-price estimates (#66): USD estimate with low/high range
+    // plus eBay/Craigslist verification links; null when no anchor exists.
+    const priceByKey = new Map(groups.map(g => [g.key, g.bestRun]));
+    for (const row of ranked) {
+      const sample = priceByKey.get(`${row.hardwareKey}|${row.modelFamily}`);
+      row.pricing = sample ? estimateStreetPrice(sample) : null;
     }
 
     return {
