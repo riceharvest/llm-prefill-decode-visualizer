@@ -4,7 +4,8 @@ import {
   speculative,
   batched,
   agentic,
-  kvCache
+  kvCache,
+  cost
 } from './_math.js';
 import { ENGINE_FLAGS, applyEngineFlags } from '../src/utils/engineFlags.js';
 
@@ -117,12 +118,24 @@ function computeOne(params) {
       } };
     }
 
+    case 'cost':
+      return { status: 200, body: cost({
+        hardwarePriceUsd: num(params.hardwarePriceUsd ?? params.price, 0),
+        electricityRatePerKwh: num(params.electricityRatePerKwh ?? params.electricityRate, 0.15),
+        powerDrawWatts: num(params.powerDrawWatts, 0),
+        amortizationMonths: num(params.amortizationMonths, 36),
+        promptTokens: num(params.promptTokens, 2048),
+        outputTokens: num(params.outputTokens, 512),
+        prefillSpeed: num(params.prefillSpeed, 3800),
+        decodeSpeed: num(params.decodeSpeed, 105)
+      }) };
+
     case '':
     case undefined:
       return { status: 200, body: capabilityList() };
 
     default:
-      return { status: 400, body: { error: `Unknown model '${model}'`, available: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged'] } };
+      return { status: 400, body: { error: `Unknown model '${model}'`, available: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost'] } };
   }
 }
 
@@ -140,7 +153,8 @@ function capabilityList() {
         flags: Object.fromEntries(ENGINE_FLAGS.map(f => [f.id, { flag: f.flag, engine: f.engine, prefillDeltaPct: Math.round((f.prefillMult - 1) * 100), decodeDeltaPct: Math.round((f.decodeMult - 1) * 100), kvBits: f.kvBits, source: f.source, sourceNote: f.sourceNote }])),
         description: 'Applies documented engine launch-flag deltas to base speeds and simulates a single turn. All deltas are heuristics with a source note each — not measurements.',
         example: '/api/compute?model=flagged&prefillSpeed=2400&decodeSpeed=65&flags=flash-attn,kv-q8'
-      }
+      },
+      cost: { params: ['hardwarePriceUsd', 'electricityRatePerKwh', 'powerDrawWatts', 'amortizationMonths', 'promptTokens', 'outputTokens', 'prefillSpeed', 'decodeSpeed'], example: '/api/compute?model=cost&hardwarePriceUsd=2000&electricityRatePerKwh=0.15&powerDrawWatts=450&prefillSpeed=3800&decodeSpeed=105' }
     },
     batch: {
       description: 'Compare variants in one call: POST {"batch": [{"model": "singleTurn", "promptTokens": 4096}, ...]}. Each item is a normal parameter set including its own "model" field. Returns { results: [{ index, ok, result | error }] } — one bad item does not fail the batch.',

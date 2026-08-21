@@ -23,6 +23,8 @@ Models:
 - `agentic` — turn-by-turn walltime for a tool-calling loop, with/without prefix caching savings. Params: `numTurns`, `basePromptTokens`, `toolOutputTokensPerTurn`, `decodeTokensPerTurn`, `prefillSpeed`, `decodeSpeed`, `enablePrefixCaching`.
 - `kvCache` — KV-cache VRAM for an architecture. Params: `architecture` (`llama70b|llama8b|qwen72b|mistral7b`) or explicit `numLayers`+`kvHeads`+`headDim`, plus `contextLength`, `precisionBytes` (2=FP16, 1=FP8, 0.5=INT4), `batchSize`.
 - `flagged` — engine launch-flag modeling. Params: `prefillSpeed`, `decodeSpeed`, `promptTokens`, `outputTokens`, and `flags` (comma-separated ids: `flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3`). Returns adjusted speeds, a per-flag audit trail (delta + source note), warnings, and a `singleTurn` simulation at the adjusted speeds. Deltas are documented heuristics, not measurements.
+- `cost` — $/1M tokens for owned hardware: amortized purchase price + electricity over the measured speeds of a scenario shape. Params: `hardwarePriceUsd`, `electricityRatePerKwh` (default 0.15), `powerDrawWatts`, `amortizationMonths` (default 36), plus the usual `promptTokens`, `outputTokens`, `prefillSpeed`, `decodeSpeed`.
+  Example: `/api/compute?model=cost&hardwarePriceUsd=2000&powerDrawWatts=450&electricityRatePerKwh=0.15&prefillSpeed=3800&decodeSpeed=105`
 
 Calling `/api/compute` with no `model` returns a self-describing capability list.
 
@@ -52,6 +54,7 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 **GET /api/sizing** — one-call deployment recommendation for agents. Pass a workload spec, get ranked hardware with the math attached:
 - `/api/sizing?model=qwen&contextLength=32768&concurrency=4&maxTtftSeconds=2&maxTpotMs=50&maxVramGb=48`
 - Each recommendation carries `vramFit` (weights from params × bits-per-weight + KV cache at target context × concurrency + overhead vs available VRAM/unified memory), `expected` TTFT/TPOT from aggregated benchmark medians with IQR, `confidence` from sample count, and `meetsSlo` flags. Ranked meet-SLO-first, then by median per-user decode.
+- `/api/best?by=cost&price=2000&electricityRate=0.15` → best tok/s-per-dollar. Ranks by **$/1M tokens** (lower is better): rig price amortized over `amortizationMonths` (default 36) + electricity at `electricityRate` $/kWh (default 0.15) and a per-hwClass power estimate (override with `powerWatts`), divided by effective throughput at median speeds for the scenario shape (`promptTokens`/`outputTokens`, default 2048/512). Each result carries its `costInputs` echo so you can see exactly what was assumed.
 
 ### Typical agent workflow
 

@@ -1,5 +1,5 @@
 import { getAllRuns, aggregate } from './_localmaxxing.js';
-import { singleTurn } from './_math.js';
+import { singleTurn, cost } from './_math.js';
 import { SCENARIO_PRESETS } from '../src/utils/presets.js';
 import { fitsInMemory } from './_vramfit.js';
 
@@ -102,10 +102,19 @@ function json(res, body, status = 200) {
   res.end(JSON.stringify(body, null, 2));
 }
 
+function num(v, fallback) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+// Rough wall-power estimates when the caller doesn't pass ?powerWatts.
+// Whole-rig figures (idle-ish load while serving), not TDP sums.
+const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
+
 /**
  * GET /api/best — ranked answers to natural benchmark questions.
  *
- * ?by=decode|prefill|efficiency|walltime   rank metric (default decode)
+ * ?by=decode|prefill|efficiency|walltime|cost  rank metric (default decode)
  * ?scenario=<preset-id>                    workload shape for by=walltime
  *                                          (chat|rag|longdoc|codegen|reasoning)
  * ?promptTokens=N&outputTokens=M           explicit workload shape for by=walltime
@@ -119,13 +128,27 @@ function json(res, body, status = 200) {
  * ?precisionBytes=2               KV cache dtype for fitCheck (fp16 default)
  * ?batchSize=1                    KV cache batch for fitCheck
  * ?limit=N                        default 10
+ *
+ * Cost ranking (?by=cost) inputs:
+ * ?price=<usd>                    hardware purchase price (per rig; default 0)
+ * ?electricityRate=$/kWh          default 0.15
+ * ?powerWatts=W                   default estimate by hwClass (see DEFAULT_POWER_WATTS)
+ * ?amortizationMonths=M           spread hardware price over this many months (default 36)
+ * ?promptTokens=&outputTokens=    scenario shape (defaults 2048/512)
  */
 export default async function handler(req, res) {
   try {
     const q = req.query || {};
     const limit = Math.min(50, Math.max(1, Number(q.limit) || 10));
-    const by = BY_MODES.includes(q.by) ? q.by : 'decode';
+    const by = [...BY_MODES, 'cost'].includes(q.by) ? q.by : 'decode';
     const workload = resolveWorkload(q);
+    const costInputs = {
+      hardwarePriceUsd: num(q.hardwarePriceUsd ?? q.price, 0),
+      electricityRatePerKwh: num(q.electricityRatePerKwh ?? q.electricityRate, 0.15),
+      amortizationMonths: num(q.amortizationMonths, 36),
+      promptTokens: num(q.promptTokens, 2048),
+      outputTokens: num(q.outputTokens, 512)
+    };
 
     let runs = await getAllRuns();
 
@@ -165,7 +188,55 @@ export default async function handler(req, res) {
     // so one lucky run doesn't top the chart.
     const groups = aggregate(runs, r => `${r.hardwareKey}|${r.modelFamily}`);
 
-    const ranked = rankGroups(groups, by, workload, limit);
+    let ranked;
+    if (by === 'cost') {
+      ranked = groups
+        .map(g => {
+          const sample = g.bestRun;
+          const c = cost({
+            ...costInputs,
+            powerDrawWatts: num(q.powerWatts, DEFAULT_POWER_WATTS[sample.hwClass] ?? 150),
+            prefillSpeed: g.prefill.median,
+            decodeSpeed: g.decode.median
+          });
+          return {
+            hardware: sample.hardware,
+            hardwareKey: sample.hardwareKey,
+            hwClass: sample.hwClass,
+            gpu: sample.gpu,
+            gpuCount: sample.gpuCount,
+            vramGb: sample.vramGb,
+            chip: sample.chip,
+            unifiedMemoryGb: sample.unifiedMemoryGb,
+            cpu: sample.cpu,
+            modelFamily: sample.modelFamily,
+            exampleModel: sample.modelName,
+            quantization: sample.quantization,
+            engine: sample.engine,
+            runsInGroup: g.runs,
+            medianPrefillTokPerSec: g.prefill.median,
+            medianDecodeTokPerSec: g.decode.median,
+            bestDecodeTokPerSec: g.decode.max,
+            source: sample.source,
+            costInputs: {
+              hardwarePriceUsd: c.inputs.hardwarePriceUsd,
+              electricityRatePerKwh: c.inputs.electricityRatePerKwh,
+              powerDrawWatts: c.inputs.powerDrawWatts,
+              amortizationMonths: c.inputs.amortizationMonths,
+              promptTokens: c.inputs.promptTokens,
+              outputTokens: c.inputs.outputTokens
+            },
+            effectiveThroughputTokPerSec: c.effectiveThroughputTokPerSec,
+            totalCostUsdPerHour: c.totalCostUsdPerHour,
+            costUsdPerMillionTokens: c.costUsdPerMillionTokens,
+            costUsdPerThousandRequests: c.costUsdPerThousandRequests
+          };
+        })
+        .sort((a, b) => (a.costUsdPerMillionTokens ?? Infinity) - (b.costUsdPerMillionTokens ?? Infinity))
+        .slice(0, limit);
+    } else {
+      ranked = rankGroups(groups, by, workload, limit);
+    }
     if (fitCheck) {
       // Attach the estimated fit verdict for each ranked group's best run.
       const bestByKey = new Map(groups.map(g => [g.key, g.bestRun]));
@@ -180,6 +251,8 @@ export default async function handler(req, res) {
     return json(res, {
       description: by === 'walltime'
         ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant; runsInGroup shows sample size.`
+        : by === 'cost'
+        ? 'Ranked hardware×model groups by cost-efficiency: $/1M tokens from hardware price (amortized) + electricity at measured median speeds for the given scenario shape. Lower is better.'
         : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size.',
       rankedBy: by,
       matchedRuns: runs.length,

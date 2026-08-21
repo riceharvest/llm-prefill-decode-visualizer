@@ -7,7 +7,7 @@ export default function handler(req, res) {
     openapi: '3.1.0',
     info: {
       title: 'LLM Prefill & Decode Speed Visualizer API',
-      version: '2.0.0',
+      version: '2.1.0',
       description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. Human docs at /llms.txt.'
     },
     servers: [{ url: BASE }],
@@ -17,9 +17,9 @@ export default function handler(req, res) {
           summary: 'Run inference math (TTFT, TPOT, walltime, VRAM)',
           description: 'Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts POST with a JSON body, or a batch of up to 50 parameter sets via POST {"batch": [...]} / GET ?batch=[...] — returns per-index results with per-item ok/error status.',
           parameters: [
-            { name: 'model', in: 'query', schema: { type: 'string', enum: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged'] } },
-            { name: 'promptTokens', in: 'query', schema: { type: 'number' }, description: 'singleTurn/batched/agentic' },
-            { name: 'outputTokens', in: 'query', schema: { type: 'number' }, description: 'singleTurn/batched/agentic' },
+            { name: 'model', in: 'query', schema: { type: 'string', enum: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost'] } },
+            { name: 'promptTokens', in: 'query', schema: { type: 'number' }, description: 'singleTurn/batched/agentic/cost' },
+            { name: 'outputTokens', in: 'query', schema: { type: 'number' }, description: 'singleTurn/batched/agentic/cost' },
             { name: 'prefillSpeed', in: 'query', schema: { type: 'number' }, description: 'tok/s' },
             { name: 'decodeSpeed', in: 'query', schema: { type: 'number' }, description: 'tok/s' },
             { name: 'numTurns', in: 'query', schema: { type: 'integer' }, description: 'agentic' },
@@ -27,6 +27,10 @@ export default function handler(req, res) {
             { name: 'batchSize', in: 'query', schema: { type: 'integer' }, description: 'batched/kvCache' },
             { name: 'draftTokens', in: 'query', schema: { type: 'integer' }, description: 'speculative: draft tokens per step' },
             { name: 'acceptanceRate', in: 'query', schema: { type: 'number' }, description: 'speculative: 0..1. Response includes breakevenAcceptanceRate — below it speculation is slower than vanilla decode.' },
+            { name: 'hardwarePriceUsd', in: 'query', schema: { type: 'number' }, description: 'cost: purchase price, amortized over amortizationMonths (default 36)' },
+            { name: 'electricityRatePerKwh', in: 'query', schema: { type: 'number' }, description: 'cost: $/kWh, default 0.15' },
+            { name: 'powerDrawWatts', in: 'query', schema: { type: 'number' }, description: 'cost: whole-rig wall power under load' },
+            { name: 'amortizationMonths', in: 'query', schema: { type: 'number' }, description: 'cost: months to spread hardware price over, default 36' },
             { name: 'architecture', in: 'query', schema: { type: 'string', enum: ['llama70b', 'llama8b', 'qwen72b', 'mistral7b'] }, description: 'kvCache preset arch' },
             { name: 'contextLength', in: 'query', schema: { type: 'integer' }, description: 'kvCache' },
             { name: 'precisionBytes', in: 'query', schema: { type: 'number', enum: [2, 1, 0.5] }, description: 'kvCache: FP16/FP8/INT4' },
@@ -130,10 +134,16 @@ export default function handler(req, res) {
       },
       '/api/best': {
         get: {
-          summary: 'Ranked answers: fastest rigs for given constraints',
-          description: 'Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed.',
+          summary: 'Ranked answers: fastest or cheapest rigs for given constraints',
+          description: 'Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed. by=cost ranks by cost-efficiency instead.',
           parameters: [
-            { name: 'by', in: 'query', schema: { type: 'string', enum: ['decode', 'prefill'], default: 'decode' } },
+            { name: 'by', in: 'query', schema: { type: 'string', enum: ['decode', 'prefill', 'cost'], default: 'decode' } },
+            { name: 'price', in: 'query', schema: { type: 'number' }, description: 'cost mode: rig purchase price in USD (default 0)' },
+            { name: 'electricityRate', in: 'query', schema: { type: 'number' }, description: 'cost mode: $/kWh (default 0.15)' },
+            { name: 'powerWatts', in: 'query', schema: { type: 'number' }, description: 'cost mode: whole-rig watts; defaults to an estimate per hwClass' },
+            { name: 'amortizationMonths', in: 'query', schema: { type: 'number' }, description: 'cost mode: spread price over this many months (default 36)' },
+            { name: 'promptTokens', in: 'query', schema: { type: 'number' }, description: 'cost mode: scenario shape (default 2048)' },
+            { name: 'outputTokens', in: 'query', schema: { type: 'number' }, description: 'cost mode: scenario shape (default 512)' },
             { name: 'model', in: 'query', schema: { type: 'string' } },
             { name: 'maxParamsB', in: 'query', schema: { type: 'number' }, description: 'only models at or under this size' },
             { name: 'quant', in: 'query', schema: { type: 'string' } },
