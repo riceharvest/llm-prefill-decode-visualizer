@@ -63,6 +63,17 @@ Calling `/api/compute` with no `model` returns a self-describing capability list
 - Each recommendation carries `vramFit` (weights from params × bits-per-weight + KV cache at target context × concurrency + overhead vs available VRAM/unified memory), `expected` TTFT/TPOT from aggregated benchmark medians with IQR, `confidence` from sample count, and `meetsSlo` flags. Ranked meet-SLO-first, then by median per-user decode.
 - `/api/best?by=cost&price=2000&electricityRate=0.15` → best tok/s-per-dollar. Ranks by **$/1M tokens** (lower is better): rig price amortized over `amortizationMonths` (default 36) + electricity at `electricityRate` $/kWh (default 0.15) and a per-hwClass power estimate (override with `powerWatts`), divided by effective throughput at median speeds for the scenario shape (`promptTokens`/`outputTokens`, default 2048/512). Each result carries its `costInputs` echo so you can see exactly what was assumed.
 
+### Statistical caveats (machine-readable)
+
+`/api/localmaxxing`, `/api/benchmarks` and `/api/best` all return a top-level `caveats` array — objects with `code`, `severity`, `summary`, `detail`. Don't quote benchmark numbers without checking it. Codes:
+
+- `single_stream_only` — dataset only contains batchSize=1 / concurrency≤1 runs; not batched-serving throughput.
+- `self_reported_unvalidated` — community-submitted runs, not independently verified; trust medians over single runs.
+- `n1_groups` / `n1_group` — some groups (or this row) rest on a single run; treat as anecdotal. Carries `pct`, `groupsWithOneRun`, `totalGroups`.
+- `mixed_engines` — a group or the matched set blends different inference engines (llama.cpp vs MLX vs vLLM…).
+
+`/api/best` and `/api/benchmarks` rows also carry a per-row `caveats` array (`n1_group`, `mixed_engines`) when they apply to that specific group.
+
 ### Typical agent workflow
 
 1. `GET /api/sizing?model=<family>&contextLength=…&concurrency=…&maxTpotMs=…` → ranked hardware recommendations with VRAM fit and expected latency, in one call.

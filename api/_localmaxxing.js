@@ -226,6 +226,7 @@ export function aggregate(runs, keyFn, { outlierIqrs = DEFAULT_OUTLIER_IQRS, inc
       includeOutliers,
       prefill: statsOf(statsRuns.map(r => r.prefillTokPerSec)),
       decode: statsOf(statsRuns.map(r => r.decodeTokPerSec)),
+      engines: [...new Set(group.map(r => r.engine).filter(Boolean))],
       bestRun: group.reduce((best, r) => (r.decodeTokPerSec > best.decodeTokPerSec ? r : best), group[0]),
       outliers
     });
