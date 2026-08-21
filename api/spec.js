@@ -26,7 +26,7 @@ export default function handler(req, res) {
             { name: 'enablePrefixCaching', in: 'query', schema: { type: 'boolean' }, description: 'agentic' },
             { name: 'batchSize', in: 'query', schema: { type: 'integer' }, description: 'batched/kvCache' },
             { name: 'draftTokens', in: 'query', schema: { type: 'integer' }, description: 'speculative: draft tokens per step' },
-            { name: 'acceptanceRate', in: 'query', schema: { type: 'number' }, description: 'speculative: 0..1' },
+            { name: 'acceptanceRate', in: 'query', schema: { type: 'number' }, description: 'speculative: 0..1. Response includes breakevenAcceptanceRate — below it speculation is slower than vanilla decode.' },
             { name: 'architecture', in: 'query', schema: { type: 'string', enum: ['llama70b', 'llama8b', 'qwen72b', 'mistral7b'] }, description: 'kvCache preset arch' },
             { name: 'contextLength', in: 'query', schema: { type: 'integer' }, description: 'kvCache' },
             { name: 'precisionBytes', in: 'query', schema: { type: 'number', enum: [2, 1, 0.5] }, description: 'kvCache: FP16/FP8/INT4' }

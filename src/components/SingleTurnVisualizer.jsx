@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Zap, Gauge, FileText, RotateCcw } from 'lucide-react';
 import { formatTime, formatTokens, SCENARIO_PRESETS } from '../utils/presets';
 import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
+import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
 
 export default function SingleTurnVisualizer({
   prefillSpeed,
@@ -27,11 +28,21 @@ export default function SingleTurnVisualizer({
     if (!specEnabled) return decodeSpeed;
     const k = draftTokens;
     const alpha = acceptance;
-    const draftCost = 0.2; // draft model step costs ~20% of a target step
+    const draftCost = DEFAULT_DRAFT_COST; // draft model step costs ~20% of a target step
     const tokensPerStep = 1 + k * alpha;           // accepted drafts + the bonus token
     const stepsPerSecond = decodeSpeed / (1 + k * draftCost);
     return stepsPerSecond * tokensPerStep;
   })();
+
+  // Acceptance rate below which speculation is slower than vanilla decode.
+  // In the linear verify-cost model this equals the draft cost fraction (~0.2).
+  const breakevenAlpha = breakevenAcceptance(DEFAULT_DRAFT_COST);
+  const specHurts = specEnabled && acceptance <= breakevenAlpha;
+
+  const applyPair = (pair) => {
+    setDraftTokens(Math.min(8, Math.max(2, pair.suggestedK)));
+    setAcceptance(pairAcceptance(pair));
+  };
 
   const activeScenario = SCENARIO_PRESETS.find(s => s.promptTokens === promptTokens && s.outputTokens === outputTokens);
 
@@ -288,7 +299,9 @@ export default function SingleTurnVisualizer({
               <div className="field">
                 <div className="field-head">
                   <span className="field-label">Acceptance rate (α)</span>
-                  <span className="field-value" style={{ color: 'var(--agent)' }}>{acceptance.toFixed(2)}</span>
+                  <span className="field-value" style={{ color: specHurts ? 'var(--prefill)' : 'var(--agent)' }}>
+                    {acceptance.toFixed(2)}
+                  </span>
                 </div>
                 <input
                   type="range"
@@ -299,13 +312,62 @@ export default function SingleTurnVisualizer({
                   aria-label="Draft token acceptance rate"
                   onChange={(e) => setAcceptance(Number(e.target.value))}
                 />
+                <div className="field-scale">
+                  <span>breakeven α ≈ {breakevenAlpha.toFixed(2)}</span>
+                  <span>0.95</span>
+                </div>
               </div>
             </div>
           )}
           {specEnabled && (
-            <p className="hint-text" style={{ marginTop: '8px' }}>
-              Draft model proposes k tokens, target verifies in one pass. Effective speed ≈ base ÷ (1 + k·c_draft) × (1 + k·α), draft cost c≈0.2. Higher α or smaller k → bigger win.
+            <p className="hint-text" style={{ marginTop: '8px', color: specHurts ? 'var(--prefill)' : undefined }}>
+              {specHurts
+                ? `⚠ α = ${acceptance.toFixed(2)} is at or below the breakeven (${breakevenAlpha.toFixed(2)}): the draft overhead outweighs the accepted tokens — speculation is slower than vanilla decode. Raise α or lower k.`
+                : `Draft model proposes k tokens, target verifies in one pass. Effective speed ≈ base ÷ (1 + k·c_draft) × (1 + k·α), draft cost c≈${DEFAULT_DRAFT_COST}. Breakeven α ≈ ${breakevenAlpha.toFixed(2)} — below it speculation hurts.`}
             </p>
+          )}
+          {specEnabled && (
+            <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+              <div className="field-head" style={{ marginBottom: '8px' }}>
+                <span className="section-label">Known-good draft / target pairings</span>
+                <span className="hint-text" style={{ fontSize: '0.72rem' }}>
+                  typical α from community runs · click to apply
+                </span>
+              </div>
+              <div className="grid-auto" style={{ '--grid-min': '260px', gap: '8px' }}>
+                {suggestPairs().map(pair => {
+                  const active = acceptance === pairAcceptance(pair) && draftTokens === Math.min(8, Math.max(2, pair.suggestedK));
+                  return (
+                    <button
+                      key={pair.id}
+                      onClick={() => applyPair(pair)}
+                      aria-pressed={active}
+                      title={`${pair.source} — sets k=${pair.suggestedK}, α=${pairAcceptance(pair).toFixed(2)}`}
+                      style={{
+                        textAlign: 'left', cursor: 'pointer',
+                        padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                        border: `1px solid ${active ? 'var(--agent-border)' : 'var(--border)'}`,
+                        background: active ? 'var(--agent-dim)' : 'var(--bg-inset)',
+                        color: 'var(--text-main)'
+                      }}
+                    >
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700 }}>
+                        {pair.draft} <span style={{ color: 'var(--text-muted)' }}>→</span> {pair.target}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'var(--font-mono)' }}>
+                        α {pair.acceptanceRange[0].toFixed(2)}–{pair.acceptanceRange[1].toFixed(2)} · {pair.speedupRange[0].toFixed(1)}–{pair.speedupRange[1].toFixed(1)}× · k={pair.suggestedK}
+                      </div>
+                      <div style={{ fontSize: '0.66rem', color: 'var(--text-subtle)', marginTop: '2px' }}>
+                        {pair.source}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="hint-text" style={{ marginTop: '8px' }}>
+                Acceptance ranges are typical community-reported values for generic chat/code workloads — coding and templated text accepts higher, creative text lower. Measure your own workload before committing.
+              </p>
+            </div>
           )}
         </div>
 
