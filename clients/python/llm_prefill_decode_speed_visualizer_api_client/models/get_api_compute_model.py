@@ -1,9 +1,10 @@
 from enum import Enum
 
-
 class GetApiComputeModel(str, Enum):
     AGENTIC = "agentic"
     BATCHED = "batched"
+    COST = "cost"
+    FLAGGED = "flagged"
     KVCACHE = "kvCache"
     SINGLETURN = "singleTurn"
     SPECULATIVE = "speculative"

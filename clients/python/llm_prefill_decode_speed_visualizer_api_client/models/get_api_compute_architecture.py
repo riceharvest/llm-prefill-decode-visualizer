@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class GetApiComputeArchitecture(str, Enum):
     LLAMA70B = "llama70b"
     LLAMA8B = "llama8b"

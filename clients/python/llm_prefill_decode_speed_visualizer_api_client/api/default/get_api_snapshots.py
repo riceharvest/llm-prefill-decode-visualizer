@@ -22,7 +22,7 @@ def _get_kwargs(
 
     _kwargs: dict[str, Any] = {
         "method": "get",
-        "url": "/api/presets",
+        "url": "/api/snapshots",
     }
 
 
@@ -54,7 +54,12 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
 
 ) -> Response[Any]:
-    """ Built-in hardware speed presets and workload scenarios
+    """ Versioned dataset snapshot IDs
+
+     Lists content-addressed dataset snapshots (e.g. snapshot-2026-08-21-a1b2c3d4). Pass any listed ID as
+    ?snapshot= on /api/localmaxxing, /api/benchmarks or /api/best to get reproducible numbers. Snapshot
+    IDs are stable for identical run sets within a fetch-time bucket; instances keep a bounded in-memory
+    ring, so old IDs may expire.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -81,7 +86,12 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
 
 ) -> Response[Any]:
-    """ Built-in hardware speed presets and workload scenarios
+    """ Versioned dataset snapshot IDs
+
+     Lists content-addressed dataset snapshots (e.g. snapshot-2026-08-21-a1b2c3d4). Pass any listed ID as
+    ?snapshot= on /api/localmaxxing, /api/benchmarks or /api/best to get reproducible numbers. Snapshot
+    IDs are stable for identical run sets within a fetch-time bucket; instances keep a bounded in-memory
+    ring, so old IDs may expire.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

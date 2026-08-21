@@ -22,7 +22,7 @@ def _get_kwargs(
 
     _kwargs: dict[str, Any] = {
         "method": "get",
-        "url": "/api/presets",
+        "url": "/api/health",
     }
 
 
@@ -32,6 +32,9 @@ def _get_kwargs(
 
 def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | None:
     if response.status_code == 200:
+        return None
+
+    if response.status_code == 500:
         return None
 
     if client.raise_on_unexpected_status:
@@ -54,7 +57,10 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
 
 ) -> Response[Any]:
-    """ Built-in hardware speed presets and workload scenarios
+    """ Service health and upstream data freshness
+
+     Liveness probe. Returns ok plus upstreamFreshness (fresh/stale/empty, last sync time, cached row
+    count) and cacheAge in seconds. Human status page at /status.html.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -81,7 +87,10 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
 
 ) -> Response[Any]:
-    """ Built-in hardware speed presets and workload scenarios
+    """ Service health and upstream data freshness
+
+     Liveness probe. Returns ok plus upstreamFreshness (fresh/stale/empty, last sync time, cached row
+    count) and cacheAge in seconds. Human status page at /status.html.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

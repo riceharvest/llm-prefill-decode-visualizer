@@ -1,11 +1,17 @@
 from http import HTTPStatus
-from typing import Any
+from typing import Any, cast
+from urllib.parse import quote
 
 import httpx
 
-from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...types import UNSET, Response, Unset
+from ...types import Response, UNSET
+from ... import errors
+
+from ...models.get_api_localmaxxing_response_429 import GetApiLocalmaxxingResponse429
+from ...types import UNSET, Unset
+from typing import cast
+
 
 
 def _get_kwargs(
@@ -14,7 +20,13 @@ def _get_kwargs(
     model: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     limit: int | Unset = 50,
+    cursor: str | Unset = UNSET,
+    snapshot: str | Unset = UNSET,
+
 ) -> dict[str, Any]:
+    
+
+    
 
     params: dict[str, Any] = {}
 
@@ -26,7 +38,13 @@ def _get_kwargs(
 
     params["limit"] = limit
 
+    params["cursor"] = cursor
+
+    params["snapshot"] = snapshot
+
+
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
+
 
     _kwargs: dict[str, Any] = {
         "method": "get",
@@ -34,12 +52,22 @@ def _get_kwargs(
         "params": params,
     }
 
+
     return _kwargs
 
 
-def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | None:
+
+def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | GetApiLocalmaxxingResponse429 | None:
     if response.status_code == 200:
-        return None
+        response_200 = cast(Any, None)
+        return response_200
+
+    if response.status_code == 429:
+        response_429 = GetApiLocalmaxxingResponse429.from_dict(response.json())
+
+
+
+        return response_429
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
@@ -47,7 +75,7 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
         return None
 
 
-def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[Any]:
+def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[Any | GetApiLocalmaxxingResponse429]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -63,32 +91,41 @@ def sync_detailed(
     model: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     limit: int | Unset = 50,
-) -> Response[Any]:
-    """Raw community benchmark runs (flattened, model-normalized)
+    cursor: str | Unset = UNSET,
+    snapshot: str | Unset = UNSET,
 
-     Bare call returns a hardware-group summary. Filters:
-    ?hardware=<substr>&model=<substr>&quant=<exact>&limit=N. Runs carry measured prefillTokPerSec /
-    decodeTokPerSec.
+) -> Response[Any | GetApiLocalmaxxingResponse429]:
+    """ Raw community benchmark runs (flattened, model-normalized)
+
+     Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: {
+    total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow
+    next_cursor until has_more is false.
 
     Args:
         hardware (str | Unset):
         model (str | Unset):
         quant (str | Unset):
         limit (int | Unset):  Default: 50.
+        cursor (str | Unset):
+        snapshot (str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any]
-    """
+        Response[Any | GetApiLocalmaxxingResponse429]
+     """
+
 
     kwargs = _get_kwargs(
         hardware=hardware,
-        model=model,
-        quant=quant,
-        limit=limit,
+model=model,
+quant=quant,
+limit=limit,
+cursor=cursor,
+snapshot=snapshot,
+
     )
 
     response = client.get_httpx_client().request(
@@ -97,6 +134,50 @@ def sync_detailed(
 
     return _build_response(client=client, response=response)
 
+def sync(
+    *,
+    client: AuthenticatedClient | Client,
+    hardware: str | Unset = UNSET,
+    model: str | Unset = UNSET,
+    quant: str | Unset = UNSET,
+    limit: int | Unset = 50,
+    cursor: str | Unset = UNSET,
+    snapshot: str | Unset = UNSET,
+
+) -> Any | GetApiLocalmaxxingResponse429 | None:
+    """ Raw community benchmark runs (flattened, model-normalized)
+
+     Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: {
+    total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow
+    next_cursor until has_more is false.
+
+    Args:
+        hardware (str | Unset):
+        model (str | Unset):
+        quant (str | Unset):
+        limit (int | Unset):  Default: 50.
+        cursor (str | Unset):
+        snapshot (str | Unset):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Any | GetApiLocalmaxxingResponse429
+     """
+
+
+    return sync_detailed(
+        client=client,
+hardware=hardware,
+model=model,
+quant=quant,
+limit=limit,
+cursor=cursor,
+snapshot=snapshot,
+
+    ).parsed
 
 async def asyncio_detailed(
     *,
@@ -105,34 +186,90 @@ async def asyncio_detailed(
     model: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     limit: int | Unset = 50,
-) -> Response[Any]:
-    """Raw community benchmark runs (flattened, model-normalized)
+    cursor: str | Unset = UNSET,
+    snapshot: str | Unset = UNSET,
 
-     Bare call returns a hardware-group summary. Filters:
-    ?hardware=<substr>&model=<substr>&quant=<exact>&limit=N. Runs carry measured prefillTokPerSec /
-    decodeTokPerSec.
+) -> Response[Any | GetApiLocalmaxxingResponse429]:
+    """ Raw community benchmark runs (flattened, model-normalized)
+
+     Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: {
+    total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow
+    next_cursor until has_more is false.
 
     Args:
         hardware (str | Unset):
         model (str | Unset):
         quant (str | Unset):
         limit (int | Unset):  Default: 50.
+        cursor (str | Unset):
+        snapshot (str | Unset):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any]
-    """
+        Response[Any | GetApiLocalmaxxingResponse429]
+     """
+
 
     kwargs = _get_kwargs(
         hardware=hardware,
-        model=model,
-        quant=quant,
-        limit=limit,
+model=model,
+quant=quant,
+limit=limit,
+cursor=cursor,
+snapshot=snapshot,
+
     )
 
-    response = await client.get_async_httpx_client().request(**kwargs)
+    response = await client.get_async_httpx_client().request(
+        **kwargs
+    )
 
     return _build_response(client=client, response=response)
+
+async def asyncio(
+    *,
+    client: AuthenticatedClient | Client,
+    hardware: str | Unset = UNSET,
+    model: str | Unset = UNSET,
+    quant: str | Unset = UNSET,
+    limit: int | Unset = 50,
+    cursor: str | Unset = UNSET,
+    snapshot: str | Unset = UNSET,
+
+) -> Any | GetApiLocalmaxxingResponse429 | None:
+    """ Raw community benchmark runs (flattened, model-normalized)
+
+     Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: {
+    total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow
+    next_cursor until has_more is false.
+
+    Args:
+        hardware (str | Unset):
+        model (str | Unset):
+        quant (str | Unset):
+        limit (int | Unset):  Default: 50.
+        cursor (str | Unset):
+        snapshot (str | Unset):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Any | GetApiLocalmaxxingResponse429
+     """
+
+
+    return (await asyncio_detailed(
+        client=client,
+hardware=hardware,
+model=model,
+quant=quant,
+limit=limit,
+cursor=cursor,
+snapshot=snapshot,
+
+    )).parsed

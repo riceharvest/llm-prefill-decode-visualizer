@@ -8,21 +8,37 @@ from ...client import AuthenticatedClient, Client
 from ...types import Response, UNSET
 from ... import errors
 
+from ...models.get_api_calc_id_endpoint import GetApiCalcIdEndpoint
+from ...types import UNSET, Unset
 
 
 
 def _get_kwargs(
-    
+    id: str,
+    *,
+    endpoint: GetApiCalcIdEndpoint | Unset = GetApiCalcIdEndpoint.COMPUTE,
+
 ) -> dict[str, Any]:
     
 
     
 
-    
+    params: dict[str, Any] = {}
+
+    json_endpoint: str | Unset = UNSET
+    if not isinstance(endpoint, Unset):
+        json_endpoint = endpoint.value
+
+    params["endpoint"] = json_endpoint
+
+
+    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
+
 
     _kwargs: dict[str, Any] = {
         "method": "get",
-        "url": "/api/presets",
+        "url": "/api/calc/{id}".format(id=quote(str(id), safe=""),),
+        "params": params,
     }
 
 
@@ -32,6 +48,9 @@ def _get_kwargs(
 
 def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | None:
     if response.status_code == 200:
+        return None
+
+    if response.status_code == 400:
         return None
 
     if client.raise_on_unexpected_status:
@@ -50,11 +69,22 @@ def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Res
 
 
 def sync_detailed(
+    id: str,
     *,
     client: AuthenticatedClient | Client,
+    endpoint: GetApiCalcIdEndpoint | Unset = GetApiCalcIdEndpoint.COMPUTE,
 
 ) -> Response[Any]:
-    """ Built-in hardware speed presets and workload scenarios
+    """ Replay a computation or recommendation from its deterministic id
+
+     Ids are content hashes (calc_ + 12 hex chars of sha256 over the normalized request) returned as `id`
+    by /api/compute and /api/best. They are not stored anywhere: re-send the original parameters
+    alongside the id and this endpoint re-runs the same math and returns the result with verified:true.
+    A mismatching parameter set is rejected with the expected id.
+
+    Args:
+        id (str):
+        endpoint (GetApiCalcIdEndpoint | Unset):  Default: GetApiCalcIdEndpoint.COMPUTE.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -66,7 +96,9 @@ def sync_detailed(
 
 
     kwargs = _get_kwargs(
-        
+        id=id,
+endpoint=endpoint,
+
     )
 
     response = client.get_httpx_client().request(
@@ -77,11 +109,22 @@ def sync_detailed(
 
 
 async def asyncio_detailed(
+    id: str,
     *,
     client: AuthenticatedClient | Client,
+    endpoint: GetApiCalcIdEndpoint | Unset = GetApiCalcIdEndpoint.COMPUTE,
 
 ) -> Response[Any]:
-    """ Built-in hardware speed presets and workload scenarios
+    """ Replay a computation or recommendation from its deterministic id
+
+     Ids are content hashes (calc_ + 12 hex chars of sha256 over the normalized request) returned as `id`
+    by /api/compute and /api/best. They are not stored anywhere: re-send the original parameters
+    alongside the id and this endpoint re-runs the same math and returns the result with verified:true.
+    A mismatching parameter set is rejected with the expected id.
+
+    Args:
+        id (str):
+        endpoint (GetApiCalcIdEndpoint | Unset):  Default: GetApiCalcIdEndpoint.COMPUTE.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -93,7 +136,9 @@ async def asyncio_detailed(
 
 
     kwargs = _get_kwargs(
-        
+        id=id,
+endpoint=endpoint,
+
     )
 
     response = await client.get_async_httpx_client().request(

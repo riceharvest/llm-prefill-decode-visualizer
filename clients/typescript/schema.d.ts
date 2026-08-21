@@ -13,15 +13,15 @@ export interface paths {
         };
         /**
          * Run inference math (TTFT, TPOT, walltime, VRAM)
-         * @description Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts POST with a JSON body.
+         * @description Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts POST with a JSON body, or a batch of up to 50 parameter sets via POST {"batch": [...]} / GET ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via /api/calc/{id}.
          */
         get: {
             parameters: {
                 query?: {
-                    model?: "singleTurn" | "speculative" | "batched" | "agentic" | "kvCache";
-                    /** @description singleTurn/batched/agentic */
+                    model?: "singleTurn" | "speculative" | "batched" | "agentic" | "kvCache" | "flagged" | "cost";
+                    /** @description singleTurn/batched/agentic/cost */
                     promptTokens?: number;
-                    /** @description singleTurn/batched/agentic */
+                    /** @description singleTurn/batched/agentic/cost */
                     outputTokens?: number;
                     /** @description tok/s */
                     prefillSpeed?: number;
@@ -35,14 +35,24 @@ export interface paths {
                     batchSize?: number;
                     /** @description speculative: draft tokens per step */
                     draftTokens?: number;
-                    /** @description speculative: 0..1 */
+                    /** @description speculative: 0..1. Response includes breakevenAcceptanceRate — below it speculation is slower than vanilla decode. */
                     acceptanceRate?: number;
+                    /** @description cost: purchase price, amortized over amortizationMonths (default 36) */
+                    hardwarePriceUsd?: number;
+                    /** @description cost: $/kWh, default 0.15 */
+                    electricityRatePerKwh?: number;
+                    /** @description cost: whole-rig wall power under load */
+                    powerDrawWatts?: number;
+                    /** @description cost: months to spread hardware price over, default 36 */
+                    amortizationMonths?: number;
                     /** @description kvCache preset arch */
                     architecture?: "llama70b" | "llama8b" | "qwen72b" | "mistral7b";
                     /** @description kvCache */
                     contextLength?: number;
                     /** @description kvCache: FP16/FP8/INT4 */
                     precisionBytes?: 2 | 1 | 0.5;
+                    /** @description flagged: comma-separated engine flag ids (flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3). Documented heuristic deltas; response carries a per-flag audit trail. */
+                    flags?: string;
                 };
                 header?: never;
                 path?: never;
@@ -52,6 +62,148 @@ export interface paths {
             responses: {
                 /** @description Computed metrics object */
                 200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid parameters (code INVALID_PARAMS) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+                /** @description Internal server error (code INTERNAL) */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vram": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Combined model + KV-cache + context VRAM from just an hfId
+         * @description Resolves layers, hidden dim, GQA heads, head dim and weight size from the Hugging Face config automatically — no architecture params needed. Answers "will this rig OOM at 64k?". Optional vramGb budget returns a fits flag plus the max context that fits; optional numTurns+tokensPerTurn projects per-turn KV growth with the exact overflow turn.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Hugging Face repo id or URL, e.g. meta-llama/Llama-3.1-8B-Instruct */
+                    hfId: string;
+                    /** @description context length in tokens */
+                    context?: number;
+                    /** @description quant tag (fp16, q8_0, q6_k, q5_k_m, q4_k_m, q4_0, q3_k_m, q2_k, fp8, …); unknown tags assume ~4.85 bpw and are flagged */
+                    quant?: string;
+                    batchSize?: number;
+                    /** @description KV cache precision: 2=FP16, 1=FP8, 0.5=INT4 */
+                    kvPrecisionBytes?: number;
+                    /** @description optional VRAM budget → fits flag + maxContextTokens (upper bound) */
+                    vramGb?: number;
+                    /** @description with tokensPerTurn: project KV growth over N agentic turns */
+                    numTurns?: number;
+                    /** @description tokens added to context per turn */
+                    tokensPerTurn?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Resolved model + weights/kv/total VRAM breakdown */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing hfId */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unknown hfId on huggingface.co */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description config.json lacks required architecture fields */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/calc/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Replay a computation or recommendation from its deterministic id
+         * @description Ids are content hashes (calc_ + 12 hex chars of sha256 over the normalized request) returned as `id` by /api/compute and /api/best. They are not stored anywhere: re-send the original parameters alongside the id and this endpoint re-runs the same math and returns the result with verified:true. A mismatching parameter set is rejected with the expected id.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    endpoint?: "compute" | "best";
+                    /** @description The same model + params (or best filters) that minted the id. Defaults may be omitted — they resolve identically before hashing. */
+                    "<original request parameters>"?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Recomputed result, stamped verified:true and carrying the id */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Malformed id, missing replay parameters, or id/parameter mismatch (body.expected carries the correct id) */
+                400: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -110,7 +262,7 @@ export interface paths {
         };
         /**
          * Raw community benchmark runs (flattened, model-normalized)
-         * @description Bare call returns a hardware-group summary. Filters: ?hardware=<substr>&model=<substr>&quant=<exact>&limit=N. Runs carry measured prefillTokPerSec / decodeTokPerSec.
+         * @description Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: { total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow next_cursor until has_more is false.
          */
         get: {
             parameters: {
@@ -121,7 +273,12 @@ export interface paths {
                     model?: string;
                     /** @description exact quantization, e.g. q4_k_m */
                     quant?: string;
+                    /** @description page size */
                     limit?: number;
+                    /** @description opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts) */
+                    cursor?: string;
+                    /** @description Serve the pinned dataset snapshot instead of live data. IDs from /api/snapshots; unknown IDs fall back to current data with snapshot.served=false. */
+                    snapshot?: string;
                 };
                 header?: never;
                 path?: never;
@@ -129,13 +286,14 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Hardware summary or run list */
+                /** @description Hardware summary, or paginated run list { total, items[], has_more, next_cursor }; both carry a machine-readable `caveats` array (single-stream-only, self-reported data, engine mix) */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
                 };
+                429: components["responses"]["RateLimited"];
             };
         };
         put?: never;
@@ -154,8 +312,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Aggregated speeds: median + IQR per group
-         * @description Outlier-resistant stats per hardware×model-family group (default). Regroup with ?groupBy=hardware|model|quant.
+         * Aggregated speeds: median + IQR + 95% bootstrap CI per group
+         * @description Outlier-resistant stats per hardware×model-family group (default). Each median carries a 95% percentile bootstrap confidence interval (2,000 resamples) in ci95 {lo, hi}, plus a "median [lo–hi]" label string. Regroup with ?groupBy=hardware|model|quant. Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak). Each group carries confidence {runs, iqrSpreadPct, outliers, newestRunAgeDays, grade} and cross_check {relatedRigComparisons, contradictions[]} comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.
          */
         get: {
             parameters: {
@@ -165,7 +323,12 @@ export interface paths {
                     model?: string;
                     quant?: string;
                     hwClass?: "discrete_gpu" | "unified" | "cpu_only";
+                    /** @description page size */
                     limit?: number;
+                    /** @description opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts) */
+                    cursor?: string;
+                    /** @description Serve the pinned dataset snapshot instead of live data. IDs from /api/snapshots; unknown IDs fall back to current data with snapshot.served=false. */
+                    snapshot?: string;
                 };
                 header?: never;
                 path?: never;
@@ -173,13 +336,14 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Groups with median/q1/q3/min/max prefill & decode, plus bestRun */
+                /** @description Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode with 95% bootstrap CIs on each median, bestRun, a confidence block and crossCheck. Top-level and per-group `caveats` arrays flag n=1 groups and mixed engine versions. */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
                 };
+                429: components["responses"]["RateLimited"];
             };
         };
         put?: never;
@@ -198,19 +362,148 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Ranked answers: fastest rigs for given constraints
-         * @description Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed.
+         * Ranked answers: fastest or cheapest rigs for given constraints
+         * @description Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed. by=cost ranks by cost-efficiency instead. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel). Responses carry a deterministic `id` (hash of the resolved filters) replayable via /api/calc/{id}?endpoint=best&<same filters>.
          */
         get: {
             parameters: {
                 query?: {
-                    by?: "decode" | "prefill";
+                    by?: "decode" | "prefill" | "cost";
+                    /** @description cost mode: rig purchase price in USD (default 0) */
+                    price?: number;
+                    /** @description cost mode: $/kWh (default 0.15) */
+                    electricityRate?: number;
+                    /** @description cost mode: whole-rig watts; defaults to an estimate per hwClass */
+                    powerWatts?: number;
+                    /** @description cost mode: spread price over this many months (default 36) */
+                    amortizationMonths?: number;
+                    /** @description cost mode: scenario shape (default 2048) */
+                    promptTokens?: number;
+                    /** @description cost mode: scenario shape (default 512) */
+                    outputTokens?: number;
                     model?: string;
                     /** @description only models at or under this size */
                     maxParamsB?: number;
                     quant?: string;
                     hwClass?: "discrete_gpu" | "unified" | "cpu_only";
                     hardware?: string;
+                    /** @description exclude rigs whose memory cannot hold the model at the given context (estimated) */
+                    fitCheck?: boolean;
+                    /** @description context for fitCheck; providing it implies fitCheck=true */
+                    contextLength?: number;
+                    /** @description KV cache dtype bytes for fitCheck (2 = fp16) */
+                    precisionBytes?: number;
+                    /** @description batch size for fitCheck KV cache math */
+                    batchSize?: number;
+                    limit?: number;
+                    /** @description Serve the pinned dataset snapshot instead of live data. IDs from /api/snapshots; unknown IDs fall back to current data with snapshot.served=false. */
+                    snapshot?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns. Each result includes a `pricing` object: USD street-price estimate with low/high range, perGpu breakdown for multi-GPU rigs, asOf date, and eBay (new + used) and Craigslist search links to verify against live listings. `pricing` is null when no anchor exists (cpu_only, unknown GPUs). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Service health and upstream data freshness
+         * @description Liveness probe. Returns ok plus upstreamFreshness (fresh/stale/empty, last sync time, cached row count) and cacheAge in seconds. Human status page at /status.html.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description {ok, service, time, upstreamFreshness, cacheAge} */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Health handler itself failed */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sizing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hardware sizing recommendation for a workload spec (VRAM fit + expected TTFT/TPOT)
+         * @description One canonical query for deployment planning: pass a workload spec, get ranked rigs with required-VRAM math (weights + KV cache at target context × concurrency + overhead) and expected TTFT/TPOT from aggregated benchmark medians, plus per-group sample confidence.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description model family / hfId substring, e.g. qwen */
+                    model: string;
+                    /** @description target context per request (drives KV-cache VRAM) */
+                    contextLength?: number;
+                    /** @description simultaneous requests; scales KV cache, decays per-user decode ~B^-0.25 */
+                    concurrency?: number;
+                    /** @description tokens prefilled per request (TTFT input) */
+                    promptTokens?: number;
+                    /** @description tokens decoded per request */
+                    outputTokens?: number;
+                    /** @description SLO cap on expected TTFT */
+                    maxTtftSeconds?: number;
+                    /** @description SLO cap on expected TPOT */
+                    maxTpotMs?: number;
+                    /** @description budget cap: rig memory (VRAM or unified) must fit under this */
+                    maxVramGb?: number;
+                    /** @description explicit KV arch (with kvHeads+headDim skips the per-param-count estimate) */
+                    numLayers?: number;
+                    kvHeads?: number;
+                    headDim?: number;
+                    /** @description exact quantization match */
+                    quant?: string;
+                    hwClass?: "discrete_gpu" | "unified" | "cpu_only";
                     limit?: number;
                 };
                 header?: never;
@@ -219,7 +512,44 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Ranked groups with medians and source links */
+                /** @description workload echo, assumptions, and ranked recommendations with vramFit, expected, confidence, meetsSlo */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Versioned dataset snapshot IDs
+         * @description Lists content-addressed dataset snapshots (e.g. snapshot-2026-08-21-a1b2c3d4). Pass any listed ID as ?snapshot= on /api/localmaxxing, /api/benchmarks or /api/best to get reproducible numbers. Snapshot IDs are stable for identical run sets within a fetch-time bucket; instances keep a bounded in-memory ring, so old IDs may expire.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description {current, snapshots[]} */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -239,11 +569,65 @@ export interface paths {
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: never;
-    responses: never;
+    schemas: {
+        /** @description RFC 9457 problem+json error body. Content-Type: application/problem+json. */
+        Problem: {
+            /**
+             * Format: uri
+             * @description Stable problem-type URI, e.g. .../problems/invalid-params
+             */
+            type: string;
+            /** @description Short human-readable summary */
+            title: string;
+            /** @description HTTP status code */
+            status: number;
+            /** @description Human-readable explanation of this occurrence */
+            detail?: string;
+            /** @description Request path + query that produced the error */
+            instance?: string;
+            /**
+             * @description Stable machine-readable error code — branch on this, not on title/detail prose
+             * @enum {string}
+             */
+            code: "INVALID_PARAMS" | "NOT_FOUND" | "RATE_LIMITED" | "UPSTREAM_UNAVAILABLE" | "INTERNAL";
+        };
+    };
+    responses: {
+        /** @description Rate limit exhausted for this window. Back off for Retry-After seconds, then resume. */
+        RateLimited: {
+            headers: {
+                /** @description Max requests per 60s window per client (best-effort, per serverless instance). */
+                "X-RateLimit-Limit"?: number;
+                /** @description Requests left in the current window. */
+                "X-RateLimit-Remaining"?: number;
+                /** @description Unix epoch seconds when the current window resets. */
+                "X-RateLimit-Reset"?: number;
+                /** @description Seconds until the window resets and requests are accepted again. */
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    error?: string;
+                    limit?: number;
+                    remaining?: number;
+                    /** @description Unix epoch seconds */
+                    reset?: number;
+                    retryAfterSeconds?: number;
+                };
+            };
+        };
+    };
     parameters: never;
     requestBodies: never;
-    headers: never;
+    headers: {
+        /** @description Max requests per 60s window per client (best-effort, per serverless instance). */
+        "X-RateLimit-Limit": number;
+        /** @description Requests left in the current window. */
+        "X-RateLimit-Remaining": number;
+        /** @description Unix epoch seconds when the current window resets. */
+        "X-RateLimit-Reset": number;
+    };
     pathItems: never;
 }
 export type $defs = Record<string, never>;

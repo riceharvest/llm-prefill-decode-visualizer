@@ -1,6 +1,6 @@
 from enum import Enum
 
-class GetApiBestHwClass(str, Enum):
+class GetApiSizingHwClass(str, Enum):
     CPU_ONLY = "cpu_only"
     DISCRETE_GPU = "discrete_gpu"
     UNIFIED = "unified"
