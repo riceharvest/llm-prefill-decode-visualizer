@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Play, Pause, Zap, Gauge, FileText, RotateCcw, Image as ImageIcon, FileDown, Copy } from 'lucide-react';
 import { formatTime, formatTokens, SCENARIO_PRESETS } from '../utils/presets';
 import {
@@ -9,6 +9,7 @@ import {
 } from '../utils/multimodal';
 import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
+import { drawItlSamples, summarizeItl, histogramItl, cumulativeItlSchedule, tokensEmittedBy } from '../utils/itl';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
@@ -49,6 +50,15 @@ export default function SingleTurnVisualizer({
   const imageTokensPerImage = estimateImageTokens(imageResolution);
   const imageTilesPerImage = estimateImageTiles(imageResolution);
   const totalImageTokens = imageTokensPerImage * imageCountSafe;
+
+  // ITL jitter (#56): draw per-token latencies from a seeded distribution so
+  // the stream stutters the way real decodes do, then report p50/p95/p99 —
+  // an average alone hides exactly the tail latency that ruins streaming UX.
+  const [jitterEnabled, setJitterEnabled] = useState(() => readParamBool('jit', false));
+  const [jitterPct, setJitterPct] = useState(() => {
+    const v = readParamNum('jitPct', 25);
+    return Math.min(60, Math.max(5, Math.round(v / 5) * 5));
+  });
 
   const effectiveDecodeSpeed = (() => {
     if (!specEnabled) return decodeSpeed;
@@ -96,9 +106,11 @@ export default function SingleTurnVisualizer({
       acc: specEnabled ? acceptance : '',
       img: imagesEnabled ? '1' : '',
       imgN: imagesEnabled && imageCount !== 1 ? imageCount : '',
-      imgRes: imagesEnabled && imageResId !== '1080p' ? imageResId : ''
+      imgRes: imagesEnabled && imageResId !== '1080p' ? imageResId : '',
+      jit: jitterEnabled ? '1' : '',
+      jitPct: jitterEnabled && jitterPct !== 25 ? jitterPct : ''
     });
-  }, [promptTokens, outputTokens, specEnabled, draftTokens, acceptance, imagesEnabled, imageCount, imageResId]);
+  }, [promptTokens, outputTokens, specEnabled, draftTokens, acceptance, imagesEnabled, imageCount, imageResId, jitterEnabled, jitterPct]);
 
   // Simulation state
   const [phase, setPhase] = useState('idle'); // 'idle' | 'prefilling' | 'decoding' | 'completed'
@@ -113,12 +125,35 @@ export default function SingleTurnVisualizer({
   // too — they extend the KV cache before the first text token can emerge.
   const totalPrefillTokens = safePromptTokens + totalImageTokens;
   const expectedTTFT = totalPrefillTokens / prefillSpeed; // seconds
-  const expectedDecodeTime = safeOutputTokens / effectiveDecodeSpeed; // seconds (spec-aware)
-  const expectedTotalTime = expectedTTFT + expectedDecodeTime;
   const tpotMs = effectiveDecodeSpeed > 0 ? 1000 / effectiveDecodeSpeed : Infinity;
 
-  // TTFT-below-kernel-launch-floor check (speed rooflines are already flagged
-  // globally in SpeedControls; this one needs this tab's prompt length).
+  // Per-token ITL draws (seeded ⇒ stable across re-renders and share links).
+  // Mean-preserving lognormal: the average TPOT is unchanged, only the tail
+  // grows with the variance slider — the p99/mean ratio is the story.
+  const ITL_SEED = 20260821;
+  const itlCv = jitterEnabled ? jitterPct / 100 : 0;
+  const itlSamples = useMemo(
+    () => (Number.isFinite(tpotMs) && safeOutputTokens > 0
+      ? drawItlSamples({ baseMs: tpotMs, cv: itlCv, count: safeOutputTokens, seed: ITL_SEED })
+      : []),
+    [tpotMs, itlCv, safeOutputTokens]
+  );
+  const itlSummary = useMemo(() => summarizeItl(itlSamples), [itlSamples]);
+  const itlHistogram = useMemo(
+    () => (jitterEnabled ? histogramItl(itlSamples, 28) : null),
+    [jitterEnabled, itlSamples]
+  );
+  // Cumulative emission schedule (ms since decode start) — with jitter on,
+  // decode time is the actual sum of drawn latencies instead of a clean line.
+  const itlSchedule = useMemo(
+    () => (jitterEnabled && Number.isFinite(tpotMs) ? cumulativeItlSchedule(itlSamples) : null),
+    [jitterEnabled, tpotMs, itlSamples]
+  );
+
+  const expectedDecodeTime = itlSchedule && itlSchedule.length > 0
+    ? itlSchedule[itlSchedule.length - 1] / 1000 // spec-aware + jittered: sum of drawn per-token gaps
+    : safeOutputTokens / effectiveDecodeSpeed; // seconds (spec-aware)
+  const expectedTotalTime = expectedTTFT + expectedDecodeTime;
   const ttftFloorWarnings = sanityWarnings({
     promptTokens: safePromptTokens,
     prefillSpeed,
@@ -225,7 +260,11 @@ export default function SingleTurnVisualizer({
         setPhase('decoding');
         setCurrentPrefillProgress(totalPrefillTokens);
         const decodeProgressTime = newTime - expectedTTFT;
-        const decodeCount = Math.max(0, Math.min(safeOutputTokens, Math.floor(decodeProgressTime * effectiveDecodeSpeed)));
+        // With ITL jitter on, token n appears when its cumulative drawn gap
+        // elapses (schedule is ms since decode start); otherwise linear rate.
+        const decodeCount = itlSchedule
+          ? Math.min(safeOutputTokens, tokensEmittedBy(itlSchedule, decodeProgressTime * 1000))
+          : Math.max(0, Math.min(safeOutputTokens, Math.floor(decodeProgressTime * effectiveDecodeSpeed)));
         setCurrentDecodeTokens(decodeCount);
       } else {
         // Completed
@@ -245,7 +284,7 @@ export default function SingleTurnVisualizer({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isPlaying, simSpeedMultiplier, promptTokens, outputTokens, prefillSpeed, decodeSpeed, effectiveDecodeSpeed, expectedTTFT, expectedTotalTime, totalPrefillTokens]);
+  }, [isPlaying, simSpeedMultiplier, promptTokens, outputTokens, prefillSpeed, decodeSpeed, effectiveDecodeSpeed, expectedTTFT, expectedTotalTime, totalPrefillTokens, safeOutputTokens, itlSchedule]);
 
   const prefillPct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedTTFT / expectedTotalTime) * 100 : 0;
   const decodePct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedDecodeTime / expectedTotalTime) * 100 : 0;
@@ -469,6 +508,64 @@ export default function SingleTurnVisualizer({
                 Acceptance ranges are typical community-reported values for generic chat/code workloads — coding and templated text accepts higher, creative text lower. Measure your own workload before committing.
               </p>
             </div>
+          )}
+        </div>
+
+        {/* ITL jitter: per-token latency draws + percentile reporting (#56) */}
+        <div className="panel-inset" style={{ marginBottom: '14px', borderColor: jitterEnabled ? 'var(--decode-border)' : 'var(--border)' }}>
+          <div className="field-head" style={{ marginBottom: jitterEnabled ? '10px' : '0' }}>
+            <button
+              onClick={() => setJitterEnabled(!jitterEnabled)}
+              className={`seg${jitterEnabled ? ' active' : ''}`}
+              aria-pressed={jitterEnabled}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '4px 12px', cursor: 'pointer',
+                borderRadius: 'var(--radius-sm)',
+                border: `1px solid ${jitterEnabled ? 'var(--decode-border)' : 'var(--border)'}`,
+                background: jitterEnabled ? 'var(--decode-dim)' : 'var(--bg-inset)',
+                color: jitterEnabled ? 'var(--decode)' : 'var(--text-muted)'
+              }}
+            >
+              ⚡ {t('singleTurn.itlJitterLabel')} {jitterEnabled ? t('singleTurn.specOn') : t('singleTurn.specOff')}
+            </button>
+            {jitterEnabled && Number.isFinite(itlSummary.mean) && itlSummary.mean > 0 && (
+              <span className="tag tag-decode">
+                p99/mean ×{(itlSummary.p99 / itlSummary.mean).toFixed(2)}
+              </span>
+            )}
+          </div>
+          {jitterEnabled && (
+            <>
+              <div className="grid-auto" style={{ '--grid-min': '220px' }}>
+                <div className="field">
+                  <div className="field-head">
+                    <span className="field-label">{t('singleTurn.itlVariance')}</span>
+                    <span className="field-value" style={{ color: 'var(--decode)' }}>CV {jitterPct}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="5"
+                    max="60"
+                    step="5"
+                    value={jitterPct}
+                    aria-label={t('singleTurn.itlVarianceAria')}
+                    onChange={(e) => {
+                      setJitterPct(Number(e.target.value));
+                      handleReset();
+                    }}
+                  />
+                  <div className="field-scale">
+                    <span>5 · steady</span>
+                    <span>25 · shared GPU</span>
+                    <span>60 · bursty</span>
+                  </div>
+                </div>
+              </div>
+              <p className="hint-text" style={{ marginTop: '8px' }}>
+                {t('singleTurn.itlHint')}
+              </p>
+            </>
           )}
         </div>
 
@@ -837,6 +934,88 @@ export default function SingleTurnVisualizer({
             )}
             {phase === 'decoding' && <span className="stream-cursor" />}
           </div>
+
+          {/* ITL histogram + percentile readouts (#56): an average TPOT alone
+              hides exactly the tail jitter that ruins streaming UX. */}
+          {jitterEnabled && itlHistogram && itlHistogram.bins.length > 0 && Number.isFinite(itlSummary.p50) && (
+            <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+              <div className="field-head" style={{ marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                <span className="section-label">{t('singleTurn.itlDistributionLabel')}</span>
+                <span style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                  {'p50 '}<strong style={{ color: 'var(--text-main)' }}>{itlSummary.p50.toFixed(1)}</strong>
+                  {' · p95 '}<strong style={{ color: 'var(--text-main)' }}>{itlSummary.p95.toFixed(1)}</strong>
+                  {' · p99 '}<strong style={{ color: 'var(--prefill)' }}>{itlSummary.p99.toFixed(1)}</strong>
+                  {' ms'}
+                </span>
+              </div>
+
+              {(() => {
+                const maxBinCount = Math.max(1, ...itlHistogram.bins.map(b => b.count));
+                const span = itlHistogram.max - itlHistogram.min;
+                const markers = [
+                  { key: 'p50', value: itlSummary.p50 },
+                  { key: 'p95', value: itlSummary.p95 },
+                  { key: 'p99', value: itlSummary.p99 }
+                ];
+                return (
+                  <>
+                    <div
+                      role="img"
+                      aria-label={t('singleTurn.itlHistogramAria')}
+                      style={{
+                        position: 'relative',
+                        height: '64px',
+                        display: 'flex',
+                        alignItems: 'flex-end',
+                        gap: '2px',
+                        background: 'var(--bg-raised)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '4px'
+                      }}
+                    >
+                      {itlHistogram.bins.map((b, i) => (
+                        <div
+                          key={i}
+                          data-tooltip={`${b.count.toLocaleString()} tok · ${b.from.toFixed(1)}–${b.to.toFixed(1)} ms`}
+                          style={{
+                            flex: 1,
+                            height: `${Math.max(b.count > 0 ? 3 : 0, (b.count / maxBinCount) * 100)}%`,
+                            background: b.to <= itlSummary.p50
+                              ? 'var(--decode)'
+                              : b.to <= itlSummary.p95 ? 'var(--agent)' : 'var(--prefill)',
+                            borderRadius: '1px'
+                          }}
+                        />
+                      ))}
+                      {markers.filter(() => span > 0).map(m => (
+                        <div
+                          key={m.key}
+                          title={`${m.key} = ${m.value.toFixed(1)} ms`}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            bottom: 0,
+                            left: `${((m.value - itlHistogram.min) / span) * 100}%`,
+                            width: '1px',
+                            background: 'var(--text-subtle)'
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div className="field-scale">
+                      <span>{itlHistogram.min.toFixed(1)} ms</span>
+                      <span>mean {itlSummary.mean.toFixed(1)} ms · avg = TPOT, tail = jitter</span>
+                      <span>{itlHistogram.max.toFixed(1)} ms</span>
+                    </div>
+                    <p className="hint-text" style={{ marginTop: '6px' }}>
+                      {t('singleTurn.itlStreamHint')}
+                    </p>
+                  </>
+                );
+              })()}
+            </div>
+          )}
         </div>
 
         {/* Walltime & Performance Breakdown Cards */}
