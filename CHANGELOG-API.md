@@ -76,3 +76,7 @@ migrate before `Sunset`. Agents can discover the current policy at
 - New optional query parameter `?context_band=lt1k|1k-8k|8k-32k|32k+` on
   `/api/localmaxxing`, `/api/benchmarks` and `/api/best`. Unknown values
   return 400 (`INVALID_PARAMS`).
+- 2026-08-22 (additive, no version bump): new `GET /api/parse-constraints`
+  (#65) — parses plain-language constraints into the canonical constraint
+  struct with an explicit `ambiguities` array and a ready-made
+  `/api/sizing` query string. New endpoint; no existing fields changed.

@@ -236,6 +236,59 @@ export default function handler(req, res) {
 
         }
       },
+      '/api/parse-constraints': {
+        get: {
+          summary: 'Parse plain-language constraints into the canonical constraint JSON',
+          description: 'Converts a natural-language constraint string (e.g. "self-hosted Qwen 27B at Q4 for 10 users under $1500") into the canonical constraint struct used by /api/sizing and /api/best. Deterministic regex/heuristics — no external LLM calls. Returns the echoed input, the parsed struct (null = not stated) and an `ambiguities` array listing every assumption (e.g. "10 users: assume 1 stream each or batched?"), plus a ready-made `sizingQuery` for the downstream decision endpoint.',
+          parameters: [
+            { name: 'q', in: 'query', required: true, schema: { type: 'string' }, description: 'Plain-language constraints, e.g. self-hosted Qwen 27B at Q4 for 10 users under $1500' }
+          ],
+          responses: {
+            '200': {
+              description: '{input, recognizedCount, constraints{deployment,modelFamily,paramsB,quantization,contextLength,concurrency,budgetUsdMax,minDecodeTokPerSec,maxVramGb,hwClass}, ambiguities[], sizingQuery}',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      input: { type: 'string' },
+                      recognizedCount: { type: 'integer' },
+                      constraints: {
+                        type: 'object',
+                        properties: {
+                          deployment: { type: 'string', enum: ['self-hosted', 'cloud'], nullable: true },
+                          modelFamily: { type: 'string', nullable: true },
+                          paramsB: { type: 'number', nullable: true },
+                          quantization: { type: 'string', nullable: true },
+                          contextLength: { type: 'integer', nullable: true },
+                          concurrency: { type: 'integer', nullable: true },
+                          budgetUsdMax: { type: 'number', nullable: true },
+                          minDecodeTokPerSec: { type: 'number', nullable: true },
+                          maxVramGb: { type: 'number', nullable: true },
+                          hwClass: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'], nullable: true }
+                        }
+                      },
+                      ambiguities: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            field: { type: 'string' },
+                            message: { type: 'string' }
+                          }
+                        }
+                      },
+                      sizingQuery: { type: 'string', nullable: true, description: 'Ready-made /api/sizing query string; null when nothing mappable was recognized' }
+                    }
+                  }
+                }
+              }
+            },
+            '400': { description: 'Missing q parameter (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } },
+            '429': RATE_LIMITED
+          }
+        }
+      },
       '/api/snapshots': {
         get: {
           summary: 'Versioned dataset snapshot IDs',

@@ -84,6 +84,8 @@ Every `/api/compute` and `/api/best` response carries a deterministic `id` (`cal
 - Each recommendation carries `vramFit` (weights from params × bits-per-weight + KV cache at target context × concurrency + overhead vs available VRAM/unified memory), `expected` TTFT/TPOT from aggregated benchmark medians with IQR, `confidence` from sample count, and `meetsSlo` flags. Ranked meet-SLO-first, then by median per-user decode.
 - `/api/best?by=cost&price=2000&electricityRate=0.15` → best tok/s-per-dollar. Ranks by **$/1M tokens** (lower is better): rig price amortized over `amortizationMonths` (default 36) + electricity at `electricityRate` $/kWh (default 0.15) and a per-hwClass power estimate (override with `powerWatts`), divided by effective throughput at median speeds for the scenario shape (`promptTokens`/`outputTokens`, default 2048/512). Each result carries its `costInputs` echo so you can see exactly what was assumed.
 
+**GET /api/parse-constraints** — turn plain-language constraints into the canonical struct: `/api/parse-constraints?q=self-hosted%20Qwen%2027B%20at%20Q4%20for%2010%20users%20under%20%241500` → `{input, constraints, ambiguities, sizingQuery}`. Deterministic regex/heuristics (no LLM). `constraints` mirrors /api/sizing params with null for anything not stated; `ambiguities` lists every assumption ("10 users: assume 1 stream each or batched?") — resolve these before trusting downstream numbers; `sizingQuery` is a ready-made /api/sizing query string.
+
 ### Statistical caveats (machine-readable)
 
 `/api/localmaxxing`, `/api/benchmarks` and `/api/best` all return a top-level `caveats` array — objects with `code`, `severity`, `summary`, `detail`. Don't quote benchmark numbers without checking it. Codes:
