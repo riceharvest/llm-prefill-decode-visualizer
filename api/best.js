@@ -107,6 +107,13 @@ export function rankGroups(groups, by, workload, limit) {
     .map(({ _rawWalltime, ...entry }) => entry);
 }
 
+/** Discrete VRAM if known, otherwise unified memory size. Null when unknown. */
+function effectiveVramGb(run) {
+  if (Number.isFinite(run.vramGb)) return run.vramGb;
+  if (Number.isFinite(run.unifiedMemoryGb)) return run.unifiedMemoryGb;
+  return null;
+}
+
 function json(res, body, status = 200) {
   return sendJson(res, body, { status, cacheTtl: 600 });
 }
@@ -139,6 +146,9 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  * ?batchSize=1                    KV cache batch for fitCheck
  * ?engine=<substr>                restrict to engine name/version tag substring (e.g. llama.cpp, b4523)
  * ?max_age=<days>                 exclude runs measured longer than N days ago
+ * ?minDecode=N                    only groups with median decode ≥ N tok/s
+ * ?maxVramGb=N                    only rigs with effective VRAM ≤ N GB
+ *                                 (vramGb, falling back to unifiedMemoryGb)
  * ?limit=N                        default 10
  *
  * Cost ranking (?by=cost) inputs:
@@ -194,6 +204,14 @@ export async function bestBody(query = {}) {
     }
     if (q.engine) runs = runs.filter(r => matchesEngineQuery(r, String(q.engine)));
     if (maxAgeDays) runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
+    if (q.minDecode) {
+      const minD = Number(q.minDecode);
+      if (Number.isFinite(minD)) runs = runs.filter(r => r.decodeTokPerSec >= minD);
+    }
+    if (q.maxVramGb) {
+      const maxV = Number(q.maxVramGb);
+      if (Number.isFinite(maxV)) runs = runs.filter(r => effectiveVramGb(r) != null && effectiveVramGb(r) <= maxV);
+    }
 
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
     // plus KV cache at the requested context. Estimates only — see _vramfit.js.
@@ -340,6 +358,13 @@ export async function bestBody(query = {}) {
     if (q.quant) filters.quant = String(q.quant).toLowerCase();
     if (q.hwClass) filters.hwClass = String(q.hwClass).toLowerCase();
     if (q.hardware) filters.hardware = String(q.hardware).toLowerCase();
+
+    // Attach effective VRAM (discrete, falling back to unified) per row (#53).
+    const sampleByKey = new Map(groups.map(g => [g.key, g.bestRun]));
+    for (const row of ranked) {
+      const sample = sampleByKey.get(`${row.hardwareKey}|${row.modelFamily}`);
+      row.effectiveVramGb = sample ? effectiveVramGb(sample) : null;
+    }
 
     return {
       status: 200,
