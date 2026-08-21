@@ -198,6 +198,52 @@ export function kvCache({ numLayers = 80, kvHeads = 8, headDim = 128, contextLen
   };
 }
 
+// ---- VRAM budget planner (issue #45) ---------------------------------------
+// Full memory ledger: weights + KV cache + framework overhead vs a GPU's
+// actual VRAM. Mirrors what the KV calculator tab renders so agents get the
+// same verdict the page shows.
+//
+// vLLM (activation buffers, CUDA graphs, PagedAttention block tables) and
+// llama.cpp (compute buffers, scratch) both reserve roughly 10–20% of VRAM on
+// top of weights + KV. Default 15% sits in the middle of that band.
+
+/** Utilization above which a fit is flagged 'warn' (tight but possible). */
+export const VRAM_WARN_UTILIZATION = 0.9;
+/** Framework overhead default — middle of the real-world 10–20% band. */
+export const DEFAULT_OVERHEAD_FRACTION = 0.15;
+
+/**
+ * Build a VRAM ledger and pass/warn/fail verdict against an optional GPU.
+ * Never throws; returns verdict null when no GPU capacity was given.
+ */
+export function vramBudget({ weightsGb = 0, kvGb = 0, overheadFraction = DEFAULT_OVERHEAD_FRACTION, gpuVramGb = null } = {}) {
+  const w = Math.max(0, Number(weightsGb) || 0);
+  const kv = Math.max(0, Number(kvGb) || 0);
+  const overhead = Math.max(0, Number(overheadFraction) || 0);
+  const overheadGb = (w + kv) * overhead;
+  const totalGb = w + kv + overheadGb;
+
+  const vram = Number.isFinite(Number(gpuVramGb)) ? Number(gpuVramGb) : null;
+  const hasGpu = vram !== null && vram > 0;
+  const utilization = hasGpu ? totalGb / vram : null;
+  let verdict = null;
+  if (hasGpu) {
+    verdict = utilization <= VRAM_WARN_UTILIZATION ? 'pass' : utilization <= 1 ? 'warn' : 'fail';
+  }
+
+  return {
+    inputs: { weightsGb: round(w), kvGb: round(kv), overheadFraction: overhead, gpuVramGb: hasGpu ? vram : null },
+    weightsGb: round(w),
+    kvGb: round(kv),
+    overheadGb: round(overheadGb),
+    totalGb: round(totalGb),
+    headroomGb: hasGpu ? round(vram - totalGb) : null,
+    utilizationPct: hasGpu ? round(utilization * 100) : null,
+    fits: verdict === 'pass' || verdict === 'warn',
+    verdict
+  };
+}
+
 function round(x) {
   if (!Number.isFinite(x)) return null;
   return Math.round(x * 1e6) / 1e6;

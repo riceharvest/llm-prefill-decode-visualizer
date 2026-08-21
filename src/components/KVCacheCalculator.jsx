@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { HardDrive } from 'lucide-react';
+import { Gauge, HardDrive } from 'lucide-react';
 import { formatTokens } from '../utils/presets';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import { DEFAULT_OVERHEAD_FRACTION, vramBudget } from '../../api/_math.js';
+import { GPU_CATALOG, WEIGHT_PRECISIONS, gpuById, parseParamsB, weightsGiB } from '../utils/vramPlanner';
 import Metric from './Metric';
 import { t } from '../i18n/strings';
 
@@ -217,10 +219,26 @@ export default function KVCacheCalculator() {
   });
   const [batchSize, setBatchSize] = useState(() => readParamNum('batch', 1));
 
+  // VRAM budget planner state (issue #45)
+  const [weightPrecisionId, setWeightPrecisionId] = useState(() => {
+    const id = readParam('wp');
+    return WEIGHT_PRECISIONS.some(p => p.id === id) ? id : 'fp16';
+  });
+  const [gpuId, setGpuId] = useState(() => {
+    const g = readParam('gpu');
+    return gpuById(g) ? g : 'rtx4090';
+  });
+  const [overheadPct, setOverheadPct] = useState(() =>
+    Math.min(40, Math.max(0, readParamNum('oh', DEFAULT_OVERHEAD_FRACTION * 100)))
+  );
+  // Measured weights size (GB) — overrides the parameter-count estimate
+  const [weightsOverrideGb, setWeightsOverrideGb] = useState(() => Math.max(0, readParamNum('wgb', 0)));
+
   // Shareable per-tab settings
   useEffect(() => {
-    writeParams({ model: modelPreset, ctx: contextLength, prec: precision, batch: batchSize });
-  }, [modelPreset, contextLength, precision, batchSize]);
+    writeParams({ model: modelPreset, ctx: contextLength, prec: precision, batch: batchSize,
+      wp: weightPrecisionId, gpu: gpuId, oh: overheadPct, wgb: weightsOverrideGb || undefined });
+  }, [modelPreset, contextLength, precision, batchSize, weightPrecisionId, gpuId, overheadPct, weightsOverrideGb]);
 
   const preset = MODEL_PRESETS.find(p => p.id === modelPreset) || MODEL_PRESETS[0];
 
@@ -233,6 +251,28 @@ export default function KVCacheCalculator() {
   const totalKVCacheBytes = bytesPerTokenSingleSeq * safeContext * safeBatch;
   const totalKVCacheGB = totalKVCacheBytes / (1024 * 1024 * 1024);
   const totalKVCacheMB = totalKVCacheBytes / (1024 * 1024);
+
+  // ---- Memory ledger: weights + KV + overhead vs selected GPU ----
+  const weightPreset = WEIGHT_PRECISIONS.find(p => p.id === weightPrecisionId) || WEIGHT_PRECISIONS[0];
+  const paramsB = parseParamsB(preset.params);
+  const estimatedWeightsGiB = paramsB !== null ? weightsGiB(paramsB, weightPreset.bpw) : null;
+  const usesMeasuredWeights = weightsOverrideGb > 0;
+  const weightsGb = usesMeasuredWeights ? weightsOverrideGb : (estimatedWeightsGiB || 0);
+
+  const overheadFraction = overheadPct / 100;
+  const selectedGpu = gpuById(gpuId);
+  const budget = vramBudget({
+    weightsGb,
+    kvGb: totalKVCacheGB,
+    overheadFraction,
+    gpuVramGb: selectedGpu ? selectedGpu.vramGb : null
+  });
+  const gpuVerdicts = GPU_CATALOG.map(gpu => ({
+    gpu,
+    verdict: vramBudget({ weightsGb, kvGb: totalKVCacheGB, overheadFraction, gpuVramGb: gpu.vramGb }).verdict
+  }));
+
+  const fmtGb = gb => gb >= 100 ? gb.toFixed(0) : gb.toFixed(1);
 
   return (
     <div className="stack">
@@ -412,6 +452,221 @@ export default function KVCacheCalculator() {
                 : t('kvCache.attnGqa')
             })}
         </p>
+
+      </section>
+
+      {/* ---- VRAM Budget Planner (issue #45): weights + KV + overhead vs GPU ---- */}
+      <section className="panel" aria-label={t('kvCache.plannerPanelTitle')}>
+        <h2 className="panel-title" style={{ marginBottom: '12px' }}>
+          <Gauge size={16} />
+          <span>{t('kvCache.plannerPanelTitle')}</span>
+        </h2>
+
+        <p className="hint-text" style={{ marginBottom: '18px', maxWidth: '900px' }}>
+          {t('kvCache.plannerIntro')}
+        </p>
+
+        {/* Planner controls */}
+        <div className="grid-auto" style={{ '--grid-min': '240px', marginBottom: '18px' }}>
+
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">{t('kvCache.weightPrecision')}</span>
+              <span className="field-value" style={{ color: 'var(--prefill)' }}>
+                {usesMeasuredWeights
+                  ? `${fmtGb(weightsGb)} GB · measured`
+                  : preset.params}
+              </span>
+            </div>
+            <div className="seg" role="group" aria-label={t('kvCache.weightPrecisionAria')} style={{ marginTop: '2px' }}>
+              {WEIGHT_PRECISIONS.map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => setWeightPrecisionId(opt.id)}
+                  disabled={usesMeasuredWeights}
+                  className={weightPrecisionId === opt.id && !usesMeasuredWeights ? 'active' : ''}
+                  aria-pressed={!usesMeasuredWeights && weightPrecisionId === opt.id}
+                  style={{ flex: 1 }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {!usesMeasuredWeights && paramsB !== null && (
+              <p style={{ fontSize: '0.68rem', color: 'var(--text-subtle)', margin: '8px 0 0', fontFamily: 'var(--font-mono)' }}>
+                {t('kvCache.weightsSource', {
+                  params: preset.params,
+                  bpw: weightPreset.bpw,
+                  gb: `${fmtGb(estimatedWeightsGiB || 0)} GB`
+                })}
+              </p>
+            )}
+            <label className="field-label" htmlFor="lmx-weights-override" style={{ display: 'block', marginTop: '10px', fontSize: '0.7rem', opacity: 0.85 }}>
+              {t('kvCache.weightsOverrideLabel')}
+            </label>
+            <input
+              id="lmx-weights-override"
+              type="number"
+              min="0"
+              step="0.5"
+              placeholder={estimatedWeightsGiB !== null ? estimatedWeightsGiB.toFixed(1) : ''}
+              value={weightsOverrideGb || ''}
+              aria-label={t('kvCache.weightsOverrideAria')}
+              onChange={(e) => setWeightsOverrideGb(Math.max(0, Number(e.target.value) || 0))}
+              style={{ width: '110px', marginTop: '4px' }}
+            />
+            <p style={{ fontSize: '0.66rem', color: 'var(--text-subtle)', margin: '6px 0 0' }}>
+              {t('kvCache.weightsOverrideHint')}
+            </p>
+          </div>
+
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">{t('kvCache.overheadLabel')}</span>
+              <span className="field-value" style={{ color: 'var(--agent)' }}>{overheadPct}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="40"
+              step="1"
+              value={overheadPct}
+              aria-label={t('kvCache.overheadAria')}
+              onChange={(e) => setOverheadPct(Number(e.target.value))}
+              style={{ width: '100%' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.64rem', color: 'var(--text-subtle)', marginTop: '2px' }}>
+              <span>0%</span>
+              <span>vLLM / llama.cpp: 10–20%</span>
+              <span>40%</span>
+            </div>
+          </div>
+
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">{t('kvCache.targetGpu')}</span>
+              <span className="field-value" style={{ color: 'var(--accent)' }}>{selectedGpu ? `${selectedGpu.vramGb} GB` : '—'}</span>
+            </div>
+            <select
+              value={gpuId}
+              aria-label={t('kvCache.targetGpuAria')}
+              onChange={(e) => setGpuId(e.target.value)}
+              style={{ width: '100%', marginTop: '4px' }}
+            >
+              {GPU_CATALOG.map(gpu => (
+                <option key={gpu.id} value={gpu.id}>
+                  {gpu.name} · {gpu.vramGb} GB{gpu.unified ? ' · unified' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+        </div>
+
+        {/* Stacked ledger bar */}
+        {selectedGpu && (
+          <div style={{ marginBottom: '18px' }}>
+            <div style={{ position: 'relative', height: '34px', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              {(() => {
+                const scaleMax = Math.max(budget.totalGb, selectedGpu.vramGb);
+                const pct = gb => Math.min(100, (gb / scaleMax) * 100);
+                const limitPos = pct(selectedGpu.vramGb);
+                return (
+                  <>
+                    <div title={t('kvCache.ledgerWeights')} style={{ position: 'absolute', inset: 0, width: `${pct(weightsGb)}%`, background: 'linear-gradient(180deg, var(--prefill), color-mix(in srgb, var(--prefill) 70%, black))' }} />
+                    <div title={t('kvCache.ledgerKv')} style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(weightsGb)}%`, width: `${Math.max(0, pct(weightsGb + totalKVCacheGB) - pct(weightsGb))}%`, background: 'var(--decode)' }} />
+                    <div title={t('kvCache.ledgerOverhead', { pct: overheadPct })} style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(weightsGb + totalKVCacheGB)}%`, width: `${Math.max(0, pct(budget.totalGb) - pct(weightsGb + totalKVCacheGB))}%`, background: 'repeating-linear-gradient(45deg, var(--agent), var(--agent) 4px, transparent 4px, transparent 8px)', backgroundColor: 'color-mix(in srgb, var(--agent) 35%, transparent)' }} />
+                    <div title={t('kvCache.gpuLimitMarker', { gb: `${selectedGpu.vramGb} GB` })} style={{ position: 'absolute', top: 0, bottom: 0, left: `${limitPos}%`, width: '2px', background: 'white', boxShadow: '0 0 6px rgba(255,255,255,0.9)' }} />
+                  </>
+                );
+              })()}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', marginTop: '8px', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>
+              <span><span style={{ display: 'inline-block', width: '9px', height: '9px', background: 'var(--prefill)', marginRight: '5px', borderRadius: '2px' }} />{t('kvCache.ledgerWeights')} {fmtGb(weightsGb)} GB</span>
+              <span><span style={{ display: 'inline-block', width: '9px', height: '9px', background: 'var(--decode)', marginRight: '5px', borderRadius: '2px' }} />{t('kvCache.ledgerKv')} {fmtGb(totalKVCacheGB)} GB</span>
+              <span><span style={{ display: 'inline-block', width: '9px', height: '9px', border: '1px solid var(--agent)', marginRight: '5px', borderRadius: '2px' }} />{t('kvCache.ledgerOverhead', { pct: overheadPct })} {fmtGb(budget.overheadGb)} GB</span>
+              <span style={{ opacity: 0.75 }}>{t('kvCache.gpuLimitMarker', { gb: `${selectedGpu.vramGb} GB` })}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Ledger totals + verdict */}
+        <div className="metric-grid">
+          <div className="metric" style={{ borderInlineStartColor: 'var(--accent)' }}>
+            <div className="metric-label">{t('kvCache.ledgerTotal')}</div>
+            <div className="metric-value" style={{ color: 'var(--accent)' }}>{fmtGb(budget.totalGb)} GB</div>
+          </div>
+
+          <div className="metric" style={{ borderInlineStartColor: budget.headroomGb !== null && budget.headroomGb >= 0 ? 'var(--decode)' : 'var(--danger)' }}>
+            <div className="metric-label">
+              {budget.headroomGb !== null && budget.headroomGb < 0
+                ? t('kvCache.ledgerOverBudget', { gb: `${fmtGb(-budget.headroomGb)} GB` })
+                : t('kvCache.ledgerHeadroom', { gpu: selectedGpu ? selectedGpu.name : '' })}
+            </div>
+            <div className="metric-value" style={{
+              color: budget.headroomGb === null ? 'var(--text-subtle)'
+                : budget.headroomGb >= 0 ? 'var(--decode)' : 'var(--danger)'
+            }}>
+              {budget.headroomGb === null ? '—' : `${budget.headroomGb >= 0 ? '+' : ''}${fmtGb(budget.headroomGb)} GB`}
+            </div>
+          </div>
+
+          <div className="metric" style={{ borderInlineStartColor: budget.verdict === 'pass' ? 'var(--decode)' : budget.verdict === 'warn' ? 'var(--warn)' : 'var(--danger)' }}>
+            <div className="metric-label">{t('kvCache.verdictBadgeAria')}</div>
+            <div className="metric-value">
+              <span style={{
+                display: 'inline-block',
+                padding: '6px 12px',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: budget.verdict === 'pass' ? 'var(--decode)' : budget.verdict === 'warn' ? 'var(--warn)' : 'var(--danger)',
+                border: `1px solid ${budget.verdict === 'pass' ? 'var(--decode-border)' : budget.verdict === 'warn' ? 'var(--agent-border)' : 'var(--danger)'}`,
+                background: budget.verdict === 'pass' ? 'var(--decode-dim)' : budget.verdict === 'warn' ? 'var(--agent-dim)' : 'rgba(248,113,113,0.10)'
+              }}>
+                {budget.verdict === 'pass' ? t('kvCache.verdictPass')
+                  : budget.verdict === 'warn' ? t('kvCache.verdictWarn')
+                  : t('kvCache.verdictFail')}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Per-GPU pass/fail/warn verdicts */}
+        <p className="field-label" style={{ margin: '18px 0 2px', fontSize: '0.74rem' }}>{t('kvCache.perGpuHeading')}</p>
+        <p style={{ fontSize: '0.68rem', color: 'var(--text-subtle)', margin: '0 0 8px' }}>{t('kvCache.perGpuIntro')}</p>
+        <div className="seg" role="group" aria-label={t('kvCache.perGpuHeading')} style={{ flexWrap: 'wrap', gap: '2px' }}>
+          {gpuVerdicts.map(({ gpu, verdict }) => (
+            <button
+              key={gpu.id}
+              onClick={() => setGpuId(gpu.id)}
+              data-tooltip={`${t('kvCache.gpuVerdictAria', {
+                name: gpu.name,
+                verdict: verdict === 'pass' ? t('kvCache.verdictPass') : verdict === 'warn' ? t('kvCache.verdictWarn') : t('kvCache.verdictFail')
+              })}`}
+              className={gpuId === gpu.id ? 'active' : ''}
+              aria-pressed={gpuId === gpu.id}
+              style={{ fontFamily: 'var(--font-sans)', fontSize: '0.76rem', display: 'inline-flex', alignItems: 'center', gap: '7px' }}
+            >
+              <span aria-hidden="true" style={{
+                display: 'inline-block',
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: verdict === 'pass' ? 'var(--decode)' : verdict === 'warn' ? 'var(--warn)' : 'var(--danger)',
+                boxShadow: `0 0 4px ${verdict === 'pass' ? 'var(--decode)' : verdict === 'warn' ? 'var(--warn)' : 'var(--danger)'}`
+              }} />
+              {gpu.name}
+              <span style={{ opacity: 0.65, fontFamily: 'var(--font-mono)', fontSize: '0.68rem' }}>{gpu.vramGb}GB</span>
+            </button>
+          ))}
+        </div>
+
+        {selectedGpu && selectedGpu.unified && (
+          <p style={{ fontSize: '0.72rem', color: 'var(--agent)', background: 'var(--agent-dim)', border: '1px solid var(--agent-border)', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginTop: '14px' }}>
+            {t('kvCache.unifiedNote')}
+          </p>
+        )}
 
       </section>
 
