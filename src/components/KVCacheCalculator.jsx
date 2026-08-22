@@ -186,12 +186,14 @@ function kvBytesPerToken(preset, precisionBytes, contextLength) {
     }
 
     case 'csa_hca': {
-      // Anchor: paper Fig. 1 @ 1M context = kvBytesAt1M at ~1 B/elem. Scale by
-      // precision (FP8 base) and linearly with context (approximation; the real
-      // curve is slightly sublinear due to the fixed SWA window and compression
-      // granularity, but the paper does not give a closed-form per-token size).
-      const base = (preset.kvBytesAt1M / 1048576) * (precisionBytes / 1);
-      return base * (contextLength / 1048576);
+      // kvBytesAt1M is the TOTAL KV bytes at 1M context (paper Fig. 1, ~1 B/elem
+      // mixed BF16/FP8). Average per-token bytes = total / context — CONSTANT,
+      // so total KV scales linearly with context (fixes quadratic scaling bug).
+      // The real curve is slightly sublinear per-token at short contexts due to
+      // SWA + compression granularity, but the paper gives no closed form; the
+      // constant-average model is correct at the anchor point and conservative
+      // (slightly over-estimates) below it.
+      return (preset.kvBytesAt1M / 1048576) * precisionBytes;
     }
 
     default:
