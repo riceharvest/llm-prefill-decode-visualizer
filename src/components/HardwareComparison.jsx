@@ -60,7 +60,11 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   const sharedPair = useRef({
     hardwareA,
     hardwareB,
-    preserve: hardwareA.startsWith('lmx:') && hardwareB.startsWith('lmx:')
+    // Any pair the URL carried in (shared permalink OR the user's own
+    // persisted selection from a previous visit to this tab) must survive
+    // the LMX auto-select below — otherwise switching tabs away and back
+    // clobbers an explicit hwA/hwB choice with lmx defaults.
+    preserve: readParam('hwA') !== null || readParam('hwB') !== null
   });
   const [testPromptTokens, setTestPromptTokens] = useState(() => readParamNum('cp', 4096));
   const [testOutputTokens, setTestOutputTokens] = useState(() => readParamNum('co', 512));
@@ -100,8 +104,10 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
     if (!localPresets.length) return;
 
     if (sharedPair.current.preserve) {
-      const sharedPairIsAvailable = localPresets.some(preset => preset.id === sharedPair.current.hardwareA)
-        && localPresets.some(preset => preset.id === sharedPair.current.hardwareB);
+      // Check against the full presets list: an explicit non-LMX pair is just
+      // as preserved as an LMX one; only stale/unknown ids fall through.
+      const sharedPairIsAvailable = presets.some(preset => preset.id === sharedPair.current.hardwareA)
+        && presets.some(preset => preset.id === sharedPair.current.hardwareB);
       sharedPair.current.preserve = false;
       if (sharedPairIsAvailable) return;
     }

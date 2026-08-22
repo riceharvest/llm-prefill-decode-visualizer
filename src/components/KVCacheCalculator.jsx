@@ -519,7 +519,14 @@ export default function KVCacheCalculator() {
               return (
                 <button
                   key={gpu.id}
-                  onClick={() => { setGpuId(gpu.id); setGpuVramGb(gpu.vramGb); }}
+                  onClick={() => {
+                    // Ledger chip ids (rtx3060/dual3090/…) don't all exist in
+                    // the planner's GPU_CATALOG — only select a real catalog
+                    // id, else clear it so the planner shows "unknown" instead
+                    // of a dangling select value.
+                    setGpuId(gpuById(gpu.id) ? gpu.id : '');
+                    setGpuVramGb(gpu.vramGb);
+                  }}
                   className={gpuId === gpu.id ? 'active' : ''}
                   aria-pressed={gpuId === gpu.id}
                   style={{ fontFamily: 'var(--font-sans)', fontSize: '0.76rem', display: 'flex', alignItems: 'center', gap: '6px' }}
@@ -846,7 +853,7 @@ export default function KVCacheCalculator() {
             </div>
           </div>
 
-          <div className="metric" style={{ borderInlineStartColor: budget.verdict === 'pass' ? 'var(--decode)' : budget.verdict === 'warn' ? 'var(--warn)' : 'var(--danger)' }}>
+          <div className="metric" style={{ borderInlineStartColor: budget.verdict === 'pass' ? 'var(--decode)' : budget.verdict === 'warn' ? 'var(--warn)' : budget.verdict === 'fail' ? 'var(--danger)' : 'var(--text-subtle)' }}>
             <div className="metric-label">{t('kvCache.verdictBadgeAria')}</div>
             <div className="metric-value">
               <span style={{
@@ -855,13 +862,16 @@ export default function KVCacheCalculator() {
                 borderRadius: 'var(--radius-md)',
                 fontSize: '0.78rem',
                 fontWeight: 600,
-                color: budget.verdict === 'pass' ? 'var(--decode)' : budget.verdict === 'warn' ? 'var(--warn)' : 'var(--danger)',
-                border: `1px solid ${budget.verdict === 'pass' ? 'var(--decode-border)' : budget.verdict === 'warn' ? 'var(--agent-border)' : 'var(--danger)'}`,
-                background: budget.verdict === 'pass' ? 'var(--decode-dim)' : budget.verdict === 'warn' ? 'var(--agent-dim)' : 'rgba(248,113,113,0.10)'
+                // verdict === null (no catalog GPU selected — custom VRAM typed
+                // in the ledger above) is "unknown", never a red FAIL.
+                color: budget.verdict === 'pass' ? 'var(--decode)' : budget.verdict === 'warn' ? 'var(--warn)' : budget.verdict === 'fail' ? 'var(--danger)' : 'var(--text-subtle)',
+                border: `1px solid ${budget.verdict === 'pass' ? 'var(--decode-border)' : budget.verdict === 'warn' ? 'var(--agent-border)' : budget.verdict === 'fail' ? 'var(--danger)' : 'var(--border)'}`,
+                background: budget.verdict === 'pass' ? 'var(--decode-dim)' : budget.verdict === 'warn' ? 'var(--agent-dim)' : budget.verdict === 'fail' ? 'rgba(248,113,113,0.10)' : 'transparent'
               }}>
                 {budget.verdict === 'pass' ? t('kvCache.verdictPass')
                   : budget.verdict === 'warn' ? t('kvCache.verdictWarn')
-                  : t('kvCache.verdictFail')}
+                  : budget.verdict === 'fail' ? t('kvCache.verdictFail')
+                  : '—'}
               </span>
             </div>
           </div>
