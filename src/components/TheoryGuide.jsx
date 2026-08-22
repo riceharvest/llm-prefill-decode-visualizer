@@ -50,7 +50,7 @@ export default function TheoryGuide() {
         </h2>
 
         {/* Comparative Dual Cards */}
-        <div className="grid-auto" style={{ '--grid-min': '320px', marginBottom: '16px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '20rem', marginBottom: '16px' }}>
 
           {/* Prefill Explanation */}
           <div id="theory-prefill" className="panel-inset theory-anchor" style={{ borderLeft: '2px solid var(--prefill)' }}>
@@ -114,7 +114,7 @@ export default function TheoryGuide() {
             {t('theory.agenticIntroBefore')}<strong style={{ color: 'var(--text-main)' }}>{t('theory.loopStages')}</strong>{t('theory.agenticIntroAfter')}
           </p>
 
-          <div className="grid-auto" style={{ '--grid-min': '260px' }}>
+          <div className="grid-auto" style={{ '--grid-min': '16.25rem' }}>
             <div className="panel-inset">
               <strong style={{ fontSize: '0.8rem', color: 'var(--text-main)' }}>
                 {t('theory.withoutCaching')}

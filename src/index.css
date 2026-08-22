@@ -88,6 +88,11 @@
 
 html {
   color-scheme: dark;
+  /* Issue #80: hidden .why-pop tooltips are absolutely positioned and can poke
+     past the right edge at large font scales; `clip` (not `hidden`, so no
+     scroll-container side effects) stops them widening/panning the page.
+     Set on <html> because Chromium does not propagate body clip to the viewport. */
+  overflow-x: clip;
 }
 
 body {
@@ -97,6 +102,12 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  /* Issue #80: hidden .why-pop tooltips are absolutely positioned and can poke
+     past the right edge at large font scales. `clip` (not `hidden`: no
+     scroll-container side effects) stops them widening or panning the page.
+     Must live on <body> so Chromium actually clips the overflowing boxes;
+     the matching rule on <html> is a belt-and-braces viewport guard. */
+  overflow-x: clip;
 }
 
 button, input, select {
@@ -161,7 +172,7 @@ a { color: var(--accent); }
 
 .grid-auto {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(var(--grid-min, 260px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(var(--grid-min, 16.25rem), 100%), 1fr));
   gap: 16px;
 }
 
@@ -456,7 +467,7 @@ input[type="range"]::-moz-range-thumb {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(11.25rem, 100%), 1fr));
   gap: 12px;
 }
 
@@ -523,7 +534,7 @@ input[type="range"]::-moz-range-thumb {
 
 .data-table {
   width: 100%;
-  min-width: 720px;
+  min-width: 56.25em; /* = 720px at default root size; scales with the table's 0.8rem font */
   border-collapse: collapse;
   font-size: 0.8rem;
   text-align: left;
@@ -562,8 +573,8 @@ input[type="range"]::-moz-range-thumb {
   background: var(--bg-inset);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
-  height: 160px;
+  padding: 0.75rem 0.875rem;
+  height: 10rem;
   overflow-y: auto;
   font-family: var(--font-mono);
   font-size: 0.84rem;
@@ -955,7 +966,7 @@ input[type="range"]::-moz-range-thumb {
     -webkit-overflow-scrolling: touch;
     padding-bottom: 6px;
   }
-  .waterfall-rows > * { min-width: 430px; }
+  .waterfall-rows > * { min-width: 26.875rem; }
 
   /* Tables keep their horizontal scroll affordance visible */
   .table-wrap {

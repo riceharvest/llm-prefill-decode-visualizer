@@ -62,7 +62,7 @@ export default function SloBudgetsPanel({ budgets, onChange }) {
 
       {open && (
         <>
-          <div className="grid-auto" style={{ '--grid-min': '200px', marginTop: '12px' }}>
+          <div className="grid-auto" style={{ '--grid-min': '12.5rem', marginTop: '12px' }}>
             {fields.map(f => (
               <div className="panel-inset field" key={f.key}>
                 <div className="field-head">

@@ -366,7 +366,7 @@ export default function KVCacheCalculator() {
         </div>
 
         {/* Parameter Sliders */}
-        <div className="grid-auto" style={{ '--grid-min': '240px', marginBottom: '18px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '15rem', marginBottom: '18px' }}>
 
           <div className="panel-inset field">
             <div className="field-head">
@@ -389,7 +389,7 @@ export default function KVCacheCalculator() {
                 value={contextLength}
                 aria-label={t('kvCache.contextValueAria')}
                 onChange={(e) => setContextLength(Number(e.target.value))}
-                style={{ width: '90px' }}
+                style={{ width: '5.625rem' }}
               />
             </div>
           </div>
@@ -415,7 +415,7 @@ export default function KVCacheCalculator() {
                 value={batchSize}
                 aria-label={t('kvCache.batchValueAria')}
                 onChange={(e) => setBatchSize(Number(e.target.value))}
-                style={{ width: '64px' }}
+                style={{ width: '4rem' }}
               />
             </div>
           </div>
@@ -535,7 +535,7 @@ export default function KVCacheCalculator() {
               value={gpuVramGb}
               aria-label={t('kvCache.gpuBudgetAria')}
               onChange={(e) => { setGpuId(''); setGpuVramGb(Number(e.target.value)); }}
-              style={{ width: '84px' }}
+              style={{ width: '5.25rem' }}
             />
             <span style={{ fontSize: '0.7rem', color: 'var(--text-subtle)', alignSelf: 'center' }}>GB</span>
           </div>
@@ -643,7 +643,7 @@ export default function KVCacheCalculator() {
         </p>
 
         {/* Planner controls */}
-        <div className="grid-auto" style={{ '--grid-min': '240px', marginBottom: '18px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '15rem', marginBottom: '18px' }}>
 
           <div className="panel-inset field">
             <div className="field-head">
@@ -689,7 +689,7 @@ export default function KVCacheCalculator() {
               value={weightsOverrideGb || ''}
               aria-label={t('kvCache.weightsOverrideAria')}
               onChange={(e) => setWeightsOverrideGb(Math.max(0, Number(e.target.value) || 0))}
-              style={{ width: '110px', marginTop: '4px' }}
+              style={{ width: '6.875rem', marginTop: '4px' }}
             />
             <p style={{ fontSize: '0.66rem', color: 'var(--text-subtle)', margin: '6px 0 0' }}>
               {t('kvCache.weightsOverrideHint')}
