@@ -44,95 +44,7 @@
   --radius-lg: 8px;
 
   --shadow-panel: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px -12px rgba(0,0,0,0.6);
-}
-
-/* Light theme (issue #81): an explicit [data-theme] choice set by
-   src/utils/theme.js, no longer an automatic OS override — users pick it from
-   the header alongside dark and high-contrast. Dark remains the :root default
-   (no attribute needed). */
-[data-theme='light'] {
-  --bg-app: #F5F7FA;
-  --bg-panel: #FFFFFF;
-  --bg-inset: #EEF1F5;
-  --bg-raised: #FFFFFF;
-  --bg-hover: #E4E9EF;
-
-  --text-main: #16202B;
-  --text-muted: #4C5A68;
-  --text-subtle: #8493A2;
-
-  --border: #D6DDE5;
-  --border-strong: #B9C4CF;
-
-  --accent-dim: rgba(14, 165, 200, 0.10);
-  --accent-ink: #FFFFFF;
-
-  --prefill-dim: rgba(2, 132, 199, 0.08);
-  --prefill-border: rgba(2, 132, 199, 0.40);
-
-  --decode-dim: rgba(5, 150, 105, 0.08);
-  --decode-border: rgba(5, 150, 105, 0.40);
-
-  --agent-dim: rgba(217, 119, 6, 0.10);
-  --agent-border: rgba(217, 119, 6, 0.40);
-
-  --shadow-panel: 0 1px 0 rgba(255,255,255,0.8) inset, 0 8px 24px -12px rgba(22, 32, 43, 0.18);
-}
-
-[data-theme='light'] { color-scheme: light; }
-
-/* High-contrast theme (issue #81): honors prefers-contrast: more as a dedicated,
-   independently selectable palette. Pure black/white only — no mid-grays — with
-   opaque borders and thicker focus outlines so every edge passes contrast checks. */
-[data-theme='high-contrast'] {
-  --bg-app: #000000;
-  --bg-panel: #000000;
-  --bg-inset: #000000;
-  --bg-raised: #000000;
-  --bg-hover: #FFFFFF;
-
-  --text-main: #FFFFFF;
-  --text-muted: #FFFFFF;
-  --text-subtle: #FFFFFF;
-
-  --border: #FFFFFF;
-  --border-strong: #FFFFFF;
-  --border-focus: #FFFF00;
-
-  --accent: #00E5FF;
-  --accent-strong: #FFFFFF;
-  --accent-dim: rgba(0, 229, 255, 0.18);
-  --accent-ink: #000000;
-
-  /* Phase colors keep their hues but drop translucent dimming/borders —
-     on pure black anything below full opacity reads as a mid-gray. */
-  --prefill: #63C8FF;
-  --prefill-dim: rgba(99, 200, 255, 0.16);
-  --prefill-border: #63C8FF;
-
-  --decode: #3DF0A8;
-  --decode-dim: rgba(61, 240, 168, 0.16);
-  --decode-border: #3DF0A8;
-
-  --agent: #FFD24D;
-  --agent-dim: rgba(255, 210, 77, 0.16);
-  --agent-border: #FFD24D;
-
-  --danger: #FF7B7B;
-  --warn: #FFB13D;
-
-  --shadow-panel: none;
-}
-
-[data-theme='high-contrast'] { color-scheme: dark; }
-
-/* Thicker focus outlines: subtle rings are exactly what low-vision users
-   can't see, so the high-contrast theme doubles outline weight. */
-[data-theme='high-contrast'] :focus-visible {
-  outline-width: 3px;
-}
-
-* {
+}* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -199,27 +111,7 @@ a { color: var(--accent); }
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #3A4757;
-}
-
-/* Hardcoded dark-theme grays above would read as mid-grays on pure black */
-[data-theme='high-contrast'] ::-webkit-scrollbar-thumb {
-  background: #FFFFFF;
-  border-color: #000000;
-}
-[data-theme='high-contrast'] ::-webkit-scrollbar-thumb:hover {
-  background: #FFFF00;
-}
-[data-theme='high-contrast'] .btn:hover {
-  /* Inverted hover: white fill, black text — unmistakable, zero mid-tones */
-  background: #FFFFFF;
-  border-color: #FFFFFF;
-  color: #000000;
-}
-[data-theme='high-contrast'] input[type='range'] {
-  background: #FFFFFF;
-}
-
-/* ---------- Layout ---------- */
+}/* ---------- Layout ---------- */
 
 .app-shell {
   min-height: 100vh;
