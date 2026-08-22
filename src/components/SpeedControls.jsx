@@ -78,9 +78,6 @@ export default function SpeedControls({
             />
             <span className="field-label">{t('common.tokPerSec')}</span>
           </div>
-          <p className="hint-text" style={{ marginTop: '8px' }}>
-            {t('speedControls.prefillHint')}
-          </p>
         </div>
 
         {/* Decode Speed Input */}
@@ -90,7 +87,7 @@ export default function SpeedControls({
               {t('speedControls.decodeSpeed')}
               <Analogy term="decode" />
             </span>
-            <span className="tag tag-decode">{t('speedControls.bandwidthBound')}</span>
+            <span className="tag tag-decode">{t('speedControls.bandwidthBound')} · {decodeSpeed > 0 ? (1000 / decodeSpeed).toFixed(1) : '∞'} ms/tok</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -114,11 +111,6 @@ export default function SpeedControls({
             />
             <span className="field-label">{t('common.tokPerSec')}</span>
           </div>
-          <p className="hint-text" style={{ marginTop: '8px' }}>
-            {t('speedControls.decodeHint', {
-              tpot: decodeSpeed > 0 ? (1000 / decodeSpeed).toFixed(1) : '∞'
-            })}
-          </p>
         </div>
 
         {/* Simulation Speed & Controls */}

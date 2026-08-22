@@ -13,7 +13,6 @@ import {
 } from '../utils/liveAnnouncer';
 import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
 import ChartDataTable from './ChartDataTable';
-import ConceptCheck from './ConceptCheck';
 import Metric from './Metric';
 import Analogy from './Analogy';
 import SloBadge from './SloBadge';
@@ -1164,18 +1163,6 @@ export default function AgenticVisualizer({
         />
 
       </section>
-
-      {/* Concept-check quizzes: prediction-then-reveal wired to live sim state */}
-      <ConceptCheck
-        tab="agentic"
-        context={{
-          turns: numTurns,
-          cachingOn: enablePrefixCaching,
-          walltime: totalAgentWalltime,
-          noCacheWalltime: turnBreakdownNoCache,
-          savedPct: cachingPercentSaved
-        }}
-      />
 
       <EmbedDialog
         open={embedOpen}

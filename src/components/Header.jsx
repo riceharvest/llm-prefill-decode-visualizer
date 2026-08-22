@@ -150,7 +150,6 @@ export default function Header({
               style={copied ? { borderColor: 'var(--decode-border)', color: 'var(--decode)' } : undefined}
             >
               {copied ? <Check size={15} /> : <Link2 size={15} />}
-              {copied ? t('common.copied') : t('common.share')}
             </button>
 
             {/* Embeddable iframe widget (issue #108) */}
@@ -163,7 +162,6 @@ export default function Header({
               style={embedCopied ? { borderColor: 'var(--decode-border)', color: 'var(--decode)' } : undefined}
             >
               {embedCopied ? <Check size={15} /> : <Code2 size={15} />}
-              {embedCopied ? t('common.copied') : t('common.embed')}
             </button>
           </div>
 
@@ -196,7 +194,6 @@ export default function Header({
             >
               <IconComponent size={15} />
               <span>{tab.label}</span>
-              <span className="tab-hint">{tab.hint}</span>
             </button>
           );
         })}

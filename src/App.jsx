@@ -28,7 +28,6 @@ import {
   createHistory, recordChange, undo as historyUndo, redo as historyRedo
 } from './utils/settingsHistory';
 import SnapshotsSidebar from './components/SnapshotsSidebar';
-import ChangelogBanner from './components/ChangelogBanner';
 import { useFocusPanelHeading } from './utils/focus';
 import { setLocale, syncDocument, t } from './i18n/strings';
 import { installTouchTooltips } from './utils/touchTooltips';
@@ -358,9 +357,6 @@ export default function App() {
         onTour={() => setTourOpen(true)}
         onShortcuts={() => setShortcutsOpen(true)}
       />
-
-      {/* What's-new banner (#112): newest /changelog.json entry, dismissible */}
-      <ChangelogBanner />
 
       <main className="app-frame stack" ref={mainRef}>
         <CollapsibleSection id="localmaxxing" title={t('common.localMaxxingTitle') || 'LocalMaxxing measured presets'} badge="LIVE">

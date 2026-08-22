@@ -1655,3 +1655,9 @@ kbd {
   -webkit-line-clamp: unset;
   opacity: 1;
 }
+
+/* Compact tab bar */
+.tab-btn {
+  padding: 8px 10px;
+  gap: 6px;
+}
