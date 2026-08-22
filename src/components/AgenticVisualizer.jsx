@@ -19,6 +19,7 @@ import Analogy from './Analogy';
 import SloBadge from './SloBadge';
 import { evaluateAgenticSlo, evaluateMetric } from '../utils/slo.js';
 
+import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { t } from '../i18n/strings';
 
@@ -276,6 +277,8 @@ export default function AgenticVisualizer({
     setIsPlaying(false);
   };
 
+  const prefersReducedMotion = usePrefersReducedMotion();
+
   // Simulation runner effect
   useEffect(() => {
     if (!isPlaying) {
@@ -300,9 +303,11 @@ export default function AgenticVisualizer({
       const realDelta = (now - lastTickRef.current) / 1000;
       lastTickRef.current = now;
 
-      if (simSpeedMultiplier === 'instant' || !Number.isFinite(totalAgentWalltime) || totalAgentWalltime <= 0) {
-        // Instant mode — or a non-finite/zero walltime (e.g. a speed typed as
-        // 0, which would otherwise hang the loop on turn 1 forever).
+      if (simSpeedMultiplier === 'instant' || prefersReducedMotion || !Number.isFinite(totalAgentWalltime) || totalAgentWalltime <= 0) {
+        // Instant mode — or prefers-reduced-motion (issue #63), or a
+        // non-finite/zero walltime (e.g. a speed typed as 0, which would
+        // otherwise hang the loop on turn 1 forever). Reduced-motion users
+        // get the final state in one step instead of a frame-by-frame stream.
         const last = turnBreakdown[turnBreakdown.length - 1] || { newTokensPrefilled: 0, decodeTokens: 0 };
         setActiveTurn(numTurns);
         setCurrentPhase('completed');
@@ -387,6 +392,7 @@ export default function AgenticVisualizer({
   }, [
     isPlaying,
     simSpeedMultiplier,
+    prefersReducedMotion,
     numTurns,
     basePromptTokens,
     toolOutputTokensPerTurn,
@@ -432,11 +438,27 @@ export default function AgenticVisualizer({
     : currentPhase === 'completed' ? t('agentic.statusCompleted')
     : t('agentic.statusIdle');
 
+  // Screen-reader run summary (issue #63): aria-live narration of the agent
+  // loop. Announces on turn/phase changes and at 25% wall-time buckets so the
+  // rAF loop doesn't flood assistive tech with per-frame updates.
+  const srElapsedBucket = Math.min(4, Math.floor(
+    (elapsedSim / Math.max(1e-9, totalAgentWalltime)) * 4
+  ));
+  const srSummary = currentPhase === 'idle'
+    ? 'Agent loop idle. Set the number of turns and press Start.'
+    : currentPhase === 'prefilling'
+      ? `Turn ${activeTurn} of ${numTurns}: prefilling ${formatTokens(basePromptTokens)} prompt tokens${enablePrefixCaching && activeTurn > 1 ? ' (served from the prefix cache)' : ''}. About ${srElapsedBucket * 25} percent of the loop elapsed.`
+      : currentPhase === 'decoding'
+        ? `Turn ${activeTurn} of ${numTurns}: decoding at about ${decodeSpeed.toLocaleString()} tokens per second. About ${srElapsedBucket * 25} percent of the loop elapsed.`
+        : `Agent loop complete in ${formatTime(totalAgentWalltime)} across ${numTurns} turns.`;
+
   return (
     <div className="stack">
 
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
+      {/* Issue #63: live narration of the animated run for screen readers */}
+      <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
 
       {/* Top Configuration Card */}
       <section className="panel" aria-label={t('agentic.paramsPanelAria')}>

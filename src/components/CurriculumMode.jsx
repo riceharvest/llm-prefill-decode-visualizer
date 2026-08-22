@@ -71,7 +71,7 @@ export default function CurriculumMode() {
     <div className="stack" aria-label="Curriculum mode">
 
       <section className="panel">
-        <h2 className="panel-title" style={{ marginBottom: '4px' }}>
+        <h2 className="panel-title" style={{ marginBottom: '4px' }} tabIndex={-1} data-panel-heading>
           <GraduationCap size={16} />
           <span>Curriculum</span>
         </h2>
