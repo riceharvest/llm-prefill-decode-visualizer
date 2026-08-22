@@ -433,6 +433,248 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Watch feeds: list registered hardware+model combos (#109)
+         * @description Public listing of watched combos — never includes secrets or webhook URLs. POST to create a watch; DELETE ?id=&secret= to remove one.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Feature description + registered watches (watchId, label, hasWebhook, createdAt) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        /**
+                         * @example {
+                         *       "description": "Watch feeds (#109): subscribe to a hardware+model combination…",
+                         *       "maxWatches": 500,
+                         *       "totalWatches": 1,
+                         *       "watches": [
+                         *         {
+                         *           "watchId": "watch_abc123_x9",
+                         *           "label": "RTX 4090 + Qwen3 32B",
+                         *           "model": "Qwen3 32B",
+                         *           "hardware": "RTX 4090",
+                         *           "quant": null,
+                         *           "hasWebhook": false,
+                         *           "createdAt": "2026-08-22T10:00:00.000Z"
+                         *         }
+                         *       ]
+                         *     }
+                         */
+                        "application/json": unknown;
+                    };
+                };
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        put?: never;
+        /**
+         * Create a watch for a hardware+model combo (#109)
+         * @description Body: { model?, hardware?, quant?, webhookUrl? } — at least one of model/hardware required; webhookUrl must be https. Returns 201 with watchId + secret (shown exactly once; required to DELETE, sent to your webhook as X-Watch-Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET /api/watch/rss.xml?model=&hardware=&quant=.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    /**
+                     * @example {
+                     *       "model": "Qwen3 32B",
+                     *       "hardware": "RTX 4090",
+                     *       "quant": "q4_k_m",
+                     *       "webhookUrl": "https://example.com/hooks/llm-watch"
+                     *     }
+                     */
+                    "application/json": unknown;
+                };
+            };
+            responses: {
+                /** @description Watch created (watchId, secret, rssUrl, matchingExistingRuns preview) */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid body (code validation_failed with per-field errors) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                429: components["responses"]["RateLimited"];
+                /** @description Watch store unavailable (code watch_store_unavailable) */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        /** Remove a watch */
+        delete: {
+            parameters: {
+                query: {
+                    /** @description watchId from the POST response */
+                    id: string;
+                    /** @description one-time secret from the POST response (also accepted as X-Watch-Secret header) */
+                    secret: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Watch removed */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Wrong or missing secret (code invalid_secret) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unknown watchId (code watch_not_found) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/watch/rss.xml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * RSS 2.0 feed of community runs for a watched combo (#109)
+         * @description Filters mirror GET /api/localmaxxing (model/hardware substring, quant exact). Items are the newest matching runs (max 50), each linking to the upstream run. Poll like any feed — no registration needed.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description substring match on normalized family / hfId / display name */
+                    model?: string;
+                    /** @description substring match on rig name/key */
+                    hardware?: string;
+                    /** @description exact quantization */
+                    quant?: string;
+                    /** @description only runs measured in the last N days (undated runs always included) */
+                    days?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description RSS 2.0 XML (application/rss+xml); X-Matched-Runs header reports the pre-cap match count */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                429: components["responses"]["RateLimited"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/watch/dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deliver unseen matching runs to registered webhooks (#109)
+         * @description Cron-friendly (Vercel Cron sends GET). For each watch with a webhookUrl: POST a watch.new_runs payload (X-Watch-Secret header) with runs created after the watch that are not yet in its bounded seen-set, then persist the set. Set WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret. Delivery failures are reported per watch, never thrown.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { dispatched, totalNewRuns, results[], previewPayload } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description WATCH_DISPATCH_SECRET set and not provided (code unauthorized) */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                429: components["responses"]["RateLimited"];
+                /** @description Watch store unavailable (code watch_store_unavailable) */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/benchmarks": {
         parameters: {
             query?: never;
