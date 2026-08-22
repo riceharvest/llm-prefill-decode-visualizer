@@ -3,6 +3,7 @@ import { HelpCircle, Gauge, Zap, Play, Bot } from 'lucide-react';
 import { demoUrl } from '../utils/urlState';
 import { t, tArray } from '../i18n/strings';
 import Analogy from './Analogy';
+import TemplateGallery from './TemplateGallery';
 
 // Demo deep-links per FAQ entry (index-aligned with theory.faq in strings.js).
 const FAQ_DEMOS = [
@@ -48,6 +49,10 @@ export default function TheoryGuide() {
           <HelpCircle size={16} />
           <span>{t('theory.panelTitle')}</span>
         </h2>
+
+        {/* Template gallery (#111): one-click question cards that load a
+            configured sim — the onboarding funnel sits above the theory. */}
+        <TemplateGallery />
 
         {/* Comparative Dual Cards */}
         <div className="grid-auto" style={{ '--grid-min': '320px', marginBottom: '16px' }}>
