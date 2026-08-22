@@ -12,6 +12,7 @@ export default function Header({
   onApplyPreset,
   onShare,
   onEmbed,
+  shareTitle,
   onTour
 }) {
   const [copied, setCopied] = useState(false);
@@ -95,12 +96,13 @@ export default function Header({
             {/* Everyday-analogy mode (issue #84) */}
             <AnalogyToggle />
 
-            {/* Share exact settings */}
+            {/* Share exact settings — tooltip previews the auto-generated
+                permalink title (#106) so users see how the link will read */}
             <button
               onClick={handleShare}
-              title={t('header.shareTooltip')}
-              aria-label={t('header.shareTooltip')}
-              data-tooltip={t('header.shareTooltip')}
+              title={shareTitle ? `${t('header.shareTooltip')} — "${shareTitle}"` : t('header.shareTooltip')}
+              aria-label={shareTitle ? `${t('header.shareTooltip')} — "${shareTitle}"` : t('header.shareTooltip')}
+              data-tooltip={shareTitle ? `${t('header.shareTooltip')} — "${shareTitle}"` : t('header.shareTooltip')}
               className="btn"
               style={copied ? { borderColor: 'var(--decode-border)', color: 'var(--decode)' } : undefined}
             >
