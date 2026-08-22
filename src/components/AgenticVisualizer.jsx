@@ -7,6 +7,7 @@ import { exportNodeAsPng } from '../utils/exportPng';
 import EmbedDialog from './EmbedDialog';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
+import ChartDataTable from './ChartDataTable';
 import ConceptCheck from './ConceptCheck';
 import Metric from './Metric';
 import Analogy from './Analogy';
@@ -1067,56 +1068,36 @@ export default function AgenticVisualizer({
           </div>
         </div>
 
-        {/* Detailed Per-Turn Metrics Table */}
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{t('agentic.tableHeaders.turn')}</th>
-                <th>{t('agentic.tableHeaders.agentPhase')}</th>
-                <th>{t('agentic.tableHeaders.historyContext')}</th>
-                <th>{t('agentic.tableHeaders.prefilledTokens')}</th>
-                <th>{t('agentic.tableHeaders.prefillTime')}</th>
-                <th>{t('agentic.tableHeaders.decodeTime')}</th>
-                <th>{t('agentic.tableHeaders.turnWalltime')}</th>
-                <th>{t('agentic.tableHeaders.cumulative')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {turnBreakdown.map((t) => (
-                <tr
-                  key={t.turn}
-                  className={activeTurn === t.turn ? 'row-active' : undefined}
-                >
-                  <td style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-                    T{t.turn}
-                  </td>
-                  <td style={{ color: 'var(--text-muted)' }}>
-                    {t.label}
-                  </td>
-                  <td className="num">
-                    {formatTokens(t.totalPromptTokens)} tok
-                  </td>
-                  <td className="num" style={{ color: 'var(--prefill)', fontWeight: 600 }}>
-                    {formatTokens(t.newTokensPrefilled)} tok{t.isCached ? ' ⚡' : ''}
-                  </td>
-                  <td className="num" style={{ color: 'var(--prefill)' }}>
-                    {formatTime(t.prefillTime)}
-                  </td>
-                  <td className="num" style={{ color: 'var(--decode)' }}>
-                    {formatTime(t.decodeTime)}
-                  </td>
-                  <td className="num" style={{ fontWeight: 700, color: 'var(--agent)' }}>
-                    {formatTime(t.turnWalltime)}
-                  </td>
-                  <td className="num" style={{ fontWeight: 700 }}>
-                    {formatTime(t.cumulativeWalltime)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* Detailed Per-Turn Metrics Table — chart-to-table alternative (#75):
+            the waterfall's exact values behind a disclosure toggle, with
+            proper <caption>/<th scope> semantics for assistive tech. */}
+        <ChartDataTable
+          caption={t('chartTable.ganttCaption')}
+          rowHeaderLabel={t('chartTable.turn')}
+          columns={[
+            { key: 'phase', label: t('chartTable.phase') },
+            { key: 'historyContext', label: t('chartTable.historyContext'), numeric: true },
+            { key: 'prefilledTokens', label: t('chartTable.prefilledTokens'), numeric: true },
+            { key: 'prefillTime', label: t('chartTable.prefillTime'), numeric: true },
+            { key: 'decodeTime', label: t('chartTable.decodeTime'), numeric: true },
+            { key: 'turnWalltime', label: t('chartTable.turnWalltime'), numeric: true },
+            { key: 'cumulative', label: t('chartTable.cumulative'), numeric: true }
+          ]}
+          rows={turnBreakdown.map((turnItem) => ({
+            id: turnItem.turn,
+            label: `T${turnItem.turn}`,
+            cells: {
+              phase: turnItem.label,
+              historyContext: `${formatTokens(turnItem.totalPromptTokens)} tok`,
+              prefilledTokens: `${formatTokens(turnItem.newTokensPrefilled)} tok${turnItem.isCached ? ' ⚡' : ''}`,
+              prefillTime: formatTime(turnItem.prefillTime),
+              decodeTime: formatTime(turnItem.decodeTime),
+              turnWalltime: formatTime(turnItem.turnWalltime),
+              cumulative: formatTime(turnItem.cumulativeWalltime)
+            }
+          }))}
+          mode="disclosure"
+        />
 
       </section>
 

@@ -6,6 +6,7 @@ import { methodologyMismatch } from '../utils/localMaxxing';
 import { buildSizingReport, buildSizingReportJson, buildSizingReportYaml, buildSizingReportMarkdown, downloadSizingReport } from '../utils/sizingReport';
 import { buildDeepLink } from '../utils/exportMarkdown';
 import QuantTradeoffMatrix from './QuantTradeoffMatrix';
+import ChartDataTable from './ChartDataTable';
 import Metric from './Metric';
 import SloBadge from './SloBadge';
 import { estimateFromLabel } from '../utils/streetPricing';
@@ -249,6 +250,81 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   const speedupTotal = totalTimeA > 0 ? totalTimeB / totalTimeA : 0;
   const speedupPrefill = ttftA > 0 ? ttftB / ttftA : 0;
   const speedupDecode = decodeTimeA > 0 ? decodeTimeB / decodeTimeA : 0;
+
+  // Chart-to-table alternative (#75): System A vs System B metrics with the
+  // per-row advantage ratio, so exact values are readable without the bars.
+  // For "lower is better" timings the factor is inverted so "A faster" always
+  // means A wins that row; speeds compare directly (higher wins).
+  const advantageCell = (valueA, valueB, lowerIsBetter) => {
+    const a = Number(valueA);
+    const b = Number(valueB);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) {
+      return t('chartTable.notComparable');
+    }
+    const aWins = lowerIsBetter ? a <= b : a >= b;
+    const factor = aWins ? (lowerIsBetter ? b / a : a / b) : (lowerIsBetter ? a / b : b / a);
+    return t(aWins ? 'chartTable.ratioSuffix' : 'chartTable.inverseRatioSuffix', { factor: factor.toFixed(2) });
+  };
+  const compareRows = [
+    {
+      id: 'prefillSpeed',
+      label: t('compare.prefillSpeed'),
+      cells: {
+        a: `${presetA.prefillSpeed.toLocaleString()} tok/s`,
+        b: `${presetB.prefillSpeed.toLocaleString()} tok/s`,
+        advantage: advantageCell(presetA.prefillSpeed, presetB.prefillSpeed, false)
+      }
+    },
+    {
+      id: 'decodeSpeed',
+      label: `${t('compare.decodeSpeed')} (${t('compare.perUserSuffix')})`,
+      cells: {
+        a: `${Math.round(batchedPerUserDecodeA).toLocaleString()} tok/s`,
+        b: `${Math.round(batchedPerUserDecodeB).toLocaleString()} tok/s`,
+        advantage: advantageCell(batchedPerUserDecodeA, batchedPerUserDecodeB, false)
+      }
+    },
+    {
+      id: 'ttft',
+      label: 'TTFT (prompt)',
+      cells: {
+        a: formatTime(ttftA),
+        b: formatTime(ttftB),
+        advantage: advantageCell(ttftA, ttftB, true)
+      }
+    },
+    {
+      id: 'decodeTime',
+      label: t('compare.decodeTime'),
+      cells: {
+        a: formatTime(decodeTimeA),
+        b: formatTime(decodeTimeB),
+        advantage: advantageCell(decodeTimeA, decodeTimeB, true)
+      }
+    },
+    {
+      id: 'totalWalltime',
+      label: t('compare.totalWalltime'),
+      cells: {
+        a: formatTime(totalTimeA),
+        b: formatTime(totalTimeB),
+        advantage: advantageCell(totalTimeA, totalTimeB, true)
+      }
+    },
+    ...(costA !== null && costB !== null
+      ? [
+          {
+            id: 'costPerRequest',
+            label: t('compare.costPerRequest'),
+            cells: {
+              a: `$${costA.toFixed(4)}`,
+              b: `$${costB.toFixed(4)}`,
+              advantage: advantageCell(costA, costB, true)
+            }
+          }
+        ]
+      : [])
+  ];
 
   // SLO check (issue #64): badge each system's TTFT / TPOT / walltime against
   // the user's persisted budgets. Disabled budgets → null → no badge.
@@ -786,6 +862,20 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
             </div>
           </div>
         </div>
+
+        {/* Chart-to-table alternative (#75): exact A-vs-B values behind the
+            metric cards, with a per-row advantage ratio. */}
+        <ChartDataTable
+          caption={t('chartTable.compareCaption')}
+          rowHeaderLabel={t('chartTable.metric')}
+          columns={[
+            { key: 'a', label: t('chartTable.systemA'), numeric: true },
+            { key: 'b', label: t('chartTable.systemB'), numeric: true },
+            { key: 'advantage', label: t('chartTable.aAdvantage') }
+          ]}
+          rows={compareRows}
+          mode="disclosure"
+        />
 
         {/* Sizing report export (issue #49): the full scenario config as a
             machine-readable artifact for infra-as-code repos, procurement
