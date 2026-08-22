@@ -230,7 +230,7 @@ export default function handler(req, res) {
                         contextLength: 8192,
                         contextBand: '8k-32k',
                         ageDays: 23,
-                        staleness: 'recent',
+                        staleness: 'fresh',
                         source: 'https://localmaxxing.com/en/runs/58213'
                       }
                     ],
