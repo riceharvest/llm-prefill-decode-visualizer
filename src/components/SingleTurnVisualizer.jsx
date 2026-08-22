@@ -540,6 +540,7 @@ export default function SingleTurnVisualizer({
                   step="1"
                   value={draftTokens}
                   aria-label={t('singleTurn.draftTokensAria')}
+                  aria-valuetext={`${draftTokens} draft ${draftTokens === 1 ? 'token' : 'tokens'}`}
                   onChange={(e) => setDraftTokens(Number(e.target.value))}
                 />
               </div>
@@ -556,6 +557,7 @@ export default function SingleTurnVisualizer({
                   step="0.05"
                   value={acceptance}
                   aria-label={t('singleTurn.acceptanceAria')}
+                  aria-valuetext={`${Math.round(acceptance * 100)}% token acceptance`}
                   onChange={(e) => setAcceptance(Number(e.target.value))}
                 />
                 <div className="field-scale">
@@ -655,6 +657,7 @@ export default function SingleTurnVisualizer({
                     step="5"
                     value={jitterPct}
                     aria-label={t('singleTurn.itlVarianceAria')}
+                    aria-valuetext={`±${jitterPct}% timing variance`}
                     onChange={(e) => {
                       setJitterPct(Number(e.target.value));
                       handleReset();
@@ -715,6 +718,7 @@ export default function SingleTurnVisualizer({
                     step="1"
                     value={ctxPresetIndex}
                     aria-label={t('singleTurn.ctxHalfAria')}
+                    aria-valuetext={`${formatTokens(HALF_SPEED_CONTEXT_PRESETS[ctxPresetIndex])} context`}
                     onChange={(e) => setCtxHalf(HALF_SPEED_CONTEXT_PRESETS[Number(e.target.value)])}
                   />
                   <div className="field-scale">
@@ -796,6 +800,7 @@ export default function SingleTurnVisualizer({
                 step="1"
                 value={probeGen}
                 aria-label={t('singleTurn.ctxProbeAria')}
+                aria-valuetext={`generated token ${probeGen.toLocaleString()}`}
                 onChange={(e) => setProbeTokens(Number(e.target.value))}
                 style={{ width: '100%' }}
               />
@@ -847,6 +852,7 @@ export default function SingleTurnVisualizer({
                     step="1"
                     value={imageCount}
                     aria-label="Number of attached images"
+                    aria-valuetext={`${imageCount} ${imageCount === 1 ? 'image' : 'images'}`}
                     onChange={(e) => {
                       setImageCount(Number(e.target.value));
                       handleReset();
@@ -904,6 +910,7 @@ export default function SingleTurnVisualizer({
                 step="128"
                 value={promptTokens}
                 aria-label={t('singleTurn.promptLengthAria')}
+                aria-valuetext={`${promptTokens.toLocaleString()} tokens`}
                 onChange={(e) => {
                   setPromptTokens(Number(e.target.value));
                   handleReset();
@@ -944,6 +951,7 @@ export default function SingleTurnVisualizer({
                 step="32"
                 value={outputTokens}
                 aria-label={t('singleTurn.outputLengthAria')}
+                aria-valuetext={`${outputTokens.toLocaleString()} tokens`}
                 onChange={(e) => {
                   setOutputTokens(Number(e.target.value));
                   handleReset();

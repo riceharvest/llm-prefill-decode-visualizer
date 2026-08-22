@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cpu, Bot, Layers, MessageSquare, HelpCircle, BarChart3, Columns2, HardDrive, Link2, Check, Code2, GitCompare, ListFilter, GraduationCap } from 'lucide-react';
+import { Cpu, Bot, Layers, MessageSquare, HelpCircle, BarChart3, Columns2, HardDrive, Link2, Check, Code2, GitCompare, ListFilter, GraduationCap, Keyboard } from 'lucide-react';
 import { HARDWARE_PRESETS } from '../utils/presets';
 import { t } from '../i18n/strings';
 import AnalogyToggle from './AnalogyToggle';
@@ -13,7 +13,8 @@ export default function Header({
   onShare,
   onEmbed,
   shareTitle,
-  onTour
+  onTour,
+  onShortcuts
 }) {
   const [copied, setCopied] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
@@ -82,6 +83,17 @@ export default function Header({
                 </option>
               ))}
             </select>
+
+            {/* Keyboard-shortcuts help dialog (#76) */}
+            <button
+              onClick={onShortcuts}
+              title={t('header.shortcutsTooltip')}
+              aria-label={t('header.shortcutsTooltip')}
+              aria-haspopup="dialog"
+              className="btn btn-icon"
+            >
+              <Keyboard size={15} />
+            </button>
 
             {/* Replay the guided tour */}
             <button

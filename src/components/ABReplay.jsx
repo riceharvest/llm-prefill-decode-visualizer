@@ -357,6 +357,7 @@ export default function ABReplay({
                 step="128"
                 value={promptTokens}
                 aria-label="Shared input prompt length in tokens"
+                aria-valuetext={`${promptTokens.toLocaleString()} tokens`}
                 onChange={(e) => setPromptTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
@@ -383,6 +384,7 @@ export default function ABReplay({
                 step="32"
                 value={outputTokens}
                 aria-label="Shared target output length in tokens"
+                aria-valuetext={`${outputTokens.toLocaleString()} tokens`}
                 onChange={(e) => setOutputTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
@@ -448,6 +450,7 @@ export default function ABReplay({
             step={Number.isFinite(masterTotal) && masterTotal > 0 ? masterTotal / 1000 : 0.001}
             value={Math.min(simTime, masterTotal)}
             aria-label="Shared A/B timeline position in simulated seconds"
+            aria-valuetext={`${Math.min(simTime, masterTotal).toFixed(1)} simulated seconds`}
             onChange={(e) => seekTo(Number(e.target.value))}
             style={{ width: '100%' }}
           />

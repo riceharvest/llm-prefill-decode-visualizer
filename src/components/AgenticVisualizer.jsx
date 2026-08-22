@@ -437,6 +437,7 @@ export default function AgenticVisualizer({
                 step="1"
                 value={numTurns}
                 aria-label={t('agentic.turnsAria')}
+                aria-valuetext={`${numTurns} ${numTurns === 1 ? 'turn' : 'turns'}`}
                 onChange={(e) => { setNumTurns(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
@@ -464,6 +465,7 @@ export default function AgenticVisualizer({
                 step="250"
                 value={basePromptTokens}
                 aria-label={t('agentic.systemPromptAria')}
+                aria-valuetext={`${basePromptTokens.toLocaleString()} tokens`}
                 onChange={(e) => { setBasePromptTokens(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
@@ -491,6 +493,7 @@ export default function AgenticVisualizer({
                 step="100"
                 value={toolOutputTokensPerTurn}
                 aria-label={t('agentic.toolOutputAria')}
+                aria-valuetext={`${toolOutputTokensPerTurn.toLocaleString()} tokens`}
                 onChange={(e) => { setToolOutputTokensPerTurn(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
@@ -518,6 +521,7 @@ export default function AgenticVisualizer({
                 step="50"
                 value={decodeTokensPerTurn}
                 aria-label={t('agentic.thoughtAria')}
+                aria-valuetext={`${decodeTokensPerTurn.toLocaleString()} tokens`}
                 onChange={(e) => { setDecodeTokensPerTurn(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />

@@ -4,6 +4,7 @@
   "presetLabel": "Preset",
   "localMaxxingRun": "LocalMaxxing measured run",
   "shareTooltip": "Copy share link with current settings",
+  "shortcutsTooltip": "Keyboard shortcuts (?)",
   "navAriaLabel": "Visualizer sections",
   "embedTooltip": "Copy embeddable iframe snippet with current settings"
 }

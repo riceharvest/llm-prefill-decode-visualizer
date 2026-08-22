@@ -290,6 +290,7 @@ export default function BatchingVisualizer({
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input type="range" min="2" max="48" step="1" value={numRequests}
                 aria-label={t('batching.requestsAria')}
+                aria-valuetext={`${numRequests} concurrent ${numRequests === 1 ? 'request' : 'requests'}`}
                 onChange={(e) => { setNumRequests(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
               <input type="number" value={numRequests}
@@ -308,6 +309,7 @@ export default function BatchingVisualizer({
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input type="range" min="128" max="32768" step="128" value={meanPromptTokens}
                 aria-label={t('batching.meanPromptAria')}
+                aria-valuetext={`${meanPromptTokens.toLocaleString()} tokens`}
                 onChange={(e) => { setMeanPromptTokens(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
               <input type="number" value={meanPromptTokens}
@@ -326,6 +328,7 @@ export default function BatchingVisualizer({
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input type="range" min="32" max="4096" step="32" value={meanOutputTokens}
                 aria-label={t('batching.meanOutputAria')}
+                aria-valuetext={`${meanOutputTokens.toLocaleString()} tokens`}
                 onChange={(e) => { setMeanOutputTokens(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
               <input type="number" value={meanOutputTokens}
@@ -344,6 +347,7 @@ export default function BatchingVisualizer({
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input type="range" min="1" max="32" step="1" value={maxBatchSize}
                 aria-label={t('batching.maxBatchAria')}
+                aria-valuetext={`batch size ${maxBatchSize}`}
                 onChange={(e) => { setMaxBatchSize(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
               <input type="number" value={maxBatchSize}
@@ -364,6 +368,9 @@ export default function BatchingVisualizer({
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input type="range" min="0" max={CHUNK_STOPS.length - 1} step="1" value={chunkStopIndex}
                 aria-label={t('batching.chunkAria')}
+                aria-valuetext={chunkSize === 0
+                  ? 'chunked prefill off'
+                  : `${formatTokens(chunkSize)} tokens per prefill chunk`}
                 onChange={(e) => { setChunkStopIndex(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
               <span style={{
@@ -387,6 +394,7 @@ export default function BatchingVisualizer({
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input type="range" min="0" max="2000" step="10" value={arrivalIntervalMs}
                 aria-label={t('batching.arrivalAria')}
+                aria-valuetext={`${arrivalIntervalMs} milliseconds between arrivals`}
                 onChange={(e) => { setArrivalIntervalMs(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
               <input type="number" value={arrivalIntervalMs}
