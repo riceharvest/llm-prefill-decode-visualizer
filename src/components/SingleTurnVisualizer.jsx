@@ -9,6 +9,7 @@ import {
 } from '../utils/multimodal';
 import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
+import ChartDataTable from './ChartDataTable';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
 import { drawItlSamples, summarizeItl, histogramItl, cumulativeItlSchedule, tokensEmittedBy } from '../utils/itl';
 import {
@@ -1408,6 +1409,45 @@ export default function SingleTurnVisualizer({
               {decodePct > 8 && `${t('singleTurn.distributionDecode').toUpperCase()} ${decodePct.toFixed(0)}%`}
             </div>
           </div>
+
+          {/* Chart-to-table alternative (#75): the stacked bar's exact phase
+              timings, visually hidden until keyboard focus (prefill/decode
+              percentages and tooltips already carry the headline numbers). */}
+          <ChartDataTable
+            caption={t('chartTable.distributionCaption')}
+            rowHeaderLabel={t('chartTable.walltimePhase')}
+            columns={[
+              { key: 'time', label: t('chartTable.time'), numeric: true },
+              { key: 'share', label: t('chartTable.shareOfWalltime'), numeric: true }
+            ]}
+            mode="sr-only"
+            rows={[
+              {
+                id: 'prefill',
+                label: t('singleTurn.distributionPrefill'),
+                cells: {
+                  time: formatTime(expectedTTFT),
+                  share: `${prefillPct.toFixed(1)}%`
+                }
+              },
+              {
+                id: 'decode',
+                label: t('singleTurn.distributionDecode'),
+                cells: {
+                  time: formatTime(expectedDecodeTime),
+                  share: `${decodePct.toFixed(1)}%`
+                }
+              },
+              {
+                id: 'total',
+                label: t('chartTable.totalWalltimeRow'),
+                cells: {
+                  time: formatTime(expectedTotalTime),
+                  share: '100%'
+                }
+              }
+            ]}
+          />
         </div>
 
       </section>

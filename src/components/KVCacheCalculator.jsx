@@ -8,6 +8,7 @@ import Metric from './Metric';
 import Analogy from './Analogy';
 import { memoryLedger, SAFETY_HEADROOM_FRACTION } from '../../api/_math.js';
 import MultiGpuPlanner from './MultiGpuPlanner';
+import ChartDataTable from './ChartDataTable';
 import ConceptCheck from './ConceptCheck';
 import { t } from '../i18n/strings';
 
@@ -578,6 +579,61 @@ export default function KVCacheCalculator() {
               <span>{ledger.totalGb?.toFixed(2)} GB · {t('kvCache.ledgerUtilization', { pct: ledger.utilizationPct ?? '—', vram: safeGpuVram })}</span>
             </div>
           </div>
+
+          {/* Chart-to-table alternative (#75): the stacked bar's exact ledger
+              values, visually hidden until keyboard focus (the GB numbers
+              already render as text in the rows above). */}
+          <ChartDataTable
+            caption={t('chartTable.kvLedgerCaption')}
+            rowHeaderLabel={t('chartTable.segment')}
+            columns={[
+              { key: 'gb', label: t('chartTable.gigabytes'), numeric: true },
+              { key: 'share', label: t('chartTable.shareOfUsage'), numeric: true }
+            ]}
+            mode="sr-only"
+            rows={[
+              {
+                id: 'weights',
+                label: t('kvCache.ledgerWeights', { params: preset.params, prec: precision === 2 ? 'FP16' : precision === 1 ? 'FP8' : 'INT4' }),
+                cells: {
+                  gb: `${ledger.weightsGb?.toFixed(2)} GB`,
+                  share: ledger.totalGb > 0 ? `${((ledger.weightsGb / ledger.totalGb) * 100).toFixed(1)}%` : '—'
+                }
+              },
+              {
+                id: 'kv',
+                label: t('kvCache.ledgerKv'),
+                cells: {
+                  gb: `${ledger.kvCacheGb?.toFixed(2)} GB`,
+                  share: ledger.totalGb > 0 ? `${((ledger.kvCacheGb / ledger.totalGb) * 100).toFixed(1)}%` : '—'
+                }
+              },
+              {
+                id: 'overhead',
+                label: t('kvCache.ledgerOverhead', { pct: Math.round(DEFAULT_OVERHEAD_FRACTION * 100) }),
+                cells: {
+                  gb: `${ledger.frameworkOverheadGb?.toFixed(2)} GB`,
+                  share: ledger.totalGb > 0 ? `${((ledger.frameworkOverheadGb / ledger.totalGb) * 100).toFixed(1)}%` : '—'
+                }
+              },
+              {
+                id: 'total',
+                label: t('chartTable.totalRowLabel'),
+                cells: {
+                  gb: `${ledger.totalGb?.toFixed(2)} GB`,
+                  share: t('chartTable.utilizationLabel', { pct: ledger.utilizationPct ?? '—', vram: safeGpuVram })
+                }
+              },
+              {
+                id: 'vramLimit',
+                label: t('chartTable.vramLimitRowLabel'),
+                cells: {
+                  gb: `${safeGpuVram} GB`,
+                  share: t('chartTable.vramLimit')
+                }
+              }
+            ]}
+          />
 
           {/* Verdict */}
           {ledger.verdict && (
