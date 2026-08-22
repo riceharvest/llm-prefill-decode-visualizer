@@ -15,6 +15,7 @@ import TheoryGuide from './components/TheoryGuide';
 import CurriculumMode from './components/CurriculumMode';
 import SloBudgetsPanel, { useSloBudgets } from './components/SloBudgetsPanel';
 import GuidedTour, { hasSeenTour } from './components/GuidedTour';
+import KeyboardShortcutsDialog from './components/KeyboardShortcutsDialog';
 import { HARDWARE_PRESETS } from './utils/presets';
 import { toLocalPreset, hardwareName } from './utils/localMaxxing';
 import {
@@ -36,6 +37,11 @@ export default function App() {
 
   // First-run guided tour: shown once, skippable, re-launchable from the header '?' button.
   const [tourOpen, setTourOpen] = useState(() => !hasSeenTour());
+
+  // Keyboard-shortcuts help dialog (#76): opened with the header keyboard
+  // button or the `?` key. While it's open the global plain-key shortcuts
+  // below stand down so typing behind the modal can't switch tabs or reset.
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   // Locale + touch tooltips: one-time setup. `?lang=` overrides the default
   // locale; direction is applied to <html> so RTL locales flip the layout.
@@ -271,8 +277,11 @@ export default function App() {
   }, []);
 
   // Keyboard shortcuts: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z redo, Space =
-  // play/pause, R = reset, 1-8 = tabs. Plain-key shortcuts are ignored while
-  // typing in inputs/selects or with modifier keys held.
+  // play/pause, R = reset, 1-9 + 0 = tabs, ? = shortcuts help dialog.
+  // Guards: modifier-held plain keys are ignored; typing in inputs/selects/
+  // textareas never triggers plain-key shortcuts; Space on a focused button
+  // lets the button handle it (the global toggle would double-fire and cancel
+  // itself out); while the shortcuts dialog is open only undo/redo stay live.
   useEffect(() => {
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'z') {
@@ -283,19 +292,25 @@ export default function App() {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
-      if (e.code === 'Space') {
+      if (shortcutsOpen) return;
+      if (e.key === '?') {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      } else if (e.code === 'Space') {
+        if (tag === 'BUTTON') return; // the button's own activation handles it
         e.preventDefault(); // stop page scroll
         setIsPlaying(p => !p);
       } else if (e.key === 'r' || e.key === 'R') {
         handleReset();
-      } else if (/^[1-9]$/.test(e.key)) {
+      } else if (/^[0-9]$/.test(e.key)) {
         const tabs = ['single', 'agentic', 'batching', 'compare', 'ab', 'diff', 'shortlist', 'kvcache', 'theory', 'curriculum'];
-        setActiveTab(tabs[Number(e.key) - 1]);
+        // 1-9 map to the first nine tabs; 0 wraps to the tenth (Curriculum).
+        setActiveTab(tabs[e.key === '0' ? 9 : Number(e.key) - 1]);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, shortcutsOpen]);
 
   // Issue #106: share a titled permalink — the current query-string state
   // (which already encodes preset, speeds, flags and every tab's sim inputs)
@@ -340,6 +355,7 @@ export default function App() {
         onEmbed={handleEmbed}
         shareTitle={permalinkTitle}
         onTour={() => setTourOpen(true)}
+        onShortcuts={() => setShortcutsOpen(true)}
       />
 
       {/* What's-new banner (#112): newest /changelog.json entry, dismissible */}
@@ -471,6 +487,11 @@ export default function App() {
           decodeSpeed={decodeSpeed}
           onClose={() => setTourOpen(false)}
         />
+      )}
+
+      {/* Keyboard-shortcuts help dialog (#76) */}
+      {shortcutsOpen && (
+        <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />
       )}
 
       {/* Footer */}

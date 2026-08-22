@@ -5,6 +5,12 @@ import SanityWarnings from './SanityWarnings';
 import Analogy from './Analogy';
 import { t } from '../i18n/strings';
 
+// Time-scale options (#76): rendered as an ARIA radiogroup with roving
+// tabindex — one option is tabbable, arrow keys move and select.
+const TIME_OPTIONS = [1, 2, 5, 20, 'instant'];
+
+const timeOptionLabel = (mult) => (mult === 'instant' ? t('common.instant') : `${mult}x`);
+
 export default function SpeedControls({
   prefillSpeed,
   setPrefillSpeed,
@@ -19,6 +25,22 @@ export default function SpeedControls({
   // Same physical-bounds checks the /api/compute API applies — surfaced
   // inline so impossible speed inputs are flagged before running a sim.
   const speedWarnings = sanityWarnings({ prefillSpeed, decodeSpeed });
+
+  // Roving-tabindex arrow-key navigation for the time-scale radiogroup.
+  // Selection follows focus (the standard radio pattern); Home/End jump to
+  // the ends. Unknown URL-injected multipliers clamp to the first option.
+  const currentTimeIndex = Math.max(0, TIME_OPTIONS.indexOf(simSpeedMultiplier));
+  const handleTimeRadioKey = (e) => {
+    let nextIndex = null;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') nextIndex = (currentTimeIndex + 1) % TIME_OPTIONS.length;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') nextIndex = (currentTimeIndex - 1 + TIME_OPTIONS.length) % TIME_OPTIONS.length;
+    else if (e.key === 'Home') nextIndex = 0;
+    else if (e.key === 'End') nextIndex = TIME_OPTIONS.length - 1;
+    if (nextIndex !== null) {
+      e.preventDefault();
+      setSimSpeedMultiplier(TIME_OPTIONS[nextIndex]);
+    }
+  };
 
   return (
     <section className="panel" aria-label="Simulation speed controls">
@@ -43,6 +65,7 @@ export default function SpeedControls({
               step="50"
               value={prefillSpeed}
               aria-label={t('speedControls.prefillAria')}
+              aria-valuetext={`${Number(prefillSpeed).toLocaleString()} tokens per second`}
               onChange={(e) => setPrefillSpeed(Number(e.target.value))}
               style={{ flex: 1 }}
             />
@@ -78,6 +101,7 @@ export default function SpeedControls({
               step="1"
               value={decodeSpeed}
               aria-label={t('speedControls.decodeAria')}
+              aria-valuetext={`${Number(decodeSpeed).toLocaleString()} tokens per second`}
               onChange={(e) => setDecodeSpeed(Number(e.target.value))}
               style={{ flex: 1 }}
             />
@@ -104,15 +128,17 @@ export default function SpeedControls({
               <FastForward size={15} />
               {t('speedControls.timeScale')}
             </span>
-            <div className="seg" role="group" aria-label={t('speedControls.timeScaleAria')}>
-              {[1, 2, 5, 20, 'instant'].map(mult => (
+            <div className="seg" role="radiogroup" aria-label={t('speedControls.timeScaleAria')} onKeyDown={handleTimeRadioKey}>
+              {TIME_OPTIONS.map(mult => (
                 <button
                   key={mult}
                   onClick={() => setSimSpeedMultiplier(mult)}
+                  role="radio"
+                  aria-checked={simSpeedMultiplier === mult}
+                  tabIndex={TIME_OPTIONS[currentTimeIndex] === mult ? 0 : -1}
                   className={simSpeedMultiplier === mult ? 'active' : ''}
-                  aria-pressed={simSpeedMultiplier === mult}
                 >
-                  {mult === 'instant' ? t('common.instant') : `${mult}x`}
+                  {timeOptionLabel(mult)}
                 </button>
               ))}
             </div>

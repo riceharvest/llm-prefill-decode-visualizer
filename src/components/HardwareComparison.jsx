@@ -459,6 +459,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 step="512"
                 value={testPromptTokens}
                 aria-label={t('compare.testPromptAria')}
+                aria-valuetext={`${testPromptTokens.toLocaleString()} tokens`}
                 onChange={(e) => setTestPromptTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
@@ -485,6 +486,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 step="64"
                 value={testOutputTokens}
                 aria-label={t('compare.testOutputAria')}
+                aria-valuetext={`${testOutputTokens.toLocaleString()} tokens`}
                 onChange={(e) => setTestOutputTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
@@ -515,6 +517,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 step="1"
                 value={batchSize}
                 aria-label={t('compare.batchAria')}
+                aria-valuetext={`batch of ${batchSize} ${batchSize === 1 ? 'request' : 'requests'}`}
                 onChange={(e) => setBatchSize(Number(e.target.value))}
                 style={{ flex: 1 }}
               />

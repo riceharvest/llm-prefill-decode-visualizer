@@ -381,6 +381,7 @@ export default function KVCacheCalculator() {
                 step="1024"
                 value={Math.min(contextLength, preset.maxContext)}
                 aria-label={t('kvCache.contextAria')}
+                aria-valuetext={`${Math.min(contextLength, preset.maxContext).toLocaleString()} tokens context`}
                 onChange={(e) => setContextLength(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
@@ -407,6 +408,7 @@ export default function KVCacheCalculator() {
                 step="1"
                 value={batchSize}
                 aria-label={t('kvCache.batchAria')}
+                aria-valuetext={`batch of ${batchSize} ${batchSize === 1 ? 'sequence' : 'sequences'}`}
                 onChange={(e) => setBatchSize(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
@@ -708,6 +710,7 @@ export default function KVCacheCalculator() {
               step="1"
               value={overheadPct}
               aria-label={t('kvCache.overheadAria')}
+              aria-valuetext={`${overheadPct}% memory overhead`}
               onChange={(e) => setOverheadPct(Number(e.target.value))}
               style={{ width: '100%' }}
             />
