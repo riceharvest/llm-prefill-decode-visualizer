@@ -34,7 +34,7 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-const { default: handler, resolveWorkload, projectWalltime } = await import('./best.js');
+const { default: handler, resolveWorkload, projectWalltime } = await import('./handlers/best.js');
 
 function mockRes() {
   const res = {

@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import handler, { bitsPerWeight } from './sizing.js';
+import handler, { bitsPerWeight } from './handlers/sizing.js';
 import { kvCache } from './_math.js';
 import { invalidateCache } from './_localmaxxing.js';
 

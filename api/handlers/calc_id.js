@@ -7,8 +7,8 @@
 // result as calc_xxxx forever and anyone can re-derive it.
 
 import { isValidCalcId } from '../_calc_id.js';
-import { computeBody as computeResponse } from '../compute.js';
-import { bestBody as bestResponse } from '../best.js';
+import { computeBody as computeResponse } from './compute.js';
+import { bestBody as bestResponse } from './best.js';
 
 export const config = { runtime: 'nodejs' };
 

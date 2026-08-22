@@ -12,8 +12,8 @@
 // Cache-Control headers so the CDN absorbs everything else.
 import { createHash } from 'node:crypto';
 import { ImageResponse } from '@vercel/og';
-import { HARDWARE_PRESETS, SCENARIO_PRESETS } from '../src/utils/presets.js';
-import { sendProblemFromError } from './_errors.js';
+import { HARDWARE_PRESETS, SCENARIO_PRESETS } from '../../src/utils/presets.js';
+import { sendProblemFromError } from '../_errors.js';
 
 export const config = { runtime: 'nodejs' };
 

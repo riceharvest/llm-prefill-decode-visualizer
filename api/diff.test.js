@@ -1,7 +1,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { diffMetric, derivedTimes, computeRunDiff, REF_PROMPT_TOKENS, REF_OUTPUT_TOKENS } from './_diff.js';
-import handler, { parseConstraintSet } from './diff.js';
+import handler, { parseConstraintSet } from './handlers/diff.js';
 import { invalidateCache } from './_localmaxxing.js';
 
 // ---------- Pure diff math ----------

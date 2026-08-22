@@ -1,6 +1,6 @@
 // GET /api/health — liveness + upstream data freshness for the status page.
 // Cheap by design: reports cache state only, never blocks on upstream fetches.
-import { getCacheInfo } from './_localmaxxing.js';
+import { getCacheInfo } from '../_localmaxxing.js';
 
 export const config = { runtime: 'nodejs' };
 

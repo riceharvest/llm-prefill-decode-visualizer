@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { aggregate, confidenceFor, invalidateCache } from './_localmaxxing.js';
-import bestHandler, { rankGroups } from './best.js';
+import bestHandler, { rankGroups } from './handlers/best.js';
 
 function run(hardwareKey, modelFamily, decode, prefill) {
   return {

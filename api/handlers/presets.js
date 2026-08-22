@@ -1,6 +1,6 @@
-import { HARDWARE_PRESETS, SCENARIO_PRESETS } from '../src/utils/presets.js';
-import { enforceRateLimit } from './_ratelimit.js';
-import { sendJson } from './_schema.js';
+import { HARDWARE_PRESETS, SCENARIO_PRESETS } from '../../src/utils/presets.js';
+import { enforceRateLimit } from '../_ratelimit.js';
+import { sendJson } from '../_schema.js';
 
 export const config = { runtime: 'nodejs' };
 

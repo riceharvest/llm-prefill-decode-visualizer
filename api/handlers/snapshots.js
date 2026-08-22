@@ -1,4 +1,4 @@
-import { listSnapshots, ensureSnapshot } from './_snapshots.js';
+import { listSnapshots, ensureSnapshot } from '../_snapshots.js';
 
 export const config = { runtime: 'nodejs' };
 

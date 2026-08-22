@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   parseOgParams, cacheKeyFor, estimateLatencies, formatSpeed,
   buildBars, buildChartElement
-} from './og.js';
+} from './handlers/og.js';
 
 function sp(entries) {
   return new URLSearchParams(entries);

@@ -1,9 +1,9 @@
-import { enforceRateLimit } from './_ratelimit.js';
-import { ERROR_CODES, problemType } from './_errors.js';
+import { enforceRateLimit } from '../_ratelimit.js';
+import { ERROR_CODES, problemType } from '../_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
-import { sendJson } from './_schema.js';
+import { sendJson } from '../_schema.js';
 
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 

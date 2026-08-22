@@ -1,7 +1,7 @@
-import { getAllRuns } from './_localmaxxing.js';
-import { computeRunDiff, REF_PROMPT_TOKENS, REF_OUTPUT_TOKENS } from './_diff.js';
+import { getAllRuns } from '../_localmaxxing.js';
+import { computeRunDiff, REF_PROMPT_TOKENS, REF_OUTPUT_TOKENS } from '../_diff.js';
 import { bestBody } from './best.js';
-import { computeWhatIfDiff } from './_whatif.js';
+import { computeWhatIfDiff } from '../_whatif.js';
 
 export const config = { runtime: 'nodejs' };
 

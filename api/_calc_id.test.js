@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeParams, computeCalcId, isValidCalcId } from './_calc_id.js';
-import { computeBody as computeResponse } from './compute.js';
-import calcHandler from './calc/[id].js';
+import { computeBody as computeResponse } from './handlers/compute.js';
+import calcHandler from './handlers/calc_id.js';
 
 function mockRes() {
   return {

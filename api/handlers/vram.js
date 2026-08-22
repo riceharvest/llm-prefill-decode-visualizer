@@ -15,9 +15,9 @@
 //   /api/vram?hfId=...&numTurns=40&tokensPerTurn=1200   → per-turn KV growth
 //                                                          with overflow turns
 
-import { resolveModel } from './_hfconfig.js';
-import { resolveQuant } from './_quant.js';
-import { lookupHfArch, guessArchFromName } from './_hflookup.js';
+import { resolveModel } from '../_hfconfig.js';
+import { resolveQuant } from '../_quant.js';
+import { lookupHfArch, guessArchFromName } from '../_hflookup.js';
 
 export const config = { runtime: 'nodejs' };
 

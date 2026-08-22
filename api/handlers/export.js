@@ -1,5 +1,5 @@
-import { getAllRuns } from './_localmaxxing.js';
-import { csvEscape, toCsv, csvPreamble, buildJsonPayload, COLUMNS, DATASET_VERSION } from './_export.js';
+import { getAllRuns } from '../_localmaxxing.js';
+import { csvEscape, toCsv, csvPreamble, buildJsonPayload, COLUMNS, DATASET_VERSION } from '../_export.js';
 
 export const config = { runtime: 'nodejs' };
 
