@@ -914,6 +914,92 @@ input[type="range"]::-moz-range-thumb {
 
 .tab-btn.active .tab-hint { color: var(--accent); }
 
+/* ---------- Changelog / what's-new banner (#112) ---------- */
+
+.changelog-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 1px var(--accent-dim);
+}
+
+.changelog-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.changelog-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.changelog-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.changelog-badge {
+  color: var(--accent-ink);
+  background: var(--accent);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  font-weight: 600;
+}
+
+.changelog-version {
+  color: var(--accent);
+}
+
+.changelog-title {
+  margin-top: 3px;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  overflow-wrap: anywhere;
+}
+
+.changelog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.changelog-try {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+@media (max-width: 720px) {
+  .changelog-banner {
+    flex-wrap: wrap;
+  }
+  .changelog-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
 /* ---------- Footer ---------- */
 
 .site-footer {
