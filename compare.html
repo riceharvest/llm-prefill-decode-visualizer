@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      SEO comparison page (/compare/:a-vs-:b). The inline script below runs
+      before paint and rewrites title/description/canonical from the URL so
+      crawlers that don't execute the app still index per-pair metadata.
+      vercel.json rewrites /compare/:a-vs-:b -> /compare.html.
+    -->
+    <script>
+      (function () {
+        var m = /^\/compare\/([^/]+?)-vs-([^/]+?)(?:\/)?$/.exec(location.pathname);
+        if (!m) { m = [null, 'gpu-a', 'gpu-b']; }
+        function pretty(slug) {
+          return String(slug).split('-').filter(Boolean).map(function (w) {
+            return /\d/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1);
+          }).join(' ');
+        }
+        var a = decodeURIComponent(m[1]);
+        var b = decodeURIComponent(m[2]);
+        var pa = pretty(a), pb = pretty(b);
+        document.title = pa + ' vs ' + pb + ' LLM inference speed — tok/s compared | LLM Prefill & Decode Visualizer';
+        function meta(name, content, attr) {
+          var el = document.querySelector('meta[' + attr + '="' + name + '"]');
+          if (!el) { el = document.createElement('meta'); el.setAttribute(attr, name); document.head.appendChild(el); }
+          el.setAttribute('content', content);
+        }
+        meta('description', pa + ' vs ' + pb + ': community-measured LLM prefill and decode tok/s, median + 95% CI. Which is faster for local LLM inference?', 'name');
+        meta('og:title', document.title, 'property');
+        meta('og:description', 'Community-measured LLM inference speeds: ' + pa + ' vs ' + pb + '.', 'property');
+        var link = document.createElement('link');
+        link.setAttribute('rel', 'canonical');
+        link.setAttribute('href', location.origin + '/compare/' + a + '-vs-' + b);
+        document.head.appendChild(link);
+      })();
+    </script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <title>LLM hardware comparison</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Enable JavaScript to see live benchmark numbers for this hardware comparison.</noscript>
+    <script type="module" src="/src/compare/main.jsx"></script>
+  </body>
+</html>

@@ -24,6 +24,11 @@ function vercelApiDev() {
     name: 'vercel-api-dev',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
+        // Mirror the vercel.json rewrite: /compare/:a-vs-:b -> /compare.html,
+        // so the SEO pages work under plain `npm run dev` too.
+        if (/^\/compare\/[^/]+-vs-[^/]+\/?$/.test(req.url?.split('?')[0] || '')) {
+          req.url = '/compare.html'
+        }
         const path = req.url?.split('?')[0]
         const handler = apiRoutes[path]
         if (!handler) return next()
@@ -40,8 +45,20 @@ function vercelApiDev() {
 }
 
 // https://vite.dev/config/
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 export default defineConfig({
   plugins: [react(), vercelApiDev()],
+  build: {
+    rollupOptions: {
+      // Multi-page: main app (index.html) + SEO comparison page (compare.html).
+      input: {
+        main: resolve(dirname(fileURLToPath(import.meta.url)), 'index.html'),
+        compare: resolve(dirname(fileURLToPath(import.meta.url)), 'compare.html'),
+      },
+    },
+  },
   server: {
     proxy: {
       '/localmaxxing-api': {
