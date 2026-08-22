@@ -18,6 +18,7 @@
 // translations never render blank UI.
 
 import { createTranslator } from './translate.js';
+import { getPlainMode } from '../utils/plainLanguage.js';
 
 let localeModules = {};
 try {
@@ -78,4 +79,45 @@ export function syncDocument() {
   if (typeof document === 'undefined') return;
   document.documentElement.lang = getLocale();
   document.documentElement.dir = getDirection();
+}
+
+// --- Plain-language mode (#79): rewrite dense jargon using plain equivalents.
+const PLAIN_MAP = [
+  { short: 'prefill', plain: 'reading the whole prompt first' },
+  { short: 'decode', plain: 'writing one word piece at a time' },
+  { short: 'TTFT', plain: 'wait before the first word appears' },
+  { short: 'TPOT', plain: 'time to write each following word piece' },
+  { short: 'GEMM', plain: 'matrix-matrix math step' },
+  { short: 'GEMV', plain: 'memory-speed math step' },
+  { short: 'KV cache', plain: 'notes on everything read so far' },
+  { short: 'prefix caching', plain: 'remembering what was already read' },
+  { short: 'VRAM', plain: 'graphics-card memory' },
+  { short: 'token', plain: 'word piece' },
+  { short: 'compute-bound', plain: 'limited by math speed' },
+  { short: 'bandwidth-bound', plain: 'limited by memory speed' }
+].sort((a, b) => b.short.length - a.short.length);
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Rewrite dense jargon in a resolved string using plain equivalents.
+ * No-op unless plain-language mode is on.
+ */
+export function plainify(text) {
+  if (typeof text !== 'string' || !text || !getPlainMode()) return text;
+  let out = text;
+  for (const { short, plain } of PLAIN_MAP) {
+    if (!out.toLowerCase().includes(short.toLowerCase())) continue;
+    out = out.replace(new RegExp(`\\b${escapeRegExp(short)}\\b`, 'gi'), (match) =>
+      match[0] === match[0].toUpperCase() ? plain.charAt(0).toUpperCase() + plain.slice(1) : plain
+    );
+  }
+  return out;
+}
+
+/** t() + plainify() — resolves the key then rewrites jargon if plain-language mode is on. */
+export function tPlain(key, params) {
+  return plainify(t(key, params));
 }

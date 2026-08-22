@@ -1,0 +1,71 @@
+{
+  "plainLanguage": {
+    "toggleLabel": "Plain language",
+    "toggleTooltip": "Swap jargon for plain wording — technical terms stay available on hover and in the Theory-tab glossary",
+    "glossaryHeading": "Jargon glossary",
+    "glossaryIntro": "Every term this mode rewrites, with its plain equivalent and the technical meaning behind it.",
+    "glossaryTechnicalLabel": "Technical:",
+    "terms": {
+      "prefill": {
+        "short": "Prefill",
+        "plain": "reading the whole prompt first",
+        "long": "Prefill — the parallel pass where the model ingests every prompt token at once and builds the KV cache. Sets TTFT."
+      },
+      "decode": {
+        "short": "Decode",
+        "plain": "writing one word piece at a time",
+        "long": "Decode — autoregressive generation: one token per step, with every step re-reading the model weights and KV cache from VRAM."
+      },
+      "ttft": {
+        "short": "TTFT",
+        "plain": "wait before the first word appears",
+        "long": "TTFT (Time To First Token) — how long from sending your prompt until the first output token shows up. Set by prefill speed."
+      },
+      "tpot": {
+        "short": "TPOT",
+        "plain": "time to write each following word piece",
+        "long": "TPOT (Time Per Output Token) — average time to generate each token after the first. Set by decode speed."
+      },
+      "gemm": {
+        "short": "GEMM",
+        "plain": "bulk parallel math step",
+        "long": "GEMM (matrix-matrix multiplication) — many multiply-accumulate operations executed at once. High arithmetic intensity, so it is compute-bound; prefill is dominated by it."
+      },
+      "gemv": {
+        "short": "GEMV",
+        "plain": "memory-speed math step",
+        "long": "GEMV (matrix-vector multiplication) — one row of math per token whose speed is capped by memory bandwidth; decode is dominated by it."
+      },
+      "kvCache": {
+        "short": "KV cache",
+        "plain": "notes on everything read so far",
+        "long": "KV cache — per-token Key/Value vectors kept in VRAM so already-processed tokens don't have to be recomputed. Grows linearly with context length."
+      },
+      "prefixCaching": {
+        "short": "Prefix caching",
+        "plain": "reusing earlier reading notes",
+        "long": "Prefix caching — reusing the KV cache of a shared prompt prefix across requests or turns instead of recomputing it from scratch."
+      },
+      "vram": {
+        "short": "VRAM",
+        "plain": "graphics-card memory",
+        "long": "VRAM — the memory on the graphics card that holds model weights, the KV cache and activation buffers."
+      },
+      "token": {
+        "short": "token",
+        "plain": "word piece",
+        "long": "Token — the chunk of text (~¾ of a word) that a model reads and writes; prompts and outputs are counted in tokens."
+      },
+      "computeBound": {
+        "short": "compute-bound (tensor cores / FLOPs)",
+        "plain": "limited by processor speed",
+        "long": "Compute-bound — the math units (tensor cores / FLOPs), not memory, set the pace. Prefill usually is compute-bound."
+      },
+      "bandwidthBound": {
+        "short": "bandwidth-bound (memory transfer rate)",
+        "plain": "limited by memory speed",
+        "long": "Bandwidth-bound — moving weights and cache from VRAM is the bottleneck, not math. Decode usually is bandwidth-bound."
+      }
+    }
+  }
+}

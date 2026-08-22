@@ -4,6 +4,7 @@ import { HARDWARE_PRESETS } from '../utils/presets';
 import { THEMES, THEME_CHANGE_EVENT, getTheme, setTheme } from '../utils/theme';
 import { t } from '../i18n/strings';
 import AnalogyToggle from './AnalogyToggle';
+import PlainLanguageToggle from './PlainLanguageToggle';
 
 export default function Header({
   activeTab,
@@ -134,6 +135,9 @@ export default function Header({
 
             {/* Everyday-analogy mode (issue #84) */}
             <AnalogyToggle />
+
+            {/* Plain-language mode (issue #79) */}
+            <PlainLanguageToggle />
 
             {/* Share exact settings — tooltip previews the auto-generated
                 permalink title (#106) so users see how the link will read */}
