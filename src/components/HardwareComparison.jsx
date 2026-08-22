@@ -10,6 +10,7 @@ import Metric from './Metric';
 import SloBadge from './SloBadge';
 import { estimateFromLabel } from '../utils/streetPricing';
 import { exportNodeAsPng } from '../utils/exportPng';
+import EmbedDialog from './EmbedDialog';
 import { buildCompareBatchBody, buildSnippet } from '../utils/copyAsCode';
 import { evaluateSlo } from '../utils/slo.js';
 import { estimatePower } from '../utils/powerThermal';
@@ -289,6 +290,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   // "dry_run": true it previews without executing.
   const chartRef = useRef(null);
   const [copiedLang, setCopiedLang] = useState('');
+  const [embedOpen, setEmbedOpen] = useState(false);
   const copyTimer = useRef(null);
 
   const snippetBody = buildCompareBatchBody({
@@ -409,6 +411,14 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               title={t('compare.exportPngTooltip')}
             >
               {t('compare.exportPng')}
+            </button>
+            <button
+              onClick={() => setEmbedOpen(true)}
+              className="btn"
+              style={exportBtnStyle}
+              title={t('embed.buttonTooltip')}
+            >
+              {t('embed.button')}
             </button>
             {['curl', 'python', 'typescript'].map(lang => (
               <button
@@ -988,6 +998,13 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
         )}
       </section>
 
+      <EmbedDialog
+        open={embedOpen}
+        onClose={() => setEmbedOpen(false)}
+        getNode={() => chartRef.current}
+        title={t('compare.panelTitle')}
+        sourceUrl={typeof window !== 'undefined' ? window.location.href : ''}
+      />
     </div>
   );
 }

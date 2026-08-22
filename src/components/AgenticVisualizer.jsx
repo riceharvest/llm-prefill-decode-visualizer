@@ -4,6 +4,7 @@ import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, readParamBool, readParam, writeParams } from '../utils/urlState';
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
 import { exportNodeAsPng } from '../utils/exportPng';
+import EmbedDialog from './EmbedDialog';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
 import ConceptCheck from './ConceptCheck';
@@ -244,6 +245,7 @@ export default function AgenticVisualizer({
   const lastTickRef = useRef(null);
   const simTimeRef = useRef(0);
   const waterfallRef = useRef(null);
+  const [embedOpen, setEmbedOpen] = useState(false);
 
   // Global Reset button (App resetKey) clears ALL sim state
   const resetKeyRef = useRef(resetKey);
@@ -914,6 +916,14 @@ export default function AgenticVisualizer({
               >
                 PNG
               </button>
+              <button
+                onClick={() => setEmbedOpen(true)}
+                className="btn"
+                style={{ padding: '2px 8px', fontSize: '0.68rem' }}
+                title={t('embed.buttonTooltip')}
+              >
+                {t('embed.button')}
+              </button>
             </div>
           </div>
 
@@ -1118,6 +1128,13 @@ export default function AgenticVisualizer({
         }}
       />
 
+      <EmbedDialog
+        open={embedOpen}
+        onClose={() => setEmbedOpen(false)}
+        getNode={() => waterfallRef.current}
+        title={t('agentic.waterfallLabel')}
+        sourceUrl={typeof window !== 'undefined' ? window.location.href : ''}
+      />
     </div>
   );
 }
