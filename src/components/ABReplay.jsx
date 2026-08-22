@@ -262,7 +262,7 @@ export default function ABReplay({
       {/* Prefill progress (rAF-driven width via sim clock — no CSS transition) */}
       <div className="field-head" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
         <span>
-          <Zap size={12} style={{ verticalAlign: '-2px', marginRight: '3px', color: 'var(--prefill)' }} />
+          <Zap size={12} style={{ verticalAlign: '-2px', marginInlineEnd: '3px', color: 'var(--prefill)' }} />
           Prefill {view.prefillProgress.toLocaleString()} / {safePromptTokens.toLocaleString()} tok
         </span>
         <span className={`tag ${phaseTagClass(view)}`} style={{ fontSize: '0.62rem', padding: '2px 6px' }}>
@@ -282,7 +282,7 @@ export default function ABReplay({
       {/* Decode progress */}
       <div className="field-head" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
         <span>
-          <Gauge size={12} style={{ verticalAlign: '-2px', marginRight: '3px', color: 'var(--decode)' }} />
+          <Gauge size={12} style={{ verticalAlign: '-2px', marginInlineEnd: '3px', color: 'var(--decode)' }} />
           Decode {view.decodeTokens.toLocaleString()} / {safeOutputTokens.toLocaleString()} tok
         </span>
         <span style={{ ...numStyle, fontSize: '0.72rem' }}>{view.decodeTokens > 0 && preset.decodeSpeed > 0 ? `${Math.round(view.decodeTokens / ((simTime - ttft) || 1e-9))} tok/s live` : ''}</span>
@@ -474,7 +474,7 @@ export default function ABReplay({
         <div className="metric-grid" style={{ marginTop: '16px' }}>
           <div
             className="metric"
-            style={{ borderLeftColor: speedupTotal >= 1 ? 'var(--decode)' : 'var(--danger)', textAlign: 'center' }}
+            style={{ borderInlineStartColor: speedupTotal >= 1 ? 'var(--decode)' : 'var(--danger)', textAlign: 'center' }}
           >
             <div className="metric-label">Overall walltime</div>
             <div className="metric-value" style={{ color: speedupTotal >= 1 ? 'var(--decode)' : 'var(--danger)', fontSize: '1.5rem' }}>
@@ -482,13 +482,13 @@ export default function ABReplay({
             </div>
             <div className="metric-sub">System A vs System B</div>
           </div>
-          <div className="metric" style={{ borderLeftColor: 'var(--prefill)', textAlign: 'center' }}>
+          <div className="metric" style={{ borderInlineStartColor: 'var(--prefill)', textAlign: 'center' }}>
             <div className="metric-label">TTFT advantage</div>
             <div className="metric-value" style={{ color: 'var(--prefill)' }}>
               {ttftA > 0 && Number.isFinite(ttftA) ? `${(ttftB / ttftA).toFixed(2)}x` : '—'}
             </div>
           </div>
-          <div className="metric" style={{ borderLeftColor: 'var(--agent)', textAlign: 'center' }}>
+          <div className="metric" style={{ borderInlineStartColor: 'var(--agent)', textAlign: 'center' }}>
             <div className="metric-label">First to finish</div>
             <div className="metric-value" style={{ fontSize: '1rem' }}>{winnerLabel}</div>
           </div>

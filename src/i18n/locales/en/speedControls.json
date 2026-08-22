@@ -1,0 +1,16 @@
+{
+  "ariaLabel": "Simulation speed controls",
+  "prefillSpeed": "Prefill Speed",
+  "computeBound": "compute bound",
+  "decodeSpeed": "Decode Speed",
+  "bandwidthBound": "bandwidth bound",
+  "prefillAria": "Prefill speed in tokens per second",
+  "prefillValueAria": "Prefill speed value",
+  "decodeAria": "Decode speed in tokens per second",
+  "decodeValueAria": "Decode speed value",
+  "prefillHint": "Prompt processing — parallel ingestion of all prompt tokens into the KV cache (sets TTFT)",
+  "decodeHint": "Token generation — 1 token per step (TPOT = {tpot} ms/tok)",
+  "timeScale": "Time Scale",
+  "timeScaleAria": "Visual time scale",
+  "resetTooltip": "Reset visualizer"
+}

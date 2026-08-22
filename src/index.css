@@ -307,7 +307,7 @@ a { color: var(--accent); }
 
 .sanity-warnings ul {
   margin: 8px 0 0;
-  padding-left: 22px;
+  padding-inline-start: 22px;
   display: grid;
   gap: 4px;
 }
@@ -414,8 +414,8 @@ input[type="number"]:focus, input[type="text"]:focus, select:focus {
   box-shadow: 0 0 0 2px var(--accent-dim);
 }
 
-input[type="number"] { text-align: right; }
-input[type="text"] { text-align: left; }
+input[type="number"] { text-align: end; }
+input[type="text"] { text-align: start; }
 select { cursor: pointer; }
 select:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -526,7 +526,7 @@ input[type="range"]::-moz-range-thumb {
   min-width: 720px;
   border-collapse: collapse;
   font-size: 0.8rem;
-  text-align: left;
+  text-align: start;
   font-variant-numeric: tabular-nums;
 }
 
@@ -586,7 +586,7 @@ input[type="range"]::-moz-range-thumb {
   width: 7px;
   height: 15px;
   background: var(--decode);
-  margin-left: 2px;
+  margin-inline-start: 2px;
   animation: cursor-blink 0.8s steps(2, start) infinite;
 }
 
@@ -1213,10 +1213,10 @@ kbd {
   transition: opacity 0.12s ease;
 }
 
-/* Narrow contexts (inline spans, table rows): anchor to the left edge so the
-   popover cannot clip off the right side of its panel. */
+/* Narrow contexts (inline spans, table rows): anchor to the inline-start edge
+   so the popover cannot clip off the far side of its panel. */
 .why-pop-left {
-  left: 0;
+  inset-inline-start: 0;
   transform: none;
 }
 

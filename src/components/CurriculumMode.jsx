@@ -50,7 +50,7 @@ export default function CurriculumMode() {
     alignItems: 'flex-start',
     gap: '10px',
     width: '100%',
-    textAlign: 'left',
+    textAlign: 'start',
     padding: '10px 12px',
     borderRadius: 'var(--radius-md)',
     border: `1px solid ${
@@ -200,7 +200,7 @@ export default function CurriculumMode() {
                   </span>
                   <span>{opt}</span>
                   {checked && idx === lesson.correctIndex && (
-                    <CheckCircle2 size={15} style={{ marginLeft: 'auto', flexShrink: 0, color: 'var(--decode)' }} />
+                    <CheckCircle2 size={15} style={{ marginInlineStart: 'auto', flexShrink: 0, color: 'var(--decode)' }} />
                   )}
                 </button>
               ))}
