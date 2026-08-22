@@ -49,6 +49,13 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- New `GET /api/og` endpoint (#105): renders a 1200x630 PNG Open Graph chart
+  card from URL params (`preset`, `prefill`, `decode`, `scenario`, `prompt`)
+  via @vercel/og. Binary image response (`image/png`, not JSON/schema-
+  versioned); errors use the standard problem+json shape. Cached by a sha256
+  of the normalized config in memory and at the CDN via long-lived immutable
+  Cache-Control headers.
+- Affected endpoints: `/api/og`.
 - `/api/benchmarks` and `/api/best` rows now carry a `dataQuality` block
   (`status: ok|flagged`, `flaggedRuns`, `flagCounts`, affected runIds) from
   the new unit-consistency audit; `/api/benchmarks` adds a top-level
