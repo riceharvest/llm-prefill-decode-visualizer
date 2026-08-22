@@ -166,6 +166,24 @@ export default function App() {
     });
   }, [activeTab, selectedPreset, prefillSpeed, decodeSpeed, simSpeedMultiplier, selectedFlags]);
 
+  // OG chart image (#105): point the og:image / twitter:image meta tags at
+  // /api/og with the current config so shared links preview the actual chart.
+  // Crawlers that don't run JS still get the static defaults from index.html.
+  useEffect(() => {
+    const qs = new URLSearchParams({ preset: selectedPreset });
+    qs.set('prefill', String(prefillSpeed));
+    qs.set('decode', String(decodeSpeed));
+    const ogUrl = `/api/og?${qs.toString()}`;
+    for (const selector of ['meta[property="og:image"]', 'meta[name="twitter:image"]']) {
+      document.querySelector(selector)?.setAttribute('content', ogUrl);
+    }
+    const title = document.querySelector('meta[property="og:title"]');
+    if (title) {
+      const hw = HARDWARE_PRESETS.find(p => p.id === selectedPreset);
+      if (hw) title.setAttribute('content', `${hw.name} — ${decodeSpeed} tok/s decode`);
+    }
+  }, [selectedPreset, prefillSpeed, decodeSpeed]);
+
   const handleApplyPreset = (preset) => {
     setPrefillSpeed(preset.prefillSpeed);
     setDecodeSpeed(preset.decodeSpeed);
