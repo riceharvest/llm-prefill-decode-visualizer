@@ -16,7 +16,10 @@ import CurriculumMode from './components/CurriculumMode';
 import SloBudgetsPanel, { useSloBudgets } from './components/SloBudgetsPanel';
 import GuidedTour, { hasSeenTour } from './components/GuidedTour';
 import { HARDWARE_PRESETS } from './utils/presets';
-import { toLocalPreset } from './utils/localMaxxing';
+import { toLocalPreset, hardwareName } from './utils/localMaxxing';
+import {
+  describeConfig, permalinkHref, readPermalinkTitle, documentTitleFor
+} from './utils/permalink';
 import { readParam, writeParams } from './utils/urlState';
 import {
   serializeSettings, parseSettings,
@@ -79,6 +82,35 @@ export default function App() {
     runs: [],
     selectedRunId: ''
   });
+
+  // Titled permalinks (issue #106): derive a human-readable title for the
+  // current config so share links and document.title read like content —
+  // "Qwen3 32B Q4 on RTX 4090 24GB, 8K agentic loop" — instead of a query
+  // string. Prompt tokens live in per-tab URL state, which is always fresh by
+  // share time because every visualizer writeParams() on change.
+  const selectedLmxRun = useMemo(() => (
+    localMaxxingContext.runs.find(r => r.id === localMaxxingContext.selectedRunId) || null
+  ), [localMaxxingContext]);
+  const permalinkTitle = useMemo(() => describeConfig({
+    presetId: selectedPreset,
+    hardwareLabel: selectedPreset.startsWith('lmx:') && selectedLmxRun
+      ? hardwareName(selectedLmxRun)
+      : undefined,
+    modelId: selectedLmxRun?.model?.hfId || localMaxxingContext.modelId,
+    quantization: selectedLmxRun?.engine?.quantization || localMaxxingContext.quantization,
+    promptTokens: Number(readParam('prompt')) || undefined,
+    activeTab
+  }), [selectedPreset, selectedLmxRun, localMaxxingContext.modelId, localMaxxingContext.quantization, activeTab]);
+
+  // An opened shared link shows its own encoded title; otherwise the derived
+  // config title sits under the site brand.
+  useEffect(() => {
+    document.title = documentTitleFor(
+      readPermalinkTitle(window.location.search),
+      permalinkTitle,
+      t('header.brandTitle')
+    );
+  }, [permalinkTitle]);
 
   const comparisonPresets = useMemo(() => [
     ...localMaxxingContext.runs.map(toLocalPreset),
@@ -247,9 +279,17 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [handleUndo, handleRedo]);
 
+  // Issue #106: share a titled permalink — the current query-string state
+  // (which already encodes preset, speeds, flags and every tab's sim inputs)
+  // plus the auto-generated human-readable `title` param and #s/<slug>.
   const handleShare = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      const href = permalinkHref({
+        origin: window.location.origin,
+        pathname: window.location.pathname,
+        search: window.location.search
+      }, permalinkTitle);
+      await navigator.clipboard.writeText(href);
     } catch {
       // clipboard may be unavailable; no-op
     }
@@ -280,6 +320,7 @@ export default function App() {
         onApplyPreset={handleApplyPreset}
         onShare={handleShare}
         onEmbed={handleEmbed}
+        shareTitle={permalinkTitle}
         onTour={() => setTourOpen(true)}
       />
 
