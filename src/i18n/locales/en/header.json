@@ -5,6 +5,13 @@
   "localMaxxingRun": "LocalMaxxing measured run",
   "shareTooltip": "Copy share link with current settings",
   "shortcutsTooltip": "Keyboard shortcuts (?)",
+  "themeLabel": "Theme",
+  "themeAriaLabel": "Color theme (dark, light, or high contrast)",
+  "themes": {
+    "dark": "Dark",
+    "light": "Light",
+    "high-contrast": "High contrast"
+  },
   "navAriaLabel": "Visualizer sections",
   "embedTooltip": "Copy embeddable iframe snippet with current settings"
 }

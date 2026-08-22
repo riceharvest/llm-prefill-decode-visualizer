@@ -46,38 +46,90 @@
   --shadow-panel: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px -12px rgba(0,0,0,0.6);
 }
 
-/* Light theme for users whose OS prefers it (site default is dark). */
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg-app: #F5F7FA;
-    --bg-panel: #FFFFFF;
-    --bg-inset: #EEF1F5;
-    --bg-raised: #FFFFFF;
-    --bg-hover: #E4E9EF;
+/* Light theme (issue #81): an explicit [data-theme] choice set by
+   src/utils/theme.js, no longer an automatic OS override — users pick it from
+   the header alongside dark and high-contrast. Dark remains the :root default
+   (no attribute needed). */
+[data-theme='light'] {
+  --bg-app: #F5F7FA;
+  --bg-panel: #FFFFFF;
+  --bg-inset: #EEF1F5;
+  --bg-raised: #FFFFFF;
+  --bg-hover: #E4E9EF;
 
-    --text-main: #16202B;
-    --text-muted: #4C5A68;
-    --text-subtle: #8493A2;
+  --text-main: #16202B;
+  --text-muted: #4C5A68;
+  --text-subtle: #8493A2;
 
-    --border: #D6DDE5;
-    --border-strong: #B9C4CF;
+  --border: #D6DDE5;
+  --border-strong: #B9C4CF;
 
-    --accent-dim: rgba(14, 165, 200, 0.10);
-    --accent-ink: #FFFFFF;
+  --accent-dim: rgba(14, 165, 200, 0.10);
+  --accent-ink: #FFFFFF;
 
-    --prefill-dim: rgba(2, 132, 199, 0.08);
-    --prefill-border: rgba(2, 132, 199, 0.40);
+  --prefill-dim: rgba(2, 132, 199, 0.08);
+  --prefill-border: rgba(2, 132, 199, 0.40);
 
-    --decode-dim: rgba(5, 150, 105, 0.08);
-    --decode-border: rgba(5, 150, 105, 0.40);
+  --decode-dim: rgba(5, 150, 105, 0.08);
+  --decode-border: rgba(5, 150, 105, 0.40);
 
-    --agent-dim: rgba(217, 119, 6, 0.10);
-    --agent-border: rgba(217, 119, 6, 0.40);
+  --agent-dim: rgba(217, 119, 6, 0.10);
+  --agent-border: rgba(217, 119, 6, 0.40);
 
-    --shadow-panel: 0 1px 0 rgba(255,255,255,0.8) inset, 0 8px 24px -12px rgba(22, 32, 43, 0.18);
-  }
+  --shadow-panel: 0 1px 0 rgba(255,255,255,0.8) inset, 0 8px 24px -12px rgba(22, 32, 43, 0.18);
+}
 
-  html { color-scheme: light; }
+[data-theme='light'] { color-scheme: light; }
+
+/* High-contrast theme (issue #81): honors prefers-contrast: more as a dedicated,
+   independently selectable palette. Pure black/white only — no mid-grays — with
+   opaque borders and thicker focus outlines so every edge passes contrast checks. */
+[data-theme='high-contrast'] {
+  --bg-app: #000000;
+  --bg-panel: #000000;
+  --bg-inset: #000000;
+  --bg-raised: #000000;
+  --bg-hover: #FFFFFF;
+
+  --text-main: #FFFFFF;
+  --text-muted: #FFFFFF;
+  --text-subtle: #FFFFFF;
+
+  --border: #FFFFFF;
+  --border-strong: #FFFFFF;
+  --border-focus: #FFFF00;
+
+  --accent: #00E5FF;
+  --accent-strong: #FFFFFF;
+  --accent-dim: rgba(0, 229, 255, 0.18);
+  --accent-ink: #000000;
+
+  /* Phase colors keep their hues but drop translucent dimming/borders —
+     on pure black anything below full opacity reads as a mid-gray. */
+  --prefill: #63C8FF;
+  --prefill-dim: rgba(99, 200, 255, 0.16);
+  --prefill-border: #63C8FF;
+
+  --decode: #3DF0A8;
+  --decode-dim: rgba(61, 240, 168, 0.16);
+  --decode-border: #3DF0A8;
+
+  --agent: #FFD24D;
+  --agent-dim: rgba(255, 210, 77, 0.16);
+  --agent-border: #FFD24D;
+
+  --danger: #FF7B7B;
+  --warn: #FFB13D;
+
+  --shadow-panel: none;
+}
+
+[data-theme='high-contrast'] { color-scheme: dark; }
+
+/* Thicker focus outlines: subtle rings are exactly what low-vision users
+   can't see, so the high-contrast theme doubles outline weight. */
+[data-theme='high-contrast'] :focus-visible {
+  outline-width: 3px;
 }
 
 * {
@@ -147,6 +199,24 @@ a { color: var(--accent); }
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #3A4757;
+}
+
+/* Hardcoded dark-theme grays above would read as mid-grays on pure black */
+[data-theme='high-contrast'] ::-webkit-scrollbar-thumb {
+  background: #FFFFFF;
+  border-color: #000000;
+}
+[data-theme='high-contrast'] ::-webkit-scrollbar-thumb:hover {
+  background: #FFFF00;
+}
+[data-theme='high-contrast'] .btn:hover {
+  /* Inverted hover: white fill, black text — unmistakable, zero mid-tones */
+  background: #FFFFFF;
+  border-color: #FFFFFF;
+  color: #000000;
+}
+[data-theme='high-contrast'] input[type='range'] {
+  background: #FFFFFF;
 }
 
 /* ---------- Layout ---------- */
@@ -1063,6 +1133,66 @@ input[type="range"]::-moz-range-thumb {
 
 @media (max-width: 520px) {
   .metric-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------- Touch targets (issue #81) ----------
+   WCAG 2.5.8 / platform HIG minimum on coarse pointers: every interactive
+   control gets a 44×44px hit area. Pointer-fine devices keep the compact
+   desktop sizes above — this block never fires for mouse users.
+   Audited controls: time-scale segmented buttons (.seg), the prefix-caching /
+   chunked-prefill / analogy / spec-decode toggles (.btn), tab buttons, icon-only
+   buttons, concept-check choices, and range-slider thumbs. */
+@media (pointer: coarse) {
+  .btn,
+  .tab-btn,
+  .concept-choice {
+    min-height: 44px;
+  }
+
+  /* Time-scale multiplier buttons and other segmented pickers */
+  .seg button {
+    min-height: 44px;
+    padding-block: 8px;
+  }
+
+  /* Icon-only buttons stretch to a square minimum without resizing their glyph */
+  .btn-icon,
+  .misconception-dismiss {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Sliders: the whole control becomes a tall touch strip while the visible
+     track stays thin via the runnable-track rules below; the thumb grows to a
+     graspable size (28px visual, centered on the 4px track). */
+  input[type='range'] {
+    height: 44px;
+    background: transparent;
+  }
+
+  input[type='range']::-webkit-slider-runnable-track {
+    height: 4px;
+    background: #28323E;
+    border-radius: 2px;
+  }
+
+  input[type='range']::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+    /* Center the 28px thumb on the 4px track: (4 - 28) / 2 = -12px */
+    margin-top: -12px;
+  }
+
+  input[type='range']::-moz-range-track {
+    height: 4px;
+    background: #28323E;
+    border-radius: 2px;
+  }
+
+  input[type='range']::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+  }
 }
 
 /* Keyboard shortcut hints */

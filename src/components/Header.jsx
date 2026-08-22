@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Cpu, Bot, Layers, MessageSquare, HelpCircle, BarChart3, Columns2, HardDrive, Link2, Check, Code2, GitCompare, ListFilter, GraduationCap, Keyboard } from 'lucide-react';
 import { HARDWARE_PRESETS } from '../utils/presets';
+import { THEMES, THEME_CHANGE_EVENT, getTheme, setTheme } from '../utils/theme';
 import { t } from '../i18n/strings';
 import AnalogyToggle from './AnalogyToggle';
 
@@ -18,6 +19,16 @@ export default function Header({
 }) {
   const [copied, setCopied] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
+  // Issue #81: dark / light / high-contrast selector. theme.js owns resolution
+  // (localStorage → prefers-contrast → OS scheme) and applies <html data-theme>;
+  // this just mirrors the applied value into the select.
+  const [theme, setThemeState] = useState(getTheme);
+
+  useEffect(() => {
+    const sync = () => setThemeState(getTheme());
+    window.addEventListener(THEME_CHANGE_EVENT, sync);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, sync);
+  }, []);
 
   const handleShare = async () => {
     await onShare();
@@ -80,6 +91,22 @@ export default function Header({
               {HARDWARE_PRESETS.map(p => (
                 <option key={p.id} value={p.id}>
                   {p.icon} {p.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Color theme (issue #81): dark default, light, and a pure
+                black/white high-contrast palette honoring prefers-contrast */}
+            <label htmlFor="theme-select" className="field-label" style={{ marginInlineEnd: '-4px' }}>{t('header.themeLabel')}</label>
+            <select
+              id="theme-select"
+              value={theme}
+              onChange={(e) => setTheme(e.target.value)}
+              aria-label={t('header.themeAriaLabel')}
+            >
+              {THEMES.map(id => (
+                <option key={id} value={id}>
+                  {t(`header.themes.${id}`)}
                 </option>
               ))}
             </select>
