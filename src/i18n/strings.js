@@ -66,6 +66,14 @@ export const locales = {
       defaultName: 'Untitled snapshot'
     },
 
+    // What's-new banner (#112) — entry titles live in /changelog.json; these
+    // are the banner's own chrome strings.
+    changelog: {
+      badge: "What's new",
+      tryIt: 'Try it',
+      dismiss: 'Dismiss'
+    },
+
     header: {
       brandTitle: 'LLM Prefill & Decode Speed Visualizer',
       brandSubtitle: 'Measure walltime, TTFT & TPOT across single-turn chat and multi-turn agentic loops',
