@@ -1,6 +1,6 @@
 import React from 'react';
 import { Play, Pause, RotateCcw, FastForward, Gauge, Zap } from 'lucide-react';
-import { sanityWarnings } from '../../api/_math.js';
+import { sanityWarnings } from '../../lib/_math.js';
 import SanityWarnings from './SanityWarnings';
 import Analogy from './Analogy';
 import { t } from '../i18n/strings';

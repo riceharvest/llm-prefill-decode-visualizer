@@ -3,12 +3,12 @@ import react from '@vitejs/plugin-react'
 
 // The ./api handlers are Vercel serverless functions in production. Mount them
 // on the Vite middleware stack in dev so /api/* works with plain `npm run dev`.
-import benchmarksApi from './api/handlers/benchmarks.js'
-import bestApi from './api/handlers/best.js'
-import computeApi from './api/handlers/compute.js'
-import localmaxxingApi from './api/handlers/localmaxxing.js'
-import presetsApi from './api/handlers/presets.js'
-import specApi from './api/handlers/spec.js'
+import benchmarksApi from './lib/handlers/benchmarks.js'
+import bestApi from './lib/handlers/best.js'
+import computeApi from './lib/handlers/compute.js'
+import localmaxxingApi from './lib/handlers/localmaxxing.js'
+import presetsApi from './lib/handlers/presets.js'
+import specApi from './lib/handlers/spec.js'
 
 const apiRoutes = {
   '/api/benchmarks': benchmarksApi,
