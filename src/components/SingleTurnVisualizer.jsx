@@ -28,6 +28,7 @@ import {
   buildDoneAnnouncement
 } from '../utils/liveAnnouncer';
 import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
+import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import ConceptCheck from './ConceptCheck';
 import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
@@ -251,6 +252,8 @@ export default function SingleTurnVisualizer({
     setIsPlaying(false);
   };
 
+  const prefersReducedMotion = usePrefersReducedMotion();
+
   // Start / Resume simulation
   useEffect(() => {
     if (!isPlaying) {
@@ -288,8 +291,10 @@ export default function SingleTurnVisualizer({
         return;
       }
 
-      // Handle instant mode
-      if (simSpeedMultiplier === 'instant') {
+      // Handle instant mode — or prefers-reduced-motion (issue #63): the
+      // streaming animation is JS-driven, so reduced-motion users get the
+      // final state in one step instead of a frame-by-frame stream.
+      if (simSpeedMultiplier === 'instant' || prefersReducedMotion) {
         setCurrentPrefillProgress(totalPrefillTokens);
         setCurrentDecodeTokens(safeOutputTokens);
         setElapsedTime(expectedTotalTime);
@@ -347,7 +352,7 @@ export default function SingleTurnVisualizer({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isPlaying, simSpeedMultiplier, promptTokens, outputTokens, prefillSpeed, decodeSpeed, effectiveDecodeSpeed, expectedTTFT, expectedTotalTime, totalPrefillTokens, safeOutputTokens, itlSchedule, ctxScaleEnabled, ctxHalfSafe]);
+  }, [isPlaying, simSpeedMultiplier, prefersReducedMotion, promptTokens, outputTokens, prefillSpeed, decodeSpeed, effectiveDecodeSpeed, expectedTTFT, expectedTotalTime, totalPrefillTokens, safeOutputTokens, itlSchedule, ctxScaleEnabled, ctxHalfSafe]);
 
   const prefillPct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedTTFT / expectedTotalTime) * 100 : 0;
   const decodePct = Number.isFinite(expectedTotalTime) && expectedTotalTime > 0 ? (expectedDecodeTime / expectedTotalTime) * 100 : 0;
@@ -456,6 +461,24 @@ export default function SingleTurnVisualizer({
   const phaseTagClass = phase === 'prefilling' ? 'tag-prefill'
     : phase === 'decoding' || phase === 'completed' ? 'tag-decode' : '';
 
+  // Screen-reader run summary (issue #63): an aria-live region narrating the
+  // simulation for users who can't watch the token stream. Progress is bucket
+  // -rounded (25% prefill / 10% decode) so the rAF loop produces a handful of
+  // announcements per run instead of one per frame.
+  const srPrefillBucket = Math.min(4, Math.floor(
+    (currentPrefillProgress / Math.max(1, totalPrefillTokens)) * 4
+  ));
+  const srDecodeBucket = Math.min(10, Math.floor(
+    (currentDecodeTokens / Math.max(1, safeOutputTokens)) * 10
+  ));
+  const srSummary = phase === 'idle'
+    ? 'Simulation idle. Set the workload and press Start to run it.'
+    : phase === 'prefilling'
+      ? `Prefilling: about ${srPrefillBucket * 25} percent of ${formatTokens(totalPrefillTokens)} prompt tokens ingested.`
+      : phase === 'decoding'
+        ? `Prefill finished in ${formatTime(expectedTTFT)}. Decoding at ${displayDecodeSpeed} tokens per second: about ${srDecodeBucket * 10} percent of ${formatTokens(safeOutputTokens)} output tokens generated.`
+        : `Run complete in ${formatTime(expectedTotalTime)}: ${formatTokens(totalPrefillTokens)} prompt tokens prefilled, ${safeOutputTokens.toLocaleString()} tokens decoded.`;
+
   // --- Misconception callouts: fire once per session at the teachable moment ---
   const [activeCallouts, setActiveCallouts] = useState([]);
   const fireMisconception = (id) => {
@@ -516,6 +539,8 @@ export default function SingleTurnVisualizer({
 
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
+      {/* Issue #63: live narration of the animated run for screen readers */}
+      <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
 
       {/* Top Parameter Cards */}
       <section className="panel" aria-label={t('singleTurn.paramsPanelAria')}>

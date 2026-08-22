@@ -7,6 +7,7 @@ import {
   formatTokens
 } from '../utils/presets';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 
 // Map an /api/presets hardware entry onto the internal preset shape so the
 // fetched agent data can seed/extend the lane selectors exactly like the
@@ -155,6 +156,8 @@ export default function ABReplay({
     handleReset();
   }, [hardwareA, hardwareB, promptTokens, outputTokens]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const prefersReducedMotion = usePrefersReducedMotion();
+
   // Single frame-synchronized playback loop for BOTH lanes
   useEffect(() => {
     if (!isPlaying) {
@@ -179,8 +182,9 @@ export default function ABReplay({
         return;
       }
 
-      // Instant mode completes the whole synchronized run in one frame
-      if (simSpeedMultiplier === 'instant') {
+      // Instant mode — or prefers-reduced-motion (issue #63): complete the
+      // whole synchronized run in one frame with no motion.
+      if (simSpeedMultiplier === 'instant' || prefersReducedMotion) {
         seekTo(masterTotal);
         setIsPlaying(false);
         return;
@@ -201,7 +205,7 @@ export default function ABReplay({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isPlaying, simSpeedMultiplier, masterTotal, setIsPlaying]);
+  }, [isPlaying, simSpeedMultiplier, prefersReducedMotion, masterTotal, setIsPlaying]);
 
   // Derive both lanes' visuals from the SAME clock value — this is the
   // frame-synchronization guarantee. No per-lane timers exist.
@@ -230,6 +234,15 @@ export default function ABReplay({
   const phaseLabel = v => v.phase === 'idle' ? 'READY'
     : v.phase === 'prefilling' ? 'PREFILL'
       : v.phase === 'decoding' ? 'DECODE' : 'DONE';
+
+  // Screen-reader run summary (issue #63): aria-live narration of both lanes.
+  // Text only changes on lane phase transitions and at completion, so the
+  // synchronized rAF loop never floods assistive tech with per-frame output.
+  const srSummary = simTime <= 0
+    ? 'A/B replay idle. Pick two systems and press Simulate Run.'
+    : simTime >= masterTotal
+      ? `Replay complete. ${winnerLabel}: ${presetA.name} in ${formatTime(totalA)}, ${presetB.name} in ${formatTime(totalB)}.`
+      : `${presetA.name}: ${phaseLabel(laneAView) === 'DONE' ? 'finished' : 'still running, ' + phaseLabel(laneAView).toLowerCase()}. ${presetB.name}: ${phaseLabel(laneBView) === 'DONE' ? 'finished' : 'still running, ' + phaseLabel(laneBView).toLowerCase()}.`;
 
   const rowStyle = { display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '0.82rem' };
   const numStyle = { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 };
@@ -315,6 +328,9 @@ export default function ABReplay({
 
   return (
     <div className="stack">
+
+      {/* Issue #63: live narration of the synchronized replay for screen readers */}
+      <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
 
       {/* Shared workload parameters */}
       <section className="panel" aria-label="A/B replay parameters">

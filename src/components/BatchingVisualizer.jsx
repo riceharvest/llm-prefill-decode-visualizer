@@ -5,6 +5,7 @@ import { readParamNum, writeParams } from '../utils/urlState';
 import { generateRequests, simulateBatching, simulateStaticBatching } from '../utils/batchScheduling';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import Metric from './Metric';
+import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { t } from '../i18n/strings';
 
 // Chunk-size slider stops. 0 = chunked prefill OFF (whole prompt per step).
@@ -131,6 +132,8 @@ export default function BatchingVisualizer({
     simTimeRef.current = 0;
   };
 
+  const prefersReducedMotion = usePrefersReducedMotion();
+
   useEffect(() => {
     if (!isPlaying) {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
@@ -148,7 +151,9 @@ export default function BatchingVisualizer({
       const realDelta = (now - lastTickRef.current) / 1000;
       lastTickRef.current = now;
 
-      if (simSpeedMultiplier === 'instant' || !Number.isFinite(makespan) || makespan <= 0) {
+      // Instant mode — or prefers-reduced-motion (issue #63): jump straight
+      // to the final schedule instead of animating the playhead across it.
+      if (simSpeedMultiplier === 'instant' || prefersReducedMotion || !Number.isFinite(makespan) || makespan <= 0) {
         setElapsedSim(makespan);
         setIsPlaying(false);
         return;
@@ -168,7 +173,7 @@ export default function BatchingVisualizer({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isPlaying, simSpeedMultiplier, makespan, setIsPlaying]);
+  }, [isPlaying, simSpeedMultiplier, prefersReducedMotion, makespan, setIsPlaying]);
 
   // Current engine step index at the playhead (binary search over steps).
   const currentStepIndex = useMemo(() => {
@@ -253,13 +258,29 @@ export default function BatchingVisualizer({
   const continuousSaving = staticSim.makespan - makespan;
   const continuousSavingPct = staticSim.makespan > 0 ? (continuousSaving / staticSim.makespan) * 100 : 0;
 
+  // Screen-reader run summary (issue #63): aria-live narration of the batch
+  // playhead, bucket-rounded to 25% of the makespan so the rAF loop produces
+  // a few announcements per run instead of one per frame.
+  const srFinishedCount = requests.filter(
+    r => r.finishTime !== null && r.finishTime <= elapsedSim
+  ).length;
+  const srElapsedBucket = Math.min(4, Math.floor((elapsedSim / Math.max(1e-9, makespan)) * 4));
+  const srSummary = elapsedSim <= 0
+    ? 'Batching simulation idle. Set the workload and press Start.'
+    : elapsedSim >= makespan
+      ? `Batch complete in ${formatTime(makespan)}: ${numRequests} requests finished, ${formatTokens(summary.totalOutputTokens)} output tokens generated.`
+      : `${srFinishedCount} of ${numRequests} requests finished, ${runningIds.length} currently running. About ${srElapsedBucket * 25} percent of the ${formatTime(makespan)} schedule elapsed.`;
+
   return (
     <div className="stack">
+
+      {/* Issue #63: live narration of the animated playhead for screen readers */}
+      <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
 
       {/* Top Configuration Card */}
       <section className="panel" aria-label={t('batching.paramsPanelAria')}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
-          <h2 className="panel-title">
+          <h2 className="panel-title" tabIndex={-1} data-panel-heading>
             <Layers size={16} style={{ color: 'var(--agent)' }} />
             <span>{t('batching.paramsPanelTitle')}</span>
           </h2>

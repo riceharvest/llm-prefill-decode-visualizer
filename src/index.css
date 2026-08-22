@@ -511,6 +511,35 @@ input[type="range"] {
   cursor: pointer;
 }
 
+/* Issue #63: the `outline: none` above strips the global :focus-visible ring
+   from every slider in the app (29 of them). Restore a clearly visible ring
+   for keyboard focus, plus a halo on the thumb so the grab point reads too. */
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 4px;
+  border-radius: var(--radius-xs);
+}
+
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--accent-dim);
+}
+
+/* Issue #63: screen-reader-only text. Used for the aria-live run summaries
+   that narrate the animated simulations and for text alternatives to
+   purely visual chart state. Visually hidden, fully exposed to AT. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
