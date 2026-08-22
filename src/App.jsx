@@ -255,6 +255,19 @@ export default function App() {
     }
   };
 
+  // Issue #108: copy a ready-to-paste <iframe> snippet pointing at /embed
+  // with the exact same settings query string as the share link, so what the
+  // visitor sees embedded matches what the author configured.
+  const handleEmbed = async () => {
+    try {
+      const src = `${window.location.origin}/embed${window.location.search}`;
+      const snippet = `<iframe src="${src}" width="100%" height="520" frameborder="0" loading="lazy" title="${t('header.brandTitle')}"></iframe>`;
+      await navigator.clipboard.writeText(snippet);
+    } catch {
+      // clipboard may be unavailable; no-op
+    }
+  };
+
   return (
     <div className="app-shell">
 
@@ -266,6 +279,7 @@ export default function App() {
         setSelectedPreset={setSelectedPreset}
         onApplyPreset={handleApplyPreset}
         onShare={handleShare}
+        onEmbed={handleEmbed}
         onTour={() => setTourOpen(true)}
       />
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cpu, Bot, Layers, MessageSquare, HelpCircle, BarChart3, Columns2, HardDrive, Link2, Check, GitCompare, ListFilter, GraduationCap } from 'lucide-react';
+import { Cpu, Bot, Layers, MessageSquare, HelpCircle, BarChart3, Columns2, HardDrive, Link2, Check, Code2, GitCompare, ListFilter, GraduationCap } from 'lucide-react';
 import { HARDWARE_PRESETS } from '../utils/presets';
 import { t } from '../i18n/strings';
 import AnalogyToggle from './AnalogyToggle';
@@ -11,14 +11,23 @@ export default function Header({
   setSelectedPreset,
   onApplyPreset,
   onShare,
+  onEmbed,
   onTour
 }) {
   const [copied, setCopied] = useState(false);
+  const [embedCopied, setEmbedCopied] = useState(false);
 
   const handleShare = async () => {
     await onShare();
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Issue #108: copy a ready-to-paste <iframe> snippet for the current view.
+  const handleEmbed = async () => {
+    await onEmbed();
+    setEmbedCopied(true);
+    setTimeout(() => setEmbedCopied(false), 2000);
   };
 
   const tabs = [
@@ -97,6 +106,19 @@ export default function Header({
             >
               {copied ? <Check size={15} /> : <Link2 size={15} />}
               {copied ? t('common.copied') : t('common.share')}
+            </button>
+
+            {/* Embeddable iframe widget (issue #108) */}
+            <button
+              onClick={handleEmbed}
+              title={t('header.embedTooltip')}
+              aria-label={t('header.embedTooltip')}
+              data-tooltip={t('header.embedTooltip')}
+              className="btn"
+              style={embedCopied ? { borderColor: 'var(--decode-border)', color: 'var(--decode)' } : undefined}
+            >
+              {embedCopied ? <Check size={15} /> : <Code2 size={15} />}
+              {embedCopied ? t('common.copied') : t('common.embed')}
             </button>
           </div>
 

@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/embed",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/embed/",
+      "destination": "/index.html"
+    },
+    {
       "source": "/v1/:path*",
       "destination": "/api/:path*"
     },
