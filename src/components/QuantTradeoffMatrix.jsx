@@ -6,7 +6,7 @@ import {
   qualityNoteKey,
   weightsVramGb
 } from '../utils/quantMatrix';
-import { normalizeModelId } from '../../lib/_normalize.js';
+import { normalizeModelId } from '../../api/_normalize.js';
 import { t } from '../i18n/strings';
 
 // Quantization tradeoff matrix (issue #47).

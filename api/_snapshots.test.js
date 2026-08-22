@@ -27,8 +27,8 @@ afterEach(() => {
 const {
   computeSnapshotId, ensureSnapshot, getSnapshot, resolveRuns, resetSnapshots
 } = await import('./_snapshots.js');
-const { invalidateCache } = await import('./_localmaxxing.js');
-const { default: snapshotsHandler } = await import('./handlers/snapshots.js');
+const { invalidateCache } = await import('../api/_localmaxxing.js');
+const { default: snapshotsHandler } = await import('./_handlers/snapshots.js');
 
 beforeEach(() => {
   invalidateCache();

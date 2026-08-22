@@ -7,7 +7,7 @@ import {
   GPU_CATALOG,
   gpuById
 } from './vramPlanner.js';
-import { vramBudget, DEFAULT_OVERHEAD_FRACTION } from '../../lib/_math.js';
+import { vramBudget, DEFAULT_OVERHEAD_FRACTION } from '../../api/_math.js';
 
 test('parseParamsB: B/T/bare tags', () => {
   assert.equal(parseParamsB('70B'), 70);

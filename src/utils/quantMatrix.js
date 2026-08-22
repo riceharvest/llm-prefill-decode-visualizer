@@ -6,7 +6,7 @@
 // bits-per-weight from the quant tag, weights-only VRAM from the family's
 // parameter count, and a rough quality-proxy tier.
 
-import { resolveQuant } from '../../lib/_quant.js';
+import { resolveQuant } from '../../api/_quant.js';
 
 // Quality proxy: community rules of thumb keyed on bits-per-weight. Deliberately
 // rough — real quality depends on model, task and quant implementation.

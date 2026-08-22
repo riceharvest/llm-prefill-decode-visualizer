@@ -30,7 +30,7 @@ import {
 import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import ConceptCheck from './ConceptCheck';
-import { sanityWarnings } from '../../lib/_math.js';
+import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
 import Metric from './Metric';
 import Analogy from './Analogy';

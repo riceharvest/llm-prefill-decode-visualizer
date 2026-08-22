@@ -2,24 +2,24 @@
 // Routes /api/* requests to the individual endpoint handlers.
 // Each handler module is imported and dispatched based on the pathname.
 
-import { handler as compute } from '../lib/handlers/compute.js';
-import { handler as presets } from '../lib/handlers/presets.js';
-import { handler as localmaxxing } from '../lib/handlers/localmaxxing.js';
-import { handler as benchmarks } from '../lib/handlers/benchmarks.js';
-import { handler as best } from '../lib/handlers/best.js';
-import { handler as diff } from '../lib/handlers/diff.js';
-import { handler as exportHandler } from '../lib/handlers/export.js';
-import { handler as health } from '../lib/handlers/health.js';
-import { handler as og } from '../lib/handlers/og.js';
-import { handler as parseConstraints } from '../lib/handlers/parse-constraints.js';
-import { handler as sizing } from '../lib/handlers/sizing.js';
-import { handler as snapshots } from '../lib/handlers/snapshots.js';
-import { handler as spec } from '../lib/handlers/spec.js';
-import { handler as vram } from '../lib/handlers/vram.js';
-import { handler as watch } from '../lib/handlers/watch.js';
-import { handler as watchRss } from '../lib/handlers/rss.xml.js';
-import { handler as watchDispatch } from '../lib/handlers/dispatch.js';
-import { handler as calcId } from '../lib/handlers/calc_id.js';
+import { default as compute } from './_handlers/compute.js';
+import { default as presets } from './_handlers/presets.js';
+import { default as localmaxxing } from './_handlers/localmaxxing.js';
+import { default as benchmarks } from './_handlers/benchmarks.js';
+import { default as best } from './_handlers/best.js';
+import { default as diff } from './_handlers/diff.js';
+import { default as exportHandler } from './_handlers/export.js';
+import { default as health } from './_handlers/health.js';
+import { default as og } from './_handlers/og.js';
+import { default as parseConstraints } from './_handlers/parse-constraints.js';
+import { default as sizing } from './_handlers/sizing.js';
+import { default as snapshots } from './_handlers/snapshots.js';
+import { default as spec } from './_handlers/spec.js';
+import { default as vram } from './_handlers/vram.js';
+import { default as watch } from './_watch_impl.js';
+import { default as watchRss } from './_handlers/rss.xml.js';
+import { default as watchDispatch } from './_handlers/dispatch.js';
+import { default as calcId } from './_handlers/calc_id.js';
 
 export const config = { runtime: 'nodejs' };
 
