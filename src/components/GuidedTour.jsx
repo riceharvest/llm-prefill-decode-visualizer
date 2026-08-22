@@ -90,7 +90,10 @@ export default function GuidedTour({ activeTab, setActiveTab, prefillSpeed, deco
   }, [onClose]);
 
   // Each step lives on a specific tab — switch there when entering the step.
+  // Never hijack the tab on the FIRST step: a shared link like ?tab=agentic
+  // must land on its tab, not get yanked back to the tour's starting tab.
   useEffect(() => {
+    if (stepIndex === 0) return;
     if (step.tab && activeTab !== step.tab) setActiveTab(step.tab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIndex]);
