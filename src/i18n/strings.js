@@ -28,6 +28,7 @@ export const locales = {
       retry: 'Retry',
       copied: 'Copied',
       share: 'Share',
+      embed: 'Embed',
       applied: 'Applied',
       selected: 'Selected',
       instant: 'INST'
@@ -72,6 +73,7 @@ export const locales = {
       presetLabel: 'Preset',
       localMaxxingRun: 'LocalMaxxing measured run',
       shareTooltip: 'Copy share link with current settings',
+      embedTooltip: 'Copy embeddable iframe snippet with current settings',
       navAriaLabel: 'Visualizer sections'
     },
 

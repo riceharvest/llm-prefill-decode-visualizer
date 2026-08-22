@@ -1268,3 +1268,32 @@ kbd {
     opacity: 0.7;
   }
 }
+
+/* Embeddable widget view (issue #108): chrome-free /embed route rendered
+   inside third-party <iframe>s. Tighter frame, no header/footer, one
+   attribution line linking back to the full app. */
+.embed-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.embed-stage {
+  flex: 1;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 12px;
+}
+
+.embed-attribution {
+  margin: 0;
+  padding: 6px 12px 10px;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--text-subtle);
+}
+
+.embed-attribution a {
+  color: var(--text-subtle);
+}
