@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import Header from './components/Header';
 import LocalMaxxingPresetPicker from './components/LocalMaxxingPresetPicker';
 import EngineFlagPicker from './components/EngineFlagPicker';
+import CollapsibleSection from './components/CollapsibleSection';
 import SpeedControls from './components/SpeedControls';
 import SingleTurnVisualizer from './components/SingleTurnVisualizer';
 import AgenticVisualizer from './components/AgenticVisualizer';
@@ -362,45 +363,59 @@ export default function App() {
       <ChangelogBanner />
 
       <main className="app-frame stack" ref={mainRef}>
-        <LocalMaxxingPresetPicker
-          selectedPreset={selectedPreset}
-          onApplyRun={handleApplyLocalMaxxingRun}
-          onContextChange={handleLocalMaxxingContext}
-        />
+        <CollapsibleSection id="localmaxxing" title={t('common.localMaxxingTitle') || 'LocalMaxxing measured presets'} badge="LIVE">
+          <LocalMaxxingPresetPicker
+            selectedPreset={selectedPreset}
+            onApplyRun={handleApplyLocalMaxxingRun}
+            onContextChange={handleLocalMaxxingContext}
+          />
+        </CollapsibleSection>
 
-        {/* Speed & Control Panel */}
-        <SpeedControls
-        prefillSpeed={prefillSpeed}
-        setPrefillSpeed={setPrefillSpeed}
-        decodeSpeed={decodeSpeed}
-        setDecodeSpeed={setDecodeSpeed}
-        simSpeedMultiplier={simSpeedMultiplier}
-        setSimSpeedMultiplier={setSimSpeedMultiplier}
-        isPlaying={isPlaying}
-        setIsPlaying={setIsPlaying}
-        onReset={handleReset}
-        />
+        {/* Speed controls only make sense on tabs that run a simulation */}
+        {['single', 'agentic', 'batching', 'compare', 'ab'].includes(activeTab) && (
+          <>
+            {/* Speed & Control Panel */}
+            <SpeedControls
+              prefillSpeed={prefillSpeed}
+              setPrefillSpeed={setPrefillSpeed}
+              decodeSpeed={decodeSpeed}
+              setDecodeSpeed={setDecodeSpeed}
+              simSpeedMultiplier={simSpeedMultiplier}
+              setSimSpeedMultiplier={setSimSpeedMultiplier}
+              isPlaying={isPlaying}
+              setIsPlaying={setIsPlaying}
+              onReset={handleReset}
+            />
 
-        {/* Engine flag modeling: documented llama.cpp/vLLM flag deltas */}
-        <EngineFlagPicker
-          prefillSpeed={prefillSpeed}
-          decodeSpeed={decodeSpeed}
-          selectedFlags={selectedFlags}
-          onToggleFlag={handleToggleFlag}
-          onApplyFlags={handleApplyFlags}
-        />
+            {/* Engine flag modeling: documented llama.cpp/vLLM flag deltas */}
+            <CollapsibleSection id="engine-flags" title="Engine flags" badge="SIMULATED DELTAS">
+              <EngineFlagPicker
+                prefillSpeed={prefillSpeed}
+                decodeSpeed={decodeSpeed}
+                selectedFlags={selectedFlags}
+                onToggleFlag={handleToggleFlag}
+                onApplyFlags={handleApplyFlags}
+              />
+            </CollapsibleSection>
+          </>
+        )}
 
-        {/* Settings history + named snapshots (#96) */}
-        <SnapshotsSidebar
-          currentQs={currentQs}
-          onRestore={handleRestoreSnapshot}
-          canUndo={settingsHistory.past.length > 0}
-          canRedo={settingsHistory.future.length > 0}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-        />
+        {/* Settings history + named snapshots (#96) — collapsed by default */}
+        <CollapsibleSection id="snapshots" title="Snapshots & history">
+          <SnapshotsSidebar
+            currentQs={currentQs}
+            onRestore={handleRestoreSnapshot}
+            canUndo={settingsHistory.past.length > 0}
+            canRedo={settingsHistory.future.length > 0}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+          />
+        </CollapsibleSection>
+
         {/* SLO budgets (issue #64): persisted targets checked on every tab */}
-        <SloBudgetsPanel budgets={sloBudgets} onChange={setSloBudgets} />
+        <CollapsibleSection id="slo-budgets" title="SLO budgets">
+          <SloBudgetsPanel budgets={sloBudgets} onChange={setSloBudgets} />
+        </CollapsibleSection>
 
       {/* Tab Content */}
         {activeTab === 'single' && (

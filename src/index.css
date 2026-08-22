@@ -1613,3 +1613,45 @@ kbd {
   overflow: hidden;
   white-space: nowrap;
 }
+
+/* --- Collapsible sections (UI declutter) --- */
+.collapse-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+.collapse-head:hover .panel-title {
+  text-decoration: underline;
+}
+.collapse-chevron {
+  margin-inline-start: auto;
+  color: var(--text-dim, #888);
+  font-size: 0.85rem;
+}
+.collapse-body {
+  margin-top: 14px;
+}
+
+/* Compact hint text under speed sliders — available on hover/focus, less vertical weight */
+.hint-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+  cursor: help;
+}
+.panel-inset:hover .hint-text,
+.panel-inset:focus-within .hint-text {
+  -webkit-line-clamp: unset;
+  opacity: 1;
+}
