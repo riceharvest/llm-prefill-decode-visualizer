@@ -1,0 +1,12 @@
+{
+  "title": "Snapshots",
+  "namePlaceholder": "e.g. 4090 fp16 32k ctx",
+  "nameAria": "Snapshot name",
+  "save": "Save snapshot of current settings",
+  "restore": "Restore snapshot",
+  "delete": "Delete snapshot",
+  "copyLink": "Copy share link for snapshot",
+  "empty": "No snapshots yet — tweak the settings above and save one.",
+  "emptySummary": "Saved configuration",
+  "defaultName": "Untitled snapshot"
+}

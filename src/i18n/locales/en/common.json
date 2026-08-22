@@ -1,0 +1,16 @@
+{
+  "pause": "Pause",
+  "reset": "Reset",
+  "simulateRun": "Simulate Run",
+  "startSimulation": "Start Simulation",
+  "pauseSimulation": "Pause Simulation",
+  "tok": "tok",
+  "tokPerSec": "tok/s",
+  "retry": "Retry",
+  "copied": "Copied",
+  "share": "Share",
+  "applied": "Applied",
+  "selected": "Selected",
+  "instant": "INST",
+  "embed": "Embed"
+}

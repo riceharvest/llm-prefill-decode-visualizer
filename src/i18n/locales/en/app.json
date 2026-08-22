@@ -1,0 +1,10 @@
+{
+  "footerTagline": "Open source inference benchmark instrument",
+  "shortcutsPrefix": "Shortcuts:",
+  "shortcutPlay": "play/pause",
+  "shortcutReset": "reset",
+  "shortcutUndo": "undo",
+  "shortcutRedo": "redo",
+  "shortcutTabs": "switch tabs",
+  "agentsLinePrefix": "AI agents: all data available as JSON —"
+}

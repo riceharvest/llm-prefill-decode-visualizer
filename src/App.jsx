@@ -25,7 +25,7 @@ import {
 import SnapshotsSidebar from './components/SnapshotsSidebar';
 import ChangelogBanner from './components/ChangelogBanner';
 import { useFocusPanelHeading } from './utils/focus';
-import { setLocale, getLocale, getDirection, t } from './i18n/strings';
+import { setLocale, syncDocument, t } from './i18n/strings';
 import { installTouchTooltips } from './utils/touchTooltips';
 
 export default function App() {
@@ -39,8 +39,7 @@ export default function App() {
   useEffect(() => {
     const lang = readParam('lang');
     if (lang) setLocale(lang);
-    document.documentElement.lang = getLocale();
-    document.documentElement.dir = getDirection();
+    syncDocument();
     installTouchTooltips();
   }, []);
   // Preset from the URL drives both the dropdown label AND the default speeds,
