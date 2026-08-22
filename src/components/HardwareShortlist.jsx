@@ -132,7 +132,7 @@ export default function HardwareShortlist() {
         </p>
 
         {/* Workload constraints */}
-        <div className="grid-auto" style={{ '--grid-min': '220px', marginBottom: '16px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '13.75rem', marginBottom: '16px' }}>
           <div className="panel-inset field">
             <div className="field-head">
               <span className="field-label">Min decode speed</span>

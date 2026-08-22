@@ -527,7 +527,7 @@ export default function SingleTurnVisualizer({
             )}
           </div>
           {specEnabled && (
-            <div className="grid-auto" style={{ '--grid-min': '220px' }}>
+            <div className="grid-auto" style={{ '--grid-min': '13.75rem' }}>
               <div className="field">
                 <div className="field-head">
                   <span className="field-label">{t('singleTurn.draftTokensPerStep')}</span>
@@ -579,7 +579,7 @@ export default function SingleTurnVisualizer({
                   typical α from community runs · click to apply
                 </span>
               </div>
-              <div className="grid-auto" style={{ '--grid-min': '260px', gap: '8px' }}>
+              <div className="grid-auto" style={{ '--grid-min': '16.25rem', gap: '8px' }}>
                 {suggestPairs().map(pair => {
                   const active = acceptance === pairAcceptance(pair) && draftTokens === Math.min(8, Math.max(2, pair.suggestedK));
                   return (
@@ -642,7 +642,7 @@ export default function SingleTurnVisualizer({
           </div>
           {jitterEnabled && (
             <>
-              <div className="grid-auto" style={{ '--grid-min': '220px' }}>
+              <div className="grid-auto" style={{ '--grid-min': '13.75rem' }}>
                 <div className="field">
                   <div className="field-head">
                     <span className="field-label">{t('singleTurn.itlVariance')}</span>
@@ -700,7 +700,7 @@ export default function SingleTurnVisualizer({
           </div>
           {ctxScaleEnabled && (
             <>
-              <div className="grid-auto" style={{ '--grid-min': '220px' }}>
+              <div className="grid-auto" style={{ '--grid-min': '13.75rem' }}>
                 <div className="field">
                   <div className="field-head">
                     <span className="field-label">{t('singleTurn.ctxHalfLabel')}</span>
@@ -834,7 +834,7 @@ export default function SingleTurnVisualizer({
           </div>
           {imagesEnabled && (
             <>
-              <div className="grid-auto" style={{ '--grid-min': '220px' }}>
+              <div className="grid-auto" style={{ '--grid-min': '13.75rem' }}>
                 <div className="field">
                   <div className="field-head">
                     <span className="field-label">Number of images</span>
@@ -887,7 +887,7 @@ export default function SingleTurnVisualizer({
           )}
         </div>
 
-        <div className="grid-auto" style={{ '--grid-min': '280px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '17.5rem' }}>
           {/* Prompt Tokens Slider */}
           <div className="panel-inset field">
             <div className="field-head">
@@ -918,7 +918,7 @@ export default function SingleTurnVisualizer({
                   setPromptTokens(Number(e.target.value));
                   handleReset();
                 }}
-                style={{ width: '80px' }}
+                style={{ width: '5rem' }}
               />
             </div>
             <div className="field-scale">
@@ -958,7 +958,7 @@ export default function SingleTurnVisualizer({
                   setOutputTokens(Number(e.target.value));
                   handleReset();
                 }}
-                style={{ width: '80px' }}
+                style={{ width: '5rem' }}
               />
             </div>
             <div className="field-scale">
@@ -1033,7 +1033,7 @@ export default function SingleTurnVisualizer({
         </div>
 
         {/* Phase Split Dual Progress Bars */}
-        <div className="grid-auto" style={{ '--grid-min': '300px', marginBottom: '20px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '18.75rem', marginBottom: '20px' }}>
 
           {/* Prefill Block Visualizer */}
           <div
@@ -1136,7 +1136,7 @@ export default function SingleTurnVisualizer({
             decode appends one row per token (memory-bound). The asymmetry IS the lesson. */}
         <div className="panel-inset" style={{ marginBottom: '20px' }}>
           <KVCacheSectionHeader label={t('singleTurn.kvSectionLabel')} />
-          <div className="grid-auto" style={{ '--grid-min': '280px' }}>
+          <div className="grid-auto" style={{ '--grid-min': '17.5rem' }}>
             <KVCacheMatrix
               title={t('singleTurn.kvPrefillTitle')}
               icon={<Zap size={13} />}
@@ -1232,7 +1232,7 @@ export default function SingleTurnVisualizer({
                       aria-label={t('singleTurn.itlHistogramAria')}
                       style={{
                         position: 'relative',
-                        height: '64px',
+                        height: '4rem',
                         display: 'flex',
                         alignItems: 'flex-end',
                         gap: '2px',

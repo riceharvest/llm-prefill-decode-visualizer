@@ -60,7 +60,7 @@ export default function RunDiff() {
           onChange={(e) => setRunA(e.target.value)}
           placeholder="Run A id"
           aria-label="Run A id"
-          style={{ width: '130px' }}
+          style={{ width: '8.125rem' }}
         />
         <input
           type="text"
@@ -68,7 +68,7 @@ export default function RunDiff() {
           onChange={(e) => setRunB(e.target.value)}
           placeholder="Run B id"
           aria-label="Run B id"
-          style={{ width: '130px' }}
+          style={{ width: '8.125rem' }}
         />
         <button className="btn" onClick={runDiff} disabled={loading}>
           {loading ? 'Diffing…' : 'Diff runs'}

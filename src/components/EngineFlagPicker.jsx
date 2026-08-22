@@ -32,7 +32,7 @@ export default function EngineFlagPicker({
         <span className="tag">simulated deltas · auditable</span>
       </div>
 
-      <div className="grid-auto" style={{ '--grid-min': '240px', alignItems: 'stretch' }}>
+      <div className="grid-auto" style={{ '--grid-min': '15rem', alignItems: 'stretch' }}>
         {ENGINE_FLAGS.map(flag => {
           const active = selectedFlags.includes(flag.id);
           return (

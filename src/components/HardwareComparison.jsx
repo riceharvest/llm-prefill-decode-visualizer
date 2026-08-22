@@ -445,7 +445,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
         )}
 
         {/* Benchmark Test Parameters */}
-        <div className="grid-auto" style={{ '--grid-min': '240px', marginBottom: '16px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '15rem', marginBottom: '16px' }}>
           <div className="panel-inset field">
             <div className="field-head">
               <span className="field-label">{t('compare.testPromptLength')}</span>
@@ -467,7 +467,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 value={testPromptTokens}
                 aria-label={t('compare.testPromptValueAria')}
                 onChange={(e) => setTestPromptTokens(Number(e.target.value))}
-                style={{ width: '80px' }}
+                style={{ width: '5rem' }}
               />
             </div>
           </div>
@@ -493,7 +493,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 value={testOutputTokens}
                 aria-label={t('compare.testOutputValueAria')}
                 onChange={(e) => setTestOutputTokens(Number(e.target.value))}
-                style={{ width: '80px' }}
+                style={{ width: '5rem' }}
               />
             </div>
           </div>
@@ -523,7 +523,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 value={batchSize}
                 aria-label={t('compare.batchValueAria')}
                 onChange={(e) => setBatchSize(Math.max(1, Math.round(Number(e.target.value) || 1)))}
-                style={{ width: '80px' }}
+                style={{ width: '5rem' }}
               />
             </div>
             <p className="hint-text" style={{ marginTop: '6px' }}>
@@ -535,7 +535,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
         </div>
 
         {/* Hardware Selectors */}
-        <div className="grid-auto" style={{ '--grid-min': '300px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '18.75rem' }}>
 
           {/* Hardware Config A */}
           <div className="panel-inset" style={{ borderColor: 'var(--prefill-border)', borderInlineStart: '2px solid var(--accent)' }}>
@@ -612,7 +612,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                     value={priceAIn}
                     aria-label={t('compare.priceInAria', { system: 'A' })}
                     onChange={(e) => setPriceAIn(e.target.value)}
-                    style={{ width: '58px', padding: '3px 5px', fontSize: '0.72rem' }}
+                    style={{ width: '3.625rem', padding: '3px 5px', fontSize: '0.72rem' }}
                   />
                   <input
                     type="number"
@@ -622,7 +622,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                     value={priceAOut}
                     aria-label={t('compare.priceOutAria', { system: 'A' })}
                     onChange={(e) => setPriceAOut(e.target.value)}
-                    style={{ width: '58px', padding: '3px 5px', fontSize: '0.72rem' }}
+                    style={{ width: '3.625rem', padding: '3px 5px', fontSize: '0.72rem' }}
                   />
                 </span>
               </div>
@@ -710,7 +710,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                     value={priceBIn}
                     aria-label={t('compare.priceInAria', { system: 'B' })}
                     onChange={(e) => setPriceBIn(e.target.value)}
-                    style={{ width: '58px', padding: '3px 5px', fontSize: '0.72rem' }}
+                    style={{ width: '3.625rem', padding: '3px 5px', fontSize: '0.72rem' }}
                   />
                   <input
                     type="number"
@@ -720,7 +720,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                     value={priceBOut}
                     aria-label={t('compare.priceOutAria', { system: 'B' })}
                     onChange={(e) => setPriceBOut(e.target.value)}
-                    style={{ width: '58px', padding: '3px 5px', fontSize: '0.72rem' }}
+                    style={{ width: '3.625rem', padding: '3px 5px', fontSize: '0.72rem' }}
                   />
                 </span>
               </div>
@@ -831,7 +831,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
           <span>TCO · Local Electricity vs Cloud</span>
         </h2>
 
-        <div className="grid-auto" style={{ '--grid-min': '240px', marginBottom: '16px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '15rem', marginBottom: '16px' }}>
           <div className="panel-inset field">
             <div className="field-head">
               <span className="field-label">Local rig</span>

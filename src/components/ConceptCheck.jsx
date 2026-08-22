@@ -71,7 +71,7 @@ export default function ConceptCheck({ tab, context }) {
         Predict first, then check yourself against the live simulation — every explanation quotes the numbers currently on screen.
       </p>
 
-      <div className="grid-auto" style={{ '--grid-min': '320px' }}>
+      <div className="grid-auto" style={{ '--grid-min': '20rem' }}>
         {checks.map((check, ci) => {
           const wasCorrect = answers[check.id];
           const isAnswered = wasCorrect !== undefined;

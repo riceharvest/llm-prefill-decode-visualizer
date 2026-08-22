@@ -23,7 +23,7 @@ export default function SpeedControls({
   return (
     <section className="panel" aria-label="Simulation speed controls">
       <SanityWarnings warnings={speedWarnings} />
-      <div className="grid-auto" style={{ '--grid-min': '280px', alignItems: 'stretch' }}>
+      <div className="grid-auto" style={{ '--grid-min': '17.5rem', alignItems: 'stretch' }}>
 
         {/* Prefill Speed Input */}
         <div className="panel-inset" data-tour="prefill-slider" style={{ borderInlineStart: '2px solid var(--prefill)' }}>          <div className="field-head" style={{ marginBottom: '10px' }}>
@@ -51,7 +51,7 @@ export default function SpeedControls({
               value={prefillSpeed}
               aria-label={t('speedControls.prefillValueAria')}
               onChange={(e) => setPrefillSpeed(Number(e.target.value))}
-              style={{ width: '88px' }}
+              style={{ width: '5.5rem' }}
             />
             <span className="field-label">{t('common.tokPerSec')}</span>
           </div>
@@ -86,7 +86,7 @@ export default function SpeedControls({
               value={decodeSpeed}
               aria-label={t('speedControls.decodeValueAria')}
               onChange={(e) => setDecodeSpeed(Number(e.target.value))}
-              style={{ width: '88px' }}
+              style={{ width: '5.5rem' }}
             />
             <span className="field-label">{t('common.tokPerSec')}</span>
           </div>

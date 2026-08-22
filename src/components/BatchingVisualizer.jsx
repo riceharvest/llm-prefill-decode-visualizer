@@ -279,7 +279,7 @@ export default function BatchingVisualizer({
           </button>
         </div>
 
-        <div className="grid-auto" style={{ '--grid-min': '240px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '15rem' }}>
 
           {/* Concurrent Requests */}
           <div className="panel-inset field">
@@ -295,7 +295,7 @@ export default function BatchingVisualizer({
               <input type="number" value={numRequests}
                 aria-label={t('batching.requestsValueAria')}
                 onChange={(e) => { setNumRequests(Number(e.target.value)); handleReset(); }}
-                style={{ width: '64px' }} />
+                style={{ width: '4rem' }} />
             </div>
           </div>
 
@@ -313,7 +313,7 @@ export default function BatchingVisualizer({
               <input type="number" value={meanPromptTokens}
                 aria-label={t('batching.meanPromptValueAria')}
                 onChange={(e) => { setMeanPromptTokens(Number(e.target.value)); handleReset(); }}
-                style={{ width: '80px' }} />
+                style={{ width: '5rem' }} />
             </div>
           </div>
 
@@ -331,7 +331,7 @@ export default function BatchingVisualizer({
               <input type="number" value={meanOutputTokens}
                 aria-label={t('batching.meanOutputValueAria')}
                 onChange={(e) => { setMeanOutputTokens(Number(e.target.value)); handleReset(); }}
-                style={{ width: '80px' }} />
+                style={{ width: '5rem' }} />
             </div>
           </div>
 
@@ -349,7 +349,7 @@ export default function BatchingVisualizer({
               <input type="number" value={maxBatchSize}
                 aria-label={t('batching.maxBatchValueAria')}
                 onChange={(e) => { setMaxBatchSize(Number(e.target.value)); handleReset(); }}
-                style={{ width: '64px' }} />
+                style={{ width: '4rem' }} />
             </div>
           </div>
 
@@ -392,7 +392,7 @@ export default function BatchingVisualizer({
               <input type="number" value={arrivalIntervalMs}
                 aria-label={t('batching.arrivalValueAria')}
                 onChange={(e) => { setArrivalIntervalMs(Number(e.target.value)); handleReset(); }}
-                style={{ width: '64px' }} />
+                style={{ width: '4rem' }} />
             </div>
           </div>
 
@@ -482,7 +482,7 @@ export default function BatchingVisualizer({
         )}
 
         {/* Headline metrics */}
-        <div className="grid-auto" style={{ '--grid-min': '170px', marginBottom: '20px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '10.625rem', marginBottom: '20px' }}>
           <Metric term="batchMakespan" substitution={`${numRequests} requests · max batch ${maxBatchSize}`}>
             <strong style={{ color: 'var(--text-main)', fontSize: '1rem' }}>{formatTime(makespan)}</strong>
             <div className="metric-sub">{t('batching.metricMakespanSub')}</div>
@@ -546,7 +546,7 @@ export default function BatchingVisualizer({
                     transition: 'background 0.15s ease, border-color 0.15s ease'
                   }}
                 >
-                  <div style={{ width: '76px', flexShrink: 0 }}>
+                  <div style={{ width: '4.75rem', flexShrink: 0 }}>
                     <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>
                       R{req.id}
                     </div>
@@ -587,7 +587,7 @@ export default function BatchingVisualizer({
                     ))}
                   </div>
 
-                  <div style={{ width: '86px', textAlign: 'end', flexShrink: 0 }}>
+                  <div style={{ width: '5.375rem', textAlign: 'end', flexShrink: 0 }}>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>
                       {Number.isFinite(req.ttft) ? formatTime(req.ttft) : '—'}
                     </div>
@@ -702,7 +702,7 @@ export default function BatchingVisualizer({
                     className="panel-inset"
                     style={{
                       padding: '6px 10px',
-                      minWidth: '130px',
+                      minWidth: '8.125rem',
                       borderColor: done === 0 ? 'var(--prefill-border)' : 'var(--decode-border)'
                     }}
                   >

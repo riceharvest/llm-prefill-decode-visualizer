@@ -421,7 +421,7 @@ export default function AgenticVisualizer({
           </button>
         </div>
 
-        <div className="grid-auto" style={{ '--grid-min': '240px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '15rem' }}>
 
           {/* Number of Turns */}
           <div className="panel-inset field">
@@ -445,7 +445,7 @@ export default function AgenticVisualizer({
                 value={numTurns}
                 aria-label={t('agentic.turnsValueAria')}
                 onChange={(e) => { setNumTurns(Number(e.target.value)); handleReset(); }}
-                style={{ width: '64px' }}
+                style={{ width: '4rem' }}
               />
             </div>
           </div>
@@ -472,7 +472,7 @@ export default function AgenticVisualizer({
                 value={basePromptTokens}
                 aria-label={t('agentic.systemPromptValueAria')}
                 onChange={(e) => { setBasePromptTokens(Number(e.target.value)); handleReset(); }}
-                style={{ width: '80px' }}
+                style={{ width: '5rem' }}
               />
             </div>
           </div>
@@ -499,7 +499,7 @@ export default function AgenticVisualizer({
                 value={toolOutputTokensPerTurn}
                 aria-label={t('agentic.toolOutputValueAria')}
                 onChange={(e) => { setToolOutputTokensPerTurn(Number(e.target.value)); handleReset(); }}
-                style={{ width: '80px' }}
+                style={{ width: '5rem' }}
               />
             </div>
           </div>
@@ -526,7 +526,7 @@ export default function AgenticVisualizer({
                 value={decodeTokensPerTurn}
                 aria-label={t('agentic.thoughtValueAria')}
                 onChange={(e) => { setDecodeTokensPerTurn(Number(e.target.value)); handleReset(); }}
-                style={{ width: '80px' }}
+                style={{ width: '5rem' }}
               />
             </div>
           </div>
@@ -719,7 +719,7 @@ export default function AgenticVisualizer({
               (reused) while only the delta rows are written during prefill. */}
           <div style={{ marginBottom: '14px' }}>
             <KVCacheSectionHeader label={t('agentic.kvSectionLabel', { turn: activeTurn || '—' })} />
-            <div className="grid-auto" style={{ '--grid-min': '280px' }}>
+            <div className="grid-auto" style={{ '--grid-min': '17.5rem' }}>
               <KVCacheMatrix
                 title={t('agentic.kvPrefillTitle')}
                 icon={<Zap size={13} />}
@@ -748,7 +748,7 @@ export default function AgenticVisualizer({
             </div>
           </div>
 
-          <div className="grid-auto" style={{ '--grid-min': '280px' }}>
+          <div className="grid-auto" style={{ '--grid-min': '17.5rem' }}>
             {/* Prefill Panel */}
             <div
               className="panel-inset"
@@ -779,7 +779,7 @@ export default function AgenticVisualizer({
               </div>
 
               {/* Token stream — windowed to match real token count */}
-              <div className="stream-box" style={{ height: '150px', fontSize: '0.8rem' }}>
+              <div className="stream-box" style={{ height: '9.375rem', fontSize: '0.8rem' }}>
                 {(() => {
                   const words = streamWords(prefillProgress, SAMPLE_PROMPT_WORDS);
                   const { totalWords, lap, visible } = wordWindowFor(prefillProgress);
@@ -852,7 +852,7 @@ export default function AgenticVisualizer({
               </div>
 
               {/* Token stream — windowed to match real token count */}
-              <div className="stream-box" style={{ height: '150px', fontSize: '0.8rem' }}>
+              <div className="stream-box" style={{ height: '9.375rem', fontSize: '0.8rem' }}>
                 {(() => {
                   const words = streamWords(decodeProgress, SAMPLE_DECODE_WORDS);
                   const { totalWords, lap, visible } = wordWindowFor(decodeProgress);
@@ -973,7 +973,7 @@ export default function AgenticVisualizer({
                     transition: 'background 0.15s ease, border-color 0.15s ease'
                   }}
                 >
-                  <div style={{ width: '76px', flexShrink: 0 }}>
+                  <div style={{ width: '4.75rem', flexShrink: 0 }}>
                     <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>
                       T{turnItem.turn}
                     </div>
@@ -1042,7 +1042,7 @@ export default function AgenticVisualizer({
                   </div>
 
                   {/* Turn Walltime Total */}
-                  <div style={{ width: '86px', textAlign: 'end', flexShrink: 0 }}>
+                  <div style={{ width: '5.375rem', textAlign: 'end', flexShrink: 0 }}>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>
                       {formatTime(turnItem.turnWalltime)}
                     </div>

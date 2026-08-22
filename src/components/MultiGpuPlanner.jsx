@@ -65,7 +65,7 @@ export default function MultiGpuPlanner({ preset, totalKvBytes }) {
       </p>
 
       {/* Layout controls */}
-      <div className="grid-auto" style={{ '--grid-min': '240px', marginBottom: '18px' }}>
+      <div className="grid-auto" style={{ '--grid-min': '15rem', marginBottom: '18px' }}>
 
         <div className="panel-inset field">
           <div className="field-head">

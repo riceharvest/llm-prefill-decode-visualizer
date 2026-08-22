@@ -343,7 +343,7 @@ export default function ABReplay({
           ))}
         </div>
 
-        <div className="grid-auto" style={{ '--grid-min': '280px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '17.5rem' }}>
           <div className="panel-inset field">
             <div className="field-head">
               <span className="field-label">Shared Input Prompt Length</span>
@@ -365,7 +365,7 @@ export default function ABReplay({
                 value={promptTokens}
                 aria-label="Shared input prompt length value"
                 onChange={(e) => setPromptTokens(Number(e.target.value))}
-                style={{ width: '80px' }}
+                style={{ width: '5rem' }}
               />
             </div>
           </div>
@@ -391,7 +391,7 @@ export default function ABReplay({
                 value={outputTokens}
                 aria-label="Shared target output length value"
                 onChange={(e) => setOutputTokens(Number(e.target.value))}
-                style={{ width: '80px' }}
+                style={{ width: '5rem' }}
               />
             </div>
           </div>
@@ -459,7 +459,7 @@ export default function ABReplay({
         </div>
 
         {/* Two lanes, one clock */}
-        <div className="grid-auto" style={{ '--grid-min': '300px' }}>
+        <div className="grid-auto" style={{ '--grid-min': '18.75rem' }}>
           {renderLane({
             letter: 'A', tagline: 'primary', accentBorder: 'var(--accent)',
             preset: presetA, view: laneAView, ttft: ttftA, totalTime: totalA

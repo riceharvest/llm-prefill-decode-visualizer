@@ -155,7 +155,7 @@ export default function QuantTradeoffMatrix({ localMaxxingContext, onApplySpeeds
       <p className="hint-text" style={{ marginBottom: '14px' }}>{t('quant.intro')}</p>
 
       {/* Model family selector */}
-      <div className="grid-auto" style={{ '--grid-min': '260px', marginBottom: '16px' }}>
+      <div className="grid-auto" style={{ '--grid-min': '16.25rem', marginBottom: '16px' }}>
         <div className="panel-inset field">
           <div className="field-head">
             <span className="field-label">{t('quant.familyLabel')}</span>
