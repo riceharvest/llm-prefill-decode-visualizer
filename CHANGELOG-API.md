@@ -56,6 +56,13 @@ migrate before `Sunset`. Agents can discover the current policy at
   of the normalized config in memory and at the CDN via long-lived immutable
   Cache-Control headers.
 - Affected endpoints: `/api/og`.
+- New watch-feed endpoints (#109): `POST/GET/DELETE /api/watch` (subscribe to a
+  hardware+model combo, list combos, unsubscribe with the one-time secret),
+  `GET /api/watch/rss.xml?model=&hardware=&quant=&days=` (RSS 2.0 feed of new
+  community runs for that pair) and `GET|POST /api/watch/dispatch`
+  (cron-friendly webhook delivery of unseen matching runs, signed with
+  `X-Watch-Secret`; optional `WATCH_DISPATCH_SECRET` locks it down). Additive
+  endpoints — no version bump.
 - `/api/benchmarks` and `/api/best` rows now carry a `dataQuality` block
   (`status: ok|flagged`, `flaggedRuns`, `flagCounts`, affected runIds) from
   the new unit-consistency audit; `/api/benchmarks` adds a top-level

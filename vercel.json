@@ -20,5 +20,11 @@
       "source": "/compare/:a-vs-:b",
       "destination": "/compare.html"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/watch/dispatch",
+      "schedule": "0 6 * * *"
+    }
   ]
 }
