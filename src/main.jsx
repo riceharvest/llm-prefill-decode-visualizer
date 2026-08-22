@@ -1,6 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+// Resolve and apply <html data-theme> before first paint (issue #81) —
+// importing ahead of the app render prevents a dark flash for light /
+// high-contrast users.
+import './utils/theme'
 import App from './App.jsx'
 import EmbedApp from './components/EmbedApp.jsx'
 
