@@ -6,6 +6,11 @@ import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMat
 import { exportNodeAsPng } from '../utils/exportPng';
 import EmbedDialog from './EmbedDialog';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
+import AriaLiveRegion, { useLiveAnnouncer } from './AriaLiveRegion';
+import {
+  buildTurnAnnouncement,
+  buildAgenticDoneAnnouncement
+} from '../utils/liveAnnouncer';
 import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
 import ChartDataTable from './ChartDataTable';
 import ConceptCheck from './ConceptCheck';
@@ -76,6 +81,9 @@ export default function AgenticVisualizer({
   const [prefillProgress, setPrefillProgress] = useState(0); // tokens ingested in current turn prefill
   const [decodeProgress, setDecodeProgress] = useState(0); // tokens decoded in current turn
   const [elapsedSim, setElapsedSim] = useState(0); // simulated seconds elapsed across the whole loop
+
+  // Issue #73: throttled screen-reader announcements (polite live region).
+  const { message: liveMessage, announce, announcer: liveAnnouncer } = useLiveAnnouncer();
 
   // Sample token streams for the live prefill/decode visualization
   const SAMPLE_PROMPT_WORDS = [
@@ -264,6 +272,7 @@ export default function AgenticVisualizer({
     setDecodeProgress(0);
     setElapsedSim(0);
     simTimeRef.current = 0;
+    liveAnnouncer.reset();
     setIsPlaying(false);
   };
 
@@ -388,6 +397,36 @@ export default function AgenticVisualizer({
     totalAgentWalltime
   ]);
 
+  // Issue #73: announce turn transitions and the loop completion through the
+  // polite live region. Long agentic runs change turn/phase many times per
+  // second at high sim multipliers — the throttled announcer drops everything
+  // inside a 5 s window so the SR queue never floods; only the completion
+  // summary forces through.
+  const liveMetricsRef = useRef({});
+  const firstTurnTtftSec = turnBreakdown[0]?.prefillTime;
+  const decodeTurns = turnBreakdown.filter(item => item.decodeTokens > 0);
+  const avgTpotMs = decodeTurns.length > 0
+    ? decodeTurns.reduce((sum, item) => sum + (1000 * item.decodeTime) / item.decodeTokens, 0) / decodeTurns.length
+    : Infinity;
+  liveMetricsRef.current = {
+    numTurns,
+    ttftSec: firstTurnTtftSec,
+    tpotMs: avgTpotMs,
+    totalSec: totalAgentWalltime
+  };
+  useEffect(() => {
+    if (!activeTurn) return;
+    const m = liveMetricsRef.current;
+    if (currentPhase === 'prefilling' || currentPhase === 'decoding') {
+      announce(buildTurnAnnouncement({ turn: activeTurn, turns: m.numTurns, phase: currentPhase }));
+    } else if (currentPhase === 'completed') {
+      announce(
+        buildAgenticDoneAnnouncement({ turns: m.numTurns, ttftSec: m.ttftSec, tpotMs: m.tpotMs, totalSec: m.totalSec }),
+        { force: true }
+      );
+    }
+  }, [activeTurn, currentPhase, announce]);
+
   const phaseStatusText = currentPhase === 'prefilling' ? t('agentic.statusPrefilling')
     : currentPhase === 'decoding' ? t('agentic.statusDecoding')
     : currentPhase === 'completed' ? t('agentic.statusCompleted')
@@ -395,6 +434,9 @@ export default function AgenticVisualizer({
 
   return (
     <div className="stack">
+
+      {/* Issue #73: screen-reader progress announcements (visually hidden) */}
+      <AriaLiveRegion message={liveMessage} />
 
       {/* Top Configuration Card */}
       <section className="panel" aria-label={t('agentic.paramsPanelAria')}>

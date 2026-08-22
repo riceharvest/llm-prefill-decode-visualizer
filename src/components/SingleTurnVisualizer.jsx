@@ -21,6 +21,12 @@ import {
   tokensGeneratedAt
 } from '../utils/contextScaling';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
+import AriaLiveRegion, { useLiveAnnouncer } from './AriaLiveRegion';
+import {
+  buildPrefillAnnouncement,
+  buildDecodeAnnouncement,
+  buildDoneAnnouncement
+} from '../utils/liveAnnouncer';
 import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
 import ConceptCheck from './ConceptCheck';
 import { sanityWarnings } from '../../api/_math.js';
@@ -142,6 +148,9 @@ export default function SingleTurnVisualizer({
   const [currentDecodeTokens, setCurrentDecodeTokens] = useState(0); // 0 to outputTokens
   const [elapsedTime, setElapsedTime] = useState(0); // seconds
 
+  // Issue #73: throttled screen-reader announcements (polite live region).
+  const { message: liveMessage, announce, announcer: liveAnnouncer } = useLiveAnnouncer();
+
   // Calculated benchmarks (typed 0/negative values sanitized for math)
   const safePromptTokens = Math.max(0, promptTokens || 0);
   const safeOutputTokens = Math.max(0, outputTokens || 0);
@@ -238,6 +247,7 @@ export default function SingleTurnVisualizer({
     setCurrentDecodeTokens(0);
     setElapsedTime(0);
     simTimeRef.current = 0;
+    liveAnnouncer.reset();
     setIsPlaying(false);
   };
 
@@ -474,9 +484,38 @@ export default function SingleTurnVisualizer({
     prevPhaseRef.current = phase;
   }, [phase]);
 
+  // Issue #73: announce phase transitions and the completion summary through
+  // the polite live region. The effect fires only on phase *changes*; metric
+  // values are read through a ref so mid-phase re-renders never re-announce.
+  // The summary is forced past the throttle — it is the one message an SR
+  // user must never miss.
+  const liveMetricsRef = useRef({});
+  liveMetricsRef.current = {
+    prefillTokens: totalPrefillTokens,
+    ttftSec: expectedTTFT,
+    tpotMs,
+    totalSec: expectedTotalTime
+  };
+  useEffect(() => {
+    const m = liveMetricsRef.current;
+    if (phase === 'prefilling') {
+      announce(buildPrefillAnnouncement(m.prefillTokens));
+    } else if (phase === 'decoding') {
+      announce(buildDecodeAnnouncement());
+    } else if (phase === 'completed') {
+      announce(
+        buildDoneAnnouncement({ ttftSec: m.ttftSec, tpotMs: m.tpotMs, totalSec: m.totalSec }),
+        { force: true }
+      );
+    }
+  }, [phase, announce]);
+
 
   return (
     <div className="stack">
+
+      {/* Issue #73: screen-reader progress announcements (visually hidden) */}
+      <AriaLiveRegion message={liveMessage} />
 
       {/* Top Parameter Cards */}
       <section className="panel" aria-label={t('singleTurn.paramsPanelAria')}>
