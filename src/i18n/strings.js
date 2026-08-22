@@ -17,20 +17,42 @@
 // Missing keys fall back to English, then to the key itself, so partial
 // translations never render blank UI.
 
-import { createTranslator } from './translate';
+import { createTranslator } from './translate.js';
 
-const localeModules = import.meta.glob('./locales/*/*.json', { eager: true });
+let localeModules = {};
+try {
+  localeModules = import.meta.glob('./locales/*/*.json', { eager: true });
+} catch {
+  // Plain-Node environments (node --test) don't have Vite's glob macro.
+  // Load the same JSON files via fs so modules that import this one stay
+  // unit-testable. Computed specifiers + @vite-ignore keep node:fs out of
+  // browser bundles; in the browser this branch never runs.
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    const fs = await import(/* @vite-ignore */ 'node:' + 'fs');
+    const localesDir = new URL('./locales/', import.meta.url);
+    for (const locale of fs.readdirSync(localesDir, { withFileTypes: true })) {
+      if (!locale.isDirectory()) continue;
+      for (const file of fs.readdirSync(new URL(`./locales/${locale.name}/`, import.meta.url))) {
+        if (!file.endsWith('.json')) continue;
+        const mod = JSON.parse(fs.readFileSync(new URL(`./locales/${locale.name}/${file}`, import.meta.url), 'utf8'));
+        localeModules[`./locales/${locale.name}/${file}`] = { default: mod };
+      }
+    }
+  }
+}
 
 const locales = {};
 for (const [path, mod] of Object.entries(localeModules)) {
   // path: './locales/<locale>/<namespace>.json'
-  const [, , locale, namespace] = path.split('/');
+  const [, , locale, namespaceRaw] = path.split('/');
+  const namespace = namespaceRaw.replace(/\.json$/, '');
   if (!locales[locale]) locales[locale] = {};
   const value = mod.default ?? mod;
   if (namespace === '_meta') {
     locales[locale].meta = value;
   } else {
     locales[locale][namespace] = value;
+
   }
 }
 
