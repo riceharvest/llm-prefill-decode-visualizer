@@ -119,7 +119,7 @@ export default function App() {
   }, [permalinkTitle]);
 
   const comparisonPresets = useMemo(() => [
-    ...localMaxxingContext.runs.map(toLocalPreset),
+    ...localMaxxingContext.runs.map(run => toLocalPreset(run)),
     ...HARDWARE_PRESETS
   ], [localMaxxingContext.runs]);
 
