@@ -1,9 +1,12 @@
 import React from 'react';
 import { HelpCircle, Gauge, Zap, Play, Bot } from 'lucide-react';
 import { demoUrl } from '../utils/urlState';
-import { t, tArray } from '../i18n/strings';
+import { t, tArray, tPlain } from '../i18n/strings';
 import Analogy from './Analogy';
 import TemplateGallery from './TemplateGallery';
+import Jargon from './Jargon';
+import JargonGlossary from './JargonGlossary';
+import { plainify } from '../i18n/strings';
 
 // Demo deep-links per FAQ entry (index-aligned with theory.faq in strings.js).
 const FAQ_DEMOS = [
@@ -54,6 +57,12 @@ export default function TheoryGuide() {
             configured sim — the onboarding funnel sits above the theory. */}
         <TemplateGallery />
 
+        {/* Progressive jargon disclosure (issue #79): every dense term below
+            renders via <Jargon />, which plain-language mode swaps for a plain
+            equivalent while the technical term stays on hover. The glossary
+            is the expandable reverse lookup. */}
+        <JargonGlossary />
+
         {/* Comparative Dual Cards */}
         <div className="grid-auto" style={{ '--grid-min': '20rem', marginBottom: '16px' }}>
 
@@ -68,13 +77,13 @@ export default function TheoryGuide() {
             </div>
 
             <p className="hint-text" style={{ marginBottom: '12px' }}>
-              {t('theory.prefillIntroBefore')}N<sub>{t('theory.subPrompt')}</sub>{t('theory.prefillIntroAfter')}
+              {t('theory.prefillIntroBefore')}N<sub>{t('theory.subPrompt')}</sub>{tPlain('theory.prefillIntroAfter')}
             </p>
 
             <ul style={bulletStyle}>
-              <li><strong style={{ color: 'var(--text-main)' }}>{t('theory.bottleneckLabel')}</strong> {t('theory.bottleneckCompute')}</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>{t('theory.operationLabel')}</strong> {t('theory.operationGemm')}</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>{t('theory.userMetricLabel')}{t('theory.metricTtft')}</strong>
+              <li><strong style={{ color: 'var(--text-main)' }}>{t('theory.bottleneckLabel')}</strong> <Jargon term="computeBound" /></li>
+              <li><strong style={{ color: 'var(--text-main)' }}>{t('theory.operationLabel')}</strong> <Jargon term="gemm">{t('theory.operationGemm')}</Jargon></li>
+              <li><strong style={{ color: 'var(--text-main)' }}>{t('theory.userMetricLabel')}<Jargon term="ttft">{t('theory.metricTtft')}</Jargon></strong>
                 <div style={{ ...formulaStyle, color: 'var(--prefill)' }}>
                   {t('theory.formulaTtft')}
                 </div>
@@ -93,13 +102,13 @@ export default function TheoryGuide() {
             </div>
 
             <p className="hint-text" style={{ marginBottom: '12px' }}>
-              {t('theory.decodeIntroBefore')}
+              {tPlain('theory.decodeIntroBefore')}
             </p>
 
             <ul style={bulletStyle}>
-              <li><strong style={{ color: 'var(--text-main)' }}>{t('theory.bottleneckLabel')}</strong> {t('theory.bottleneckBandwidth')}</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>{t('theory.operationLabel')}</strong> {t('theory.operationGemv')}</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>{t('theory.userMetricLabel')}{t('theory.metricTpot')}</strong>
+              <li><strong style={{ color: 'var(--text-main)' }}>{t('theory.bottleneckLabel')}</strong> <Jargon term="bandwidthBound" /></li>
+              <li><strong style={{ color: 'var(--text-main)' }}>{t('theory.operationLabel')}</strong> <Jargon term="gemv">{t('theory.operationGemv')}</Jargon></li>
+              <li><strong style={{ color: 'var(--text-main)' }}>{t('theory.userMetricLabel')}<Jargon term="tpot">{t('theory.metricTpot')}</Jargon></strong>
                 <div style={{ ...formulaStyle, color: 'var(--decode)' }}>
                   {t('theory.formulaTpot')}
                 </div>
@@ -116,7 +125,7 @@ export default function TheoryGuide() {
             {t('theory.agenticHeading')}
           </h3>
           <p className="hint-text" style={{ marginBottom: '12px' }}>
-            {t('theory.agenticIntroBefore')}<strong style={{ color: 'var(--text-main)' }}>{t('theory.loopStages')}</strong>{t('theory.agenticIntroAfter')}
+            {t('theory.agenticIntroBefore')}<strong style={{ color: 'var(--text-main)' }}>{t('theory.loopStages')}</strong>{tPlain('theory.agenticIntroAfter')}
           </p>
 
           <div className="grid-auto" style={{ '--grid-min': '16.25rem' }}>
@@ -125,7 +134,7 @@ export default function TheoryGuide() {
                 {t('theory.withoutCaching')}
               </strong>
               <p className="hint-text" style={{ marginTop: '4px' }}>
-                {t('theory.withoutCachingBodyBefore')}P<sub>{t('theory.subK')}</sub>{t('theory.withoutCachingBodyAfter')}
+                {tPlain('theory.withoutCachingBodyBefore')}P<sub>{t('theory.subK')}</sub>{tPlain('theory.withoutCachingBodyAfter')}
               </p>
             </div>
             <div className="panel-inset">
@@ -134,7 +143,7 @@ export default function TheoryGuide() {
                 <Analogy term="prefixCaching" />
               </strong>
               <p className="hint-text" style={{ marginTop: '4px' }}>
-                {t('theory.withCachingBodyBefore')}ΔP<sub>{t('theory.subK')}</sub>{t('theory.withCachingBodyAfter')}
+                {tPlain('theory.withCachingBodyBefore')}ΔP<sub>{t('theory.subK')}</sub>{tPlain('theory.withCachingBodyAfter')}
               </p>
             </div>
           </div>
@@ -164,7 +173,7 @@ export default function TheoryGuide() {
                   {item.q}
                 </summary>
                 <p className="hint-text" style={{ marginTop: '8px' }}>
-                  {item.a}
+                  {plainify(item.a)}
                 </p>
                 {FAQ_DEMOS[i] && (
                   <button
