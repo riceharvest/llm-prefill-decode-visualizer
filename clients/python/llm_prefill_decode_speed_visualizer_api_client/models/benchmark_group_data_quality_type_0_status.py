@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class BenchmarkGroupDataQualityType0Status(str, Enum):
     FLAGGED = "flagged"
     OK = "ok"

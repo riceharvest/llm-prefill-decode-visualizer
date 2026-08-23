@@ -1,30 +1,38 @@
 from __future__ import annotations
 
-import datetime
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
+
+from ..types import UNSET, Unset
 
 from ..models.best_list_envelope_context_band_type_1 import BestListEnvelopeContextBandType1
 from ..models.best_list_envelope_context_band_type_2_type_1 import BestListEnvelopeContextBandType2Type1
 from ..models.best_list_envelope_context_band_type_3_type_1 import BestListEnvelopeContextBandType3Type1
 from ..models.best_list_envelope_ranked_by import BestListEnvelopeRankedBy
 from ..types import UNSET, Unset
+from typing import cast
+from typing import Literal, cast
+import datetime
 
 if TYPE_CHECKING:
-    from ..models.best_result import BestResult
-    from ..models.caveat import Caveat
-    from ..models.snapshot_ref import SnapshotRef
+  from ..models.best_result import BestResult
+  from ..models.caveat import Caveat
+  from ..models.snapshot_ref import SnapshotRef
+
+
+
 
 
 T = TypeVar("T", bound="BestListEnvelope")
 
 
+
 @_attrs_define
 class BestListEnvelope:
-    """Ranked recommendations. Carries a deterministic `id` (hash of the resolved filters) replayable via
+    """ Ranked recommendations. Carries a deterministic `id` (hash of the resolved filters) replayable via
     /api/calc/{id}?endpoint=best&<same filters>.
 
         Attributes:
@@ -43,7 +51,7 @@ class BestListEnvelope:
             context_band (BestListEnvelopeContextBandType1 | BestListEnvelopeContextBandType2Type1 |
                 BestListEnvelopeContextBandType3Type1 | None | Unset): Echoed ?context_band= filter (null when unset)
             schema_version (Literal['1'] | Unset):
-    """
+     """
 
     ranked_by: BestListEnvelopeRankedBy
     caveats: list[Caveat]
@@ -56,17 +64,18 @@ class BestListEnvelope:
     matched_runs: int | Unset = UNSET
     excluded_runs: int | None | Unset = UNSET
     max_age_days: float | None | Unset = UNSET
-    context_band: (
-        BestListEnvelopeContextBandType1
-        | BestListEnvelopeContextBandType2Type1
-        | BestListEnvelopeContextBandType3Type1
-        | None
-        | Unset
-    ) = UNSET
-    schema_version: Literal["1"] | Unset = UNSET
+    context_band: BestListEnvelopeContextBandType1 | BestListEnvelopeContextBandType2Type1 | BestListEnvelopeContextBandType3Type1 | None | Unset = UNSET
+    schema_version: Literal['1'] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
+
+
+
+
     def to_dict(self) -> dict[str, Any]:
+        from ..models.best_result import BestResult
+        from ..models.caveat import Caveat
+        from ..models.snapshot_ref import SnapshotRef
         ranked_by = self.ranked_by.value
 
         caveats = []
@@ -74,12 +83,18 @@ class BestListEnvelope:
             caveats_item = caveats_item_data.to_dict()
             caveats.append(caveats_item)
 
+
+
         warnings = self.warnings
+
+
 
         results = []
         for results_item_data in self.results:
             results_item = results_item_data.to_dict()
             results.append(results_item)
+
+
 
         id = self.id
 
@@ -125,16 +140,15 @@ class BestListEnvelope:
 
         schema_version = self.schema_version
 
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update(
-            {
-                "rankedBy": ranked_by,
-                "caveats": caveats,
-                "warnings": warnings,
-                "results": results,
-            }
-        )
+        field_dict.update({
+            "rankedBy": ranked_by,
+            "caveats": caveats,
+            "warnings": warnings,
+            "results": results,
+        })
         if id is not UNSET:
             field_dict["id"] = id
         if description is not UNSET:
@@ -156,30 +170,41 @@ class BestListEnvelope:
 
         return field_dict
 
+
+
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.best_result import BestResult
         from ..models.caveat import Caveat
         from ..models.snapshot_ref import SnapshotRef
-
         d = dict(src_dict)
         ranked_by = BestListEnvelopeRankedBy(d.pop("rankedBy"))
 
+
+
+
         caveats = []
         _caveats = d.pop("caveats")
-        for caveats_item_data in _caveats:
+        for caveats_item_data in (_caveats):
             caveats_item = Caveat.from_dict(caveats_item_data)
+
+
 
             caveats.append(caveats_item)
 
+
         warnings = cast(list[str], d.pop("warnings"))
+
 
         results = []
         _results = d.pop("results")
-        for results_item_data in _results:
+        for results_item_data in (_results):
             results_item = BestResult.from_dict(results_item_data)
 
+
+
             results.append(results_item)
+
 
         id = d.pop("id", UNSET)
 
@@ -187,10 +212,13 @@ class BestListEnvelope:
 
         _snapshot = d.pop("snapshot", UNSET)
         snapshot: SnapshotRef | Unset
-        if isinstance(_snapshot, Unset):
+        if isinstance(_snapshot,  Unset):
             snapshot = UNSET
         else:
             snapshot = SnapshotRef.from_dict(_snapshot)
+
+
+
 
         def _parse_snapshot_at(data: object) -> datetime.datetime | None | Unset:
             if data is None:
@@ -202,12 +230,15 @@ class BestListEnvelope:
                     raise TypeError()
                 snapshot_at_type_0 = datetime.datetime.fromisoformat(data)
 
+
+
                 return snapshot_at_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(datetime.datetime | None | Unset, data)
 
         snapshot_at = _parse_snapshot_at(d.pop("snapshotAt", UNSET))
+
 
         matched_runs = d.pop("matchedRuns", UNSET)
 
@@ -220,6 +251,7 @@ class BestListEnvelope:
 
         excluded_runs = _parse_excluded_runs(d.pop("excludedRuns", UNSET))
 
+
         def _parse_max_age_days(data: object) -> float | None | Unset:
             if data is None:
                 return data
@@ -229,15 +261,8 @@ class BestListEnvelope:
 
         max_age_days = _parse_max_age_days(d.pop("maxAgeDays", UNSET))
 
-        def _parse_context_band(
-            data: object,
-        ) -> (
-            BestListEnvelopeContextBandType1
-            | BestListEnvelopeContextBandType2Type1
-            | BestListEnvelopeContextBandType3Type1
-            | None
-            | Unset
-        ):
+
+        def _parse_context_band(data: object) -> BestListEnvelopeContextBandType1 | BestListEnvelopeContextBandType2Type1 | BestListEnvelopeContextBandType3Type1 | None | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
@@ -247,6 +272,8 @@ class BestListEnvelope:
                     raise TypeError()
                 context_band_type_1 = BestListEnvelopeContextBandType1(data)
 
+
+
                 return context_band_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
@@ -254,6 +281,8 @@ class BestListEnvelope:
                 if not isinstance(data, str):
                     raise TypeError()
                 context_band_type_2_type_1 = BestListEnvelopeContextBandType2Type1(data)
+
+
 
                 return context_band_type_2_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
@@ -263,22 +292,18 @@ class BestListEnvelope:
                     raise TypeError()
                 context_band_type_3_type_1 = BestListEnvelopeContextBandType3Type1(data)
 
+
+
                 return context_band_type_3_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
-            return cast(
-                BestListEnvelopeContextBandType1
-                | BestListEnvelopeContextBandType2Type1
-                | BestListEnvelopeContextBandType3Type1
-                | None
-                | Unset,
-                data,
-            )
+            return cast(BestListEnvelopeContextBandType1 | BestListEnvelopeContextBandType2Type1 | BestListEnvelopeContextBandType3Type1 | None | Unset, data)
 
         context_band = _parse_context_band(d.pop("contextBand", UNSET))
 
-        schema_version = cast(Literal["1"] | Unset, d.pop("schema_version", UNSET))
-        if schema_version != "1" and not isinstance(schema_version, Unset):
+
+        schema_version = cast(Literal['1'] | Unset , d.pop("schema_version", UNSET))
+        if schema_version != '1'and not isinstance(schema_version, Unset):
             raise ValueError(f"schema_version must match const '1', got '{schema_version}'")
 
         best_list_envelope = cls(
@@ -296,6 +321,7 @@ class BestListEnvelope:
             context_band=context_band,
             schema_version=schema_version,
         )
+
 
         best_list_envelope.additional_properties = d
         return best_list_envelope

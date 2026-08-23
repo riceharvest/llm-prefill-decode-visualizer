@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import datetime
 from collections.abc import Mapping
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
+
+from ..types import UNSET, Unset
 
 from ..models.run_context_band_type_1 import RunContextBandType1
 from ..models.run_context_band_type_2_type_1 import RunContextBandType2Type1
@@ -17,13 +18,21 @@ from ..models.run_staleness_type_1 import RunStalenessType1
 from ..models.run_staleness_type_2_type_1 import RunStalenessType2Type1
 from ..models.run_staleness_type_3_type_1 import RunStalenessType3Type1
 from ..types import UNSET, Unset
+from typing import cast
+import datetime
+
+
+
+
+
 
 T = TypeVar("T", bound="Run")
 
 
+
 @_attrs_define
 class Run:
-    """Raw comparable community run, flattened and model-normalized (modelFamily collapses repo/quant variants of the same
+    """ Raw comparable community run, flattened and model-normalized (modelFamily collapses repo/quant variants of the same
     base model). Single-stream runs only.
 
         Attributes:
@@ -56,7 +65,7 @@ class Run:
             staleness (None | RunStalenessType1 | RunStalenessType2Type1 | RunStalenessType3Type1 | Unset): fresh <90d,
                 aging <180d, stale otherwise, unknown when undated
             source (None | str | Unset): Link to the upstream run page
-    """
+     """
 
     run_id: int
     model_family: str
@@ -86,6 +95,10 @@ class Run:
     staleness: None | RunStalenessType1 | RunStalenessType2Type1 | RunStalenessType3Type1 | Unset = UNSET
     source: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
+
+
+
+
 
     def to_dict(self) -> dict[str, Any]:
         run_id = self.run_id
@@ -254,16 +267,15 @@ class Run:
         else:
             source = self.source
 
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update(
-            {
-                "runId": run_id,
-                "modelFamily": model_family,
-                "prefillTokPerSec": prefill_tok_per_sec,
-                "decodeTokPerSec": decode_tok_per_sec,
-            }
-        )
+        field_dict.update({
+            "runId": run_id,
+            "modelFamily": model_family,
+            "prefillTokPerSec": prefill_tok_per_sec,
+            "decodeTokPerSec": decode_tok_per_sec,
+        })
         if created_at is not UNSET:
             field_dict["createdAt"] = created_at
         if model_id is not UNSET:
@@ -313,6 +325,8 @@ class Run:
 
         return field_dict
 
+
+
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
@@ -334,12 +348,15 @@ class Run:
                     raise TypeError()
                 created_at_type_0 = datetime.datetime.fromisoformat(data)
 
+
+
                 return created_at_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(datetime.datetime | None | Unset, data)
 
         created_at = _parse_created_at(d.pop("createdAt", UNSET))
+
 
         def _parse_model_id(data: object) -> None | str | Unset:
             if data is None:
@@ -350,6 +367,7 @@ class Run:
 
         model_id = _parse_model_id(d.pop("modelId", UNSET))
 
+
         def _parse_model_name(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -358,6 +376,7 @@ class Run:
             return cast(None | str | Unset, data)
 
         model_name = _parse_model_name(d.pop("modelName", UNSET))
+
 
         def _parse_params_b(data: object) -> float | None | Unset:
             if data is None:
@@ -368,6 +387,7 @@ class Run:
 
         params_b = _parse_params_b(d.pop("paramsB", UNSET))
 
+
         def _parse_hardware_key(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -376,6 +396,7 @@ class Run:
             return cast(None | str | Unset, data)
 
         hardware_key = _parse_hardware_key(d.pop("hardwareKey", UNSET))
+
 
         def _parse_hardware(data: object) -> None | str | Unset:
             if data is None:
@@ -386,9 +407,8 @@ class Run:
 
         hardware = _parse_hardware(d.pop("hardware", UNSET))
 
-        def _parse_hw_class(
-            data: object,
-        ) -> None | RunHwClassType1 | RunHwClassType2Type1 | RunHwClassType3Type1 | Unset:
+
+        def _parse_hw_class(data: object) -> None | RunHwClassType1 | RunHwClassType2Type1 | RunHwClassType3Type1 | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
@@ -398,6 +418,8 @@ class Run:
                     raise TypeError()
                 hw_class_type_1 = RunHwClassType1(data)
 
+
+
                 return hw_class_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
@@ -405,6 +427,8 @@ class Run:
                 if not isinstance(data, str):
                     raise TypeError()
                 hw_class_type_2_type_1 = RunHwClassType2Type1(data)
+
+
 
                 return hw_class_type_2_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
@@ -414,12 +438,15 @@ class Run:
                     raise TypeError()
                 hw_class_type_3_type_1 = RunHwClassType3Type1(data)
 
+
+
                 return hw_class_type_3_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(None | RunHwClassType1 | RunHwClassType2Type1 | RunHwClassType3Type1 | Unset, data)
 
         hw_class = _parse_hw_class(d.pop("hwClass", UNSET))
+
 
         def _parse_gpu(data: object) -> None | str | Unset:
             if data is None:
@@ -430,6 +457,7 @@ class Run:
 
         gpu = _parse_gpu(d.pop("gpu", UNSET))
 
+
         def _parse_gpu_count(data: object) -> int | None | Unset:
             if data is None:
                 return data
@@ -438,6 +466,7 @@ class Run:
             return cast(int | None | Unset, data)
 
         gpu_count = _parse_gpu_count(d.pop("gpuCount", UNSET))
+
 
         def _parse_vram_gb(data: object) -> float | None | Unset:
             if data is None:
@@ -448,6 +477,7 @@ class Run:
 
         vram_gb = _parse_vram_gb(d.pop("vramGb", UNSET))
 
+
         def _parse_chip(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -456,6 +486,7 @@ class Run:
             return cast(None | str | Unset, data)
 
         chip = _parse_chip(d.pop("chip", UNSET))
+
 
         def _parse_unified_memory_gb(data: object) -> float | None | Unset:
             if data is None:
@@ -466,6 +497,7 @@ class Run:
 
         unified_memory_gb = _parse_unified_memory_gb(d.pop("unifiedMemoryGb", UNSET))
 
+
         def _parse_cpu(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -474,6 +506,7 @@ class Run:
             return cast(None | str | Unset, data)
 
         cpu = _parse_cpu(d.pop("cpu", UNSET))
+
 
         def _parse_engine(data: object) -> None | str | Unset:
             if data is None:
@@ -484,6 +517,7 @@ class Run:
 
         engine = _parse_engine(d.pop("engine", UNSET))
 
+
         def _parse_engine_version(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -492,6 +526,7 @@ class Run:
             return cast(None | str | Unset, data)
 
         engine_version = _parse_engine_version(d.pop("engineVersion", UNSET))
+
 
         def _parse_quantization(data: object) -> None | str | Unset:
             if data is None:
@@ -502,6 +537,7 @@ class Run:
 
         quantization = _parse_quantization(d.pop("quantization", UNSET))
 
+
         def _parse_prompt_tokens(data: object) -> int | None | Unset:
             if data is None:
                 return data
@@ -510,6 +546,7 @@ class Run:
             return cast(int | None | Unset, data)
 
         prompt_tokens = _parse_prompt_tokens(d.pop("promptTokens", UNSET))
+
 
         def _parse_output_tokens(data: object) -> int | None | Unset:
             if data is None:
@@ -520,6 +557,7 @@ class Run:
 
         output_tokens = _parse_output_tokens(d.pop("outputTokens", UNSET))
 
+
         def _parse_context_length(data: object) -> int | None | Unset:
             if data is None:
                 return data
@@ -529,9 +567,8 @@ class Run:
 
         context_length = _parse_context_length(d.pop("contextLength", UNSET))
 
-        def _parse_context_band(
-            data: object,
-        ) -> None | RunContextBandType1 | RunContextBandType2Type1 | RunContextBandType3Type1 | Unset:
+
+        def _parse_context_band(data: object) -> None | RunContextBandType1 | RunContextBandType2Type1 | RunContextBandType3Type1 | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
@@ -541,6 +578,8 @@ class Run:
                     raise TypeError()
                 context_band_type_1 = RunContextBandType1(data)
 
+
+
                 return context_band_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
@@ -548,6 +587,8 @@ class Run:
                 if not isinstance(data, str):
                     raise TypeError()
                 context_band_type_2_type_1 = RunContextBandType2Type1(data)
+
+
 
                 return context_band_type_2_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
@@ -557,12 +598,15 @@ class Run:
                     raise TypeError()
                 context_band_type_3_type_1 = RunContextBandType3Type1(data)
 
+
+
                 return context_band_type_3_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(None | RunContextBandType1 | RunContextBandType2Type1 | RunContextBandType3Type1 | Unset, data)
 
         context_band = _parse_context_band(d.pop("contextBand", UNSET))
+
 
         def _parse_age_days(data: object) -> int | None | Unset:
             if data is None:
@@ -573,9 +617,8 @@ class Run:
 
         age_days = _parse_age_days(d.pop("ageDays", UNSET))
 
-        def _parse_staleness(
-            data: object,
-        ) -> None | RunStalenessType1 | RunStalenessType2Type1 | RunStalenessType3Type1 | Unset:
+
+        def _parse_staleness(data: object) -> None | RunStalenessType1 | RunStalenessType2Type1 | RunStalenessType3Type1 | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
@@ -585,6 +628,8 @@ class Run:
                     raise TypeError()
                 staleness_type_1 = RunStalenessType1(data)
 
+
+
                 return staleness_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
@@ -592,6 +637,8 @@ class Run:
                 if not isinstance(data, str):
                     raise TypeError()
                 staleness_type_2_type_1 = RunStalenessType2Type1(data)
+
+
 
                 return staleness_type_2_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
@@ -601,12 +648,15 @@ class Run:
                     raise TypeError()
                 staleness_type_3_type_1 = RunStalenessType3Type1(data)
 
+
+
                 return staleness_type_3_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(None | RunStalenessType1 | RunStalenessType2Type1 | RunStalenessType3Type1 | Unset, data)
 
         staleness = _parse_staleness(d.pop("staleness", UNSET))
+
 
         def _parse_source(data: object) -> None | str | Unset:
             if data is None:
@@ -616,6 +666,7 @@ class Run:
             return cast(None | str | Unset, data)
 
         source = _parse_source(d.pop("source", UNSET))
+
 
         run = cls(
             run_id=run_id,
@@ -646,6 +697,7 @@ class Run:
             staleness=staleness,
             source=source,
         )
+
 
         run.additional_properties = d
         return run

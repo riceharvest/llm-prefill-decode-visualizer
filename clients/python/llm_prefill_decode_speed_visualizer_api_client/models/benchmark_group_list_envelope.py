@@ -1,35 +1,39 @@
 from __future__ import annotations
 
-import datetime
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..models.benchmark_group_list_envelope_context_band_type_1 import BenchmarkGroupListEnvelopeContextBandType1
-from ..models.benchmark_group_list_envelope_context_band_type_2_type_1 import (
-    BenchmarkGroupListEnvelopeContextBandType2Type1,
-)
-from ..models.benchmark_group_list_envelope_context_band_type_3_type_1 import (
-    BenchmarkGroupListEnvelopeContextBandType3Type1,
-)
 from ..types import UNSET, Unset
 
+from ..models.benchmark_group_list_envelope_context_band_type_1 import BenchmarkGroupListEnvelopeContextBandType1
+from ..models.benchmark_group_list_envelope_context_band_type_2_type_1 import BenchmarkGroupListEnvelopeContextBandType2Type1
+from ..models.benchmark_group_list_envelope_context_band_type_3_type_1 import BenchmarkGroupListEnvelopeContextBandType3Type1
+from ..types import UNSET, Unset
+from typing import cast
+from typing import Literal, cast
+import datetime
+
 if TYPE_CHECKING:
-    from ..models.benchmark_group import BenchmarkGroup
-    from ..models.benchmark_group_list_envelope_outlier_policy import BenchmarkGroupListEnvelopeOutlierPolicy
-    from ..models.benchmark_group_list_envelope_unit_audit import BenchmarkGroupListEnvelopeUnitAudit
-    from ..models.caveat import Caveat
-    from ..models.snapshot_ref import SnapshotRef
+  from ..models.benchmark_group import BenchmarkGroup
+  from ..models.benchmark_group_list_envelope_outlier_policy import BenchmarkGroupListEnvelopeOutlierPolicy
+  from ..models.benchmark_group_list_envelope_unit_audit import BenchmarkGroupListEnvelopeUnitAudit
+  from ..models.caveat import Caveat
+  from ..models.snapshot_ref import SnapshotRef
+
+
+
 
 
 T = TypeVar("T", bound="BenchmarkGroupListEnvelope")
 
 
+
 @_attrs_define
 class BenchmarkGroupListEnvelope:
-    """Cursor-paginated aggregate groups, sorted by median decode desc (group-key tiebreak). Follow next_cursor until
+    """ Cursor-paginated aggregate groups, sorted by median decode desc (group-key tiebreak). Follow next_cursor until
     has_more is false.
 
         Attributes:
@@ -57,7 +61,7 @@ class BenchmarkGroupListEnvelope:
             unit_audit (BenchmarkGroupListEnvelopeUnitAudit | Unset): Unit-consistency audit across all matching runs.
             next_cursor (None | str | Unset):
             schema_version (Literal['1'] | Unset):
-    """
+     """
 
     total: int
     items: list[BenchmarkGroup]
@@ -70,13 +74,7 @@ class BenchmarkGroupListEnvelope:
     caveats: list[Caveat] | Unset = UNSET
     warnings: list[str] | Unset = UNSET
     max_age_days: float | None | Unset = UNSET
-    context_band: (
-        BenchmarkGroupListEnvelopeContextBandType1
-        | BenchmarkGroupListEnvelopeContextBandType2Type1
-        | BenchmarkGroupListEnvelopeContextBandType3Type1
-        | None
-        | Unset
-    ) = UNSET
+    context_band: BenchmarkGroupListEnvelopeContextBandType1 | BenchmarkGroupListEnvelopeContextBandType2Type1 | BenchmarkGroupListEnvelopeContextBandType3Type1 | None | Unset = UNSET
     distinct_model_families: int | Unset = UNSET
     distinct_engines: list[str] | Unset = UNSET
     engine_cohorted_by_default: bool | Unset = UNSET
@@ -84,16 +82,27 @@ class BenchmarkGroupListEnvelope:
     outlier_policy: BenchmarkGroupListEnvelopeOutlierPolicy | Unset = UNSET
     unit_audit: BenchmarkGroupListEnvelopeUnitAudit | Unset = UNSET
     next_cursor: None | str | Unset = UNSET
-    schema_version: Literal["1"] | Unset = UNSET
+    schema_version: Literal['1'] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
+
+
+
+
     def to_dict(self) -> dict[str, Any]:
+        from ..models.benchmark_group import BenchmarkGroup
+        from ..models.benchmark_group_list_envelope_outlier_policy import BenchmarkGroupListEnvelopeOutlierPolicy
+        from ..models.benchmark_group_list_envelope_unit_audit import BenchmarkGroupListEnvelopeUnitAudit
+        from ..models.caveat import Caveat
+        from ..models.snapshot_ref import SnapshotRef
         total = self.total
 
         items = []
         for items_item_data in self.items:
             items_item = items_item_data.to_dict()
             items.append(items_item)
+
+
 
         has_more = self.has_more
 
@@ -122,9 +131,13 @@ class BenchmarkGroupListEnvelope:
                 caveats_item = caveats_item_data.to_dict()
                 caveats.append(caveats_item)
 
+
+
         warnings: list[str] | Unset = UNSET
         if not isinstance(self.warnings, Unset):
             warnings = self.warnings
+
+
 
         max_age_days: float | None | Unset
         if isinstance(self.max_age_days, Unset):
@@ -150,6 +163,8 @@ class BenchmarkGroupListEnvelope:
         if not isinstance(self.distinct_engines, Unset):
             distinct_engines = self.distinct_engines
 
+
+
         engine_cohorted_by_default = self.engine_cohorted_by_default
 
         freshness_tiers = self.freshness_tiers
@@ -170,15 +185,14 @@ class BenchmarkGroupListEnvelope:
 
         schema_version = self.schema_version
 
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update(
-            {
-                "total": total,
-                "items": items,
-                "has_more": has_more,
-            }
-        )
+        field_dict.update({
+            "total": total,
+            "items": items,
+            "has_more": has_more,
+        })
         if description is not UNSET:
             field_dict["description"] = description
         if note is not UNSET:
@@ -216,6 +230,8 @@ class BenchmarkGroupListEnvelope:
 
         return field_dict
 
+
+
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.benchmark_group import BenchmarkGroup
@@ -223,16 +239,18 @@ class BenchmarkGroupListEnvelope:
         from ..models.benchmark_group_list_envelope_unit_audit import BenchmarkGroupListEnvelopeUnitAudit
         from ..models.caveat import Caveat
         from ..models.snapshot_ref import SnapshotRef
-
         d = dict(src_dict)
         total = d.pop("total")
 
         items = []
         _items = d.pop("items")
-        for items_item_data in _items:
+        for items_item_data in (_items):
             items_item = BenchmarkGroup.from_dict(items_item_data)
 
+
+
             items.append(items_item)
+
 
         has_more = d.pop("has_more")
 
@@ -242,10 +260,13 @@ class BenchmarkGroupListEnvelope:
 
         _snapshot = d.pop("snapshot", UNSET)
         snapshot: SnapshotRef | Unset
-        if isinstance(_snapshot, Unset):
+        if isinstance(_snapshot,  Unset):
             snapshot = UNSET
         else:
             snapshot = SnapshotRef.from_dict(_snapshot)
+
+
+
 
         def _parse_snapshot_at(data: object) -> datetime.datetime | None | Unset:
             if data is None:
@@ -257,12 +278,15 @@ class BenchmarkGroupListEnvelope:
                     raise TypeError()
                 snapshot_at_type_0 = datetime.datetime.fromisoformat(data)
 
+
+
                 return snapshot_at_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(datetime.datetime | None | Unset, data)
 
         snapshot_at = _parse_snapshot_at(d.pop("snapshotAt", UNSET))
+
 
         matched_runs = d.pop("matchedRuns", UNSET)
 
@@ -273,9 +297,13 @@ class BenchmarkGroupListEnvelope:
             for caveats_item_data in _caveats:
                 caveats_item = Caveat.from_dict(caveats_item_data)
 
+
+
                 caveats.append(caveats_item)
 
+
         warnings = cast(list[str], d.pop("warnings", UNSET))
+
 
         def _parse_max_age_days(data: object) -> float | None | Unset:
             if data is None:
@@ -286,15 +314,8 @@ class BenchmarkGroupListEnvelope:
 
         max_age_days = _parse_max_age_days(d.pop("maxAgeDays", UNSET))
 
-        def _parse_context_band(
-            data: object,
-        ) -> (
-            BenchmarkGroupListEnvelopeContextBandType1
-            | BenchmarkGroupListEnvelopeContextBandType2Type1
-            | BenchmarkGroupListEnvelopeContextBandType3Type1
-            | None
-            | Unset
-        ):
+
+        def _parse_context_band(data: object) -> BenchmarkGroupListEnvelopeContextBandType1 | BenchmarkGroupListEnvelopeContextBandType2Type1 | BenchmarkGroupListEnvelopeContextBandType3Type1 | None | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
@@ -304,6 +325,8 @@ class BenchmarkGroupListEnvelope:
                     raise TypeError()
                 context_band_type_1 = BenchmarkGroupListEnvelopeContextBandType1(data)
 
+
+
                 return context_band_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
@@ -311,6 +334,8 @@ class BenchmarkGroupListEnvelope:
                 if not isinstance(data, str):
                     raise TypeError()
                 context_band_type_2_type_1 = BenchmarkGroupListEnvelopeContextBandType2Type1(data)
+
+
 
                 return context_band_type_2_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
@@ -320,23 +345,20 @@ class BenchmarkGroupListEnvelope:
                     raise TypeError()
                 context_band_type_3_type_1 = BenchmarkGroupListEnvelopeContextBandType3Type1(data)
 
+
+
                 return context_band_type_3_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
-            return cast(
-                BenchmarkGroupListEnvelopeContextBandType1
-                | BenchmarkGroupListEnvelopeContextBandType2Type1
-                | BenchmarkGroupListEnvelopeContextBandType3Type1
-                | None
-                | Unset,
-                data,
-            )
+            return cast(BenchmarkGroupListEnvelopeContextBandType1 | BenchmarkGroupListEnvelopeContextBandType2Type1 | BenchmarkGroupListEnvelopeContextBandType3Type1 | None | Unset, data)
 
         context_band = _parse_context_band(d.pop("contextBand", UNSET))
+
 
         distinct_model_families = d.pop("distinctModelFamilies", UNSET)
 
         distinct_engines = cast(list[str], d.pop("distinctEngines", UNSET))
+
 
         engine_cohorted_by_default = d.pop("engineCohortedByDefault", UNSET)
 
@@ -344,17 +366,23 @@ class BenchmarkGroupListEnvelope:
 
         _outlier_policy = d.pop("outlierPolicy", UNSET)
         outlier_policy: BenchmarkGroupListEnvelopeOutlierPolicy | Unset
-        if isinstance(_outlier_policy, Unset):
+        if isinstance(_outlier_policy,  Unset):
             outlier_policy = UNSET
         else:
             outlier_policy = BenchmarkGroupListEnvelopeOutlierPolicy.from_dict(_outlier_policy)
 
+
+
+
         _unit_audit = d.pop("unitAudit", UNSET)
         unit_audit: BenchmarkGroupListEnvelopeUnitAudit | Unset
-        if isinstance(_unit_audit, Unset):
+        if isinstance(_unit_audit,  Unset):
             unit_audit = UNSET
         else:
             unit_audit = BenchmarkGroupListEnvelopeUnitAudit.from_dict(_unit_audit)
+
+
+
 
         def _parse_next_cursor(data: object) -> None | str | Unset:
             if data is None:
@@ -365,8 +393,9 @@ class BenchmarkGroupListEnvelope:
 
         next_cursor = _parse_next_cursor(d.pop("next_cursor", UNSET))
 
-        schema_version = cast(Literal["1"] | Unset, d.pop("schema_version", UNSET))
-        if schema_version != "1" and not isinstance(schema_version, Unset):
+
+        schema_version = cast(Literal['1'] | Unset , d.pop("schema_version", UNSET))
+        if schema_version != '1'and not isinstance(schema_version, Unset):
             raise ValueError(f"schema_version must match const '1', got '{schema_version}'")
 
         benchmark_group_list_envelope = cls(
@@ -391,6 +420,7 @@ class BenchmarkGroupListEnvelope:
             next_cursor=next_cursor,
             schema_version=schema_version,
         )
+
 
         benchmark_group_list_envelope.additional_properties = d
         return benchmark_group_list_envelope

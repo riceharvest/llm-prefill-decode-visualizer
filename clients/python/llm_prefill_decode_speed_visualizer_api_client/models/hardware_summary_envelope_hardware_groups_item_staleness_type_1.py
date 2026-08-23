@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class HardwareSummaryEnvelopeHardwareGroupsItemStalenessType1(str, Enum):
     AGING = "aging"
     FRESH = "fresh"

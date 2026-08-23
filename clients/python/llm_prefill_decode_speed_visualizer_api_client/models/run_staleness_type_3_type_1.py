@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class RunStalenessType3Type1(str, Enum):
     AGING = "aging"
     FRESH = "fresh"
