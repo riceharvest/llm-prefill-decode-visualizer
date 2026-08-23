@@ -463,7 +463,8 @@ export default function BatchingVisualizer({
               type="button"
               title={t('speedControls.resetTooltip')}
               aria-label={`${t('batching.resetTag')} — ${t('speedControls.resetTooltip')}`}
-              className="btn">
+              className="btn"
+            >
               <RotateCcw size={15} />
               {t('batching.resetTag')}
             </button>
