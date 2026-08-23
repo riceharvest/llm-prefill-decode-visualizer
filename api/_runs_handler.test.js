@@ -53,7 +53,7 @@ function restore() {
 }
 
 function mockReq(query = {}) {
-  return { url: '/api/runs', query, headers: {}, socket: { remoteAddress: '10.0.0.1' } };
+  return { url: '/api/runs', method: 'GET', query, headers: {}, socket: { remoteAddress: '10.0.0.1' } };
 }
 
 function mockRes() {
@@ -62,6 +62,7 @@ function mockRes() {
     statusCode: null,
     headers: {},
     bodyText: '',
+    status(c) { this.statusCode = c; return this; },
     setHeader(k, v) { this.headers[k.toLowerCase()] = v; },
     getHeader(k) { return this.headers[k.toLowerCase()]; },
     write(c) { chunks.push(String(c)); },
@@ -78,6 +79,7 @@ test('GET /api/runs returns the full index as JSON with envelope metadata', asyn
     assert.equal(body.schema_version, '1');
     assert.equal(body.rowCount, 2);
     assert.equal(body.totalRunCount, 2);
+    assert.equal(body.comparableCount, 1);
     assert.equal(body.comparableFilter, 'all');
     assert.equal(body.runs.length, 2);
     const tags = body.runs.map(r => r.comparable).sort();
@@ -130,6 +132,30 @@ test('invalid format / comparable values return 400 problem+json', async () => {
       assert.match(res.headers['content-type'], /problem\+json/);
       const problem = JSON.parse(res.bodyText);
       assert.equal(problem.code, 'INVALID_PARAMS');
+    }
+  } finally { restore(); }
+});
+
+test('OPTIONS preflight returns 204 with CORS headers', async () => {
+  try {
+    const res = mockRes();
+    await handler({ ...mockReq({}), method: 'OPTIONS' }, res);
+    assert.equal(res.statusCode, 204);
+    assert.equal(res.headers['access-control-allow-origin'], '*');
+    assert.match(res.headers['access-control-allow-methods'], /GET/);
+  } finally { restore(); }
+});
+
+test('non-GET methods return a 405 problem+json with an Allow header', async () => {
+  try {
+    for (const method of ['POST', 'DELETE']) {
+      const res = mockRes();
+      await handler({ ...mockReq({}), method }, res);
+      assert.equal(res.statusCode, 405);
+      assert.match(res.headers['content-type'], /problem\+json/);
+      assert.equal(res.headers.allow, 'GET, OPTIONS');
+      const problem = JSON.parse(res.bodyText);
+      assert.equal(problem.code, 'METHOD_NOT_ALLOWED');
     }
   } finally { restore(); }
 });

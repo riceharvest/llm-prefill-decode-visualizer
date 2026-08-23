@@ -83,13 +83,14 @@ function filterTextFallback(mode) {
 }
 
 /** JSON dump envelope with the same dictionary in structured form. */
-export function buildRunsJsonPayload(rows, generatedAt, { totalRunCount, comparableFilter = 'all' } = {}) {
+export function buildRunsJsonPayload(rows, generatedAt, { totalRunCount, comparableCount, comparableFilter = 'all' } = {}) {
   return {
     description: 'Full machine-readable dump of the community-measured LLM benchmark run index, including batched/non-comparable runs. Filter client-side with the `comparable` flag to reproduce the single-stream dataset the aggregate endpoints use.',
     schemaVersion: RUNS_DATASET_VERSION,
     generatedAt,
     comparableFilter,
     totalRunCount,
+    comparableCount,
     rowCount: rows.length,
     dataDictionary: RUNS_COLUMNS.map(c => ({ column: c.key, type: c.type, description: c.description })),
     runs: rows

@@ -52,7 +52,7 @@ migrate before `Sunset`. Agents can discover the current policy at
 - New `GET /api/runs` endpoint: one-shot machine-readable dump of the **full**
   run index — every community-measured run, comparable AND batched/
   non-comparable — as JSON (`?format=json`, envelope with `schemaVersion`,
-  `generatedAt`, `rowCount`, `totalRunCount`, structured `dataDictionary`,
+  `generatedAt`, `rowCount`, `totalRunCount`, `comparableCount`, structured `dataDictionary`,
   per-run `comparable` flag) or RFC 4180 CSV (`?format=csv`, `#`-preamble with
   metadata + data dictionary, dated attachment). Optional
   `?comparable=true|false|all` subsets server-side. Shares the cached upstream

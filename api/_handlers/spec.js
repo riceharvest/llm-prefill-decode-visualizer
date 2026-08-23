@@ -254,7 +254,7 @@ export default function handler(req, res) {
           ],
           responses: {
             '200': {
-              description: '{schemaVersion, generatedAt, comparableFilter, rowCount, totalRunCount, dataDictionary[], runs[]} for format=json; RFC 4180 text/csv attachment for format=csv',
+              description: '{schemaVersion, generatedAt, comparableFilter, rowCount, totalRunCount, comparableCount, dataDictionary[], runs[]} for format=json; RFC 4180 text/csv attachment for format=csv',
               content: {
                 'application/json': {
                   example: {
@@ -264,6 +264,7 @@ export default function handler(req, res) {
                     comparableFilter: 'all',
                     rowCount: 3642,
                     totalRunCount: 3642,
+                    comparableCount: 3642,
                     dataDictionary: [{ column: 'runId', type: 'string', description: 'Upstream run identifier' }],
                     runs: [
                       {
@@ -283,11 +284,17 @@ export default function handler(req, res) {
                       }
                     ]
                   }
+                },
+                'text/csv': {
+                  schema: { type: 'string' },
+                  example: '# dataset: localmaxxing full LLM benchmark run index\r\n# schema_version: 1\r\n# generated_at: 2026-08-23T05:00:00.000Z\r\n# rows: 3642\r\n# filter: none — every community-measured run (use the `comparable` column)\r\n# data dictionary (column: type — description):\r\nrunId,createdAt,comparable,…\r\n'
                 }
               }
             },
             '400': { description: 'Invalid format/comparable value (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } },
-            '429': RATE_LIMITED
+            '405': { description: 'Method not allowed (code METHOD_NOT_ALLOWED) — only GET and OPTIONS are supported', content: { 'application/problem+json': { schema: PROBLEM } } },
+            '429': RATE_LIMITED,
+            '502': DATA_ERRORS['502']
           }
         }
       },

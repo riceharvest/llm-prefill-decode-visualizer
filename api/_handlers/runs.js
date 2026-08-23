@@ -2,7 +2,7 @@ import { getAllRunsRaw } from '../_localmaxxing.js';
 import { runsCsvPreamble, toRunsCsv, buildRunsJsonPayload, RUNS_DATASET_VERSION } from '../_runs_dump.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson } from '../_schema.js';
-import { ApiError, sendProblemFromError } from '../_errors.js';
+import { ApiError, sendProblem, sendProblemFromError } from '../_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -22,6 +22,20 @@ const COMPARABLE_MODES = ['all', 'true', 'false'];
  * this dump adds no extra upstream load.
  */
 export default async function handler(req, res) {
+  // CORS preflight + method guard (agents/crawlers are first-class consumers).
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    return res.status(204).end();
+  }
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET, OPTIONS');
+    return sendProblem(res, req, {
+      code: 'METHOD_NOT_ALLOWED',
+      detail: `${req.method} is not supported here. Use GET to fetch the full run index.`
+    });
+  }
+
   if (!enforceRateLimit(req, res)) return;
 
   try {
@@ -57,7 +71,11 @@ export default async function handler(req, res) {
       return res.end();
     }
 
-    const payload = buildRunsJsonPayload(rows, generatedAt, { totalRunCount: all.length, comparableFilter: mode });
+    const payload = buildRunsJsonPayload(rows, generatedAt, {
+      totalRunCount: all.length,
+      comparableCount: all.filter(r => r.comparable).length,
+      comparableFilter: mode
+    });
     return sendJson(res, payload, { cacheTtl: 600 });
   } catch (err) {
     return sendProblemFromError(res, req, err);
