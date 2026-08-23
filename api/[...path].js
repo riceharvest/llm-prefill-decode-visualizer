@@ -26,6 +26,7 @@ import { default as agentBenchmarks } from './_handlers/agent_benchmarks.js';
 import { default as agentScenario } from './_handlers/agent_scenario.js';
 import { default as mcp } from './mcp.js';
 import { default as agentCompute } from './_handlers/agent_compute.js';
+import { default as agentFreshness } from './_handlers/agent_freshness.js';
 
 import { withMarkdownNegotiation } from './_markdown.js';
 
@@ -94,6 +95,8 @@ export default async function handler(req, res) {
       case '/agent/compute.json': return agentCompute(req, res);
       case '/agent/benchmarks.json': return agentBenchmarks(req, res);
       case '/agent/scenario.json': return agentScenario(req, res);
+      case '/agent/freshness.json': return agentFreshness(req, res);
+      case '/agent/confidence.json': return agentFreshness(req, res); // alias, same report
       default:
         // /api/calc/<id>
         const calcMatch = clean.match(/^\/calc\/([^/]+)$/);

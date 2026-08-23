@@ -91,6 +91,12 @@
       "returns": "application/json"
     },
     {
+      "path": "/api/agent/freshness.json",
+      "method": "GET",
+      "description": "Data-freshness and confidence report for the benchmark dataset: staleness tiers (fresh <90d, aging <1y, stale >=1y), per-group 0-100 confidence, upstream cache state, engine-release warnings. Alias: /api/agent/confidence.json.",
+      "returns": "application/json"
+    },
+    {
       "path": "/api/sizing",
       "method": "GET",
       "description": "One-call hardware sizing recommendation: pass a workload spec (?model=<family>&contextLength=&concurrency=&maxTtftSeconds=&maxTpotMs=&maxVramGb=) and get ranked rigs with required-VRAM math, expected TTFT/TPOT from benchmark medians, sample confidence, and meetsSlo flags.",

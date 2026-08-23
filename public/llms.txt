@@ -41,6 +41,8 @@ Every endpoint below is also served under a versioned prefix: replace `/api/` wi
 
 **GET /api/health** — liveness + upstream data freshness ({ok, upstreamFreshness, cacheAge}). Human status page at /status.html.
 
+**GET /api/agent/freshness.json** — agent-readable data-freshness and confidence report (alias: /api/agent/confidence.json, same handler). Answers "how old are these numbers and how much should I trust them?" without fetching raw runs: upstream cache state, dataset-wide staleness (`fresh <90d | aging <1y | stale ≥1y`, `unknown` = no parseable date), per-group freshness + the same 0-100 confidence score used by /api/benchmarks and /api/best (sample size, IQR spread, outlier density; grades `high >=70 | medium >=40 | low <40`), major engine-release boundary warnings. Filters mirror the other data endpoints: `?hardware=` (substring), `?model=` (substring), `?quant=` (exact), `?context_band=`, `?max_age=<days>`, `?groupBy=hardware|model|hardwareModel`, `?snapshot=<id>`. Response: `{ description, endpoint, generatedAt, filters, cache, dataset, groups[], summary, caveats, relatedEndpoints }`. Identical computations to /api/benchmarks, /api/best and /api/health — this endpoint only wraps them.
+
 ### Endpoints
 
 **GET /api/compute?model=<name>&<params>** — run any simulator math and get exact numbers.
