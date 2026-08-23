@@ -255,6 +255,12 @@ same handler). Flat JSON: `description`, `generatedAt`, echoed `filters`,
 Alias for `GET /api/agent/freshness.json` — identical handler and response
 shape (`api/_handlers/agent_freshness.js`). Same filters and schema.
 
+### GET /api/version
+
+Machine-readable version report (`api/_handlers/version.js`): service name,
+app `version` (package.json), `schemaVersion`, `generatedAt`, links to
+`/api/spec`, `CHANGELOG-API.md` and machine-readable `CHANGELOG.json`.
+
 ### GET /api/benchmarks
 
 Aggregated median + IQR speeds per hardware×model group (outlier-resistant),

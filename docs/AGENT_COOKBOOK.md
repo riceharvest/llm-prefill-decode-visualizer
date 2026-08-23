@@ -494,6 +494,18 @@ Alias for `GET /api/agent/freshness.json` — identical handler, identical
 response shape (`api/_handlers/agent_freshness.js`). Use whichever name
 matches your agent's vocabulary; both carry the same filters and schema.
 
+## `GET /api/version`
+
+Machine-readable version report for agents and clients
+(`api/_handlers/version.js`): service name, app `version` (package.json),
+`schemaVersion` (the wire schema_version stamped on every JSON response),
+`generatedAt` timestamp and links to `/api/spec`, `CHANGELOG-API.md` and the
+machine-readable `CHANGELOG.json`. Additive — no existing fields changed.
+
+```bash
+curl -s "$BASE/api/version"
+```
+
 ## `GET /api/snapshots`
 
 Content-addressed dataset snapshot ids. Pin any data endpoint with
