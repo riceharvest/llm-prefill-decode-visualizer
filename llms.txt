@@ -7,6 +7,7 @@
 - [README](README.md): features, setup and architecture overview
 - [Full API guide (llms.txt)](public/llms.txt): every endpoint with parameters, curl examples, response shapes, statistical caveats, error codes and rate limits
 - [API changelog](CHANGELOG-API.md): schema-versioning policy and endpoint change history
+- [Full documentation (llms-full.txt)](public/llms-full.txt): every agent-facing doc above compiled into one flat markdown file, served at `/llms-full.txt`
 
 ## Machine-readable surfaces
 
