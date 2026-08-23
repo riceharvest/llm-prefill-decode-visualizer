@@ -1,7 +1,9 @@
 name: CI
 
-# Gate for every push/PR: unit tests, lint, and a production build must
-# all pass before a change can merge to main.
+# Gate for every push to main and every PR: unit tests, lint, a headless
+# simulation run (scripts/run-sim.mjs drives the pure-JS sim modules with no
+# browser/display), and a production build must all pass before a change can
+# merge to main.
 
 on:
   push:
@@ -30,6 +32,9 @@ jobs:
 
       - name: Lint
         run: npx oxlint
+
+      - name: Headless simulation
+        run: node scripts/run-sim.mjs
 
       - name: Build
         run: npx vite build
