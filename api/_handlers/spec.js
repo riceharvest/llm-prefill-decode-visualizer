@@ -1,4 +1,4 @@
-import { enforceRateLimit } from '../_ratelimit.js';
+import { enforceRateLimit, RATE_LIMIT, RATE_WINDOW_MS } from '../_ratelimit.js';
 import { ERROR_CODES, problemType } from '../_errors.js';
 
 export const config = { runtime: 'nodejs' };
@@ -35,6 +35,45 @@ const RATE_LIMITED_RESPONSE = {
     }
   }
 };
+
+// x-rate-limit: machine-readable per-operation rate-limit metadata. Values are
+// derived from the live limiter constants in api/_ratelimit.js so /api/spec can
+// never drift from the actual budget. `enforced` mirrors which handler modules
+// really call enforceRateLimit() — asserted against source in
+// api/_spec_rate_limit.test.js.
+const ENFORCED_PATHS = new Set([
+  '/api/compute',
+  '/api/presets',
+  '/api/localmaxxing',
+  '/api/benchmarks',
+  '/api/best',
+  '/api/parse-constraints',
+  '/api/watch',
+  '/api/watch/rss.xml',
+  '/api/watch/dispatch'
+]);
+
+function xRateLimit(enforced) {
+  const ext = {
+    enforced,
+    limit: RATE_LIMIT,
+    windowSeconds: RATE_WINDOW_MS / 1000,
+    keying: 'per client IP (first X-Forwarded-For hop)',
+    scope: 'best-effort fixed window, per serverless instance — concurrent warm instances each allow this budget and cold starts reset it'
+  };
+  if (enforced) {
+    ext.headers = ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'];
+    ext.onExhaustion = {
+      status: 429,
+      retryAfterHeader: 'Retry-After (seconds)',
+      errorCode: 'RATE_LIMITED',
+      response: { $ref: '#/components/responses/RateLimited' }
+    };
+  } else {
+    ext.note = 'This endpoint is currently not metered — it sets no rate-limit headers and never returns 429.';
+  }
+  return ext;
+}
 
 // Shared by /api/localmaxxing, /api/benchmarks and /api/best: pin a
 // versioned dataset snapshot (see /api/snapshots) for reproducible results.
@@ -586,6 +625,18 @@ export default function handler(req, res) {
       title: meta.title,
       description: meta.description
     }))
+  };
+
+  // Stamp x-rate-limit on every operation plus a root-level default so agents
+  // can plan request budgets directly from /api/spec without probing 429s.
+  for (const [path, item] of Object.entries(spec.paths)) {
+    for (const method of ['get', 'post', 'put', 'delete', 'patch']) {
+      if (item[method]) item[method]['x-rate-limit'] = xRateLimit(ENFORCED_PATHS.has(path));
+    }
+  }
+  spec['x-rate-limit'] = {
+    summary: 'Global default; per-operation values live under paths[*][method].x-rate-limit.',
+    ...xRateLimit(true)
   };
 
   // Every JSON response carries schema_version + X-Schema-Version

@@ -49,6 +49,16 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- `/api/spec` now annotates every operation with a machine-readable
+  `x-rate-limit` extension: `{ enforced, limit, windowSeconds, keying, scope }`
+  plus, for metered endpoints, the `X-RateLimit-*` header names and the 429
+  exhaustion shape (`onExhaustion.status/retryAfterHeader/errorCode/response`
+  ref to the shared RateLimited response). A root-level `x-rate-limit` carries
+  the global default. Values derive from the live limiter constants in
+  `api/_ratelimit.js`; `enforced` is asserted against actual handler source by
+  `api/_spec_rate_limit.test.js`. Additive — no version bump.
+- Affected endpoints: `/api/spec` only.
+
 - New `GET /api/og` endpoint (#105): renders a 1200x630 PNG Open Graph chart
   card from URL params (`preset`, `prefill`, `decode`, `scenario`, `prompt`)
   via @vercel/og. Binary image response (`image/png`, not JSON/schema-
