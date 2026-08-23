@@ -109,6 +109,10 @@ test('documented MCP tool names exist in mcp/server.js', () => {
 
 test('every repo file cited in the doc exists on disk', () => {
   const cites = [...doc.matchAll(/\b((?:api|mcp|scripts|public|test|lib)\/[A-Za-z0-9_\-./[\]]+\.(?:js|mjs|json|txt))\b/g)]
+    // Skip URL/route references (always written with a leading slash,
+    // e.g. GET /api/agent/capabilities.json) — only bare repo-path
+    // citations like (api/_errors.js) are checked against disk.
+    .filter((m) => m.index === 0 || doc[m.index - 1] !== '/')
     .map((m) => m[1]);
   assert.ok(cites.length >= 20, `expected inline source citations, got ${cites.length}`);
   for (const rel of new Set(cites)) {

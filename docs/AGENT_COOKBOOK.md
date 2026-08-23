@@ -414,6 +414,18 @@ curl -s "$BASE/api/health"
 }
 ```
 
+## `GET /api/agent/capabilities.json`
+
+Machine-readable discovery document: every agent-facing surface of the app —
+JSON API endpoints, the MCP server (`/api/mcp`, `/.well-known/mcp.json`),
+feeds, manifests and docs — as a structured list of
+`{ path, methods, kind, description }` entries. Static by design (no upstream
+fetches) and CDN-cached for 1h; carries the standard schema-version stamp.
+
+```bash
+curl -s "$BASE/api/agent/capabilities.json"
+```
+
 ## `GET /api/snapshots`
 
 Content-addressed dataset snapshot ids. Pin any data endpoint with

@@ -203,6 +203,13 @@ boolean. CSV is RFC 4180 with a `#`-comment metadata preamble + data
 dictionary, served as a dated attachment. Non-GET → `405` problem+json
 (`METHOD_NOT_ALLOWED`).
 
+### GET /api/agent/capabilities.json
+
+Machine-readable discovery document (`api/_handlers/capabilities.js`): every
+agent-facing surface — JSON API endpoints, MCP server, feeds, manifests,
+docs — as `{ path, methods, kind, description }` entries. Static and
+CDN-cached (1h); schema-version stamped.
+
 ### GET /api/benchmarks
 
 Aggregated median + IQR speeds per hardware×model group (outlier-resistant),
