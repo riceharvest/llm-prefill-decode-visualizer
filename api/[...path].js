@@ -22,6 +22,7 @@ import { default as watchRss } from './_handlers/rss.xml.js';
 import { default as watchDispatch } from './_handlers/dispatch.js';
 import { default as calcId } from './_handlers/calc_id.js';
 import { default as capabilities } from './_handlers/capabilities.js';
+import { default as agentBenchmarks } from './_handlers/agent_benchmarks.js';
 import { default as mcp } from './mcp.js';
 import { default as agentCompute } from './_handlers/agent_compute.js';
 
@@ -90,6 +91,7 @@ export default async function handler(req, res) {
       case '/mcp': return mcp(req, res);
       case '/agent/capabilities.json': return capabilities(req, res);
       case '/agent/compute.json': return agentCompute(req, res);
+      case '/agent/benchmarks.json': return agentBenchmarks(req, res);
       default:
         // /api/calc/<id>
         const calcMatch = clean.match(/^\/calc\/([^/]+)$/);
