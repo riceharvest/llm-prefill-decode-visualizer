@@ -15,6 +15,8 @@
  *     `Deprecation` and `Sunset` headers plus a CHANGELOG-API.md entry.
  */
 
+import { rateLimitBody } from './_ratelimit.js';
+
 export const SCHEMA_VERSION = '1';
 
 /** Stamp the schema version onto a response body without mutating it.
@@ -90,5 +92,12 @@ export function sendJson(res, body, { status = 200, cacheTtl } = {}) {
     res.setHeader('Cache-Control', `public, max-age=${cacheTtl}`);
   }
   applySchemaHeaders(res);
-  res.end(JSON.stringify(withSchemaVersion(body), null, 2));
+  const payload = withSchemaVersion(body);
+  // Agent-facing rate-limit info in the body itself (mirrors the X-RateLimit-*
+  // headers): present whenever the handler ran enforceRateLimit before
+  // sending. Additive field — does not bump schema_version. See AGENTS.md,
+  // "Rate limits".
+  const rl = rateLimitBody(res);
+  if (rl && payload.rate_limit === undefined) payload.rate_limit = rl;
+  res.end(JSON.stringify(payload, null, 2));
 }
