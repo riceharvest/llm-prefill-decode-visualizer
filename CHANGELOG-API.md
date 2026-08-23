@@ -49,6 +49,16 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- New `GET /api/agent/freshness.json` endpoint: agent-readable data-freshness
+  and confidence report (alias: `/api/agent/confidence.json`, same handler).
+  Wraps the existing freshness/confidence machinery (`groupFreshness()` +
+  staleness tiers, `confidenceFor()`/`aggregate()`, upstream cache state) —
+  flat JSON with `description`, `generatedAt`, echoed `filters`, a `cache`
+  block, dataset-wide `dataset`, per-group `groups[]` (freshness + 0-100
+  confidence with high/medium/low grades) and a cross-group `summary`.
+  Filters: `?hardware=`, `?model=`, `?quant=`, `?context_band=`, `?max_age=`,
+  `?groupBy=hardware|model|hardwareModel`, `?snapshot=`.
+- Affected endpoints: `/api/agent/freshness.json`, `/api/agent/confidence.json`.
 - New `GET /api/og` endpoint (#105): renders a 1200x630 PNG Open Graph chart
   card from URL params (`preset`, `prefill`, `decode`, `scenario`, `prompt`)
   via @vercel/og. Binary image response (`image/png`, not JSON/schema-
