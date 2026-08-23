@@ -59,6 +59,533 @@ const DATA_ERRORS = {
   '502': { description: 'Upstream benchmark source unavailable (code UPSTREAM_UNAVAILABLE) — transient, safe to retry with backoff', content: { 'application/problem+json': { schema: PROBLEM } } }
 };
 
+// ---------------------------------------------------------------------------
+// Reusable component schemas (#319). These mirror the wire shapes emitted by
+// /api/localmaxxing (_localmaxxing.js slim() + _freshness.js decorateRun()),
+// /api/benchmarks (aggregate() in _localmaxxing.js), /api/best and
+// /api/compute (_math.js). Fields are nullable where the upstream dataset may
+// omit them; every response additionally carries the top-level envelope
+// fields (schema_version, caveats, snapshot metadata) defined below.
+// ---------------------------------------------------------------------------
+const CI95 = {
+  type: 'object',
+  description: '95% percentile bootstrap confidence interval (2,000 resamples). Overlapping intervals across groups mean they are statistically tied.',
+  required: ['lo', 'hi'],
+  properties: {
+    lo: { type: 'number', description: '2.5th percentile' },
+    hi: { type: 'number', description: '97.5th percentile' }
+  }
+};
+
+const SPEED_STATS = {
+  type: 'object',
+  description: 'Outlier-resistant distribution stats for one metric within a group.',
+  required: ['median'],
+  properties: {
+    q1: { type: ['number', 'null'], description: 'First quartile' },
+    median: { type: ['number', 'null'] },
+    q3: { type: ['number', 'null'], description: 'Third quartile' },
+    min: { type: ['number', 'null'] },
+    max: { type: ['number', 'null'] },
+    ci95: CI95,
+    label: { type: ['string', 'null'], description: 'Rendered as "median [lo–hi]"', example: '105 [101–110]' }
+  }
+};
+
+const CAVEAT = {
+  type: 'object',
+  description: 'Machine-readable dataset limitation. Branch on `code`; treat `severity` as display weight.',
+  required: ['code', 'severity', 'summary'],
+  properties: {
+    code: { type: 'string', example: 'single_stream_only' },
+    severity: { type: 'string', enum: ['info', 'low', 'medium', 'high', 'warning'], description: 'Display weight. `warning` marks statistical limitations that should change how the number is used (n=1 groups, mixed engines/bands); `info` is contextual.' },
+    summary: { type: 'string' },
+    detail: { type: 'string' }
+  },
+  additionalProperties: true
+};
+
+const CONFIDENCE = {
+  type: 'object',
+  description: 'How much to trust one aggregate: sample size, decode-IQR width, outlier density, recency and an overall grade.',
+  required: ['runs', 'grade'],
+  properties: {
+    runs: { type: 'integer', description: 'Comparable runs backing this aggregate' },
+    iqrSpreadPct: { type: ['number', 'null'], description: 'Decode IQR / median × 100; tighter is better' },
+    outliers: { type: 'integer', description: 'Runs outside the 1.5×IQR fences' },
+    newestRunAgeDays: { type: ['integer', 'null'] },
+    score: { type: ['integer', 'null'], minimum: 0, maximum: 100, description: '0–100 composite of sample size, spread and outliers (when computed)' },
+    grade: { type: 'string', enum: ['low', 'medium', 'high'], description: "low <3 runs; high ≥10 runs with ≤40% decode IQR spread; medium otherwise" }
+  }
+};
+
+const CONTRADICTION = {
+  type: 'object',
+  description: 'A multi-GPU rig whose numbers contradict the single-GPU baseline on the same model/quant — likely a misconfigured run.',
+  required: ['kind', 'metric'],
+  properties: {
+    kind: { type: 'string', enum: ['slower_than_single', 'poor_scaling'] },
+    vs: { type: 'string', description: 'Rig label, e.g. "2x RTX 4090"' },
+    gpuCount: { type: 'integer' },
+    metric: { type: 'string', enum: ['decode', 'prefill'] },
+    singleTokPerSec: { type: 'number' },
+    multiTokPerSec: { type: 'number' },
+    deltaPct: { type: 'number' },
+    perGpuScalingPct: { type: 'number' },
+    note: { type: 'string' }
+  }
+};
+
+const CROSS_CHECK = {
+  type: 'object',
+  description: 'Sanity comparison of multi-GPU rigs against the single-GPU baseline on the same model/quant.',
+  required: ['relatedRigComparisons', 'contradictions'],
+  properties: {
+    relatedRigComparisons: { type: 'integer', description: 'Number of multi-GPU comparisons performed' },
+    contradictions: { type: 'array', items: { $ref: '#/components/schemas/Contradiction' } }
+  }
+};
+
+const SNAPSHOT_REF = {
+  type: 'object',
+  description: 'Content-addressed dataset snapshot actually served. Pin its id via ?snapshot= for reproducible numbers (see /api/snapshots).',
+  required: ['id'],
+  properties: {
+    id: { type: 'string', example: 'snapshot-2026-08-21-a1b2c3d4' },
+    createdAt: { type: ['string', 'null'], format: 'date-time' },
+    runCount: { type: ['integer', 'null'] }
+  }
+};
+
+const BEST_RUN_SUMMARY = {
+  type: 'object',
+  description: 'The single fastest measured run inside a group.',
+  required: ['runId', 'decodeTokPerSec'],
+  properties: {
+    runId: { type: 'integer' },
+    modelName: { type: ['string', 'null'] },
+    hardware: { type: ['string', 'null'] },
+    engine: { type: ['string', 'null'] },
+    engineVersion: { type: ['string', 'null'] },
+    quantization: { type: ['string', 'null'] },
+    prefillTokPerSec: { type: 'integer' },
+    decodeTokPerSec: { type: 'integer' },
+    createdAt: { type: ['string', 'null'], format: 'date-time' },
+    source: { type: ['string', 'null'], format: 'uri', description: 'Upstream run page' }
+  }
+};
+
+/** One community-measured benchmark run (GET /api/localmaxxing items[]). */
+const RUN = {
+  type: 'object',
+  description: 'Raw comparable community run, flattened and model-normalized (modelFamily collapses repo/quant variants of the same base model). Single-stream runs only.',
+  required: ['runId', 'modelFamily', 'prefillTokPerSec', 'decodeTokPerSec'],
+  properties: {
+    runId: { type: 'integer', description: 'Stable upstream run id (also used as pagination tiebreak)' },
+    createdAt: { type: ['string', 'null'], format: 'date-time' },
+    modelFamily: { type: 'string', description: 'Normalized base-model family, e.g. qwen3.6-27b' },
+    modelId: { type: ['string', 'null'], description: 'Hugging Face repo id when known' },
+    modelName: { type: ['string', 'null'], description: 'Upstream display name' },
+    paramsB: { type: ['number', 'null'], description: 'Parameter count in billions' },
+    hardwareKey: { type: ['string', 'null'], description: 'Normalized rig key, e.g. rtx4090' },
+    hardware: { type: ['string', 'null'], description: 'Human-readable rig label' },
+    hwClass: { type: ['string', 'null'], enum: ['discrete_gpu', 'unified', 'cpu_only', null] },
+    gpu: { type: ['string', 'null'] },
+    gpuCount: { type: ['integer', 'null'], default: 1 },
+    vramGb: { type: ['number', 'null'] },
+    chip: { type: ['string', 'null'] },
+    unifiedMemoryGb: { type: ['number', 'null'] },
+    cpu: { type: ['string', 'null'] },
+    engine: { type: ['string', 'null'], example: 'llama.cpp' },
+    engineVersion: { type: ['string', 'null'] },
+    quantization: { type: ['string', 'null'], example: 'q4_k_m' },
+    prefillTokPerSec: { type: 'integer', description: 'Measured prompt-processing speed (tok/s)' },
+    decodeTokPerSec: { type: 'integer', description: 'Measured single-stream decode speed (tok/s)' },
+    promptTokens: { type: ['integer', 'null'] },
+    outputTokens: { type: ['integer', 'null'] },
+    contextLength: { type: ['integer', 'null'] },
+    contextBand: { type: ['string', 'null'], enum: ['lt1k', '1k-8k', '8k-32k', '32k+', null], description: 'Context-length bucket; null when the run reports no usable contextLength' },
+    ageDays: { type: ['integer', 'null'], description: 'Days since measurement (null when undated)' },
+    staleness: { type: ['string', 'null'], enum: ['fresh', 'aging', 'stale', 'unknown', null], description: 'fresh <90d, aging <180d, stale otherwise, unknown when undated' },
+    source: { type: ['string', 'null'], format: 'uri', description: 'Link to the upstream run page' }
+  },
+  additionalProperties: true
+};
+
+/** Per-group context-band mix (shared by BenchmarkGroup and BestResult). */
+const CONTEXT_BANDS = {
+  type: 'object',
+  description: 'Context-length band mix inside the group — speeds depend on context, so a mixed group blends regimes.',
+  properties: {
+    bands: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          band: { type: 'string', enum: ['lt1k', '1k-8k', '8k-32k', '32k+'] },
+          label: { type: 'string', description: 'Display label, e.g. "8k–32k"' },
+          runs: { type: 'integer' }
+        },
+        additionalProperties: true
+      }
+    },
+    unknownRuns: { type: 'integer', description: 'Runs reporting no usable contextLength' },
+    distinctBands: { type: 'integer' },
+    mixed: { type: 'boolean' }
+  },
+  additionalProperties: true
+};
+
+/** Per-group freshness block (shared by BenchmarkGroup and BestResult). */
+const GROUP_FRESHNESS = {
+  type: 'object',
+  description: 'Recency of the runs backing this group.',
+  properties: {
+    newestRunAt: { type: ['string', 'null'], format: 'date-time' },
+    oldestRunAt: { type: ['string', 'null'], format: 'date-time' },
+    newestAgeDays: { type: ['integer', 'null'] },
+    staleness: { type: ['string', 'null'], enum: ['fresh', 'aging', 'stale', 'unknown', null] },
+    engineVersions: { type: 'array', items: { type: 'string' } },
+    majorReleaseWarnings: { type: 'array', items: { type: 'string' } }
+  },
+  additionalProperties: true
+};
+
+/** One hardware×model-family aggregate (GET /api/benchmarks items[]). */
+const BENCHMARK_GROUP = {
+  type: 'object',
+  description: 'Aggregated speeds for one group (hardware×model-family by default; regroup with ?groupBy=). Medians are outlier-resistant and carry 95% bootstrap CIs.',
+  required: ['key', 'runs', 'prefill', 'decode'],
+  properties: {
+    key: { type: 'string', description: 'Group key, e.g. "rtx4090|qwen3.6-27b"', example: 'rtx4090|qwen3.6-27b' },
+    runs: { type: 'integer', description: 'Comparable runs in the group' },
+    prefill: { $ref: '#/components/schemas/SpeedStats' },
+    decode: { $ref: '#/components/schemas/SpeedStats' },
+    modelFamilies: { type: 'array', items: { type: 'string' } },
+    engines: { type: 'array', items: { type: 'string' } },
+    mixedEngines: { type: 'boolean', description: 'True when the group spans multiple engine builds — check freshness before comparing' },
+    mixedContextBands: { type: ['boolean', 'null'], description: 'Present (true) only when ?context_band= filtering is off and the group mixes bands' },
+    dataQuality: {
+      type: ['object', 'null'],
+      description: 'Unit-consistency audit over the group\'s runs (status ok|flagged).',
+      properties: {
+        status: { type: 'string', enum: ['ok', 'flagged'] },
+        runsAudited: { type: 'integer' },
+        flaggedRuns: { type: 'integer' },
+        flagCounts: { type: 'object', additionalProperties: { type: 'integer' } },
+        flagged: { type: 'array', items: { type: 'object', properties: { runId: { type: 'integer' }, codes: { type: 'array', items: { type: 'string' } } } } }
+      },
+      additionalProperties: true
+    },
+    caveats: { type: 'array', items: { $ref: '#/components/schemas/Caveat' }, description: 'Per-group flags (n=1 group, mixed engines)' },
+    confidence: { $ref: '#/components/schemas/Confidence' },
+    crossCheck: { $ref: '#/components/schemas/CrossCheck' },
+    bestRun: { $ref: '#/components/schemas/BestRunSummary' },
+    runsInStats: { type: 'integer', description: 'Runs actually included in the stats (outliers excluded by default)' },
+    outliersExcludedFromStats: { type: 'integer', description: 'Runs fenced out of the stats by the IQR outlier rule' },
+    outlierIqrs: { type: 'number', description: 'Outlier fence in IQRs from the group median (see top-level outlierPolicy)' },
+    includeOutliers: { type: 'boolean', description: 'Whether outlier runs were included (echoes ?include_outliers=)' },
+    outliers: {
+      type: 'array',
+      description: 'Flagged outlier runs (empty unless ?include_outliers=true); each carries the metrics that tripped the fence plus a z-score-style deviation.',
+      items: { type: 'object', additionalProperties: true }
+    },
+    contextBands: CONTEXT_BANDS,
+    freshness: GROUP_FRESHNESS
+  },
+  additionalProperties: true
+};
+
+/** One ranked recommendation row (GET /api/best results[]). */
+const BEST_RESULT = {
+  type: 'object',
+  description: 'One ranked hardware×model recommendation. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel); pricing/power/vramFit are estimates anchored on the group\'s best-measured run and are null when no anchor exists (cpu_only, unknown GPUs).',
+  required: ['hardwareKey', 'modelFamily', 'runsInGroup', 'confidence', 'medianPrefillTokPerSec', 'medianDecodeTokPerSec'],
+  properties: {
+    hardware: { type: ['string', 'null'] },
+    hardwareKey: { type: ['string', 'null'] },
+    hwClass: { type: ['string', 'null'], enum: ['discrete_gpu', 'unified', 'cpu_only', null] },
+    gpu: { type: ['string', 'null'] },
+    gpuCount: { type: ['integer', 'null'], default: 1 },
+    vramGb: { type: ['number', 'null'] },
+    effectiveVramGb: { type: ['number', 'null'], description: 'Discrete VRAM, falling back to unified memory' },
+    chip: { type: ['string', 'null'] },
+    unifiedMemoryGb: { type: ['number', 'null'] },
+    cpu: { type: ['string', 'null'] },
+    modelFamily: { type: 'string' },
+    exampleModel: { type: ['string', 'null'] },
+    quantization: { type: ['string', 'null'] },
+    engine: { type: ['string', 'null'] },
+    runsInGroup: { type: 'integer' },
+    confidence: { $ref: '#/components/schemas/Confidence' },
+    medianPrefillTokPerSec: { type: 'number' },
+    medianDecodeTokPerSec: { type: 'number' },
+    bestDecodeTokPerSec: { type: ['number', 'null'] },
+    medianPrefillCi95: CI95,
+    medianPrefillLabel: { type: ['string', 'null'] },
+    medianDecodeCi95: CI95,
+    medianDecodeLabel: { type: ['string', 'null'] },
+    caveats: { type: 'array', items: { $ref: '#/components/schemas/Caveat' } },
+    newestRunAt: { type: ['string', 'null'], format: 'date-time' },
+    newestAgeDays: { type: ['integer', 'null'] },
+    staleness: { type: ['string', 'null'], enum: ['fresh', 'aging', 'stale', 'unknown', null] },
+    engineVersions: { type: 'array', items: { type: 'string' }, description: 'Engine builds seen in the group (mixed builds → treat deltas with caution)' },
+    majorReleaseWarnings: { type: 'array', items: { type: 'string' } },
+    engines: { type: 'array', items: { type: 'string' }, description: '"engine version" tags seen in the group' },
+    engineVersion: { type: ['string', 'null'], description: 'Engine build when the group is single-build; null/absent when mixed' },
+    mixedEngines: { type: 'boolean', description: 'True when the group spans multiple engine builds' },
+    mixedContextBands: { type: ['boolean', 'null'], description: 'Present (true) only when ?context_band= filtering is off and the group mixes bands' },
+    contextBands: CONTEXT_BANDS,
+    dataQuality: {
+      type: ['object', 'null'],
+      description: 'Unit-consistency audit over the group\'s runs (status ok|flagged).',
+      properties: {
+        status: { type: 'string', enum: ['ok', 'flagged'] },
+        runsAudited: { type: 'integer' },
+        flaggedRuns: { type: 'integer' },
+        flagCounts: { type: 'object', additionalProperties: { type: 'integer' } },
+        flagged: { type: 'array', items: { type: 'object', properties: { runId: { type: 'integer' }, codes: { type: 'array', items: { type: 'string' } } } } }
+      },
+      additionalProperties: true
+    },
+    ttftSeconds: { type: 'number', description: 'Expected time to first token at the default/requested scenario shape (default 2048-in / 512-out)' },
+    decodeSeconds: { type: 'number', description: 'Projected decode walltime for the scenario output tokens' },
+    projectedWalltimeSeconds: { type: 'number', description: 'Prefill + decode walltime for the scenario shape' },
+    effectiveThroughputTokPerSec: { type: 'number', description: 'Total tokens / total walltime for the scenario shape' },
+    prefillSharePct: { type: 'number', description: 'Share of scenario walltime spent prefilling' },
+    decodeSharePct: { type: 'number', description: 'Share of scenario walltime spent decoding' },
+    source: { type: ['string', 'null'], format: 'uri' },
+    vramFit: {
+      type: ['object', 'null'],
+      description: 'Estimated fit at the requested context (present with ?fitCheck or ?contextLength): weights + KV cache vs available memory.',
+      additionalProperties: true
+    },
+    pricing: {
+      type: ['object', 'null'],
+      description: 'USD street-price estimate with range, per-GPU breakdown, asOf date and eBay/Craigslist verification links; null when no anchor exists.',
+      additionalProperties: true
+    },
+    power: {
+      type: ['object', 'null'],
+      description: 'Board power (TDP per card and total), typical whole-rig inference wattage and recommended PSU size; null when no anchor exists.',
+      additionalProperties: true
+    },
+    explain: { type: ['string', 'null'], description: 'One-sentence human-readable explanation combining VRAM-fit math with the measured source — pass-through ready for agent chat pipelines' }
+  },
+  additionalProperties: true
+};
+
+/**
+ * Inference-math result (GET /api/compute). Common core fields are typed;
+ * each ?model= mode adds mode-specific extras (e.g. speedupVsVanilla for
+ * speculative, perUserDecodeTokPerSec for batched, kvBytes for kvCache,
+ * costUsdPerMillionTokens for cost) — hence additionalProperties: true.
+ */
+const COMPUTE_RESULT = {
+  type: 'object',
+  description: 'Computed inference metrics. Every successful result carries a deterministic `id` (calc_<hash> of the resolved inputs) replayable via /api/calc/{id}, plus a non-blocking `warnings` array flagging physically implausible inputs.',
+  required: ['inputs', 'warnings'],
+  properties: {
+    id: { type: 'string', pattern: '^calc_[0-9a-f]{12}$', description: 'Deterministic content hash of the resolved request' },
+    inputs: { type: 'object', description: 'Resolved input parameters (defaults filled in)', additionalProperties: true },
+    warnings: {
+      type: 'array',
+      description: 'Implausibility warnings (empty when inputs are plausible); never affect the math or HTTP status.',
+      items: {
+        type: 'object',
+        properties: {
+          code: { type: 'string', enum: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor'] },
+          message: { type: 'string' }
+        },
+        additionalProperties: true
+      }
+    },
+    ttftSeconds: { type: 'number', description: 'Time to first token (singleTurn/batched/agentic/kvCache/cost modes)' },
+    tpotMs: { type: 'number', description: 'Time per output token in ms' },
+    decodeSeconds: { type: 'number' },
+    totalWalltimeSeconds: { type: 'number' },
+    effectiveThroughputTokPerSec: { type: 'number' },
+    prefillSharePct: { type: 'number' },
+    decodeSharePct: { type: 'number' }
+  },
+  additionalProperties: true
+};
+
+/** GET /api/compute body: a ComputeResult plus the standard envelope stamp. */
+const COMPUTE_RESPONSE = {
+  allOf: [
+    { $ref: '#/components/schemas/ComputeResult' }
+  ],
+  type: 'object',
+  required: ['schema_version'],
+  properties: {
+    schema_version: { type: 'string', const: '1' }
+  }
+};
+
+// Cursor-paginated list envelopes (shared pagination contract: total, items[],
+// has_more, next_cursor — see _pagination.js).
+
+/** GET /api/localmaxxing with any filter. */
+const RUN_LIST_ENVELOPE = {
+  type: 'object',
+  description: 'Cursor-paginated raw run list, sorted by decode speed desc (runId tiebreak). Follow next_cursor until has_more is false.',
+  required: ['total', 'items', 'has_more'],
+  properties: {
+    description: { type: 'string' },
+    snapshot: { $ref: '#/components/schemas/SnapshotRef' },
+    snapshotAt: { type: ['string', 'null'], format: 'date-time' },
+    maxAgeDays: { type: ['number', 'null'], description: 'Echoed ?max_age= filter (null when unset)' },
+    contextBand: { type: ['string', 'null'], enum: ['lt1k', '1k-8k', '8k-32k', '32k+', null], description: 'Echoed ?context_band= filter (null when unset)' },
+    total: { type: 'integer', description: 'Total matching runs across all pages' },
+    caveats: { type: 'array', items: { $ref: '#/components/schemas/Caveat' } },
+    items: { type: 'array', items: { $ref: '#/components/schemas/Run' } },
+    has_more: { type: 'boolean' },
+    next_cursor: { type: ['string', 'null'], description: 'Opaque keyset cursor; pass back as ?cursor=' },
+    schema_version: { type: 'string', const: '1' }
+  }
+};
+
+/** Bare GET /api/localmaxxing (no filters): hardware-group summary. */
+const HARDWARE_SUMMARY_ENVELOPE = {
+  type: 'object',
+  description: 'Bare call (no hardware/model/quant filter): one summary row per hardware group, largest first.',
+  required: ['totalComparableRuns', 'hardwareGroups'],
+  properties: {
+    description: { type: 'string' },
+    snapshot: { $ref: '#/components/schemas/SnapshotRef' },
+    snapshotAt: { type: ['string', 'null'], format: 'date-time' },
+    maxAgeDays: { type: ['number', 'null'] },
+    contextBand: { type: ['string', 'null'], enum: ['lt1k', '1k-8k', '8k-32k', '32k+', null] },
+    totalComparableRuns: { type: 'integer' },
+    caveats: { type: 'array', items: { $ref: '#/components/schemas/Caveat' } },
+    hardwareGroups: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          hardware: { type: ['string', 'null'] },
+          hardwareKey: { type: ['string', 'null'] },
+          hwClass: { type: ['string', 'null'], enum: ['discrete_gpu', 'unified', 'cpu_only', null] },
+          runs: { type: 'integer' },
+          distinctModelFamilies: { type: 'integer' },
+          staleness: { type: ['string', 'null'], enum: ['fresh', 'aging', 'stale', 'unknown', null] },
+          newestRunAt: { type: ['string', 'null'], format: 'date-time' }
+        },
+        additionalProperties: true
+      }
+    },
+    schema_version: { type: 'string', const: '1' }
+  }
+};
+
+/** GET /api/benchmarks. */
+const BENCHMARK_GROUP_LIST_ENVELOPE = {
+  type: 'object',
+  description: 'Cursor-paginated aggregate groups, sorted by median decode desc (group-key tiebreak). Follow next_cursor until has_more is false.',
+  required: ['total', 'items', 'has_more'],
+  properties: {
+    description: { type: 'string' },
+    note: { type: 'string' },
+    snapshot: { $ref: '#/components/schemas/SnapshotRef' },
+    snapshotAt: { type: ['string', 'null'], format: 'date-time' },
+    total: { type: 'integer', description: 'Total matching groups across all pages' },
+    matchedRuns: { type: 'integer', description: 'Comparable runs that survived filtering before grouping' },
+    caveats: { type: 'array', items: { $ref: '#/components/schemas/Caveat' }, description: 'Dataset-level flags (n=1 share, mixed engine versions)' },
+    warnings: { type: 'array', items: { type: 'string' }, description: 'Human-readable group-level warnings (mixed context bands within a group key)' },
+    maxAgeDays: { type: ['number', 'null'], description: 'Echoed ?max_age= filter (null when unset)' },
+    contextBand: { type: ['string', 'null'], enum: ['lt1k', '1k-8k', '8k-32k', '32k+', null], description: 'Echoed ?context_band= filter (null when unset)' },
+    distinctModelFamilies: { type: 'integer', description: 'Distinct model families across all matching runs' },
+    distinctEngines: { type: 'array', items: { type: 'string' }, description: 'Distinct "engine version" tags across matching runs' },
+    engineCohortedByDefault: { type: 'boolean', description: 'True when groups are keyed per engine build so mixed-engine stats never blend' },
+    freshnessTiers: { type: 'string', description: 'Human-readable definition of the fresh/aging/stale tiers' },
+    outlierPolicy: {
+      type: 'object',
+      description: 'How outlier runs are fenced and whether they are included in stats.',
+      properties: {
+        thresholdIqrs: { type: 'number' },
+        includeOutliers: { type: 'boolean' },
+        note: { type: 'string' }
+      },
+      additionalProperties: true
+    },
+    unitAudit: {
+      type: 'object',
+      description: 'Unit-consistency audit across all matching runs.',
+      properties: {
+        runsAudited: { type: 'integer' },
+        flaggedRuns: { type: 'integer' },
+        flagCounts: { type: 'object', additionalProperties: { type: 'integer' } },
+        note: { type: 'string' }
+      },
+      additionalProperties: true
+    },
+    items: { type: 'array', items: { $ref: '#/components/schemas/BenchmarkGroup' } },
+    has_more: { type: 'boolean' },
+    next_cursor: { type: ['string', 'null'] },
+    schema_version: { type: 'string', const: '1' }
+  }
+};
+
+/** GET /api/best. */
+const BEST_LIST_ENVELOPE = {
+  type: 'object',
+  description: 'Ranked recommendations. Carries a deterministic `id` (hash of the resolved filters) replayable via /api/calc/{id}?endpoint=best&<same filters>.',
+  required: ['rankedBy', 'results', 'caveats', 'warnings'],
+  properties: {
+    id: { type: 'string', pattern: '^calc_[0-9a-f]{12}$' },
+    description: { type: 'string' },
+    rankedBy: { type: 'string', enum: ['decode', 'prefill', 'cost', 'walltime'] },
+    snapshot: { $ref: '#/components/schemas/SnapshotRef' },
+    snapshotAt: { type: ['string', 'null'], format: 'date-time' },
+    matchedRuns: { type: 'integer', description: 'Comparable runs that survived filtering' },
+    excludedRuns: { type: ['integer', 'null'], description: 'Runs dropped by ?fitCheck= (present only with fitCheck)' },
+    maxAgeDays: { type: ['number', 'null'], description: 'Echoed ?max_age= filter (null when unset)' },
+    contextBand: { type: ['string', 'null'], enum: ['lt1k', '1k-8k', '8k-32k', '32k+', null], description: 'Echoed ?context_band= filter (null when unset)' },
+    caveats: { type: 'array', items: { $ref: '#/components/schemas/Caveat' } },
+    warnings: { type: 'array', items: { type: 'string' }, description: 'Human-readable group-level warnings (mixed engine versions / context bands)' },
+    results: { type: 'array', items: { $ref: '#/components/schemas/BestResult' } },
+    schema_version: { type: 'string', const: '1' }
+  }
+};
+
+const SCHEMAS = {
+  // RFC 9457 problem+json error body (#16)
+  Problem: {
+    type: 'object',
+    description: 'RFC 9457 problem+json error body. Content-Type: application/problem+json.',
+    required: ['type', 'title', 'status', 'code'],
+    properties: {
+      type: { type: 'string', format: 'uri', description: 'Stable problem-type URI, e.g. .../problems/invalid-params' },
+      title: { type: 'string', description: 'Short human-readable summary' },
+      status: { type: 'integer', description: 'HTTP status code' },
+      detail: { type: 'string', description: 'Human-readable explanation of this occurrence' },
+      instance: { type: 'string', description: 'Request path + query that produced the error' },
+      code: { type: 'string', enum: Object.keys(ERROR_CODES), description: 'Stable machine-readable error code — branch on this, not on title/detail prose' }
+    }
+  },
+  // Shared building blocks
+  Ci95Interval: CI95,
+  SpeedStats: SPEED_STATS,
+  Caveat: CAVEAT,
+  Confidence: CONFIDENCE,
+  Contradiction: CONTRADICTION,
+  CrossCheck: CROSS_CHECK,
+  SnapshotRef: SNAPSHOT_REF,
+  BestRunSummary: BEST_RUN_SUMMARY,
+  // Core resource schemas
+  Run: RUN,
+  BenchmarkGroup: BENCHMARK_GROUP,
+  BestResult: BEST_RESULT,
+  ComputeResult: COMPUTE_RESULT,
+  // Envelope shapes
+  ComputeResponse: COMPUTE_RESPONSE,
+  RunListEnvelope: RUN_LIST_ENVELOPE,
+  HardwareSummaryEnvelope: HARDWARE_SUMMARY_ENVELOPE,
+  BenchmarkGroupListEnvelope: BENCHMARK_GROUP_LIST_ENVELOPE,
+  BestListEnvelope: BEST_LIST_ENVELOPE
+};
+
 export default function handler(req, res) {
   if (!enforceRateLimit(req, res)) return;
   const spec = {
@@ -104,6 +631,7 @@ export default function handler(req, res) {
               description: 'Computed metrics object',
               content: {
                 'application/json': {
+                  schema: { $ref: '#/components/schemas/ComputeResponse' },
                   example: {
                     id: 'calc_9536a8f7358a',
                     inputs: { promptTokens: 4096, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 },
@@ -207,6 +735,12 @@ export default function handler(req, res) {
               description: 'Hardware summary, or paginated run list { total, items[], has_more, next_cursor }; both carry a machine-readable `caveats` array (single-stream-only, self-reported data, engine mix)',
               content: {
                 'application/json': {
+                  schema: {
+                    oneOf: [
+                      { $ref: '#/components/schemas/RunListEnvelope' },
+                      { $ref: '#/components/schemas/HardwareSummaryEnvelope' }
+                    ]
+                  },
                   example: {
                     description: 'Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false.',
                     snapshot: { id: 'snapshot-2026-08-21-a1b2c3d4', createdAt: '2026-08-21T09:14:03.000Z', runCount: 3642 },
@@ -344,6 +878,7 @@ export default function handler(req, res) {
               description: 'Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode with 95% bootstrap CIs on each median, bestRun, a confidence block and crossCheck. Top-level and per-group `caveats` arrays flag n=1 groups and mixed engine versions.',
               content: {
                 'application/json': {
+                  schema: { $ref: '#/components/schemas/BenchmarkGroupListEnvelope' },
                   example: {
                     description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group).',
                     snapshot: { id: 'snapshot-2026-08-21-a1b2c3d4', createdAt: '2026-08-21T09:14:03.000Z', runCount: 3642 },
@@ -420,6 +955,7 @@ export default function handler(req, res) {
               description: 'Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns. Each result includes a `pricing` object: USD street-price estimate with low/high range, perGpu breakdown for multi-GPU rigs, asOf date, and eBay (new + used) and Craigslist search links to verify against live listings. `pricing` is null when no anchor exists (cpu_only, unknown GPUs). Each result also carries `explain`: a one-sentence human-readable explanation combining the VRAM-fit math (weights + KV estimates) with the measured source, e.g. \'24GB fits 8B q4_k_m weights ~5GB + 32k KV ~4GB with 14GB headroom; measured 100 tok/s decode from run #a1\' — pass-through ready for agent chat pipelines. Each result also includes a `power` object (#69): board power (TDP, per card and total), typical whole-rig wattage under sustained inference, and a recommended PSU size with transient-headroom notes — so a dual-GPU recommendation can be sanity-checked against the user\'s actual electrical setup. `power` is null when no anchor exists (cpu_only, unknown GPUs).',
               content: {
                 'application/json': {
+                  schema: { $ref: '#/components/schemas/BestListEnvelope' },
                   example: {
                     id: 'calc_7f2c91b04da3',
                     description: 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant.',
@@ -580,21 +1116,7 @@ export default function handler(req, res) {
     components: {
       headers: RATE_LIMIT_HEADERS,
       responses: { RateLimited: RATE_LIMITED_RESPONSE },
-      schemas: {
-        Problem: {
-          type: 'object',
-          description: 'RFC 9457 problem+json error body. Content-Type: application/problem+json.',
-          required: ['type', 'title', 'status', 'code'],
-          properties: {
-            type: { type: 'string', format: 'uri', description: 'Stable problem-type URI, e.g. .../problems/invalid-params' },
-            title: { type: 'string', description: 'Short human-readable summary' },
-            status: { type: 'integer', description: 'HTTP status code' },
-            detail: { type: 'string', description: 'Human-readable explanation of this occurrence' },
-            instance: { type: 'string', description: 'Request path + query that produced the error' },
-            code: { type: 'string', enum: Object.keys(ERROR_CODES), description: 'Stable machine-readable error code — branch on this, not on title/detail prose' }
-          }
-        }
-      }
+      schemas: SCHEMAS
     },
     'x-error-codes': Object.entries(ERROR_CODES).map(([code, meta]) => ({
       code,
