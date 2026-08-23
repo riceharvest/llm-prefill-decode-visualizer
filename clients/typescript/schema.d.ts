@@ -15,102 +15,7 @@ export interface paths {
          * Run inference math (TTFT, TPOT, walltime, VRAM)
          * @description Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts POST with a JSON body, or a batch of up to 50 parameter sets via POST {"batch": [...]} / GET ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via /api/calc/{id}.
          */
-        get: {
-            parameters: {
-                query?: {
-                    model?: "singleTurn" | "speculative" | "batched" | "agentic" | "kvCache" | "flagged" | "cost";
-                    /** @description singleTurn/batched/agentic/cost */
-                    promptTokens?: number;
-                    /** @description singleTurn/batched/agentic/cost */
-                    outputTokens?: number;
-                    /** @description tok/s */
-                    prefillSpeed?: number;
-                    /** @description tok/s */
-                    decodeSpeed?: number;
-                    /** @description agentic */
-                    numTurns?: number;
-                    /** @description agentic */
-                    enablePrefixCaching?: boolean;
-                    /** @description batched/kvCache */
-                    batchSize?: number;
-                    /** @description speculative: draft tokens per step */
-                    draftTokens?: number;
-                    /** @description speculative: 0..1. Response includes breakevenAcceptanceRate — below it speculation is slower than vanilla decode. */
-                    acceptanceRate?: number;
-                    /** @description cost: purchase price, amortized over amortizationMonths (default 36) */
-                    hardwarePriceUsd?: number;
-                    /** @description cost: $/kWh, default 0.15 */
-                    electricityRatePerKwh?: number;
-                    /** @description cost: whole-rig wall power under load */
-                    powerDrawWatts?: number;
-                    /** @description cost: months to spread hardware price over, default 36 */
-                    amortizationMonths?: number;
-                    /** @description kvCache preset arch */
-                    architecture?: "llama70b" | "llama8b" | "qwen72b" | "mistral7b";
-                    /** @description kvCache */
-                    contextLength?: number;
-                    /** @description kvCache: FP16/FP8/INT4 */
-                    precisionBytes?: 2 | 1 | 0.5;
-                    /** @description flagged: comma-separated engine flag ids (flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3). Documented heuristic deltas; response carries a per-flag audit trail. */
-                    flags?: string;
-                    /** @description Validate + echo parsed params (defaults filled in) without executing any math. Returns { dry_run: true, model, inputs, id?, note }; the id matches the real call. Also applies per-item inside a batch via "dry_run": true in the POST body. */
-                    dry_run?: boolean;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Computed metrics object */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        /**
-                         * @example {
-                         *       "id": "calc_9536a8f7358a",
-                         *       "inputs": {
-                         *         "promptTokens": 4096,
-                         *         "outputTokens": 512,
-                         *         "prefillSpeed": 3800,
-                         *         "decodeSpeed": 105
-                         *       },
-                         *       "warnings": [],
-                         *       "ttftSeconds": 1.077895,
-                         *       "tpotMs": 9.52381,
-                         *       "decodeSeconds": 4.87619,
-                         *       "totalWalltimeSeconds": 5.954085,
-                         *       "effectiveThroughputTokPerSec": 773.922414,
-                         *       "prefillSharePct": 18.103448,
-                         *       "decodeSharePct": 81.896552,
-                         *       "schema_version": "1"
-                         *     }
-                         */
-                        "application/json": unknown;
-                    };
-                };
-                /** @description Invalid parameters (code INVALID_PARAMS) */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-                /** @description Internal server error (code INTERNAL) */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-            };
-        };
+        get: operations["computeInference"];
         put?: never;
         post?: never;
         delete?: never;
@@ -130,61 +35,7 @@ export interface paths {
          * Combined model + KV-cache + context VRAM from just an hfId
          * @description Resolves layers, hidden dim, GQA heads, head dim and weight size from the Hugging Face config automatically — no architecture params needed. Answers "will this rig OOM at 64k?". Optional vramGb budget returns a fits flag plus the max context that fits; optional numTurns+tokensPerTurn projects per-turn KV growth with the exact overflow turn.
          */
-        get: {
-            parameters: {
-                query: {
-                    /** @description Hugging Face repo id or URL, e.g. meta-llama/Llama-3.1-8B-Instruct */
-                    hfId: string;
-                    /** @description context length in tokens */
-                    context?: number;
-                    /** @description quant tag (fp16, q8_0, q6_k, q5_k_m, q4_k_m, q4_0, q3_k_m, q2_k, fp8, …); unknown tags assume ~4.85 bpw and are flagged */
-                    quant?: string;
-                    batchSize?: number;
-                    /** @description KV cache precision: 2=FP16, 1=FP8, 0.5=INT4 */
-                    kvPrecisionBytes?: number;
-                    /** @description optional VRAM budget → fits flag + maxContextTokens (upper bound) */
-                    vramGb?: number;
-                    /** @description with tokensPerTurn: project KV growth over N agentic turns */
-                    numTurns?: number;
-                    /** @description tokens added to context per turn */
-                    tokensPerTurn?: number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Resolved model + weights/kv/total VRAM breakdown */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Missing hfId */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Unknown hfId on huggingface.co */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description config.json lacks required architecture fields */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        get: operations["estimateVram"];
         put?: never;
         post?: never;
         delete?: never;
@@ -204,37 +55,7 @@ export interface paths {
          * Replay a computation or recommendation from its deterministic id
          * @description Ids are content hashes (calc_ + 12 hex chars of sha256 over the normalized request) returned as `id` by /api/compute and /api/best. They are not stored anywhere: re-send the original parameters alongside the id and this endpoint re-runs the same math and returns the result with verified:true. A mismatching parameter set is rejected with the expected id.
          */
-        get: {
-            parameters: {
-                query?: {
-                    endpoint?: "compute" | "best";
-                    /** @description The same model + params (or best filters) that minted the id. Defaults may be omitted — they resolve identically before hashing. */
-                    "<original request parameters>"?: string;
-                };
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Recomputed result, stamped verified:true and carrying the id */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Malformed id, missing replay parameters, or id/parameter mismatch (body.expected carries the correct id) */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        get: operations["replayCalculation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -251,73 +72,7 @@ export interface paths {
             cookie?: never;
         };
         /** Built-in hardware speed presets and workload scenarios */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description {hardware[], scenarios[]}; each hardware entry carries power/thermal guidance (#69): tdpWatts (board power), loadWatts (typical whole-rig wattage under inference), psuWatts (recommended PSU size) and powerNote — null where not applicable (cloud/edge/custom). */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        /**
-                         * @example {
-                         *       "description": "Built-in hardware speed presets and workload scenario presets. Use these values as inputs to /api/compute.",
-                         *       "hardware": [
-                         *         {
-                         *           "id": "rtx4090_exl2",
-                         *           "name": "RTX 4090 24GB (ExLlamaV2 EXL2)",
-                         *           "prefillSpeedTokPerSec": 3800,
-                         *           "decodeSpeedTokPerSec": 105,
-                         *           "vramBandwidth": "1.01 TB/s (GDDR6X)",
-                         *           "badge": "Localmaxxing #1 Consumer"
-                         *         },
-                         *         {
-                         *           "id": "dual_rtx3090",
-                         *           "name": "Dual RTX 3090 48GB (TP2 ExLlamaV2 70B)",
-                         *           "prefillSpeedTokPerSec": 4600,
-                         *           "decodeSpeedTokPerSec": 78,
-                         *           "vramBandwidth": "1.87 TB/s Combined",
-                         *           "badge": "Localmaxxing 70B Rig"
-                         *         },
-                         *         {
-                         *           "id": "rtx3090_llamacpp",
-                         *           "name": "RTX 3090 24GB (llama.cpp Q4_K_M)",
-                         *           "prefillSpeedTokPerSec": 2400,
-                         *           "decodeSpeedTokPerSec": 65,
-                         *           "vramBandwidth": "936 GB/s (GDDR6X)",
-                         *           "badge": "Localmaxxing Budget King"
-                         *         }
-                         *       ],
-                         *       "scenarios": [
-                         *         {
-                         *           "id": "chat",
-                         *           "label": "Standard chat",
-                         *           "promptTokens": 2048,
-                         *           "outputTokens": 512
-                         *         },
-                         *         {
-                         *           "id": "rag",
-                         *           "label": "RAG query",
-                         *           "promptTokens": 4096,
-                         *           "outputTokens": 512
-                         *         }
-                         *       ],
-                         *       "schema_version": "1"
-                         *     }
-                         */
-                        "application/json": unknown;
-                    };
-                };
-                429: components["responses"]["RateLimited"];
-            };
-        };
+        get: operations["listPresets"];
         put?: never;
         post?: never;
         delete?: never;
@@ -337,94 +92,7 @@ export interface paths {
          * Raw community benchmark runs (flattened, model-normalized)
          * @description Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: { total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow next_cursor until has_more is false.
          */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description substring match on rig name/key */
-                    hardware?: string;
-                    /** @description substring match on normalized family or hfId */
-                    model?: string;
-                    /** @description exact quantization, e.g. q4_k_m */
-                    quant?: string;
-                    /** @description only runs measured at this context length (<1000, 1000–7999, 8000–31999, ≥32000 tokens) */
-                    context_band?: "lt1k" | "1k-8k" | "8k-32k" | "32k+";
-                    /** @description page size */
-                    limit?: number;
-                    /** @description opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts) */
-                    cursor?: string;
-                    /** @description Serve the pinned dataset snapshot instead of live data. IDs from /api/snapshots; unknown IDs fall back to current data with snapshot.served=false. */
-                    snapshot?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Hardware summary, or paginated run list { total, items[], has_more, next_cursor }; both carry a machine-readable `caveats` array (single-stream-only, self-reported data, engine mix) */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        /**
-                         * @example {
-                         *       "description": "Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false.",
-                         *       "snapshot": {
-                         *         "id": "snapshot-2026-08-21-a1b2c3d4",
-                         *         "createdAt": "2026-08-21T09:14:03.000Z",
-                         *         "runCount": 3642
-                         *       },
-                         *       "snapshotAt": "2026-08-21T09:14:03.512Z",
-                         *       "schema_version": "1",
-                         *       "total": 214,
-                         *       "caveats": [
-                         *         {
-                         *           "code": "single_stream_only",
-                         *           "severity": "medium",
-                         *           "summary": "Dataset only contains batchSize=1 runs — not batched-serving throughput.",
-                         *           "detail": "All 3642 runs report concurrency ≤ 1."
-                         *         },
-                         *         {
-                         *           "code": "self_reported_unvalidated",
-                         *           "severity": "medium",
-                         *           "summary": "Community-submitted runs, not independently verified; trust medians over single runs.",
-                         *           "detail": "Submissions are sanity-bounded and deduplicated but not lab-measured."
-                         *         }
-                         *       ],
-                         *       "items": [
-                         *         {
-                         *           "runId": 58213,
-                         *           "createdAt": "2026-07-30T18:22:41.000Z",
-                         *           "modelFamily": "qwen3.6-27b",
-                         *           "modelName": "unsloth/Qwen3.6-27B-MTP-GGUF",
-                         *           "hardwareKey": "rtx4090",
-                         *           "hardware": "RTX 4090 24GB",
-                         *           "hwClass": "discrete_gpu",
-                         *           "gpu": "RTX 4090",
-                         *           "gpuCount": 1,
-                         *           "engine": "llama.cpp",
-                         *           "engineVersion": "b6123",
-                         *           "quantization": "q4_k_m",
-                         *           "prefillTokPerSec": 3820,
-                         *           "decodeTokPerSec": 108,
-                         *           "contextLength": 8192,
-                         *           "contextBand": "8k-32k",
-                         *           "ageDays": 23,
-                         *           "staleness": "recent",
-                         *           "source": "https://localmaxxing.com/en/runs/58213"
-                         *         }
-                         *       ],
-                         *       "has_more": true,
-                         *       "next_cursor": "MTA4fCI1ODIxMyI"
-                         *     }
-                         */
-                        "application/json": unknown;
-                    };
-                };
-                429: components["responses"]["RateLimited"];
-            };
-        };
+        get: operations["listBenchmarkRuns"];
         put?: never;
         post?: never;
         delete?: never;
@@ -444,133 +112,15 @@ export interface paths {
          * Watch feeds: list registered hardware+model combos (#109)
          * @description Public listing of watched combos — never includes secrets or webhook URLs. POST to create a watch; DELETE ?id=&secret= to remove one.
          */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Feature description + registered watches (watchId, label, hasWebhook, createdAt) */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        /**
-                         * @example {
-                         *       "description": "Watch feeds (#109): subscribe to a hardware+model combination…",
-                         *       "maxWatches": 500,
-                         *       "totalWatches": 1,
-                         *       "watches": [
-                         *         {
-                         *           "watchId": "watch_abc123_x9",
-                         *           "label": "RTX 4090 + Qwen3 32B",
-                         *           "model": "Qwen3 32B",
-                         *           "hardware": "RTX 4090",
-                         *           "quant": null,
-                         *           "hasWebhook": false,
-                         *           "createdAt": "2026-08-22T10:00:00.000Z"
-                         *         }
-                         *       ]
-                         *     }
-                         */
-                        "application/json": unknown;
-                    };
-                };
-                429: components["responses"]["RateLimited"];
-            };
-        };
+        get: operations["listWatches"];
         put?: never;
         /**
          * Create a watch for a hardware+model combo (#109)
          * @description Body: { model?, hardware?, quant?, webhookUrl? } — at least one of model/hardware required; webhookUrl must be https. Returns 201 with watchId + secret (shown exactly once; required to DELETE, sent to your webhook as X-Watch-Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET /api/watch/rss.xml?model=&hardware=&quant=.
          */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    /**
-                     * @example {
-                     *       "model": "Qwen3 32B",
-                     *       "hardware": "RTX 4090",
-                     *       "quant": "q4_k_m",
-                     *       "webhookUrl": "https://example.com/hooks/llm-watch"
-                     *     }
-                     */
-                    "application/json": unknown;
-                };
-            };
-            responses: {
-                /** @description Watch created (watchId, secret, rssUrl, matchingExistingRuns preview) */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Invalid body (code validation_failed with per-field errors) */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                429: components["responses"]["RateLimited"];
-                /** @description Watch store unavailable (code watch_store_unavailable) */
-                503: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        post: operations["createWatch"];
         /** Remove a watch */
-        delete: {
-            parameters: {
-                query: {
-                    /** @description watchId from the POST response */
-                    id: string;
-                    /** @description one-time secret from the POST response (also accepted as X-Watch-Secret header) */
-                    secret: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Watch removed */
-                204: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Wrong or missing secret (code invalid_secret) */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Unknown watchId (code watch_not_found) */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        delete: operations["deleteWatch"];
         options?: never;
         head?: never;
         patch?: never;
@@ -587,34 +137,7 @@ export interface paths {
          * RSS 2.0 feed of community runs for a watched combo (#109)
          * @description Filters mirror GET /api/localmaxxing (model/hardware substring, quant exact). Items are the newest matching runs (max 50), each linking to the upstream run. Poll like any feed — no registration needed.
          */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description substring match on normalized family / hfId / display name */
-                    model?: string;
-                    /** @description substring match on rig name/key */
-                    hardware?: string;
-                    /** @description exact quantization */
-                    quant?: string;
-                    /** @description only runs measured in the last N days (undated runs always included) */
-                    days?: number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description RSS 2.0 XML (application/rss+xml); X-Matched-Runs header reports the pre-cap match count */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                429: components["responses"]["RateLimited"];
-            };
-        };
+        get: operations["getWatchRssFeed"];
         put?: never;
         post?: never;
         delete?: never;
@@ -634,39 +157,7 @@ export interface paths {
          * Deliver unseen matching runs to registered webhooks (#109)
          * @description Cron-friendly (Vercel Cron sends GET). For each watch with a webhookUrl: POST a watch.new_runs payload (X-Watch-Secret header) with runs created after the watch that are not yet in its bounded seen-set, then persist the set. Set WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret. Delivery failures are reported per watch, never thrown.
          */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description { dispatched, totalNewRuns, results[], previewPayload } */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description WATCH_DISPATCH_SECRET set and not provided (code unauthorized) */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                429: components["responses"]["RateLimited"];
-                /** @description Watch store unavailable (code watch_store_unavailable) */
-                503: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        get: operations["dispatchWatchWebhooks"];
         put?: never;
         post?: never;
         delete?: never;
@@ -686,128 +177,7 @@ export interface paths {
          * Aggregated speeds: median + IQR + 95% bootstrap CI per group
          * @description Outlier-resistant stats per hardware×model-family group (default). Each median carries a 95% percentile bootstrap confidence interval (2,000 resamples) in ci95 {lo, hi}, plus a "median [lo–hi]" label string. Regroup with ?groupBy=hardware|model|quant. Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak). Each group carries confidence {runs, iqrSpreadPct, outliers, newestRunAgeDays, grade} and cross_check {relatedRigComparisons, contradictions[]} comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.
          */
-        get: {
-            parameters: {
-                query?: {
-                    groupBy?: "hardwareModel" | "hardware" | "model" | "quant";
-                    hardware?: string;
-                    model?: string;
-                    quant?: string;
-                    hwClass?: "discrete_gpu" | "unified" | "cpu_only";
-                    /** @description only runs measured at this context length; groups mixing bands carry mixedContextBands + a warning */
-                    context_band?: "lt1k" | "1k-8k" | "8k-32k" | "32k+";
-                    /** @description page size */
-                    limit?: number;
-                    /** @description opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts) */
-                    cursor?: string;
-                    /** @description Serve the pinned dataset snapshot instead of live data. IDs from /api/snapshots; unknown IDs fall back to current data with snapshot.served=false. */
-                    snapshot?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode with 95% bootstrap CIs on each median, bestRun, a confidence block and crossCheck. Top-level and per-group `caveats` arrays flag n=1 groups and mixed engine versions. */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        /**
-                         * @example {
-                         *       "description": "Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group).",
-                         *       "snapshot": {
-                         *         "id": "snapshot-2026-08-21-a1b2c3d4",
-                         *         "createdAt": "2026-08-21T09:14:03.000Z",
-                         *         "runCount": 3642
-                         *       },
-                         *       "snapshotAt": "2026-08-21T09:14:03.512Z",
-                         *       "schema_version": "1",
-                         *       "total": 187,
-                         *       "caveats": [
-                         *         {
-                         *           "code": "n1_groups",
-                         *           "severity": "medium",
-                         *           "summary": "22% of groups rest on a single run — treat as anecdotal.",
-                         *           "detail": "18 of 82 returned groups have runs=1.",
-                         *           "pct": 22,
-                         *           "groupsWithOneRun": 18,
-                         *           "totalGroups": 82
-                         *         }
-                         *       ],
-                         *       "items": [
-                         *         {
-                         *           "key": "rtx4090|qwen3.6-27b",
-                         *           "runs": 14,
-                         *           "prefill": {
-                         *             "q1": 3601,
-                         *             "median": 3800,
-                         *             "q3": 3950,
-                         *             "min": 3210,
-                         *             "max": 4102,
-                         *             "ci95": {
-                         *               "lo": 3701,
-                         *               "hi": 3902
-                         *             },
-                         *             "label": "3800 [3701–3902]"
-                         *           },
-                         *           "decode": {
-                         *             "q1": 99,
-                         *             "median": 105,
-                         *             "q3": 112,
-                         *             "min": 88,
-                         *             "max": 118,
-                         *             "ci95": {
-                         *               "lo": 101,
-                         *               "hi": 110
-                         *             },
-                         *             "label": "105 [101–110]"
-                         *           },
-                         *           "modelFamilies": [
-                         *             "qwen3.6-27b"
-                         *           ],
-                         *           "engines": [
-                         *             "llama.cpp"
-                         *           ],
-                         *           "mixedEngines": false,
-                         *           "caveats": [],
-                         *           "confidence": {
-                         *             "runs": 14,
-                         *             "iqrSpreadPct": 12.38,
-                         *             "outliers": 0,
-                         *             "newestRunAgeDays": 3,
-                         *             "grade": "high"
-                         *           },
-                         *           "crossCheck": {
-                         *             "relatedRigComparisons": [],
-                         *             "contradictions": []
-                         *           },
-                         *           "bestRun": {
-                         *             "runId": 58213,
-                         *             "modelName": "unsloth/Qwen3.6-27B-MTP-GGUF",
-                         *             "hardware": "RTX 4090 24GB",
-                         *             "engine": "llama.cpp",
-                         *             "engineVersion": "b6123",
-                         *             "quantization": "q4_k_m",
-                         *             "prefillTokPerSec": 3820,
-                         *             "decodeTokPerSec": 108,
-                         *             "createdAt": "2026-07-30T18:22:41.000Z",
-                         *             "source": "https://localmaxxing.com/en/runs/58213"
-                         *           }
-                         *         }
-                         *       ],
-                         *       "has_more": true,
-                         *       "next_cursor": "MTA1fCJydDQwOTB8cXdlbjMuNi0yN2Ii"
-                         *     }
-                         */
-                        "application/json": unknown;
-                    };
-                };
-                429: components["responses"]["RateLimited"];
-            };
-        };
+        get: operations["getBenchmarkAggregates"];
         put?: never;
         post?: never;
         delete?: never;
@@ -827,139 +197,7 @@ export interface paths {
          * Ranked answers: fastest or cheapest rigs for given constraints
          * @description Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed. by=cost ranks by cost-efficiency instead. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel). Responses carry a deterministic `id` (hash of the resolved filters) replayable via /api/calc/{id}?endpoint=best&<same filters>.
          */
-        get: {
-            parameters: {
-                query?: {
-                    by?: "decode" | "prefill" | "cost";
-                    /** @description cost mode: rig purchase price in USD (default 0) */
-                    price?: number;
-                    /** @description cost mode: $/kWh (default 0.15) */
-                    electricityRate?: number;
-                    /** @description cost mode: whole-rig watts; defaults to an estimate per hwClass */
-                    powerWatts?: number;
-                    /** @description cost mode: spread price over this many months (default 36) */
-                    amortizationMonths?: number;
-                    /** @description cost mode: scenario shape (default 2048) */
-                    promptTokens?: number;
-                    /** @description cost mode: scenario shape (default 512) */
-                    outputTokens?: number;
-                    model?: string;
-                    /** @description only models at or under this size */
-                    maxParamsB?: number;
-                    quant?: string;
-                    hwClass?: "discrete_gpu" | "unified" | "cpu_only";
-                    hardware?: string;
-                    /** @description only runs measured at this context length (<1000, 1000–7999, 8000–31999, ≥32000 tokens) */
-                    context_band?: "lt1k" | "1k-8k" | "8k-32k" | "32k+";
-                    /** @description exclude rigs whose memory cannot hold the model at the given context (estimated) */
-                    fitCheck?: boolean;
-                    /** @description context for fitCheck; providing it implies fitCheck=true */
-                    contextLength?: number;
-                    /** @description KV cache dtype bytes for fitCheck (2 = fp16) */
-                    precisionBytes?: number;
-                    /** @description batch size for fitCheck KV cache math */
-                    batchSize?: number;
-                    limit?: number;
-                    /** @description Serve the pinned dataset snapshot instead of live data. IDs from /api/snapshots; unknown IDs fall back to current data with snapshot.served=false. */
-                    snapshot?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns. Each result includes a `pricing` object: USD street-price estimate with low/high range, perGpu breakdown for multi-GPU rigs, asOf date, and eBay (new + used) and Craigslist search links to verify against live listings. `pricing` is null when no anchor exists (cpu_only, unknown GPUs). Each result also carries `explain`: a one-sentence human-readable explanation combining the VRAM-fit math (weights + KV estimates) with the measured source, e.g. '24GB fits 8B q4_k_m weights ~5GB + 32k KV ~4GB with 14GB headroom; measured 100 tok/s decode from run #a1' — pass-through ready for agent chat pipelines. Each result also includes a `power` object (#69): board power (TDP, per card and total), typical whole-rig wattage under sustained inference, and a recommended PSU size with transient-headroom notes — so a dual-GPU recommendation can be sanity-checked against the user's actual electrical setup. `power` is null when no anchor exists (cpu_only, unknown GPUs). */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        /**
-                         * @example {
-                         *       "id": "calc_7f2c91b04da3",
-                         *       "description": "Ranked hardware×model groups by measured community speed. Medians are outlier-resistant.",
-                         *       "rankedBy": "decode",
-                         *       "snapshot": {
-                         *         "id": "snapshot-2026-08-21-a1b2c3d4",
-                         *         "createdAt": "2026-08-21T09:14:03.000Z",
-                         *         "runCount": 3642
-                         *       },
-                         *       "snapshotAt": "2026-08-21T09:14:03.512Z",
-                         *       "matchedRuns": 214,
-                         *       "schema_version": "1",
-                         *       "caveats": [
-                         *         {
-                         *           "code": "single_stream_only",
-                         *           "severity": "medium",
-                         *           "summary": "Dataset only contains batchSize=1 runs — not batched-serving throughput.",
-                         *           "detail": "All 3642 runs report concurrency ≤ 1."
-                         *         }
-                         *       ],
-                         *       "warnings": [],
-                         *       "results": [
-                         *         {
-                         *           "hardware": "RTX 4090 24GB",
-                         *           "hardwareKey": "rtx4090",
-                         *           "hwClass": "discrete_gpu",
-                         *           "gpu": "RTX 4090",
-                         *           "gpuCount": 1,
-                         *           "vramGb": 24,
-                         *           "modelFamily": "qwen3.6-27b",
-                         *           "exampleModel": "unsloth/Qwen3.6-27B-MTP-GGUF",
-                         *           "quantization": "q4_k_m",
-                         *           "engine": "llama.cpp",
-                         *           "runsInGroup": 14,
-                         *           "confidence": {
-                         *             "runs": 14,
-                         *             "iqrSpreadPct": 12.38,
-                         *             "outliers": 0,
-                         *             "newestRunAgeDays": 3,
-                         *             "grade": "high"
-                         *           },
-                         *           "medianPrefillTokPerSec": 3800,
-                         *           "medianDecodeTokPerSec": 105,
-                         *           "bestDecodeTokPerSec": 118,
-                         *           "medianPrefillCi95": {
-                         *             "lo": 3701,
-                         *             "hi": 3902
-                         *           },
-                         *           "medianPrefillLabel": "3800 [3701–3902]",
-                         *           "medianDecodeCi95": {
-                         *             "lo": 101,
-                         *             "hi": 110
-                         *           },
-                         *           "medianDecodeLabel": "105 [101–110]",
-                         *           "caveats": [],
-                         *           "effectiveVramGb": 24,
-                         *           "pricing": {
-                         *             "estimateUsd": 1650,
-                         *             "lowUsd": 1400,
-                         *             "highUsd": 1900,
-                         *             "perGpu": [
-                         *               {
-                         *                 "gpu": "RTX 4090",
-                         *                 "estimateUsd": 1650
-                         *               }
-                         *             ],
-                         *             "asOf": "2026-08-01",
-                         *             "links": {
-                         *               "ebay": "https://www.ebay.com/sch/i.html?_nkw=rtx+4090",
-                         *               "ebayUsed": "https://www.ebay.com/sch/i.html?_nkw=rtx+4090&LH_ItemCondition=3000",
-                         *               "craigslist": "https://craigslist.org/search/sss?query=rtx+4090"
-                         *             }
-                         *           },
-                         *           "explain": "24GB VRAM fits qwen3.6-27b q4_k_m weights ~16GB + 32k KV ~7GB with ~1GB headroom; measured 105 tok/s decode median across 14 community runs."
-                         *         }
-                         *       ]
-                         *     }
-                         */
-                        "application/json": unknown;
-                    };
-                };
-                429: components["responses"]["RateLimited"];
-            };
-        };
+        get: operations["getBestConfigs"];
         put?: never;
         post?: never;
         delete?: never;
@@ -979,31 +217,7 @@ export interface paths {
          * Service health and upstream data freshness
          * @description Liveness probe. Returns ok plus upstreamFreshness (fresh/stale/empty, last sync time, cached row count) and cacheAge in seconds. Human status page at /status.html.
          */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description {ok, service, time, upstreamFreshness, cacheAge} */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Health handler itself failed */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        get: operations["getHealth"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1023,49 +237,7 @@ export interface paths {
          * Hardware sizing recommendation for a workload spec (VRAM fit + expected TTFT/TPOT)
          * @description One canonical query for deployment planning: pass a workload spec, get ranked rigs with required-VRAM math (weights + KV cache at target context × concurrency + overhead) and expected TTFT/TPOT from aggregated benchmark medians, plus per-group sample confidence.
          */
-        get: {
-            parameters: {
-                query: {
-                    /** @description model family / hfId substring, e.g. qwen */
-                    model: string;
-                    /** @description target context per request (drives KV-cache VRAM) */
-                    contextLength?: number;
-                    /** @description simultaneous requests; scales KV cache, decays per-user decode ~B^-0.25 */
-                    concurrency?: number;
-                    /** @description tokens prefilled per request (TTFT input) */
-                    promptTokens?: number;
-                    /** @description tokens decoded per request */
-                    outputTokens?: number;
-                    /** @description SLO cap on expected TTFT */
-                    maxTtftSeconds?: number;
-                    /** @description SLO cap on expected TPOT */
-                    maxTpotMs?: number;
-                    /** @description budget cap: rig memory (VRAM or unified) must fit under this */
-                    maxVramGb?: number;
-                    /** @description explicit KV arch (with kvHeads+headDim skips the per-param-count estimate) */
-                    numLayers?: number;
-                    kvHeads?: number;
-                    headDim?: number;
-                    /** @description exact quantization match */
-                    quant?: string;
-                    hwClass?: "discrete_gpu" | "unified" | "cpu_only";
-                    limit?: number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description workload echo, assumptions, and ranked recommendations with vramFit, expected, confidence, meetsSlo, and a one-sentence human-readable `explain` string combining fit math with the measured source (#73) */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        get: operations["getSizingRecommendation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1085,70 +257,7 @@ export interface paths {
          * Parse plain-language constraints into the canonical constraint JSON
          * @description Converts a natural-language constraint string (e.g. "self-hosted Qwen 27B at Q4 for 10 users under $1500") into the canonical constraint struct used by /api/sizing and /api/best. Deterministic regex/heuristics — no external LLM calls. Returns the echoed input, the parsed struct (null = not stated) and an `ambiguities` array listing every assumption (e.g. "10 users: assume 1 stream each or batched?"), plus a ready-made `sizingQuery` for the downstream decision endpoint.
          */
-        get: {
-            parameters: {
-                query: {
-                    /** @description Plain-language constraints, e.g. self-hosted Qwen 27B at Q4 for 10 users under $1500 */
-                    q: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description {input, recognizedCount, constraints{deployment,modelFamily,paramsB,quantization,contextLength,concurrency,budgetUsdMax,minDecodeTokPerSec,maxVramGb,hwClass}, ambiguities[], sizingQuery} */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            input?: string;
-                            recognizedCount?: number;
-                            constraints?: {
-                                /** @enum {string|null} */
-                                deployment?: "self-hosted" | "cloud" | null;
-                                modelFamily?: string | null;
-                                paramsB?: number | null;
-                                quantization?: string | null;
-                                contextLength?: number | null;
-                                concurrency?: number | null;
-                                budgetUsdMax?: number | null;
-                                minDecodeTokPerSec?: number | null;
-                                maxVramGb?: number | null;
-                                /** @enum {string|null} */
-                                hwClass?: "discrete_gpu" | "unified" | "cpu_only" | null;
-                            };
-                            ambiguities?: {
-                                field?: string;
-                                message?: string;
-                            }[];
-                            /** @description Ready-made /api/sizing query string; null when nothing mappable was recognized */
-                            sizingQuery?: string | null;
-                        };
-                    };
-                };
-                /** @description Missing q parameter (code INVALID_PARAMS) */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-                /** @description Rate limited (code RATE_LIMITED) */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-            };
-        };
+        get: operations["parseConstraints"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1168,24 +277,7 @@ export interface paths {
          * Versioned dataset snapshot IDs
          * @description Lists content-addressed dataset snapshots (e.g. snapshot-2026-08-21-a1b2c3d4). Pass any listed ID as ?snapshot= on /api/localmaxxing, /api/benchmarks or /api/best to get reproducible numbers. Snapshot IDs are stable for identical run sets within a fetch-time bucket; instances keep a bounded in-memory ring, so old IDs may expire.
          */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description {current, snapshots[]} */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        get: operations["listDatasetSnapshots"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1219,6 +311,544 @@ export interface components {
              */
             code: "INVALID_PARAMS" | "NOT_FOUND" | "RATE_LIMITED" | "UPSTREAM_UNAVAILABLE" | "INTERNAL";
         };
+        /** @description 95% percentile bootstrap confidence interval (2,000 resamples). Overlapping intervals across groups mean they are statistically tied. */
+        Ci95Interval: {
+            /** @description 2.5th percentile */
+            lo: number;
+            /** @description 97.5th percentile */
+            hi: number;
+        };
+        /** @description Outlier-resistant distribution stats for one metric within a group. */
+        SpeedStats: {
+            /** @description First quartile */
+            q1?: number | null;
+            median: number | null;
+            /** @description Third quartile */
+            q3?: number | null;
+            min?: number | null;
+            max?: number | null;
+            /** @description 95% percentile bootstrap confidence interval (2,000 resamples). Overlapping intervals across groups mean they are statistically tied. */
+            ci95?: {
+                /** @description 2.5th percentile */
+                lo: number;
+                /** @description 97.5th percentile */
+                hi: number;
+            };
+            /**
+             * @description Rendered as "median [lo–hi]"
+             * @example 105 [101–110]
+             */
+            label?: string | null;
+        };
+        /** @description Machine-readable dataset limitation. Branch on `code`; treat `severity` as display weight. */
+        Caveat: {
+            /** @example single_stream_only */
+            code: string;
+            /**
+             * @description Display weight. `warning` marks statistical limitations that should change how the number is used (n=1 groups, mixed engines/bands); `info` is contextual.
+             * @enum {string}
+             */
+            severity: "info" | "low" | "medium" | "high" | "warning";
+            summary: string;
+            detail?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description How much to trust one aggregate: sample size, decode-IQR width, outlier density, recency and an overall grade. */
+        Confidence: {
+            /** @description Comparable runs backing this aggregate */
+            runs: number;
+            /** @description Decode IQR / median × 100; tighter is better */
+            iqrSpreadPct?: number | null;
+            /** @description Runs outside the 1.5×IQR fences */
+            outliers?: number;
+            newestRunAgeDays?: number | null;
+            /** @description 0–100 composite of sample size, spread and outliers (when computed) */
+            score?: number | null;
+            /**
+             * @description low <3 runs; high ≥10 runs with ≤40% decode IQR spread; medium otherwise
+             * @enum {string}
+             */
+            grade: "low" | "medium" | "high";
+        };
+        /** @description A multi-GPU rig whose numbers contradict the single-GPU baseline on the same model/quant — likely a misconfigured run. */
+        Contradiction: {
+            /** @enum {string} */
+            kind: "slower_than_single" | "poor_scaling";
+            /** @description Rig label, e.g. "2x RTX 4090" */
+            vs?: string;
+            gpuCount?: number;
+            /** @enum {string} */
+            metric: "decode" | "prefill";
+            singleTokPerSec?: number;
+            multiTokPerSec?: number;
+            deltaPct?: number;
+            perGpuScalingPct?: number;
+            note?: string;
+        };
+        /** @description Sanity comparison of multi-GPU rigs against the single-GPU baseline on the same model/quant. */
+        CrossCheck: {
+            /** @description Number of multi-GPU comparisons performed */
+            relatedRigComparisons: number;
+            contradictions: components["schemas"]["Contradiction"][];
+        };
+        /** @description Content-addressed dataset snapshot actually served. Pin its id via ?snapshot= for reproducible numbers (see /api/snapshots). */
+        SnapshotRef: {
+            /** @example snapshot-2026-08-21-a1b2c3d4 */
+            id: string;
+            /** Format: date-time */
+            createdAt?: string | null;
+            runCount?: number | null;
+        };
+        /** @description The single fastest measured run inside a group. */
+        BestRunSummary: {
+            runId: number;
+            modelName?: string | null;
+            hardware?: string | null;
+            engine?: string | null;
+            engineVersion?: string | null;
+            quantization?: string | null;
+            prefillTokPerSec?: number;
+            decodeTokPerSec: number;
+            /** Format: date-time */
+            createdAt?: string | null;
+            /**
+             * Format: uri
+             * @description Upstream run page
+             */
+            source?: string | null;
+        };
+        /** @description Raw comparable community run, flattened and model-normalized (modelFamily collapses repo/quant variants of the same base model). Single-stream runs only. */
+        Run: {
+            /** @description Stable upstream run id (also used as pagination tiebreak) */
+            runId: number;
+            /** Format: date-time */
+            createdAt?: string | null;
+            /** @description Normalized base-model family, e.g. qwen3.6-27b */
+            modelFamily: string;
+            /** @description Hugging Face repo id when known */
+            modelId?: string | null;
+            /** @description Upstream display name */
+            modelName?: string | null;
+            /** @description Parameter count in billions */
+            paramsB?: number | null;
+            /** @description Normalized rig key, e.g. rtx4090 */
+            hardwareKey?: string | null;
+            /** @description Human-readable rig label */
+            hardware?: string | null;
+            /** @enum {string|null} */
+            hwClass?: "discrete_gpu" | "unified" | "cpu_only" | null;
+            gpu?: string | null;
+            /** @default 1 */
+            gpuCount: number | null;
+            vramGb?: number | null;
+            chip?: string | null;
+            unifiedMemoryGb?: number | null;
+            cpu?: string | null;
+            /** @example llama.cpp */
+            engine?: string | null;
+            engineVersion?: string | null;
+            /** @example q4_k_m */
+            quantization?: string | null;
+            /** @description Measured prompt-processing speed (tok/s) */
+            prefillTokPerSec: number;
+            /** @description Measured single-stream decode speed (tok/s) */
+            decodeTokPerSec: number;
+            promptTokens?: number | null;
+            outputTokens?: number | null;
+            contextLength?: number | null;
+            /**
+             * @description Context-length bucket; null when the run reports no usable contextLength
+             * @enum {string|null}
+             */
+            contextBand?: "lt1k" | "1k-8k" | "8k-32k" | "32k+" | null;
+            /** @description Days since measurement (null when undated) */
+            ageDays?: number | null;
+            /**
+             * @description fresh <90d, aging <180d, stale otherwise, unknown when undated
+             * @enum {string|null}
+             */
+            staleness?: "fresh" | "aging" | "stale" | "unknown" | null;
+            /**
+             * Format: uri
+             * @description Link to the upstream run page
+             */
+            source?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Aggregated speeds for one group (hardware×model-family by default; regroup with ?groupBy=). Medians are outlier-resistant and carry 95% bootstrap CIs. */
+        BenchmarkGroup: {
+            /**
+             * @description Group key, e.g. "rtx4090|qwen3.6-27b"
+             * @example rtx4090|qwen3.6-27b
+             */
+            key: string;
+            /** @description Comparable runs in the group */
+            runs: number;
+            prefill: components["schemas"]["SpeedStats"];
+            decode: components["schemas"]["SpeedStats"];
+            modelFamilies?: string[];
+            engines?: string[];
+            /** @description True when the group spans multiple engine builds — check freshness before comparing */
+            mixedEngines?: boolean;
+            /** @description Present (true) only when ?context_band= filtering is off and the group mixes bands */
+            mixedContextBands?: boolean | null;
+            /** @description Unit-consistency audit over the group's runs (status ok|flagged). */
+            dataQuality?: ({
+                /** @enum {string} */
+                status?: "ok" | "flagged";
+                runsAudited?: number;
+                flaggedRuns?: number;
+                flagCounts?: {
+                    [key: string]: number;
+                };
+                flagged?: {
+                    runId?: number;
+                    codes?: string[];
+                }[];
+            } & {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Per-group flags (n=1 group, mixed engines) */
+            caveats?: components["schemas"]["Caveat"][];
+            confidence?: components["schemas"]["Confidence"];
+            crossCheck?: components["schemas"]["CrossCheck"];
+            bestRun?: components["schemas"]["BestRunSummary"];
+            /** @description Runs actually included in the stats (outliers excluded by default) */
+            runsInStats?: number;
+            /** @description Runs fenced out of the stats by the IQR outlier rule */
+            outliersExcludedFromStats?: number;
+            /** @description Outlier fence in IQRs from the group median (see top-level outlierPolicy) */
+            outlierIqrs?: number;
+            /** @description Whether outlier runs were included (echoes ?include_outliers=) */
+            includeOutliers?: boolean;
+            /** @description Flagged outlier runs (empty unless ?include_outliers=true); each carries the metrics that tripped the fence plus a z-score-style deviation. */
+            outliers?: {
+                [key: string]: unknown;
+            }[];
+            /** @description Context-length band mix inside the group — speeds depend on context, so a mixed group blends regimes. */
+            contextBands?: {
+                bands?: ({
+                    /** @enum {string} */
+                    band?: "lt1k" | "1k-8k" | "8k-32k" | "32k+";
+                    /** @description Display label, e.g. "8k–32k" */
+                    label?: string;
+                    runs?: number;
+                } & {
+                    [key: string]: unknown;
+                })[];
+                /** @description Runs reporting no usable contextLength */
+                unknownRuns?: number;
+                distinctBands?: number;
+                mixed?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
+            /** @description Recency of the runs backing this group. */
+            freshness?: {
+                /** Format: date-time */
+                newestRunAt?: string | null;
+                /** Format: date-time */
+                oldestRunAt?: string | null;
+                newestAgeDays?: number | null;
+                /** @enum {string|null} */
+                staleness?: "fresh" | "aging" | "stale" | "unknown" | null;
+                engineVersions?: string[];
+                majorReleaseWarnings?: string[];
+            } & {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description One ranked hardware×model recommendation. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel); pricing/power/vramFit are estimates anchored on the group's best-measured run and are null when no anchor exists (cpu_only, unknown GPUs). */
+        BestResult: {
+            hardware?: string | null;
+            hardwareKey: string | null;
+            /** @enum {string|null} */
+            hwClass?: "discrete_gpu" | "unified" | "cpu_only" | null;
+            gpu?: string | null;
+            /** @default 1 */
+            gpuCount: number | null;
+            vramGb?: number | null;
+            /** @description Discrete VRAM, falling back to unified memory */
+            effectiveVramGb?: number | null;
+            chip?: string | null;
+            unifiedMemoryGb?: number | null;
+            cpu?: string | null;
+            modelFamily: string;
+            exampleModel?: string | null;
+            quantization?: string | null;
+            engine?: string | null;
+            runsInGroup: number;
+            confidence: components["schemas"]["Confidence"];
+            medianPrefillTokPerSec: number;
+            medianDecodeTokPerSec: number;
+            bestDecodeTokPerSec?: number | null;
+            /** @description 95% percentile bootstrap confidence interval (2,000 resamples). Overlapping intervals across groups mean they are statistically tied. */
+            medianPrefillCi95?: {
+                /** @description 2.5th percentile */
+                lo: number;
+                /** @description 97.5th percentile */
+                hi: number;
+            };
+            medianPrefillLabel?: string | null;
+            /** @description 95% percentile bootstrap confidence interval (2,000 resamples). Overlapping intervals across groups mean they are statistically tied. */
+            medianDecodeCi95?: {
+                /** @description 2.5th percentile */
+                lo: number;
+                /** @description 97.5th percentile */
+                hi: number;
+            };
+            medianDecodeLabel?: string | null;
+            caveats?: components["schemas"]["Caveat"][];
+            /** Format: date-time */
+            newestRunAt?: string | null;
+            newestAgeDays?: number | null;
+            /** @enum {string|null} */
+            staleness?: "fresh" | "aging" | "stale" | "unknown" | null;
+            /** @description Engine builds seen in the group (mixed builds → treat deltas with caution) */
+            engineVersions?: string[];
+            majorReleaseWarnings?: string[];
+            /** @description "engine version" tags seen in the group */
+            engines?: string[];
+            /** @description Engine build when the group is single-build; null/absent when mixed */
+            engineVersion?: string | null;
+            /** @description True when the group spans multiple engine builds */
+            mixedEngines?: boolean;
+            /** @description Present (true) only when ?context_band= filtering is off and the group mixes bands */
+            mixedContextBands?: boolean | null;
+            /** @description Context-length band mix inside the group — speeds depend on context, so a mixed group blends regimes. */
+            contextBands?: {
+                bands?: ({
+                    /** @enum {string} */
+                    band?: "lt1k" | "1k-8k" | "8k-32k" | "32k+";
+                    /** @description Display label, e.g. "8k–32k" */
+                    label?: string;
+                    runs?: number;
+                } & {
+                    [key: string]: unknown;
+                })[];
+                /** @description Runs reporting no usable contextLength */
+                unknownRuns?: number;
+                distinctBands?: number;
+                mixed?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
+            /** @description Unit-consistency audit over the group's runs (status ok|flagged). */
+            dataQuality?: ({
+                /** @enum {string} */
+                status?: "ok" | "flagged";
+                runsAudited?: number;
+                flaggedRuns?: number;
+                flagCounts?: {
+                    [key: string]: number;
+                };
+                flagged?: {
+                    runId?: number;
+                    codes?: string[];
+                }[];
+            } & {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Expected time to first token at the default/requested scenario shape (default 2048-in / 512-out) */
+            ttftSeconds?: number;
+            /** @description Projected decode walltime for the scenario output tokens */
+            decodeSeconds?: number;
+            /** @description Prefill + decode walltime for the scenario shape */
+            projectedWalltimeSeconds?: number;
+            /** @description Total tokens / total walltime for the scenario shape */
+            effectiveThroughputTokPerSec?: number;
+            /** @description Share of scenario walltime spent prefilling */
+            prefillSharePct?: number;
+            /** @description Share of scenario walltime spent decoding */
+            decodeSharePct?: number;
+            /** Format: uri */
+            source?: string | null;
+            /** @description Estimated fit at the requested context (present with ?fitCheck or ?contextLength): weights + KV cache vs available memory. */
+            vramFit?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description USD street-price estimate with range, per-GPU breakdown, asOf date and eBay/Craigslist verification links; null when no anchor exists. */
+            pricing?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Board power (TDP per card and total), typical whole-rig inference wattage and recommended PSU size; null when no anchor exists. */
+            power?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description One-sentence human-readable explanation combining VRAM-fit math with the measured source — pass-through ready for agent chat pipelines */
+            explain?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Computed inference metrics. Every successful result carries a deterministic `id` (calc_<hash> of the resolved inputs) replayable via /api/calc/{id}, plus a non-blocking `warnings` array flagging physically implausible inputs. */
+        ComputeResult: {
+            /** @description Deterministic content hash of the resolved request */
+            id?: string;
+            /** @description Resolved input parameters (defaults filled in) */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /** @description Implausibility warnings (empty when inputs are plausible); never affect the math or HTTP status. */
+            warnings: ({
+                /** @enum {string} */
+                code?: "decode_above_bandwidth_roofline" | "prefill_above_compute_roofline" | "ttft_below_kernel_launch_floor";
+                message?: string;
+            } & {
+                [key: string]: unknown;
+            })[];
+            /** @description Time to first token (singleTurn/batched/agentic/kvCache/cost modes) */
+            ttftSeconds?: number;
+            /** @description Time per output token in ms */
+            tpotMs?: number;
+            decodeSeconds?: number;
+            totalWalltimeSeconds?: number;
+            effectiveThroughputTokPerSec?: number;
+            prefillSharePct?: number;
+            decodeSharePct?: number;
+        } & {
+            [key: string]: unknown;
+        };
+        ComputeResponse: {
+            /** @constant */
+            schema_version: "1";
+        } & components["schemas"]["ComputeResult"];
+        /** @description Cursor-paginated raw run list, sorted by decode speed desc (runId tiebreak). Follow next_cursor until has_more is false. */
+        RunListEnvelope: {
+            description?: string;
+            snapshot?: components["schemas"]["SnapshotRef"];
+            /** Format: date-time */
+            snapshotAt?: string | null;
+            /** @description Echoed ?max_age= filter (null when unset) */
+            maxAgeDays?: number | null;
+            /**
+             * @description Echoed ?context_band= filter (null when unset)
+             * @enum {string|null}
+             */
+            contextBand?: "lt1k" | "1k-8k" | "8k-32k" | "32k+" | null;
+            /** @description Total matching runs across all pages */
+            total: number;
+            caveats?: components["schemas"]["Caveat"][];
+            items: components["schemas"]["Run"][];
+            has_more: boolean;
+            /** @description Opaque keyset cursor; pass back as ?cursor= */
+            next_cursor?: string | null;
+            /** @constant */
+            schema_version?: "1";
+        };
+        /** @description Bare call (no hardware/model/quant filter): one summary row per hardware group, largest first. */
+        HardwareSummaryEnvelope: {
+            description?: string;
+            snapshot?: components["schemas"]["SnapshotRef"];
+            /** Format: date-time */
+            snapshotAt?: string | null;
+            maxAgeDays?: number | null;
+            /** @enum {string|null} */
+            contextBand?: "lt1k" | "1k-8k" | "8k-32k" | "32k+" | null;
+            totalComparableRuns: number;
+            caveats?: components["schemas"]["Caveat"][];
+            hardwareGroups: ({
+                hardware?: string | null;
+                hardwareKey?: string | null;
+                /** @enum {string|null} */
+                hwClass?: "discrete_gpu" | "unified" | "cpu_only" | null;
+                runs?: number;
+                distinctModelFamilies?: number;
+                /** @enum {string|null} */
+                staleness?: "fresh" | "aging" | "stale" | "unknown" | null;
+                /** Format: date-time */
+                newestRunAt?: string | null;
+            } & {
+                [key: string]: unknown;
+            })[];
+            /** @constant */
+            schema_version?: "1";
+        };
+        /** @description Cursor-paginated aggregate groups, sorted by median decode desc (group-key tiebreak). Follow next_cursor until has_more is false. */
+        BenchmarkGroupListEnvelope: {
+            description?: string;
+            note?: string;
+            snapshot?: components["schemas"]["SnapshotRef"];
+            /** Format: date-time */
+            snapshotAt?: string | null;
+            /** @description Total matching groups across all pages */
+            total: number;
+            /** @description Comparable runs that survived filtering before grouping */
+            matchedRuns?: number;
+            /** @description Dataset-level flags (n=1 share, mixed engine versions) */
+            caveats?: components["schemas"]["Caveat"][];
+            /** @description Human-readable group-level warnings (mixed context bands within a group key) */
+            warnings?: string[];
+            /** @description Echoed ?max_age= filter (null when unset) */
+            maxAgeDays?: number | null;
+            /**
+             * @description Echoed ?context_band= filter (null when unset)
+             * @enum {string|null}
+             */
+            contextBand?: "lt1k" | "1k-8k" | "8k-32k" | "32k+" | null;
+            /** @description Distinct model families across all matching runs */
+            distinctModelFamilies?: number;
+            /** @description Distinct "engine version" tags across matching runs */
+            distinctEngines?: string[];
+            /** @description True when groups are keyed per engine build so mixed-engine stats never blend */
+            engineCohortedByDefault?: boolean;
+            /** @description Human-readable definition of the fresh/aging/stale tiers */
+            freshnessTiers?: string;
+            /** @description How outlier runs are fenced and whether they are included in stats. */
+            outlierPolicy?: {
+                thresholdIqrs?: number;
+                includeOutliers?: boolean;
+                note?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            /** @description Unit-consistency audit across all matching runs. */
+            unitAudit?: {
+                runsAudited?: number;
+                flaggedRuns?: number;
+                flagCounts?: {
+                    [key: string]: number;
+                };
+                note?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            items: components["schemas"]["BenchmarkGroup"][];
+            has_more: boolean;
+            next_cursor?: string | null;
+            /** @constant */
+            schema_version?: "1";
+        };
+        /** @description Ranked recommendations. Carries a deterministic `id` (hash of the resolved filters) replayable via /api/calc/{id}?endpoint=best&<same filters>. */
+        BestListEnvelope: {
+            id?: string;
+            description?: string;
+            /** @enum {string} */
+            rankedBy: "decode" | "prefill" | "cost" | "walltime";
+            snapshot?: components["schemas"]["SnapshotRef"];
+            /** Format: date-time */
+            snapshotAt?: string | null;
+            /** @description Comparable runs that survived filtering */
+            matchedRuns?: number;
+            /** @description Runs dropped by ?fitCheck= (present only with fitCheck) */
+            excludedRuns?: number | null;
+            /** @description Echoed ?max_age= filter (null when unset) */
+            maxAgeDays?: number | null;
+            /**
+             * @description Echoed ?context_band= filter (null when unset)
+             * @enum {string|null}
+             */
+            contextBand?: "lt1k" | "1k-8k" | "8k-32k" | "32k+" | null;
+            caveats: components["schemas"]["Caveat"][];
+            /** @description Human-readable group-level warnings (mixed engine versions / context bands) */
+            warnings: string[];
+            results: components["schemas"]["BestResult"][];
+            /** @constant */
+            schema_version?: "1";
+        };
     };
     responses: {
         /** @description Rate limit exhausted for this window. Back off for Retry-After seconds, then resume. */
@@ -1242,6 +872,8 @@ export interface components {
                     /** @description Unix epoch seconds */
                     reset?: number;
                     retryAfterSeconds?: number;
+                    /** @description Pointer to the documented budget in /llms.txt plus the X-RateLimit-* header names. */
+                    note?: string;
                 };
             };
         };
@@ -1259,4 +891,930 @@ export interface components {
     pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export interface operations {
+    computeInference: {
+        parameters: {
+            query?: {
+                model?: "singleTurn" | "speculative" | "batched" | "agentic" | "kvCache" | "flagged" | "cost";
+                /** @description singleTurn/batched/agentic/cost */
+                promptTokens?: number;
+                /** @description singleTurn/batched/agentic/cost */
+                outputTokens?: number;
+                /** @description tok/s */
+                prefillSpeed?: number;
+                /** @description tok/s */
+                decodeSpeed?: number;
+                /** @description agentic */
+                numTurns?: number;
+                /** @description agentic */
+                enablePrefixCaching?: boolean;
+                /** @description batched/kvCache */
+                batchSize?: number;
+                /** @description speculative: draft tokens per step */
+                draftTokens?: number;
+                /** @description speculative: 0..1. Response includes breakevenAcceptanceRate — below it speculation is slower than vanilla decode. */
+                acceptanceRate?: number;
+                /** @description cost: purchase price, amortized over amortizationMonths (default 36) */
+                hardwarePriceUsd?: number;
+                /** @description cost: $/kWh, default 0.15 */
+                electricityRatePerKwh?: number;
+                /** @description cost: whole-rig wall power under load */
+                powerDrawWatts?: number;
+                /** @description cost: months to spread hardware price over, default 36 */
+                amortizationMonths?: number;
+                /** @description kvCache preset arch */
+                architecture?: "llama70b" | "llama8b" | "qwen72b" | "mistral7b";
+                /** @description kvCache */
+                contextLength?: number;
+                /** @description kvCache: FP16/FP8/INT4 */
+                precisionBytes?: 2 | 1 | 0.5;
+                /** @description flagged: comma-separated engine flag ids (flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3). Documented heuristic deltas; response carries a per-flag audit trail. */
+                flags?: string;
+                /** @description Validate + echo parsed params (defaults filled in) without executing any math. Returns { dry_run: true, model, inputs, id?, note }; the id matches the real call. Also applies per-item inside a batch via "dry_run": true in the POST body. */
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Computed metrics object */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "calc_9536a8f7358a",
+                     *       "inputs": {
+                     *         "promptTokens": 4096,
+                     *         "outputTokens": 512,
+                     *         "prefillSpeed": 3800,
+                     *         "decodeSpeed": 105
+                     *       },
+                     *       "warnings": [],
+                     *       "ttftSeconds": 1.077895,
+                     *       "tpotMs": 9.52381,
+                     *       "decodeSeconds": 4.87619,
+                     *       "totalWalltimeSeconds": 5.954085,
+                     *       "effectiveThroughputTokPerSec": 773.922414,
+                     *       "prefillSharePct": 18.103448,
+                     *       "decodeSharePct": 81.896552,
+                     *       "schema_version": "1"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ComputeResponse"];
+                };
+            };
+            /** @description Invalid parameters (code INVALID_PARAMS) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal server error (code INTERNAL) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    estimateVram: {
+        parameters: {
+            query: {
+                /** @description Hugging Face repo id or URL, e.g. meta-llama/Llama-3.1-8B-Instruct */
+                hfId: string;
+                /** @description context length in tokens */
+                context?: number;
+                /** @description quant tag (fp16, q8_0, q6_k, q5_k_m, q4_k_m, q4_0, q3_k_m, q2_k, fp8, …); unknown tags assume ~4.85 bpw and are flagged */
+                quant?: string;
+                batchSize?: number;
+                /** @description KV cache precision: 2=FP16, 1=FP8, 0.5=INT4 */
+                kvPrecisionBytes?: number;
+                /** @description optional VRAM budget → fits flag + maxContextTokens (upper bound) */
+                vramGb?: number;
+                /** @description with tokensPerTurn: project KV growth over N agentic turns */
+                numTurns?: number;
+                /** @description tokens added to context per turn */
+                tokensPerTurn?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resolved model + weights/kv/total VRAM breakdown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing hfId */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown hfId on huggingface.co */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description config.json lacks required architecture fields */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    replayCalculation: {
+        parameters: {
+            query?: {
+                endpoint?: "compute" | "best";
+                /** @description The same model + params (or best filters) that minted the id. Defaults may be omitted — they resolve identically before hashing. */
+                "<original request parameters>"?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recomputed result, stamped verified:true and carrying the id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed id, missing replay parameters, or id/parameter mismatch (body.expected carries the correct id) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listPresets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {hardware[], scenarios[]}; each hardware entry carries power/thermal guidance (#69): tdpWatts (board power), loadWatts (typical whole-rig wattage under inference), psuWatts (recommended PSU size) and powerNote — null where not applicable (cloud/edge/custom). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "description": "Built-in hardware speed presets and workload scenario presets. Use these values as inputs to /api/compute.",
+                     *       "hardware": [
+                     *         {
+                     *           "id": "rtx4090_exl2",
+                     *           "name": "RTX 4090 24GB (ExLlamaV2 EXL2)",
+                     *           "prefillSpeedTokPerSec": 3800,
+                     *           "decodeSpeedTokPerSec": 105,
+                     *           "vramBandwidth": "1.01 TB/s (GDDR6X)",
+                     *           "badge": "Localmaxxing #1 Consumer"
+                     *         },
+                     *         {
+                     *           "id": "dual_rtx3090",
+                     *           "name": "Dual RTX 3090 48GB (TP2 ExLlamaV2 70B)",
+                     *           "prefillSpeedTokPerSec": 4600,
+                     *           "decodeSpeedTokPerSec": 78,
+                     *           "vramBandwidth": "1.87 TB/s Combined",
+                     *           "badge": "Localmaxxing 70B Rig"
+                     *         },
+                     *         {
+                     *           "id": "rtx3090_llamacpp",
+                     *           "name": "RTX 3090 24GB (llama.cpp Q4_K_M)",
+                     *           "prefillSpeedTokPerSec": 2400,
+                     *           "decodeSpeedTokPerSec": 65,
+                     *           "vramBandwidth": "936 GB/s (GDDR6X)",
+                     *           "badge": "Localmaxxing Budget King"
+                     *         }
+                     *       ],
+                     *       "scenarios": [
+                     *         {
+                     *           "id": "chat",
+                     *           "label": "Standard chat",
+                     *           "promptTokens": 2048,
+                     *           "outputTokens": 512
+                     *         },
+                     *         {
+                     *           "id": "rag",
+                     *           "label": "RAG query",
+                     *           "promptTokens": 4096,
+                     *           "outputTokens": 512
+                     *         }
+                     *       ],
+                     *       "schema_version": "1"
+                     *     }
+                     */
+                    "application/json": unknown;
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    listBenchmarkRuns: {
+        parameters: {
+            query?: {
+                /** @description substring match on rig name/key */
+                hardware?: string;
+                /** @description substring match on normalized family or hfId */
+                model?: string;
+                /** @description exact quantization, e.g. q4_k_m */
+                quant?: string;
+                /** @description only runs measured at this context length (<1000, 1000–7999, 8000–31999, ≥32000 tokens) */
+                context_band?: "lt1k" | "1k-8k" | "8k-32k" | "32k+";
+                /** @description page size */
+                limit?: number;
+                /** @description opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts) */
+                cursor?: string;
+                /** @description Serve the pinned dataset snapshot instead of live data. IDs from /api/snapshots; unknown IDs fall back to current data with snapshot.served=false. */
+                snapshot?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hardware summary, or paginated run list { total, items[], has_more, next_cursor }; both carry a machine-readable `caveats` array (single-stream-only, self-reported data, engine mix) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "description": "Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false.",
+                     *       "snapshot": {
+                     *         "id": "snapshot-2026-08-21-a1b2c3d4",
+                     *         "createdAt": "2026-08-21T09:14:03.000Z",
+                     *         "runCount": 3642
+                     *       },
+                     *       "snapshotAt": "2026-08-21T09:14:03.512Z",
+                     *       "schema_version": "1",
+                     *       "total": 214,
+                     *       "caveats": [
+                     *         {
+                     *           "code": "single_stream_only",
+                     *           "severity": "medium",
+                     *           "summary": "Dataset only contains batchSize=1 runs — not batched-serving throughput.",
+                     *           "detail": "All 3642 runs report concurrency ≤ 1."
+                     *         },
+                     *         {
+                     *           "code": "self_reported_unvalidated",
+                     *           "severity": "medium",
+                     *           "summary": "Community-submitted runs, not independently verified; trust medians over single runs.",
+                     *           "detail": "Submissions are sanity-bounded and deduplicated but not lab-measured."
+                     *         }
+                     *       ],
+                     *       "items": [
+                     *         {
+                     *           "runId": 58213,
+                     *           "createdAt": "2026-07-30T18:22:41.000Z",
+                     *           "modelFamily": "qwen3.6-27b",
+                     *           "modelName": "unsloth/Qwen3.6-27B-MTP-GGUF",
+                     *           "hardwareKey": "rtx4090",
+                     *           "hardware": "RTX 4090 24GB",
+                     *           "hwClass": "discrete_gpu",
+                     *           "gpu": "RTX 4090",
+                     *           "gpuCount": 1,
+                     *           "engine": "llama.cpp",
+                     *           "engineVersion": "b6123",
+                     *           "quantization": "q4_k_m",
+                     *           "prefillTokPerSec": 3820,
+                     *           "decodeTokPerSec": 108,
+                     *           "contextLength": 8192,
+                     *           "contextBand": "8k-32k",
+                     *           "ageDays": 23,
+                     *           "staleness": "fresh",
+                     *           "source": "https://localmaxxing.com/en/runs/58213"
+                     *         }
+                     *       ],
+                     *       "has_more": true,
+                     *       "next_cursor": "MTA4fCI1ODIxMyI"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RunListEnvelope"] | components["schemas"]["HardwareSummaryEnvelope"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    listWatches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Feature description + registered watches (watchId, label, hasWebhook, createdAt) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "description": "Watch feeds (#109): subscribe to a hardware+model combination…",
+                     *       "maxWatches": 500,
+                     *       "totalWatches": 1,
+                     *       "watches": [
+                     *         {
+                     *           "watchId": "watch_abc123_x9",
+                     *           "label": "RTX 4090 + Qwen3 32B",
+                     *           "model": "Qwen3 32B",
+                     *           "hardware": "RTX 4090",
+                     *           "quant": null,
+                     *           "hasWebhook": false,
+                     *           "createdAt": "2026-08-22T10:00:00.000Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": unknown;
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    createWatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "model": "Qwen3 32B",
+                 *       "hardware": "RTX 4090",
+                 *       "quant": "q4_k_m",
+                 *       "webhookUrl": "https://example.com/hooks/llm-watch"
+                 *     }
+                 */
+                "application/json": unknown;
+            };
+        };
+        responses: {
+            /** @description Watch created (watchId, secret, rssUrl, matchingExistingRuns preview) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body (code validation_failed with per-field errors) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["RateLimited"];
+            /** @description Watch store unavailable (code watch_store_unavailable) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteWatch: {
+        parameters: {
+            query: {
+                /** @description watchId from the POST response */
+                id: string;
+                /** @description one-time secret from the POST response (also accepted as X-Watch-Secret header) */
+                secret: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Watch removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Wrong or missing secret (code invalid_secret) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown watchId (code watch_not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getWatchRssFeed: {
+        parameters: {
+            query?: {
+                /** @description substring match on normalized family / hfId / display name */
+                model?: string;
+                /** @description substring match on rig name/key */
+                hardware?: string;
+                /** @description exact quantization */
+                quant?: string;
+                /** @description only runs measured in the last N days (undated runs always included) */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description RSS 2.0 XML (application/rss+xml); X-Matched-Runs header reports the pre-cap match count */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    dispatchWatchWebhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description { dispatched, totalNewRuns, results[], previewPayload } */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description WATCH_DISPATCH_SECRET set and not provided (code unauthorized) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["RateLimited"];
+            /** @description Watch store unavailable (code watch_store_unavailable) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getBenchmarkAggregates: {
+        parameters: {
+            query?: {
+                groupBy?: "hardwareModel" | "hardware" | "model" | "quant";
+                hardware?: string;
+                model?: string;
+                quant?: string;
+                hwClass?: "discrete_gpu" | "unified" | "cpu_only";
+                /** @description only runs measured at this context length; groups mixing bands carry mixedContextBands + a warning */
+                context_band?: "lt1k" | "1k-8k" | "8k-32k" | "32k+";
+                /** @description page size */
+                limit?: number;
+                /** @description opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts) */
+                cursor?: string;
+                /** @description Serve the pinned dataset snapshot instead of live data. IDs from /api/snapshots; unknown IDs fall back to current data with snapshot.served=false. */
+                snapshot?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated groups { total, items[], has_more, next_cursor }; items carry median/q1/q3/min/max prefill & decode with 95% bootstrap CIs on each median, bestRun, a confidence block and crossCheck. Top-level and per-group `caveats` arrays flag n=1 groups and mixed engine versions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "description": "Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group).",
+                     *       "snapshot": {
+                     *         "id": "snapshot-2026-08-21-a1b2c3d4",
+                     *         "createdAt": "2026-08-21T09:14:03.000Z",
+                     *         "runCount": 3642
+                     *       },
+                     *       "snapshotAt": "2026-08-21T09:14:03.512Z",
+                     *       "schema_version": "1",
+                     *       "total": 187,
+                     *       "caveats": [
+                     *         {
+                     *           "code": "n1_groups",
+                     *           "severity": "medium",
+                     *           "summary": "22% of groups rest on a single run — treat as anecdotal.",
+                     *           "detail": "18 of 82 returned groups have runs=1.",
+                     *           "pct": 22,
+                     *           "groupsWithOneRun": 18,
+                     *           "totalGroups": 82
+                     *         }
+                     *       ],
+                     *       "items": [
+                     *         {
+                     *           "key": "rtx4090|qwen3.6-27b",
+                     *           "runs": 14,
+                     *           "prefill": {
+                     *             "q1": 3601,
+                     *             "median": 3800,
+                     *             "q3": 3950,
+                     *             "min": 3210,
+                     *             "max": 4102,
+                     *             "ci95": {
+                     *               "lo": 3701,
+                     *               "hi": 3902
+                     *             },
+                     *             "label": "3800 [3701–3902]"
+                     *           },
+                     *           "decode": {
+                     *             "q1": 99,
+                     *             "median": 105,
+                     *             "q3": 112,
+                     *             "min": 88,
+                     *             "max": 118,
+                     *             "ci95": {
+                     *               "lo": 101,
+                     *               "hi": 110
+                     *             },
+                     *             "label": "105 [101–110]"
+                     *           },
+                     *           "modelFamilies": [
+                     *             "qwen3.6-27b"
+                     *           ],
+                     *           "engines": [
+                     *             "llama.cpp"
+                     *           ],
+                     *           "mixedEngines": false,
+                     *           "caveats": [],
+                     *           "confidence": {
+                     *             "runs": 14,
+                     *             "iqrSpreadPct": 12.38,
+                     *             "outliers": 0,
+                     *             "newestRunAgeDays": 3,
+                     *             "grade": "high"
+                     *           },
+                     *           "crossCheck": {
+                     *             "relatedRigComparisons": [],
+                     *             "contradictions": []
+                     *           },
+                     *           "bestRun": {
+                     *             "runId": 58213,
+                     *             "modelName": "unsloth/Qwen3.6-27B-MTP-GGUF",
+                     *             "hardware": "RTX 4090 24GB",
+                     *             "engine": "llama.cpp",
+                     *             "engineVersion": "b6123",
+                     *             "quantization": "q4_k_m",
+                     *             "prefillTokPerSec": 3820,
+                     *             "decodeTokPerSec": 108,
+                     *             "createdAt": "2026-07-30T18:22:41.000Z",
+                     *             "source": "https://localmaxxing.com/en/runs/58213"
+                     *           }
+                     *         }
+                     *       ],
+                     *       "has_more": true,
+                     *       "next_cursor": "MTA1fCJydDQwOTB8cXdlbjMuNi0yN2Ii"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BenchmarkGroupListEnvelope"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getBestConfigs: {
+        parameters: {
+            query?: {
+                /** @default decode */
+                by?: "decode" | "prefill" | "efficiency" | "walltime" | "confidence" | "cost";
+                /** @description cost mode: rig purchase price in USD (default 0) */
+                price?: number;
+                /** @description cost mode: $/kWh (default 0.15) */
+                electricityRate?: number;
+                /** @description cost mode: whole-rig watts; defaults to an estimate per hwClass */
+                powerWatts?: number;
+                /** @description cost mode: spread price over this many months (default 36) */
+                amortizationMonths?: number;
+                /** @description cost mode: scenario shape (default 2048) */
+                promptTokens?: number;
+                /** @description cost mode: scenario shape (default 512) */
+                outputTokens?: number;
+                model?: string;
+                /** @description only models at or under this size */
+                maxParamsB?: number;
+                quant?: string;
+                hwClass?: "discrete_gpu" | "unified" | "cpu_only";
+                hardware?: string;
+                /** @description only runs measured at this context length (<1000, 1000–7999, 8000–31999, ≥32000 tokens) */
+                context_band?: "lt1k" | "1k-8k" | "8k-32k" | "32k+";
+                /** @description exclude rigs whose memory cannot hold the model at the given context (estimated) */
+                fitCheck?: boolean;
+                /** @description context for fitCheck; providing it implies fitCheck=true */
+                contextLength?: number;
+                /** @description KV cache dtype bytes for fitCheck (2 = fp16) */
+                precisionBytes?: number;
+                /** @description batch size for fitCheck KV cache math */
+                batchSize?: number;
+                limit?: number;
+                /** @description Serve the pinned dataset snapshot instead of live data. IDs from /api/snapshots; unknown IDs fall back to current data with snapshot.served=false. */
+                snapshot?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked groups with medians, per-row `caveats` (n=1, mixed engines), a confidence block and a top-level `caveats` array, plus source links; with fitCheck, each result carries an estimated vramFit breakdown and the response reports excludedRuns. Each result includes a `pricing` object: USD street-price estimate with low/high range, perGpu breakdown for multi-GPU rigs, asOf date, and eBay (new + used) and Craigslist search links to verify against live listings. `pricing` is null when no anchor exists (cpu_only, unknown GPUs). Each result also carries `explain`: a one-sentence human-readable explanation combining the VRAM-fit math (weights + KV estimates) with the measured source, e.g. '24GB fits 8B q4_k_m weights ~5GB + 32k KV ~4GB with 14GB headroom; measured 100 tok/s decode from run #a1' — pass-through ready for agent chat pipelines. Each result also includes a `power` object (#69): board power (TDP, per card and total), typical whole-rig wattage under sustained inference, and a recommended PSU size with transient-headroom notes — so a dual-GPU recommendation can be sanity-checked against the user's actual electrical setup. `power` is null when no anchor exists (cpu_only, unknown GPUs). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "calc_7f2c91b04da3",
+                     *       "description": "Ranked hardware×model groups by measured community speed. Medians are outlier-resistant.",
+                     *       "rankedBy": "decode",
+                     *       "snapshot": {
+                     *         "id": "snapshot-2026-08-21-a1b2c3d4",
+                     *         "createdAt": "2026-08-21T09:14:03.000Z",
+                     *         "runCount": 3642
+                     *       },
+                     *       "snapshotAt": "2026-08-21T09:14:03.512Z",
+                     *       "matchedRuns": 214,
+                     *       "schema_version": "1",
+                     *       "caveats": [
+                     *         {
+                     *           "code": "single_stream_only",
+                     *           "severity": "medium",
+                     *           "summary": "Dataset only contains batchSize=1 runs — not batched-serving throughput.",
+                     *           "detail": "All 3642 runs report concurrency ≤ 1."
+                     *         }
+                     *       ],
+                     *       "warnings": [],
+                     *       "results": [
+                     *         {
+                     *           "hardware": "RTX 4090 24GB",
+                     *           "hardwareKey": "rtx4090",
+                     *           "hwClass": "discrete_gpu",
+                     *           "gpu": "RTX 4090",
+                     *           "gpuCount": 1,
+                     *           "vramGb": 24,
+                     *           "modelFamily": "qwen3.6-27b",
+                     *           "exampleModel": "unsloth/Qwen3.6-27B-MTP-GGUF",
+                     *           "quantization": "q4_k_m",
+                     *           "engine": "llama.cpp",
+                     *           "runsInGroup": 14,
+                     *           "confidence": {
+                     *             "runs": 14,
+                     *             "iqrSpreadPct": 12.38,
+                     *             "outliers": 0,
+                     *             "newestRunAgeDays": 3,
+                     *             "grade": "high"
+                     *           },
+                     *           "medianPrefillTokPerSec": 3800,
+                     *           "medianDecodeTokPerSec": 105,
+                     *           "bestDecodeTokPerSec": 118,
+                     *           "medianPrefillCi95": {
+                     *             "lo": 3701,
+                     *             "hi": 3902
+                     *           },
+                     *           "medianPrefillLabel": "3800 [3701–3902]",
+                     *           "medianDecodeCi95": {
+                     *             "lo": 101,
+                     *             "hi": 110
+                     *           },
+                     *           "medianDecodeLabel": "105 [101–110]",
+                     *           "caveats": [],
+                     *           "effectiveVramGb": 24,
+                     *           "pricing": {
+                     *             "estimateUsd": 1650,
+                     *             "lowUsd": 1400,
+                     *             "highUsd": 1900,
+                     *             "perGpu": [
+                     *               {
+                     *                 "gpu": "RTX 4090",
+                     *                 "estimateUsd": 1650
+                     *               }
+                     *             ],
+                     *             "asOf": "2026-08-01",
+                     *             "links": {
+                     *               "ebay": "https://www.ebay.com/sch/i.html?_nkw=rtx+4090",
+                     *               "ebayUsed": "https://www.ebay.com/sch/i.html?_nkw=rtx+4090&LH_ItemCondition=3000",
+                     *               "craigslist": "https://craigslist.org/search/sss?query=rtx+4090"
+                     *             }
+                     *           },
+                     *           "explain": "24GB VRAM fits qwen3.6-27b q4_k_m weights ~16GB + 32k KV ~7GB with ~1GB headroom; measured 105 tok/s decode median across 14 community runs."
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BestListEnvelope"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {ok, service, time, upstreamFreshness, cacheAge} */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Health handler itself failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getSizingRecommendation: {
+        parameters: {
+            query: {
+                /** @description model family / hfId substring, e.g. qwen */
+                model: string;
+                /** @description target context per request (drives KV-cache VRAM) */
+                contextLength?: number;
+                /** @description simultaneous requests; scales KV cache, decays per-user decode ~B^-0.25 */
+                concurrency?: number;
+                /** @description tokens prefilled per request (TTFT input) */
+                promptTokens?: number;
+                /** @description tokens decoded per request */
+                outputTokens?: number;
+                /** @description SLO cap on expected TTFT */
+                maxTtftSeconds?: number;
+                /** @description SLO cap on expected TPOT */
+                maxTpotMs?: number;
+                /** @description budget cap: rig memory (VRAM or unified) must fit under this */
+                maxVramGb?: number;
+                /** @description explicit KV arch (with kvHeads+headDim skips the per-param-count estimate) */
+                numLayers?: number;
+                kvHeads?: number;
+                headDim?: number;
+                /** @description exact quantization match */
+                quant?: string;
+                hwClass?: "discrete_gpu" | "unified" | "cpu_only";
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description workload echo, assumptions, and ranked recommendations with vramFit, expected, confidence, meetsSlo, and a one-sentence human-readable `explain` string combining fit math with the measured source (#73) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    parseConstraints: {
+        parameters: {
+            query: {
+                /** @description Plain-language constraints, e.g. self-hosted Qwen 27B at Q4 for 10 users under $1500 */
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {input, recognizedCount, constraints{deployment,modelFamily,paramsB,quantization,contextLength,concurrency,budgetUsdMax,minDecodeTokPerSec,maxVramGb,hwClass}, ambiguities[], sizingQuery} */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        input?: string;
+                        recognizedCount?: number;
+                        constraints?: {
+                            /** @enum {string|null} */
+                            deployment?: "self-hosted" | "cloud" | null;
+                            modelFamily?: string | null;
+                            paramsB?: number | null;
+                            quantization?: string | null;
+                            contextLength?: number | null;
+                            concurrency?: number | null;
+                            budgetUsdMax?: number | null;
+                            minDecodeTokPerSec?: number | null;
+                            maxVramGb?: number | null;
+                            /** @enum {string|null} */
+                            hwClass?: "discrete_gpu" | "unified" | "cpu_only" | null;
+                        };
+                        ambiguities?: {
+                            field?: string;
+                            message?: string;
+                        }[];
+                        /** @description Ready-made /api/sizing query string; null when nothing mappable was recognized */
+                        sizingQuery?: string | null;
+                    };
+                };
+            };
+            /** @description Missing q parameter (code INVALID_PARAMS) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited (code RATE_LIMITED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listDatasetSnapshots: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {current, snapshots[]} */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+}

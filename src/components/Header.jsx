@@ -46,7 +46,8 @@ export default function Header({
         </div>
 
         <select
-          aria-label="View"
+          id="view-select"
+          aria-label={t('header.viewAriaLabel')}
           value={activeTab}
           onChange={(e) => setActiveTab(e.target.value)}
           style={{ maxWidth: 170 }}
