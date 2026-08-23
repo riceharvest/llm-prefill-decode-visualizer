@@ -46,6 +46,7 @@ const ENFORCED_PATHS = new Set([
   '/api/compute',
   '/api/presets',
   '/api/localmaxxing',
+  '/api/runs',
   '/api/benchmarks',
   '/api/best',
   '/api/parse-constraints',

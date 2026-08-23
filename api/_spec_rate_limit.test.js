@@ -51,6 +51,7 @@ const HANDLER_FILE = {
   '/api/calc/{id}': '_handlers/calc_id.js',
   '/api/presets': '_handlers/presets.js',
   '/api/localmaxxing': '_handlers/localmaxxing.js',
+  '/api/runs': '_handlers/runs.js',
   '/api/watch': '_watch_impl.js',
   '/api/watch/rss.xml': '_handlers/rss.xml.js',
   '/api/watch/dispatch': '_handlers/dispatch.js',
