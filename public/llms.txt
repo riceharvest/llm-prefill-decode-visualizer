@@ -192,6 +192,7 @@ Every `/api/*` response carries rate-limit headers so agents can self-throttle:
 - `X-RateLimit-Remaining` — requests left in the current window.
 - `X-RateLimit-Reset` — Unix epoch seconds when the window resets.
 - When exhausted, endpoints return **429** with a `Retry-After` header (seconds) and a JSON body explaining the budget. Back off for that many seconds instead of retrying immediately.
+- Machine-readable per-operation rate-limit metadata lives in `/api/spec`: every operation carries an `x-rate-limit` object (`enforced`, `limit`, `windowSeconds`, `keying`, `scope`, and for metered endpoints the header names + 429 exhaustion shape). A root-level `x-rate-limit` carries the global default.
 
 Budget: 120 requests/min per client IP. Note this is enforced best-effort **per serverless instance**: Vercel functions share no memory across invocations, so concurrent warm instances each allow 120/min and cold starts reset counters — treat the limit as a floor on good behavior, not a hard global cap.
 
