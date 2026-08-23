@@ -49,6 +49,13 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- Every agent-facing JSON response body now carries a machine-readable
+  `rate_limit` object — `{ limit, remaining, reset, window_seconds, policy }`
+  — mirroring the existing `X-RateLimit-*` headers, for clients that only
+  parse bodies (MCP tools, body-only HTTP wrappers). Present whenever the
+  handler ran `enforceRateLimit` (i.e. on all standard `/api/*` handlers);
+  absent otherwise. Additive field; `schema_version` stays `"1"`. Also
+  documented in the "Rate limits" section of public/llms.txt.
 - New `GET /api/og` endpoint (#105): renders a 1200x630 PNG Open Graph chart
   card from URL params (`preset`, `prefill`, `decode`, `scenario`, `prompt`)
   via @vercel/og. Binary image response (`image/png`, not JSON/schema-
