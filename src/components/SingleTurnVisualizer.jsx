@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Play, Pause, Zap, Gauge, FileText, RotateCcw, Image as ImageIcon, FileDown, Copy } from 'lucide-react';
+import { Play, Pause, Zap, Gauge, FileText, RotateCcw, Image as ImageIcon, FileDown, Copy, FileJson } from 'lucide-react';
 import { formatTime, formatTokens, SCENARIO_PRESETS } from '../utils/presets';
 import {
   IMAGE_RESOLUTION_PRESETS,
@@ -37,6 +37,7 @@ import SloBadge from './SloBadge';
 import { evaluateSlo } from '../utils/slo.js';
 
 import { buildSingleTurnMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
+import { buildSingleTurnJson, downloadJson } from '../utils/exportJson';
 import { t } from '../i18n/strings';
 
 export default function SingleTurnVisualizer({
@@ -433,6 +434,18 @@ export default function SingleTurnVisualizer({
     deepLink: buildDeepLink('single')
   });
   const handleExportMd = () => downloadMarkdown(buildMarkdown(), 'single-turn-simulation.md');
+  const buildJson = () => buildSingleTurnJson({
+    promptTokens,
+    outputTokens,
+    prefillSpeed,
+    decodeSpeed,
+    specEnabled,
+    draftTokens,
+    acceptance,
+    effectiveDecodeSpeed,
+    deepLink: buildDeepLink('single')
+  });
+  const handleExportJson = () => downloadJson(buildJson(), 'single-turn-simulation.json');
   const handleCopyMd = async () => {
     const ok = await copyMarkdownToClipboard(buildMarkdown());
     if (ok) {
@@ -1090,6 +1103,15 @@ export default function SingleTurnVisualizer({
             >
               <FileDown size={15} />
               Export MD
+            </button>
+
+            <button
+              onClick={handleExportJson}
+              title="Export this simulation as machine-readable JSON (download)"
+              className="btn"
+            >
+              <FileJson size={15} />
+              Export JSON
             </button>
 
             <button
