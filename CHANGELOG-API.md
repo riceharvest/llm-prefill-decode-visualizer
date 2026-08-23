@@ -49,6 +49,15 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- New `GET /api/runs` endpoint: one-shot machine-readable dump of the **full**
+  run index — every community-measured run, comparable AND batched/
+  non-comparable — as JSON (`?format=json`, envelope with `schemaVersion`,
+  `generatedAt`, `rowCount`, `totalRunCount`, structured `dataDictionary`,
+  per-run `comparable` flag) or RFC 4180 CSV (`?format=csv`, `#`-preamble with
+  metadata + data dictionary, dated attachment). Optional
+  `?comparable=true|false|all` subsets server-side. Shares the cached upstream
+  fetch with the other benchmark endpoints. Additive — no version bump.
+- Affected endpoints: `/api/runs`.
 - New `GET /api/og` endpoint (#105): renders a 1200x630 PNG Open Graph chart
   card from URL params (`preset`, `prefill`, `decode`, `scenario`, `prompt`)
   via @vercel/og. Binary image response (`image/png`, not JSON/schema-

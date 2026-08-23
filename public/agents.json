@@ -30,6 +30,12 @@
       "returns": "application/json"
     },
     {
+      "path": "/api/runs",
+      "method": "GET",
+      "description": "One-shot machine-readable dump of the full run index (comparable AND batched/non-comparable runs). ?format=json|csv; ?comparable=all|true|false. Each run carries a `comparable` flag; JSON envelope includes dataDictionary.",
+      "returns": "application/json or text/csv"
+    },
+    {
       "path": "/api/benchmarks",
       "method": "GET",
       "description": "Aggregated median + IQR speeds per hardware×model group (outlier-resistant). ?groupBy=hardware|model|quant.",
@@ -42,9 +48,6 @@
       "returns": "application/json"
     },
     {
-      "path": "/api/sizing",
-      "method": "GET",
-      "description": "One-call hardware sizing recommendation: pass a workload spec (?model=<family>&contextLength=&concurrency=&maxTtftSeconds=&maxTpotMs=&maxVramGb=) and get ranked rigs with required-VRAM math, expected TTFT/TPOT from benchmark medians, sample confidence, and meetsSlo flags.",
       "path": "/api/snapshots",
       "method": "GET",
       "description": "Versioned dataset snapshot IDs. All data endpoints accept ?snapshot=<id> (and return a snapshot object) for reproducible, citable results.",
