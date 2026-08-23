@@ -1,47 +1,60 @@
-# About
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About — LLM Prefill &amp; Decode Speed Visualizer</title>
+<meta name="description" content="Why the LLM Prefill & Decode Speed Visualizer exists: an open-source, interactive tool for reasoning about LLM inference performance — prefill vs decode physics, KV-cache VRAM, speculative decoding and $/1M-token cost.">
+<link rel="canonical" href="https://llm-prefill-decode-visualizer.vercel.app/about">
+<style>
+  body { font-family: system-ui, sans-serif; background: #0A0D11; color: #E6EAF0; max-width: 680px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+  a { color: #22D3EE; }
+  h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 1.6em; color: #97A3B2; }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "AboutPage",
+  "name": "About — LLM Prefill & Decode Speed Visualizer",
+  "url": "https://llm-prefill-decode-visualizer.vercel.app/about",
+  "description": "An open-source, interactive tool for reasoning about LLM inference performance: prefill vs decode physics, KV-cache VRAM growth, speculative decoding speedups and dollar cost per million tokens.",
+  "mainEntity": { "@id": "https://llm-prefill-decode-visualizer.vercel.app/#organization" },
+  "isPartOf": {
+    "@type": "WebSite",
+    "@id": "https://llm-prefill-decode-visualizer.vercel.app/#website",
+    "url": "https://llm-prefill-decode-visualizer.vercel.app/",
+    "name": "LLM Prefill & Decode Speed Visualizer"
+  }
+}
+</script>
+</head>
+<body>
+<h1>About</h1>
+<p>The <strong>LLM Prefill &amp; Decode Speed Visualizer</strong> is an open-source, interactive tool for reasoning about LLM inference performance. It was built on a simple observation: most people pick hardware for local LLMs by vibes and marketing numbers, when the physics of prefill (compute-bound prompt ingestion) versus decode (bandwidth-bound token generation) tells you almost everything you need to know.</p>
 
-The **LLM Prefill & Decode Speed Visualizer** is an open-source, interactive
-tool for reasoning about LLM inference performance. It was built on a simple
-observation: most people pick hardware for local LLMs by vibes and marketing
-numbers, when the physics of prefill (compute-bound prompt ingestion) versus
-decode (bandwidth-bound token generation) tells you almost everything you
-need to know.
+<h2>What it does</h2>
 
-## What it does
+<p>The tool simulates two distinct phases of LLM inference:</p>
 
-The tool simulates two distinct phases of LLM inference:
+<ul>
+<li><strong>Prefill</strong> — the parallel pass that ingests your entire prompt at once. Its speed is limited by GPU compute (FLOPS) and it determines your time-to-first-token (TTFT).</li>
+<li><strong>Decode</strong> — the sequential pass that generates one token per step. Its speed is limited by memory bandwidth and it determines your time-per-output-token (TPOT), which is what you feel as “tokens per second” while reading a response.</li>
+</ul>
 
-- **Prefill** — the parallel pass that ingests your entire prompt at once.
-  Its speed is limited by GPU compute (FLOPS) and it determines your
-  time-to-first-token (TTFT).
-- **Decode** — the sequential pass that generates one token per step. Its
-  speed is limited by memory bandwidth and it determines your
-  time-per-output-token (TPOT), which is what you feel as "tokens per second"
-  while reading a response.
+<p>On top of those two primitives it models KV-cache VRAM growth by architecture and precision, prefix caching savings across agentic turns, speculative decoding speedups, continuous-batching throughput decay, documented engine launch-flag deltas (llama.cpp and vLLM), and dollar cost per million tokens including electricity.</p>
 
-On top of those two primitives it models KV-cache VRAM growth by architecture
-and precision, prefix caching savings across agentic turns, speculative
-decoding speedups, continuous-batching throughput decay, documented engine
-launch-flag deltas (llama.cpp and vLLM), and dollar cost per million tokens
-including electricity.
+<h2>Who it's for</h2>
 
-## Who it's for
+<p>Engineers choosing hardware for local inference, developers budgeting cloud or self-hosted deployments, and anyone who wants to understand <em>why</em> an LLM feels fast or slow — with real numbers instead of marketing claims.</p>
 
-Engineers choosing hardware for local inference, developers budgeting cloud
-or self-hosted deployments, and anyone who wants to understand *why* an LLM
-feels fast or slow — with real numbers instead of marketing claims.
+<h2>Under the hood</h2>
 
-## Under the hood
+<p>Every number shown in the UI comes from a deterministic JSON API. The full math is auditable: each endpoint documents its formulas in the <a href="/api/spec">OpenAPI spec</a> and returns intermediate values (not just final answers) so results can be checked by hand. Benchmark data comes from <a href="https://www.localmaxxing.com" rel="noopener">LocalMaxxing</a> community runs with confidence intervals attached.</p>
 
-Every number shown in the UI comes from a deterministic JSON API. The full
-math is auditable: each endpoint documents its formulas in the
-[OpenAPI spec](/api/spec) and returns intermediate values (not just final
-answers) so results can be checked by hand. Benchmark data comes from
-[LocalMaxxing](https://www.localmaxxing.com) community runs with confidence
-intervals attached.
+<h2>Contact and source</h2>
 
-## Contact and source
+<p>Source code and issues: <a href="https://github.com/riceharvest/llm-prefill-decode-visualizer" rel="noopener">GitHub — riceharvest/llm-prefill-decode-visualizer</a>. See also the <a href="/privacy.html">privacy policy</a> (short version: no telemetry, no cookies, no tracking) and <a href="/llms.txt">agent guidance</a> for programmatic use.</p>
 
-Source code and issues: [GitHub — riceharvest/llm-prefill-decode-visualizer](https://github.com/riceharvest/llm-prefill-decode-visualizer).
-See also the [privacy policy](/privacy.html) (short version: no telemetry,
-no cookies, no tracking) and [agent guidance](/llms.txt) for programmatic use.
+<p><a href="/">← Back to the visualizer</a></p>
+</body>
+</html>

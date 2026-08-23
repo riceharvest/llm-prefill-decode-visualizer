@@ -99,6 +99,11 @@ export default function ChartDataTable({
         className="btn"
         aria-expanded={open}
         aria-controls={regionId}
+        /* Distinct name per chart: SR users tabbing between several
+           "View as table" toggles need to know which chart each targets. */
+        aria-label={open
+          ? `${t('chartTable.hideTable')}: ${caption}`
+          : `${t('chartTable.viewAsTable')}: ${caption}`}
         onClick={() => setOpen((prev) => !prev)}
       >
         <Table2 size={13} style={{ verticalAlign: '-2px', marginInlineEnd: '5px' }} aria-hidden="true" />

@@ -25,6 +25,11 @@ export const ERROR_CODES = {
     title: 'Not found',
     description: 'A referenced resource (e.g. a scenario preset id) does not exist. Do not retry unchanged.'
   },
+  METHOD_NOT_ALLOWED: {
+    status: 405,
+    title: 'Method not allowed',
+    description: 'The HTTP method is not supported by this endpoint. Use GET as documented; do not retry with the same method.'
+  },
   RATE_LIMITED: {
     status: 429,
     title: 'Rate limited',
