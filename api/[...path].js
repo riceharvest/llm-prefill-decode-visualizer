@@ -6,6 +6,7 @@ import { default as compute } from './_handlers/compute.js';
 import { default as presets } from './_handlers/presets.js';
 import { default as localmaxxing } from './_handlers/localmaxxing.js';
 import { default as benchmarks } from './_handlers/benchmarks.js';
+import { default as agentCrosscheck } from './_handlers/agent_crosscheck.js';
 import { default as best } from './_handlers/best.js';
 import { default as diff } from './_handlers/diff.js';
 import { default as exportHandler } from './_handlers/export.js';
@@ -46,6 +47,7 @@ export default async function handler(req, res) {
       case '/presets': return presets(req, res);
       case '/localmaxxing': return localmaxxing(req, res);
       case '/benchmarks': return benchmarks(req, res);
+      case '/agent/crosscheck.json': return agentCrosscheck(req, res);
       case '/best': return best(req, res);
       case '/diff': return diff(req, res);
       case '/export': return exportHandler(req, res);
