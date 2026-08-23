@@ -1,7 +1,7 @@
 import { getAllRuns } from '../_localmaxxing.js';
 import { runsCaveats } from '../_caveats.js';
 import { resolveRuns, listSnapshots } from '../_snapshots.js';
-import { normalizeModelId } from '../_normalize.js';
+import { normalizeModelId, normalizeQueryModel } from '../_normalize.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from '../_pagination.js';
 import { validateSubmission, checkDuplicates, queueSubmission } from '../_submit.js';
 import { enforceRateLimit } from '../_ratelimit.js';
@@ -117,7 +117,7 @@ export default async function handler(req, res) {
     const { snapshot } = resolved;
 
     const hardware = q.hardware ? String(q.hardware).toLowerCase() : null;
-    const model = q.model ? String(q.model).toLowerCase() : null;
+    const model = q.model ? normalizeQueryModel(q.model) : null;
     const quant = q.quant ? String(q.quant).toLowerCase() : null;
 
     if (hardware) runs = runs.filter(r => r.hardwareKey?.toLowerCase().includes(hardware) || r.hardware?.toLowerCase().includes(hardware));

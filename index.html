@@ -8,6 +8,14 @@
     <meta name="description" content="Interactive simulator for LLM inference performance: prefill vs decode token streaming across GPUs, Macs and cloud endpoints. Compute TTFT, TPOT, KV-cache VRAM and cost per 1M tokens." />
     <link rel="canonical" href="https://llm-prefill-decode-visualizer.vercel.app/" />
 
+    <!-- Agent discovery (#362): surface the JSON API from the HTML head so
+         agents/crawlers find it without guessing. /llms.txt + /agents.json are
+         the standard agent-entry conventions; /api/mcp is the MCP endpoint. -->
+    <link rel="llms.txt" href="/llms.txt" />
+    <link rel="mcp" href="/api/mcp" />
+    <link rel="agents.json" href="/agents.json" type="application/json" />
+    <meta name="agent-endpoints" content="/api/spec, /llms.txt, /agents.json, /api/mcp, /api/agent/index.json" />
+
     <!-- Open Graph (#105): /api/og renders a 1200x630 chart card from the URL
          params; App.jsx keeps these tags pointed at the live config. -->
     <meta property="og:type" content="website" />
