@@ -75,6 +75,7 @@ export default function handler(req, res) {
     paths: {
       '/api/compute': {
         get: {
+          operationId: 'computeInference',
           summary: 'Run inference math (TTFT, TPOT, walltime, VRAM)',
           description: 'Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts POST with a JSON body, or a batch of up to 50 parameter sets via POST {"batch": [...]} / GET ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via /api/calc/{id}.',
           parameters: [
@@ -126,6 +127,7 @@ export default function handler(req, res) {
       },
       '/api/vram': {
         get: {
+          operationId: 'estimateVram',
           summary: 'Combined model + KV-cache + context VRAM from just an hfId',
           description: 'Resolves layers, hidden dim, GQA heads, head dim and weight size from the Hugging Face config automatically — no architecture params needed. Answers "will this rig OOM at 64k?". Optional vramGb budget returns a fits flag plus the max context that fits; optional numTurns+tokensPerTurn projects per-turn KV growth with the exact overflow turn.',
           parameters: [
@@ -143,6 +145,7 @@ export default function handler(req, res) {
       },
       '/api/calc/{id}': {
         get: {
+          operationId: 'replayCalculation',
           summary: 'Replay a computation or recommendation from its deterministic id',
           description: 'Ids are content hashes (calc_ + 12 hex chars of sha256 over the normalized request) returned as `id` by /api/compute and /api/best. They are not stored anywhere: re-send the original parameters alongside the id and this endpoint re-runs the same math and returns the result with verified:true. A mismatching parameter set is rejected with the expected id.',
           parameters: [
@@ -158,6 +161,7 @@ export default function handler(req, res) {
       },
       '/api/presets': {
         get: {
+          operationId: 'listPresets',
           summary: 'Built-in hardware speed presets and workload scenarios',
           responses: {
             '200': {
@@ -186,6 +190,7 @@ export default function handler(req, res) {
       },
       '/api/localmaxxing': {
         get: {
+          operationId: 'listBenchmarkRuns',
           summary: 'Raw community benchmark runs (flattened, model-normalized)',
           description: 'Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: { total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow next_cursor until has_more is false.',
           parameters: [
@@ -247,6 +252,7 @@ export default function handler(req, res) {
       },
       '/api/watch': {
         get: {
+          operationId: 'listWatches',
           summary: 'Watch feeds: list registered hardware+model combos (#109)',
           description: 'Public listing of watched combos — never includes secrets or webhook URLs. POST to create a watch; DELETE ?id=&secret= to remove one.',
           responses: {
@@ -262,6 +268,7 @@ export default function handler(req, res) {
           }
         },
         post: {
+          operationId: 'createWatch',
           summary: 'Create a watch for a hardware+model combo (#109)',
           description: 'Body: { model?, hardware?, quant?, webhookUrl? } — at least one of model/hardware required; webhookUrl must be https. Returns 201 with watchId + secret (shown exactly once; required to DELETE, sent to your webhook as X-Watch-Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET /api/watch/rss.xml?model=&hardware=&quant=.',
           requestBody: { required: true, content: { 'application/json': { example: { model: 'Qwen3 32B', hardware: 'RTX 4090', quant: 'q4_k_m', webhookUrl: 'https://example.com/hooks/llm-watch' } } } },
@@ -273,6 +280,7 @@ export default function handler(req, res) {
           }
         },
         delete: {
+          operationId: 'deleteWatch',
           summary: 'Remove a watch',
           parameters: [
             { name: 'id', in: 'query', required: true, schema: { type: 'string' }, description: 'watchId from the POST response' },
@@ -287,6 +295,7 @@ export default function handler(req, res) {
       },
       '/api/watch/rss.xml': {
         get: {
+          operationId: 'getWatchRssFeed',
           summary: 'RSS 2.0 feed of community runs for a watched combo (#109)',
           description: 'Filters mirror GET /api/localmaxxing (model/hardware substring, quant exact). Items are the newest matching runs (max 50), each linking to the upstream run. Poll like any feed — no registration needed.',
           parameters: [
@@ -303,6 +312,7 @@ export default function handler(req, res) {
       },
       '/api/watch/dispatch': {
         get: {
+          operationId: 'dispatchWatchWebhooks',
           summary: 'Deliver unseen matching runs to registered webhooks (#109)',
           description: 'Cron-friendly (Vercel Cron sends GET). For each watch with a webhookUrl: POST a watch.new_runs payload (X-Watch-Secret header) with runs created after the watch that are not yet in its bounded seen-set, then persist the set. Set WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret. Delivery failures are reported per watch, never thrown.',
           responses: {
@@ -315,6 +325,7 @@ export default function handler(req, res) {
       },
       '/api/benchmarks': {
         get: {
+          operationId: 'getBenchmarkAggregates',
           summary: 'Aggregated speeds: median + IQR + 95% bootstrap CI per group',
           description: 'Outlier-resistant stats per hardware×model-family group (default). Each median carries a 95% percentile bootstrap confidence interval (2,000 resamples) in ci95 {lo, hi}, plus a "median [lo–hi]" label string. Regroup with ?groupBy=hardware|model|quant. Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak). Each group carries confidence {runs, iqrSpreadPct, outliers, newestRunAgeDays, grade} and cross_check {relatedRigComparisons, contradictions[]} comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.',
           parameters: [
@@ -380,6 +391,7 @@ export default function handler(req, res) {
       },
       '/api/best': {
         get: {
+          operationId: 'getBestConfigs',
           summary: 'Ranked answers: fastest or cheapest rigs for given constraints',
           description: 'Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed. by=cost ranks by cost-efficiency instead. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel). Responses carry a deterministic `id` (hash of the resolved filters) replayable via /api/calc/{id}?endpoint=best&<same filters>.',
           parameters: [
@@ -468,6 +480,7 @@ export default function handler(req, res) {
       },
       '/api/health': {
         get: {
+          operationId: 'getHealth',
           summary: 'Service health and upstream data freshness',
           description: 'Liveness probe. Returns ok plus upstreamFreshness (fresh/stale/empty, last sync time, cached row count) and cacheAge in seconds. Human status page at /status.html.',
           responses: {
@@ -478,6 +491,7 @@ export default function handler(req, res) {
       },
       '/api/sizing': {
         get: {
+          operationId: 'getSizingRecommendation',
           summary: 'Hardware sizing recommendation for a workload spec (VRAM fit + expected TTFT/TPOT)',
           description: 'One canonical query for deployment planning: pass a workload spec, get ranked rigs with required-VRAM math (weights + KV cache at target context × concurrency + overhead) and expected TTFT/TPOT from aggregated benchmark medians, plus per-group sample confidence.',
           parameters: [
@@ -502,6 +516,7 @@ export default function handler(req, res) {
       },
       '/api/parse-constraints': {
         get: {
+          operationId: 'parseConstraints',
           summary: 'Parse plain-language constraints into the canonical constraint JSON',
           description: 'Converts a natural-language constraint string (e.g. "self-hosted Qwen 27B at Q4 for 10 users under $1500") into the canonical constraint struct used by /api/sizing and /api/best. Deterministic regex/heuristics — no external LLM calls. Returns the echoed input, the parsed struct (null = not stated) and an `ambiguities` array listing every assumption (e.g. "10 users: assume 1 stream each or batched?"), plus a ready-made `sizingQuery` for the downstream decision endpoint.',
           parameters: [
@@ -555,6 +570,7 @@ export default function handler(req, res) {
       },
       '/api/snapshots': {
         get: {
+          operationId: 'listDatasetSnapshots',
           summary: 'Versioned dataset snapshot IDs',
           description: 'Lists content-addressed dataset snapshots (e.g. snapshot-2026-08-21-a1b2c3d4). Pass any listed ID as ?snapshot= on /api/localmaxxing, /api/benchmarks or /api/best to get reproducible numbers. Snapshot IDs are stable for identical run sets within a fetch-time bucket; instances keep a bounded in-memory ring, so old IDs may expire.',
           responses: { '200': { description: '{current, snapshots[]}' } }
