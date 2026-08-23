@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class GetApiBenchmarksGroupBy(str, Enum):
     HARDWARE = "hardware"
     HARDWAREMODEL = "hardwareModel"

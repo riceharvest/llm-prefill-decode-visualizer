@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class GetApiBestContextBand(str, Enum):
     LT1K = "lt1k"
     VALUE_1 = "1k-8k"

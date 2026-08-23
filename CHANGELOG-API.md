@@ -70,6 +70,24 @@ migrate before `Sunset`. Agents can discover the current policy at
   and queue with a stored `unitAudit`; flagged submissions still return 202
   with an extra warning.
 - Affected endpoints: `/api/benchmarks`, `/api/best`, `/api/localmaxxing`.
+- Schema-drift audit (#319): `components.schemas` in `/api/spec` now declares
+  every field the endpoints actually emit. Newly documented (wire shapes were
+  unchanged — docs-only, additive): `Caveat.severity` gains the `warning`
+  value the caveat builder has always emitted; `BenchmarkGroupListEnvelope`
+  documents `matchedRuns`, `warnings`, `maxAgeDays`, `contextBand`,
+  `distinctModelFamilies`, `distinctEngines`, `engineCohortedByDefault`,
+  `freshnessTiers`, `outlierPolicy` and `unitAudit`; `BenchmarkGroup` and
+  `BestResult` document `runsInStats`, `outliersExcludedFromStats`,
+  `outlierIqrs`, `includeOutliers`, `outliers`, `contextBands`, `freshness`,
+  `engines`, `engineVersion`, `mixedEngines`, `mixedContextBands`,
+  `dataQuality` and the scenario walltime block (`ttftSeconds`,
+  `decodeSeconds`, `projectedWalltimeSeconds`,
+  `effectiveThroughputTokPerSec`, `prefillSharePct`, `decodeSharePct`);
+  `BestListEnvelope` documents `maxAgeDays` + `contextBand`.
+  Guarded by `api/_handlers/spec.wire-drift.test.js`, which generates real
+  wire responses offline and fails if an emitted field is missing from the
+  schema or a severity falls outside the enum.
+- Affected endpoints: `/api/benchmarks`, `/api/best`, `/api/localmaxxing` (docs only).
 
 ### 1 — 2026-08-21
 

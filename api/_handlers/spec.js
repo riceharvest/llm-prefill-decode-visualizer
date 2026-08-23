@@ -97,7 +97,7 @@ const CAVEAT = {
   required: ['code', 'severity', 'summary'],
   properties: {
     code: { type: 'string', example: 'single_stream_only' },
-    severity: { type: 'string', enum: ['info', 'low', 'medium', 'high'] },
+    severity: { type: 'string', enum: ['info', 'low', 'medium', 'high', 'warning'], description: 'Display weight. `warning` marks statistical limitations that should change how the number is used (n=1 groups, mixed engines/bands); `info` is contextual.' },
     summary: { type: 'string' },
     detail: { type: 'string' }
   },
@@ -211,6 +211,45 @@ const RUN = {
   additionalProperties: true
 };
 
+/** Per-group context-band mix (shared by BenchmarkGroup and BestResult). */
+const CONTEXT_BANDS = {
+  type: 'object',
+  description: 'Context-length band mix inside the group — speeds depend on context, so a mixed group blends regimes.',
+  properties: {
+    bands: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          band: { type: 'string', enum: ['lt1k', '1k-8k', '8k-32k', '32k+'] },
+          label: { type: 'string', description: 'Display label, e.g. "8k–32k"' },
+          runs: { type: 'integer' }
+        },
+        additionalProperties: true
+      }
+    },
+    unknownRuns: { type: 'integer', description: 'Runs reporting no usable contextLength' },
+    distinctBands: { type: 'integer' },
+    mixed: { type: 'boolean' }
+  },
+  additionalProperties: true
+};
+
+/** Per-group freshness block (shared by BenchmarkGroup and BestResult). */
+const GROUP_FRESHNESS = {
+  type: 'object',
+  description: 'Recency of the runs backing this group.',
+  properties: {
+    newestRunAt: { type: ['string', 'null'], format: 'date-time' },
+    oldestRunAt: { type: ['string', 'null'], format: 'date-time' },
+    newestAgeDays: { type: ['integer', 'null'] },
+    staleness: { type: ['string', 'null'], enum: ['fresh', 'aging', 'stale', 'unknown', null] },
+    engineVersions: { type: 'array', items: { type: 'string' } },
+    majorReleaseWarnings: { type: 'array', items: { type: 'string' } }
+  },
+  additionalProperties: true
+};
+
 /** One hardware×model-family aggregate (GET /api/benchmarks items[]). */
 const BENCHMARK_GROUP = {
   type: 'object',
@@ -240,7 +279,18 @@ const BENCHMARK_GROUP = {
     caveats: { type: 'array', items: { $ref: '#/components/schemas/Caveat' }, description: 'Per-group flags (n=1 group, mixed engines)' },
     confidence: { $ref: '#/components/schemas/Confidence' },
     crossCheck: { $ref: '#/components/schemas/CrossCheck' },
-    bestRun: { $ref: '#/components/schemas/BestRunSummary' }
+    bestRun: { $ref: '#/components/schemas/BestRunSummary' },
+    runsInStats: { type: 'integer', description: 'Runs actually included in the stats (outliers excluded by default)' },
+    outliersExcludedFromStats: { type: 'integer', description: 'Runs fenced out of the stats by the IQR outlier rule' },
+    outlierIqrs: { type: 'number', description: 'Outlier fence in IQRs from the group median (see top-level outlierPolicy)' },
+    includeOutliers: { type: 'boolean', description: 'Whether outlier runs were included (echoes ?include_outliers=)' },
+    outliers: {
+      type: 'array',
+      description: 'Flagged outlier runs (empty unless ?include_outliers=true); each carries the metrics that tripped the fence plus a z-score-style deviation.',
+      items: { type: 'object', additionalProperties: true }
+    },
+    contextBands: CONTEXT_BANDS,
+    freshness: GROUP_FRESHNESS
   },
   additionalProperties: true
 };
@@ -280,6 +330,29 @@ const BEST_RESULT = {
     staleness: { type: ['string', 'null'], enum: ['fresh', 'aging', 'stale', 'unknown', null] },
     engineVersions: { type: 'array', items: { type: 'string' }, description: 'Engine builds seen in the group (mixed builds → treat deltas with caution)' },
     majorReleaseWarnings: { type: 'array', items: { type: 'string' } },
+    engines: { type: 'array', items: { type: 'string' }, description: '"engine version" tags seen in the group' },
+    engineVersion: { type: ['string', 'null'], description: 'Engine build when the group is single-build; null/absent when mixed' },
+    mixedEngines: { type: 'boolean', description: 'True when the group spans multiple engine builds' },
+    mixedContextBands: { type: ['boolean', 'null'], description: 'Present (true) only when ?context_band= filtering is off and the group mixes bands' },
+    contextBands: CONTEXT_BANDS,
+    dataQuality: {
+      type: ['object', 'null'],
+      description: 'Unit-consistency audit over the group\'s runs (status ok|flagged).',
+      properties: {
+        status: { type: 'string', enum: ['ok', 'flagged'] },
+        runsAudited: { type: 'integer' },
+        flaggedRuns: { type: 'integer' },
+        flagCounts: { type: 'object', additionalProperties: { type: 'integer' } },
+        flagged: { type: 'array', items: { type: 'object', properties: { runId: { type: 'integer' }, codes: { type: 'array', items: { type: 'string' } } } } }
+      },
+      additionalProperties: true
+    },
+    ttftSeconds: { type: 'number', description: 'Expected time to first token at the default/requested scenario shape (default 2048-in / 512-out)' },
+    decodeSeconds: { type: 'number', description: 'Projected decode walltime for the scenario output tokens' },
+    projectedWalltimeSeconds: { type: 'number', description: 'Prefill + decode walltime for the scenario shape' },
+    effectiveThroughputTokPerSec: { type: 'number', description: 'Total tokens / total walltime for the scenario shape' },
+    prefillSharePct: { type: 'number', description: 'Share of scenario walltime spent prefilling' },
+    decodeSharePct: { type: 'number', description: 'Share of scenario walltime spent decoding' },
     source: { type: ['string', 'null'], format: 'uri' },
     vramFit: {
       type: ['object', 'null'],
@@ -416,7 +489,36 @@ const BENCHMARK_GROUP_LIST_ENVELOPE = {
     snapshot: { $ref: '#/components/schemas/SnapshotRef' },
     snapshotAt: { type: ['string', 'null'], format: 'date-time' },
     total: { type: 'integer', description: 'Total matching groups across all pages' },
+    matchedRuns: { type: 'integer', description: 'Comparable runs that survived filtering before grouping' },
     caveats: { type: 'array', items: { $ref: '#/components/schemas/Caveat' }, description: 'Dataset-level flags (n=1 share, mixed engine versions)' },
+    warnings: { type: 'array', items: { type: 'string' }, description: 'Human-readable group-level warnings (mixed context bands within a group key)' },
+    maxAgeDays: { type: ['number', 'null'], description: 'Echoed ?max_age= filter (null when unset)' },
+    contextBand: { type: ['string', 'null'], enum: ['lt1k', '1k-8k', '8k-32k', '32k+', null], description: 'Echoed ?context_band= filter (null when unset)' },
+    distinctModelFamilies: { type: 'integer', description: 'Distinct model families across all matching runs' },
+    distinctEngines: { type: 'array', items: { type: 'string' }, description: 'Distinct "engine version" tags across matching runs' },
+    engineCohortedByDefault: { type: 'boolean', description: 'True when groups are keyed per engine build so mixed-engine stats never blend' },
+    freshnessTiers: { type: 'string', description: 'Human-readable definition of the fresh/aging/stale tiers' },
+    outlierPolicy: {
+      type: 'object',
+      description: 'How outlier runs are fenced and whether they are included in stats.',
+      properties: {
+        thresholdIqrs: { type: 'number' },
+        includeOutliers: { type: 'boolean' },
+        note: { type: 'string' }
+      },
+      additionalProperties: true
+    },
+    unitAudit: {
+      type: 'object',
+      description: 'Unit-consistency audit across all matching runs.',
+      properties: {
+        runsAudited: { type: 'integer' },
+        flaggedRuns: { type: 'integer' },
+        flagCounts: { type: 'object', additionalProperties: { type: 'integer' } },
+        note: { type: 'string' }
+      },
+      additionalProperties: true
+    },
     items: { type: 'array', items: { $ref: '#/components/schemas/BenchmarkGroup' } },
     has_more: { type: 'boolean' },
     next_cursor: { type: ['string', 'null'] },
@@ -437,6 +539,8 @@ const BEST_LIST_ENVELOPE = {
     snapshotAt: { type: ['string', 'null'], format: 'date-time' },
     matchedRuns: { type: 'integer', description: 'Comparable runs that survived filtering' },
     excludedRuns: { type: ['integer', 'null'], description: 'Runs dropped by ?fitCheck= (present only with fitCheck)' },
+    maxAgeDays: { type: ['number', 'null'], description: 'Echoed ?max_age= filter (null when unset)' },
+    contextBand: { type: ['string', 'null'], enum: ['lt1k', '1k-8k', '8k-32k', '32k+', null], description: 'Echoed ?context_band= filter (null when unset)' },
     caveats: { type: 'array', items: { $ref: '#/components/schemas/Caveat' } },
     warnings: { type: 'array', items: { type: 'string' }, description: 'Human-readable group-level warnings (mixed engine versions / context bands)' },
     results: { type: 'array', items: { $ref: '#/components/schemas/BestResult' } },

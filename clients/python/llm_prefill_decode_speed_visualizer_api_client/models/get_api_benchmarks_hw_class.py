@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class GetApiBenchmarksHwClass(str, Enum):
     CPU_ONLY = "cpu_only"
     DISCRETE_GPU = "discrete_gpu"
