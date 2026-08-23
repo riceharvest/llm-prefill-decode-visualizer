@@ -240,6 +240,16 @@ scenario id with token counts). `?id=<preset>` → validated load with derived
 `totalTokens` / `prefillShare` and pointers to `/api/compute` incl. a
 ready-to-use example query. Unknown ids → 400 listing valid ids.
 
+### GET /api/agent/freshness.json
+
+Agent-readable data-freshness + confidence report
+(`api/_handlers/agent_freshness.js`; alias `/api/agent/confidence.json`,
+same handler). Flat JSON: `description`, `generatedAt`, echoed `filters`,
+`cache` block, dataset-wide `dataset`, per-group `groups[]` (freshness +
+0-100 confidence with grades), cross-group `summary`. Filters: `?hardware=`,
+`?model=`, `?quant=`, `?context_band=`, `?max_age=`,
+`?groupBy=hardware|model|hardwareModel`, `?snapshot=`.
+
 ### GET /api/benchmarks
 
 Aggregated median + IQR speeds per hardware×model group (outlier-resistant),

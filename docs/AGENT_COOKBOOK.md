@@ -472,6 +472,22 @@ curl -s "$BASE/api/agent/scenario.json"
 curl -s "$BASE/api/agent/scenario.json?id=ragSummary"
 ```
 
+## `GET /api/agent/freshness.json`
+
+Agent-readable data-freshness + confidence report
+(`api/_handlers/agent_freshness.js`; alias `/api/agent/confidence.json`,
+same handler). Wraps the existing freshness/confidence machinery —
+`groupFreshness()` with staleness tiers, `confidenceFor()`/`aggregate()`, and
+upstream cache state — into flat JSON: `description`, `generatedAt`, echoed
+`filters`, a `cache` block, dataset-wide `dataset`, per-group `groups[]`
+(freshness + 0-100 confidence with high/medium/low grades) and a cross-group
+`summary`. Filters: `?hardware=`, `?model=`, `?quant=`, `?context_band=`,
+`?max_age=`, `?groupBy=hardware|model|hardwareModel`, `?snapshot=`.
+
+```bash
+curl -s "$BASE/api/agent/freshness.json"
+```
+
 ## `GET /api/snapshots`
 
 Content-addressed dataset snapshot ids. Pin any data endpoint with
