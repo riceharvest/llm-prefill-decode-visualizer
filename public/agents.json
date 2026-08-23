@@ -4,17 +4,30 @@
   "description": "LLM inference performance math: TTFT, TPOT, walltime for single-turn chat, agentic loops, batched serving, speculative decoding, and KV-cache VRAM. Includes community-measured hardware benchmarks.",
   "url": "https://llm-prefill-decode-visualizer.vercel.app",
   "docs": "/llms.txt",
+  "openapi": "/api/spec",
   "endpoints": [
     {
       "path": "/api/spec",
       "method": "GET",
-      "description": "Full OpenAPI 3.1 spec — derive all endpoints from this.",
+      "description": "Full OpenAPI 3.1 spec — derive all endpoints from this. Also served under /v1/spec.",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/health",
+      "method": "GET",
+      "description": "Liveness + upstream data freshness: {ok, upstreamFreshness, cacheAge}. Human status page at /status.html.",
       "returns": "application/json"
     },
     {
       "path": "/api/compute",
       "method": "GET",
-      "description": "Run inference math. ?model=singleTurn|speculative|batched|agentic|kvCache plus parameters. No model param returns a self-describing capability list. Batching: POST {\"batch\": [up to 50 parameter sets]} returns per-index results with per-item ok/error status.",
+      "description": "Run inference math. ?model=singleTurn|speculative|batched|agentic|kvCache|flagged|cost plus parameters. No model param returns a self-describing capability list; dry_run=true validates and echoes parsed inputs without executing math. Every response carries a deterministic id (calc_<12 hex>) replayable via /api/calc/<id>.",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/compute",
+      "method": "POST",
+      "description": "Batch mode: {\"batch\": [up to 50 parameter sets]} (also accepted as \"variants\" or ?batch=[...] on GET) returns per-index results with per-item ok/error status — one bad scenario does not fail the whole batch. Each item carries its own model field and may set dry_run.",
       "returns": "application/json"
     },
     {
@@ -26,28 +39,109 @@
     {
       "path": "/api/localmaxxing",
       "method": "GET",
-      "description": "Community-measured single-stream benchmark runs with normalized model families. No params = hardware summary; ?hardware=&model=&quant=&limit=N filters.",
+      "description": "Community-measured single-stream benchmark runs with normalized model families. No params = hardware summary; ?hardware=&model=&quant=&limit=N filters. Cursor-paginated: {total, items[], has_more, next_cursor}. All data endpoints accept ?snapshot=<id> for reproducible results.",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/localmaxxing",
+      "method": "POST",
+      "description": "Submit a community benchmark run for review. Required: model, quant, hardware, hwClass (discrete_gpu|unified|cpu_only), prefillTokPerSec, decodeTokPerSec. Server-side sanity bounds + near-duplicate rejection. Returns 202 {submissionId} (queued for manual review, never auto-published) or 400 validation_failed with machine-readable errors.",
       "returns": "application/json"
     },
     {
       "path": "/api/benchmarks",
       "method": "GET",
-      "description": "Aggregated median + IQR speeds per hardware×model group (outlier-resistant). ?groupBy=hardware|model|quant.",
+      "description": "Aggregated median + IQR speeds per hardware×model group (outlier-resistant). ?groupBy=hardware|model|quant. Cursor-paginated like /api/localmaxxing; sorted by median decode desc.",
       "returns": "application/json"
     },
     {
       "path": "/api/best",
       "method": "GET",
-      "description": "Ranked answers: ?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M.",
+      "description": "Ranked answers: ?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M. Supports model/hwClass filters and VRAM fit checks. Replayable via /api/calc/<id>?endpoint=best&<same filters>.",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/diff",
+      "method": "GET",
+      "description": "Diff two measured runs: ?runA=<id>&runB=<id> → both runs' metrics, per-metric deltas/ratios and a plain-language summary (time metrics normalized to 2048-token prompt / 512-token output). What-if mode: ?mode=whatif&a=<constraints>&b=<constraints> compares two /api/best-style constraint sets and reports options entering/leaving the feasible set plus VRAM headroom changes. Also accepts a POST body {\"mode\":\"whatif\",\"a\":{...},\"b\":{...}}.",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/export",
+      "method": "GET",
+      "description": "Full comparable benchmark dataset as a downloadable file. ?format=csv|json (default csv). CSV is RFC 4180 with a #-comment metadata preamble + data dictionary; JSON carries a structured dataDictionary + runs array.",
+      "returns": "text/csv"
+    },
+    {
+      "path": "/api/og",
+      "method": "GET",
+      "description": "Auto-generated 1200x630 Open Graph chart PNG from shared-link params (?preset=&prefill=&decode=&scenario=): tok/s bar chart across hardware presets with the shared config highlighted. CDN-cached.",
+      "returns": "image/png"
+    },
+    {
+      "path": "/api/parse-constraints",
+      "method": "GET",
+      "description": "Turn plain-language constraints into the canonical struct: ?q=self-hosted Qwen 27B at Q4 for 10 users under $1500 → {input, constraints, ambiguities, sizingQuery}. Deterministic regex/heuristics (no LLM). sizingQuery is a ready-made /api/sizing query string.",
       "returns": "application/json"
     },
     {
       "path": "/api/sizing",
       "method": "GET",
       "description": "One-call hardware sizing recommendation: pass a workload spec (?model=<family>&contextLength=&concurrency=&maxTtftSeconds=&maxTpotMs=&maxVramGb=) and get ranked rigs with required-VRAM math, expected TTFT/TPOT from benchmark medians, sample confidence, and meetsSlo flags.",
+      "returns": "application/json"
+    },
+    {
       "path": "/api/snapshots",
       "method": "GET",
-      "description": "Versioned dataset snapshot IDs. All data endpoints accept ?snapshot=<id> (and return a snapshot object) for reproducible, citable results.",
+      "description": "Versioned dataset snapshot IDs. All data endpoints accept ?snapshot=<id> (and return a snapshot object) for reproducible, citable results. Unknown/expired IDs fall back to current data with snapshot.served: false.",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/vram",
+      "method": "GET",
+      "description": "Combined model + KV-cache + context VRAM from just an hfId: ?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m → weights GB + KV GB + total, with architecture resolved automatically from the Hugging Face config.",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/calc/:id",
+      "method": "GET",
+      "description": "Replay any computation from its deterministic content-hash id: /api/calc/<id>?<original params> re-runs identical math and stamps verified: true. For /api/best results add endpoint=best.",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/watch",
+      "method": "GET",
+      "description": "List registered benchmark-watch combos (no secrets returned).",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/watch",
+      "method": "POST",
+      "description": "Register a watch: {\"model\":\"Qwen3 32B\",\"hardware\":\"RTX 4090\",\"quant\":\"q4_k_m\",\"webhookUrl\":\"https://…\"} → 201 {watchId, secret, rssUrl, matchingExistingRuns}. At least one of model/hardware required; webhookUrl optional (RSS works without it). Secret is shown once and authorizes DELETE.",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/watch",
+      "method": "DELETE",
+      "description": "Unsubscribe: ?id=<watchId>&secret=<secret>.",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/watch/rss.xml",
+      "method": "GET",
+      "description": "RSS feed of new matching runs, no registration needed: /api/watch/rss.xml?model=Qwen3+32B&hardware=RTX+4090&quant=q4_k_m. Filters mirror GET /api/localmaxxing; days=N bounds item age (default 30); max 50 items, newest first.",
+      "returns": "application/rss+xml"
+    },
+    {
+      "path": "/api/watch/dispatch",
+      "method": "POST",
+      "description": "Cron-friendly dispatch pass delivering each webhook watch's unseen matching runs as a watch.new_runs JSON payload, with per-watch delivery status. Also accepts GET. Lock down via the WATCH_DISPATCH_SECRET env var.",
+      "returns": "application/json"
+    },
+    {
+      "path": "/api/mcp",
+      "method": "POST",
+      "description": "Streamable HTTP MCP server (JSON-RPC): initialize, tools/list, tools/call. Manifest at /.well-known/mcp.json.",
       "returns": "application/json"
     }
   ],
