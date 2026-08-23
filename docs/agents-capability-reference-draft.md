@@ -1,8 +1,10 @@
 # AGENTS.md — Capability Reference for AI Agents
 
-> Draft content intended to live at the repo root as `AGENTS.md`. Applying it
-> requires explicit user consent (Hermes blocks unconsented writes to
-> agent-instruction files).
+> **Draft content intended to live at the repo root as `AGENTS.md`.** Applying
+> it is a one-step `git mv docs/agents-capability-reference-draft.md AGENTS.md`
+> (plus updating the path in `test/agents-md.test.js`, which auto-detects
+> either location) — it is blocked only because writes to agent-instruction
+> files require explicit user consent.
 
 This site is LLM inference performance math: TTFT, TPOT, walltime for single-turn
 chat, agentic loops, batched serving, speculative decoding, and KV-cache VRAM —
@@ -10,49 +12,50 @@ plus community-measured hardware benchmarks. Everything is available as plain
 JSON over HTTP; no browser or API key needed.
 
 This file enumerates every agent-facing endpoint, what it returns, and how to
-call it. It is generated from the actual handlers in `api/` (route table:
-`api/[...path].js`, handlers: `api/_handlers/*.js`).
+call it. It is derived from the actual handlers in `api/` (route table:
+`api/[...path].js`, handlers: `api/_handlers/*.js`). A test
+(`test/agents-md.test.js`) asserts that every endpoint, constant and file cited
+below exists in the source — if this file and the code disagree, prefer the code
+and file an issue.
 
 ## Base URL & conventions
 
 - **Base URL:** `https://llm-prefill-decode-visualizer.vercel.app`
-- **Auth:** none. **CORS:** `Access-Control-Allow-Origin: *` on all `/api/*` responses.
+- **Auth:** none. **CORS:** `Access-Control-Allow-Origin: *` on all `/api/*`
+  responses (`api/[...path].js`).
 - **Versioned prefix:** every endpoint below also answers under `/v1/…`
-  (e.g. `/v1/compute?model=singleTurn&…`). Same handlers, same responses.
-  External integrations should harden onto `/v1/`; breaking changes ship under a
-  new prefix with 90-day `Deprecation`/`Sunset` overlap (see `CHANGELOG-API.md`).
+  (e.g. `/v1/compute?model=singleTurn&…`). Same handlers, same responses
+  (prefix stripped in `api/[...path].js`). External integrations should harden
+  onto `/v1/`; breaking changes ship under a new prefix with 90-day
+  `Deprecation`/`Sunset` overlap (see `CHANGELOG-API.md`).
 - **Schema version:** every JSON body carries top-level `schema_version`
-  (`"1"`) and every response the `X-Schema-Version` header — even errors and
-  preflight. Additive changes never bump it; clients must ignore unknown fields.
+  (`"1"`, `SCHEMA_VERSION` in `api/_schema.js`) and every response carries the
+  `X-Schema-Version` header — even errors and preflight. Additive changes never
+  bump it; clients must ignore unknown fields.
 - **Errors:** machine-readable. Data/math endpoints use RFC 9457
-  `application/problem+json` with a shared error code taxonomy
-  (`api/_errors.js`); a few older endpoints return `{ error, detail? }`.
+  `application/problem+json` with a shared error-code taxonomy (`api/_errors.js`);
+  a few older endpoints return `{ error, detail? }`.
 - **Rate limits:** best-effort fixed window of **120 req/min per client IP**,
-  enforced per warm serverless instance (the effective global limit can be
-  higher). Responses carry `X-RateLimit-Limit` / `-Remaining` / `-Reset`
-  headers; exceeding the window returns `429` with `Retry-After`. Back off on
-  429 rather than retrying immediately.
+  enforced per warm serverless instance (`RATE_LIMIT` in `api/_ratelimit.js`;
+  the effective global limit can be higher). Responses carry
+  `X-RateLimit-Limit` / `-Remaining` / `-Reset` headers; exceeding the window
+  returns `429` with `Retry-After`. Back off on 429 rather than retrying
+  immediately.
 - **Pagination contract** (run/group listings): `?limit=N` + opaque `&cursor=`;
-  responses carry `items[]`, `has_more`, `next_cursor`, `total`.
-- **Reproducibility:** data endpoints accept `?snapshot=<id>` and stamp results;
-  math endpoints carry deterministic `calc_<hex>` ids (see `/api/calc/<id>`).
+  responses carry `items[]`, `has_more`, `next_cursor`, `total`
+  (`api/_pagination.js`).
+- **Reproducibility:** data endpoints accept `?snapshot=<id>` and stamp results
+  (`api/_snapshots.js`); math endpoints carry deterministic `calc_<hex>` ids
+  (`api/_calc_id.js`, replayable via `/api/calc/<id>`).
 
 ## Discovery chain — read these first
 
 | Resource | What it gives you |
 | --- | --- |
-| `GET /api/spec` | Full OpenAPI 3.1 spec — derive every endpoint from this programmatically. Also under `/v1/spec`. |
+| `GET /api/spec` | Full OpenAPI 3.1 spec (`api/_handlers/spec.js`) — derive every endpoint from this programmatically. Also under `/v1/spec`. |
 | `GET /agents.json` | Agent-provider manifest (`public/agents.json`) listing the primary JSON endpoints, one line each. |
-| `GET /llms.txt` | Human-and-machine quick-start with worked examples per endpoint. |
+| `GET /llms.txt` | Human-and-machine quick-start with worked examples per endpoint (`public/llms.txt`). |
 | `GET /.well-known/mcp.json` | MCP server manifest pointing at `/api/mcp`. |
-
-**Upcoming (open PRs, not yet merged):** `GET /api/agent/capabilities.json` will
-return one structured list of every agent-facing surface (JSON API, MCP, feeds,
-manifests) as `{surfaces: [{path, methods, kind, description}]}`; flat
-agent-shaped wrappers `GET|POST /api/agent/compute.json`,
-`GET /api/agent/benchmarks.json` and `GET /api/agent/freshness.json` (alias
-`confidence.json`) are also in review. They wrap the endpoints documented below
-— no behavior changes.
 
 ---
 
@@ -60,11 +63,12 @@ agent-shaped wrappers `GET|POST /api/agent/compute.json`,
 
 ### GET /api/compute?model=<name>&<params>
 
-Runs any simulator model. All speeds are caller-supplied assumptions in tok/s —
-this is arithmetic, never measurement. Results carry a non-blocking `warnings`
-array (empty when plausible) flagging outputs that violate physical rooflines.
+Runs any simulator model (`api/_handlers/compute.js`, formulas in
+`api/_math.js`). All speeds are caller-supplied assumptions in tok/s — this is
+arithmetic, never measurement. Results carry a non-blocking `warnings` array
+(empty when plausible) flagging outputs that violate physical rooflines.
 
-Models (`model=`):
+Models (`model=`, dispatch in `api/_handlers/compute.js`):
 
 | Model | Purpose | Key params |
 | --- | --- | --- |
@@ -116,7 +120,8 @@ deterministic `id`, result fields, `warnings[]`.)
 ### GET /api/vram
 
 Combined model weights + KV-cache + context VRAM from just an HF repo id —
-architecture (layers, GQA heads, head dim) and weight size are resolved for you.
+architecture (layers, GQA heads, head dim) and weight size are resolved for you
+(`api/_handlers/vram.js`, resolution in `api/_hfconfig.js` / `api/_gguf.js`).
 
 ```
 GET /api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m
@@ -124,11 +129,13 @@ GET /api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m
 
 Returns `{ hfId, quant, contextTokens, weightsGb, kvCacheGb, totalGb, model: {…resolved architecture, resolutionSource, notes}, kvBytesPerToken }`.
 
-- Add `&vramGb=24` → `fits: true|false` plus `maxContextTokens` that fit the budget.
+- Add `&vramGb=24` → `fits: true|false` plus `maxContextTokens` that fit the
+  budget (`api/_vramfit.js`).
 - Add `&numTurns=40&tokensPerTurn=1200` → per-turn KV-growth projection with
   `firstContextOverflowTurn` and `firstVramOverflowTurn`.
-- `quant` accepts GGUF/GPTQ tags (`fp16, fp8, q8_0, q6_k, q5_k_m, q4_k_m, q4_0, q3_k_m, q2_k…`);
-  unknown tags assume ~4-bit and set `inputs.quantAssumed: true`.
+- `quant` accepts GGUF/GPTQ tags (`fp16, fp8, q8_0, q6_k, q5_k_m, q4_k_m, q4_0, q3_k_m, q2_k…`,
+  mapping in `api/_quant.js`); unknown tags assume ~4-bit and set
+  `inputs.quantAssumed: true`.
 - Resolution tiers, visible via `model.resolutionSource`: `builtin-table`
   (offline, common families), `huggingface` (config.json / GGUF header),
   `name-heuristic` (HF unreachable/gated; coarse estimate spelled out in
@@ -137,15 +144,16 @@ Returns `{ hfId, quant, contextTokens, weightsGb, kvCacheGb, totalGb, model: {�
 ### GET /api/presets
 
 Built-in hardware speed presets (RTX 4090, dual RTX 3090, M3 Ultra, Groq LPU,
-H100, RPi5…) and workload scenario presets (RAG, chat, code generation). Feed
-these values into `/api/compute` or use `scenario=<preset-id>` on `/api/best`.
-Response: `{ presets: [...], scenarios: [...] }`.
+H100, RPi5…) and workload scenario presets (RAG, chat, code generation)
+(`api/_handlers/presets.js`). Feed these values into `/api/compute` or use
+`scenario=<preset-id>` on `/api/best`. Response: `{ presets: [...], scenarios: [...] }`.
 
 ### GET /api/calc/<id>?<original params>
 
 Replays any computation from its deterministic `calc_<12 hex>` id (content hash
-of the resolved inputs, not a database key). Re-send the original parameters;
-identical math comes back stamped `verified: true`. For `/api/best` results add
+of the resolved inputs, not a database key — `api/_calc_id.js`, handler
+`api/_handlers/calc_id.js`). Re-send the original parameters; identical math
+comes back stamped `verified: true`. For `/api/best` results add
 `&endpoint=best`. Altered parameters are rejected with `expected` = the id they
 actually hash to.
 
@@ -157,12 +165,14 @@ GET /api/calc/calc_x?model=singleTurn&promptTokens=4096  → { ..., verified: tr
 
 ## Measured benchmark data
 
-Community-measured single-stream runs ("LocalMaxxing"). Freshness tiers used
+Community-measured single-stream runs ("LocalMaxxing"; normalization in
+`api/_localmaxxing.js`, freshness in `api/_freshness.js`). Freshness tiers used
 across these endpoints: `fresh` <90d, `aging` <1y, `stale` ≥1y, `unknown`.
 
 ### GET /api/localmaxxing
 
-Raw community benchmark runs with normalized model families.
+Raw community benchmark runs with normalized model families
+(`api/_handlers/localmaxxing.js`).
 
 - No params → hardware summary (`{ summary: [...per-hardware aggregates...] }`).
 - Filters: `?hardware=` (substring on rig key/label), `?model=` (substring on
@@ -175,16 +185,18 @@ Raw community benchmark runs with normalized model families.
 
 ### POST /api/localmaxxing
 
-Submit a community benchmark run **for manual review** — never instant-publish.
-Body: required `model`, `hardware`, `hwClass`, `prefillTokPerSec`,
-`decodeTokPerSec`, `quantization`; optional engine/context fields.
-Validation failures → `400` problem+json with machine-readable codes;
+Submit a community benchmark run **for manual review** — never instant-publish
+(validation in `api/_submit.js`). Body: required `model`, `hardware`, `hwClass`,
+`prefillTokPerSec`, `decodeTokPerSec`, `quantization`; optional engine/context
+fields. Validation failures → `400` problem+json with machine-readable codes;
 success → `202 {status: "queued", submissionId}`.
 
 ### GET /api/benchmarks
 
 Aggregated median + IQR speeds per hardware×model group (outlier-resistant),
-with confidence blocks and caveats. Params: `?groupBy=hardware|model|quant`,
+with confidence blocks and caveats (`api/_handlers/benchmarks.js`, aggregation
+and `confidenceFor` in `api/_localmaxxing.js`, cross-checks in
+`api/_crosscheck.js`). Params: `?groupBy=hardware|model|quant`,
 same filters/pagination/snapshot support as above (limit default 25, max 200).
 Response groups look like:
 `{ key, label, sampleSize, prefill: {median, iqr, ...}, decode: {median, iqr, ...},
@@ -192,39 +204,43 @@ confidence: {score, grade, crossCheck...}, caveats[] }`.
 
 ### GET /api/best
 
-Ranked rig recommendations. Example:
+Ranked rig recommendations (`api/_handlers/best.js`, ranking logic in `lib/` —
+see the handler's imports). Example:
 `/api/best?by=decode&maxParamsB=8&quant=q4_k_m` → top rigs for ≤8B models at Q4_K_M.
 
 Params: `by=decode|prefill|efficiency|walltime|confidence`, optional
 `maxParamsB`, `quant`, `hardware`, `engine`, workload shape via
 `promptTokens`/`outputTokens` or `scenario=<preset-id>`, VRAM fit via
-`vramBudgetGb`, plus the shared freshness/context-band/pagination params.
-Each ranked row carries projected TTFT/TPOT for the workload, VRAM-fit check,
-estimated street price, power estimate, confidence score, per-row caveats and a
-replayable calc id. Response: `{ description, query, items: [...], ... }`.
+`vramBudgetGb`, plus the shared freshness/context-band/pagination params
+(`api/_contextbands.js`). Each ranked row carries projected TTFT/TPOT for the
+workload, VRAM-fit check, estimated street price, power estimate, confidence
+score, per-row caveats (`api/_caveats.js`) and a replayable calc id. Response:
+`{ description, query, items: [...], ... }`.
 
 ### GET /api/sizing
 
-One-call hardware sizing recommendation from a workload spec:
+One-call hardware sizing recommendation from a workload spec
+(`api/_handlers/sizing.js`):
 
 ```
 GET /api/sizing?model=qwen3-32b&contextLength=32768&concurrency=10&maxTtftSeconds=2&maxVramGb=24
 ```
 
 Returns ranked rigs with required-VRAM math, expected TTFT/TPOT from benchmark
-medians, sample confidence, `meetsSlo` flags and human-readable explanations.
+medians, sample confidence, `meetsSlo` flags and human-readable explanations
+(`api/_explain.js`).
 
 ### GET /api/snapshots
 
 Versioned, content-addressed dataset snapshot ids usable as `?snapshot=<id>`
-on every data endpoint for reproducible, citable reads.
+on every data endpoint for reproducible, citable reads (`api/_snapshots.js`).
 Response: `{ description, current: "<id>", snapshots: [{id, createdAt, runCount}...] }`.
 Old ids may expire from the bounded in-memory ring — re-read `/api/snapshots`
 if a pinned id stops resolving.
 
 ### GET /api/diff
 
-Two modes:
+Two modes (`api/_handlers/diff.js`, logic in `api/_diff.js` / `api/_whatif.js`):
 
 - **Run diff (default):** `GET /api/diff?runA=<id>&runB=<id>` (aliases `a`/`b`)
   → `{ description, runA, runB, diff }` where `diff` normalizes both runs to a
@@ -237,15 +253,17 @@ Two modes:
 
 ### GET /api/export
 
-Full comparable dataset as a download: `?format=csv` (default; RFC 4180 with a
-`#`-comment metadata preamble + data dictionary) or `?format=json`
+Full comparable dataset as a download (`api/_handlers/export.js`, formatting in
+`api/_export.js`): `?format=csv` (default; RFC 4180 with a `#`-comment metadata
+preamble + data dictionary) or `?format=json`
 (`{ dataDictionary, runs: [...], generatedAt }`). Sets
 `Content-Disposition: attachment`.
 
 ### GET|POST /api/parse-constraints
 
 Natural-language constraints → canonical constraint JSON for `/api/sizing` and
-`/api/best`. Pure deterministic heuristics, no external LLM.
+`/api/best` (`api/_parse_constraints.js`). Pure deterministic heuristics, no
+external LLM.
 
 ```
 GET /api/parse-constraints?q=self-hosted%20Qwen%2027B%20at%20Q4%20for%2010%20users%20under%20%241500
@@ -259,6 +277,8 @@ of guessing.
 ---
 
 ## Watching for new data
+
+`api/_watch_impl.js` + handlers `api/_handlers/rss.xml.js` / `api/_handlers/dispatch.js`.
 
 ### POST /api/watch — subscribe to a hardware+model combo
 
@@ -281,27 +301,35 @@ delivery on top of RSS. Response carries `watchId`, a **one-time `secret`**
 
 ### GET /api/health
 
-Liveness + upstream data freshness, cheap (cache state only, never blocks):
+Liveness + upstream data freshness, cheap (cache state only, never blocks;
+`api/_handlers/health.js`, freshness in `api/_freshness.js`):
 `{ ok, service, upstreamFreshness: {status: fresh|stale|empty, fetchedAt, ageSeconds, ttlSeconds, rowCount, source} }`.
 Human status page: `/status.html`.
 
 ### GET /api/spec
 
-The OpenAPI 3.1 document describing every endpoint above. If anything in this
-file and the spec disagree, prefer the spec and file an issue.
+The OpenAPI 3.1 document describing every endpoint above
+(`api/_handlers/spec.js`; static dump via `scripts/dump-openapi.mjs`). If
+anything in this file and the spec disagree, prefer the spec and file an issue.
 
 ### GET /api/og
 
 Renders a 1200×630 PNG chart card from URL params
-(`?preset=<hardware-id>&prefill=<tok/s>&decode=<tok/s>&scenario=<preset-id>`).
-Binary image output — useful for embedding previews, not JSON.
+(`?preset=<hardware-id>&prefill=<tok/s>&decode=<tok/s>&scenario=<preset-id>`;
+`api/_handlers/og.js`). Binary image output — useful for embedding previews,
+not JSON.
 
 ### MCP server
 
 - Manifest: `GET /.well-known/mcp.json`
-- Endpoint: `POST /api/mcp` — Streamable HTTP JSON-RPC (`initialize`,
-  `tools/list`, `tools/call`, `ping`). Tools proxy to the REST endpoints, so
-  there is exactly one implementation of every formula.
+- Endpoint: `POST /api/mcp` (`api/mcp.js`) — Streamable HTTP JSON-RPC
+  (`initialize`, `tools/list`, `tools/call`, `ping`). Standalone server:
+  `mcp/server.js`. Tools proxy to the REST endpoints, so there is exactly one
+  implementation of every formula:
+  - `compute_inference` → `/api/compute`
+  - `search_runs` → `/api/localmaxxing`
+  - `best_configs` → `/api/best`
+  - `compare_hardware` → paired `/api/localmaxxing` reads + delta report
 
 ---
 
