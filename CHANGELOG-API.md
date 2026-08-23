@@ -16,6 +16,36 @@ The header is present even on error responses and preflight (`OPTIONS`)
 responses, so a client can check compatibility without parsing the body.
 Both are exposed to browser clients via `Access-Control-Expose-Headers`.
 
+## Two version numbers (release version vs wire schema version)
+
+This API publishes **two independent version numbers** that answer different
+questions. They are intentionally decoupled — seeing different values is not
+a bug:
+
+| | `info.version` in `/api/spec` | Wire schema version |
+| --- | --- | --- |
+| Current value    | `2.6.0` | `"1"` |
+| Defined in       | `api/_handlers/spec.js` (`info.version`) | `api/_schema.js` (`SCHEMA_VERSION`) |
+| Carried on wire  | only inside `/api/spec` (`info.version`; the wire version is mirrored there as `info.x-schema-version`) | every JSON response: top-level `schema_version` body field + `X-Schema-Version` header |
+| Answers          | "Which release of the API *surface* is this?" (endpoints, parameters, docs) | "Which contract do the response *bodies* follow?" |
+| Bumps on         | every release that changes the surface — new endpoints, new optional params, new docs features (semver: minor for additions, patch for fixes) | breaking response-body changes only (removed/renamed fields, type/unit/semantic changes) — see [Versioning policy](#versioning-policy) |
+
+**Mapping:** API releases `2.x` all speak wire schema version `"1"`. Additive
+releases bump `info.version` (e.g. `2.5.0 → 2.6.0`) while
+`schema_version` stays `"1"`; when a response-body breaking change ships,
+`SCHEMA_VERSION` increments (to `"2"`) independently of `info.version`.
+
+**Which one should you check?**
+
+- Machine consumers gating on **response shape** (parsing bodies) should read
+  `schema_version` / `X-Schema-Version` from each response — never parse
+  against an assumed shape without checking it.
+- Humans and agents tracking **features and endpoints** should read
+  `info.version` from `/api/spec` and this changelog.
+- A mismatch between what you expect is always signalled by the wire value,
+  not by `info.version`: if `schema_version` differs from the major you were
+  built against, re-read this file's changelog before parsing.
+
 ## Versioning policy
 
 - **Additive changes do NOT bump the version.** Adding new fields to a
@@ -49,6 +79,14 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- Documented the two independent version numbers (#113-style clarity pass):
+  `/api/spec` `info.version` (`2.6.0`, the API *release* version) vs the wire
+  contract `schema_version` / `X-Schema-Version` (`"1"`, from
+  `SCHEMA_VERSION` in `api/_schema.js`). New section "Two version numbers"
+  above explains the mapping and bump rules; the spec now also carries
+  `info.x-schema-version` so machine consumers can see both numbers in one
+  place without hardcoding either.
+
 - New `GET /api/runs` endpoint: one-shot machine-readable dump of the **full**
   run index — every community-measured run, comparable AND batched/
   non-comparable — as JSON (`?format=json`, envelope with `schemaVersion`,
@@ -58,6 +96,7 @@ migrate before `Sunset`. Agents can discover the current policy at
   `?comparable=true|false|all` subsets server-side. Shares the cached upstream
   fetch with the other benchmark endpoints. Additive — no version bump.
 - Affected endpoints: `/api/runs`.
+>>>>>>> origin/main
 - New `GET /api/og` endpoint (#105): renders a 1200x630 PNG Open Graph chart
   card from URL params (`preset`, `prefill`, `decode`, `scenario`, `prompt`)
   via @vercel/og. Binary image response (`image/png`, not JSON/schema-
