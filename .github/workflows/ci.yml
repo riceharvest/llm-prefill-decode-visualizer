@@ -29,7 +29,7 @@ jobs:
         run: node --test "**/*.test.js"
 
       - name: Lint
-        run: oxlint
+        run: npx oxlint
 
       - name: Build
-        run: vite build
+        run: npx vite build
