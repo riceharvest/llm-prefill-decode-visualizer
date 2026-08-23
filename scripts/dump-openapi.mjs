@@ -9,7 +9,7 @@ import fs from 'node:fs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const outPath = process.argv[2] || path.join(here, '..', 'openapi.json');
 
-const { default: handler } = await import(path.join(here, '..', 'api', 'spec.js'));
+const { default: handler } = await import(path.join(here, '..', 'api', '_handlers', 'spec.js'));
 
 // Minimal mock of the Vercel/Node response object the handler writes to.
 const chunks = [];

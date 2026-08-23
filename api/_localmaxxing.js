@@ -15,6 +15,9 @@ const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 export const DEFAULT_OUTLIER_IQRS = 2.5;
 
 let cache = { rows: null, fetchedAt: 0, promise: null };
+// Full index (comparable + non-comparable runs), populated by the same
+// upstream fetch that fills `cache` — used only by the /api/runs dump.
+let rawCache = { rows: null, fetchedAt: 0 };
 
 function comparable(r) {
   const ef = r.engineFlags || {};
@@ -32,6 +35,18 @@ function comparable(r) {
 /** Fetch all comparable runs, from cache when fresh. */
 export async function getAllRuns() {
   return (await getDataset()).rows;
+}
+
+/**
+ * Fetch the FULL run index — every community-measured run including batched /
+ * non-comparable ones — tagged with a `comparable` boolean. Served by the
+ * /api/runs machine-readable dump. Non-finite speeds (possible on runs the
+ * comparable filter would have dropped) are nulled so the JSON/CSV stays clean.
+ * Shares the upstream fetch + cache window with getAllRuns(): no extra load.
+ */
+export async function getAllRunsRaw() {
+  await getDataset(); // ensures the shared upstream fetch has run
+  return rawCache.rows ?? [];
 }
 
 /** Fetch all comparable runs plus the fetch timestamp of the cached set. */
@@ -58,6 +73,15 @@ export async function getDataset() {
     const comparableRows = rows.filter(comparable).map(slim);
     cache.rows = comparableRows;
     cache.fetchedAt = Date.now();
+    // Full index for /api/runs: every run, tagged. Same upstream pages —
+    // zero additional requests.
+    rawCache.rows = rows.map(r => {
+      const s = slim(r);
+      if (!Number.isFinite(s.prefillTokPerSec)) s.prefillTokPerSec = null;
+      if (!Number.isFinite(s.decodeTokPerSec)) s.decodeTokPerSec = null;
+      return { ...s, comparable: comparable(r) };
+    });
+    rawCache.fetchedAt = Date.now();
     return comparableRows;
   })();
 
@@ -107,6 +131,7 @@ function slim(r) {
 
 export function invalidateCache() {
   cache = { rows: null, fetchedAt: 0, promise: null };
+  rawCache = { rows: null, fetchedAt: 0 };
 }
 
 /**
