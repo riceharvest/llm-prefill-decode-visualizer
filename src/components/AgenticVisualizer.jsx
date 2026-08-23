@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, FileDown, Copy, Zap, Gauge } from 'lucide-react';
+import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, FileDown, Copy, Zap, Gauge, FileJson } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, readParamBool, readParam, writeParams } from '../utils/urlState';
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
@@ -20,6 +20,7 @@ import { evaluateAgenticSlo, evaluateMetric } from '../utils/slo.js';
 
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
+import { buildAgenticJson, downloadJson } from '../utils/exportJson';
 import { t } from '../i18n/strings';
 
 export default function AgenticVisualizer({
@@ -241,6 +242,17 @@ export default function AgenticVisualizer({
     deepLink: buildDeepLink('agentic')
   });
   const handleExportMd = () => downloadMarkdown(buildMarkdown(), 'agentic-loop-simulation.md');
+  const buildJson = () => buildAgenticJson({
+    numTurns,
+    basePromptTokens,
+    toolOutputTokensPerTurn,
+    decodeTokensPerTurn,
+    enablePrefixCaching,
+    prefillSpeed,
+    decodeSpeed,
+    deepLink: buildDeepLink('agentic')
+  });
+  const handleExportJson = () => downloadJson(buildJson(), 'agentic-loop-simulation.json');
   const handleCopyMd = async () => {
     const ok = await copyMarkdownToClipboard(buildMarkdown());
     if (ok) {
@@ -643,6 +655,7 @@ export default function AgenticVisualizer({
             <button
               onClick={handleReset}
               title={t('agentic.resetTooltip')}
+              aria-label={t('agentic.resetTooltip')}
               className="btn"
             >
               <RotateCcw size={15} />
@@ -656,6 +669,15 @@ export default function AgenticVisualizer({
             >
               <FileDown size={15} />
               Export MD
+            </button>
+
+            <button
+              onClick={handleExportJson}
+              title="Export this simulation as machine-readable JSON (download)"
+              className="btn"
+            >
+              <FileJson size={15} />
+              Export JSON
             </button>
 
             <button

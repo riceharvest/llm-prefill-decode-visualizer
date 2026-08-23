@@ -2,6 +2,7 @@
   "brandTitle": "LLM Prefill & Decode Speed Visualizer",
   "brandSubtitle": "Measure walltime, TTFT & TPOT across single-turn chat and multi-turn agentic loops",
   "presetLabel": "Preset",
+  "viewAriaLabel": "Switch visualizer view",
   "localMaxxingRun": "LocalMaxxing measured run",
   "shareTooltip": "Copy share link with current settings",
   "shortcutsTooltip": "Keyboard shortcuts (?)",
