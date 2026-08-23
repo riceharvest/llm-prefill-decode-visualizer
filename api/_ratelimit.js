@@ -87,6 +87,10 @@ function send429(res, info) {
  */
 export function enforceRateLimit(req, res, { key } = {}) {
   const info = rateLimit(key ?? clientKey(req));
+  // Keep the computed window state on the response so sendJson() can embed a
+  // machine-readable `rate_limit` object in agent-facing JSON bodies (see
+  // _schema.js). Plain property so node --test mock responses work too.
+  res.rateLimitInfo = info;
   res.setHeader('X-RateLimit-Limit', String(info.limit));
   res.setHeader('X-RateLimit-Remaining', String(info.remaining));
   res.setHeader('X-RateLimit-Reset', String(info.resetEpochSec));
@@ -95,4 +99,27 @@ export function enforceRateLimit(req, res, { key } = {}) {
     return false;
   }
   return true;
+}
+
+/** The rate-limit window state `enforceRateLimit` stamped onto this response, or null. */
+export function getRateLimitInfo(res) {
+  return res?.rateLimitInfo ?? null;
+}
+
+/**
+ * Machine-readable `rate_limit` payload for JSON response bodies — the same
+ * numbers the X-RateLimit-* headers carry, readable by clients that only
+ * parse bodies (MCP tools, body-only HTTP wrappers). Returns null when the
+ * request never went through enforceRateLimit.
+ */
+export function rateLimitBody(res) {
+  const info = getRateLimitInfo(res);
+  if (!info) return null;
+  return {
+    limit: info.limit,
+    remaining: info.remaining,
+    reset: info.resetEpochSec,
+    window_seconds: RATE_WINDOW_MS / 1000,
+    policy: 'fixed-window per client IP, best-effort per serverless instance'
+  };
 }

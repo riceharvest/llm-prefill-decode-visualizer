@@ -1,0 +1,194 @@
+{
+  "$schema": "https://llm-prefill-decode-visualizer.vercel.app/api/spec",
+  "name": "llm-prefill-decode-visualizer",
+  "description": "Machine-readable index of every agent-facing endpoint on the LLM Prefill & Decode Speed Visualizer API. All endpoints return JSON (except /api/watch/rss.xml, which returns RSS XML), support CORS, require no auth, and are also served under the /v1/ prefix (replace /api/ with /v1/). Full request/response details: GET /api/spec (OpenAPI 3.1). Human + agent docs: /llms.txt.",
+  "baseURL": "https://llm-prefill-decode-visualizer.vercel.app",
+  "openapi": "/api/spec",
+  "docs": "/llms.txt",
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/compute",
+      "description": "Run inference math (TTFT, TPOT, walltime, VRAM): ?model=singleTurn|speculative|batched|agentic|kvCache|flagged|cost plus parameters. No model param returns a self-describing capability list. Add dry_run=true to validate without executing.",
+      "responseSchema": "{ id, inputs, warnings[], ttftSeconds, tpotMs, decodeSeconds, totalWalltimeSeconds, effectiveThroughputTokPerSec, prefillSharePct, decodeSharePct, schema_version }"
+    },
+    {
+      "method": "POST",
+      "path": "/api/compute",
+      "description": "Batch up to 50 parameter sets in one round trip: {\"batch\": [{\"model\": ..., ...}]} (also accepted as \"variants\" or ?batch=[...] on GET). Per-item ok/error status; supports per-item dry_run.",
+      "requestSchema": "{ batch: [{ model, ...params }] } (max 50 items)",
+      "responseSchema": "{ batch: true, count, okCount, errorCount, results: [{ index, ok, result | error }] }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/calc/{id}",
+      "description": "Replay a computation or /api/best recommendation from its deterministic id (calc_<12 hex>). Ids are content hashes: re-send the original parameters and get verified:true; mismatches are rejected with the expected id.",
+      "responseSchema": "<original result> + { id, verified: true }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/presets",
+      "description": "Built-in hardware speed presets (RTX 4090, dual RTX 3090, M3 Ultra, Groq LPU, H100, RPi5…) and workload scenarios (RAG query, code generation) — feed as /api/compute inputs.",
+      "responseSchema": "{ description, hardware[{id, name, prefillSpeedTokPerSec, decodeSpeedTokPerSec, vramBandwidth, badge}], scenarios[{id, label, promptTokens, outputTokens}], schema_version }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/vram",
+      "description": "Combined weights + KV-cache VRAM from just an hfId (?hfId=&context=&quant=). Optional vramGb budget → fits flag + maxContextTokens; optional numTurns+tokensPerTurn → per-turn KV growth projection with first overflow turns. Also accepts POST with a JSON body.",
+      "responseSchema": "{ inputs, model{architecture, resolutionSource}, weights{gb}, kvCache{bytesPerToken, gbAtContext, formula}, total{gb, breakdown}, contextWindow, fits, projection }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/localmaxxing",
+      "description": "Community-measured single-stream benchmark runs. Bare call = hardware-group summary; ?hardware=&model=&quant=&context_band=&limit=&cursor= filters return cursor-paginated runs sorted by decode speed desc.",
+      "responseSchema": "{ snapshot, total, caveats[], items[{runId, modelFamily, hardwareKey, hwClass, engine, quantization, prefillTokPerSec, decodeTokPerSec, contextBand, ageDays, staleness, source}], has_more, next_cursor }"
+    },
+    {
+      "method": "POST",
+      "path": "/api/localmaxxing",
+      "description": "Submit a community benchmark run for manual review. Required: model, quant, hardware, hwClass (discrete_gpu|unified|cpu_only), prefillTokPerSec, decodeTokPerSec. Sanity bounds + near-duplicate rejection; 202 = queued, never published immediately.",
+      "requestSchema": "{ model, quant, hardware, hwClass, prefillTokPerSec, decodeTokPerSec, engine?, provenance?, submitter? }",
+      "responseSchema": "202 { description, status: 'queued', reviewStatus, submissionId } · 400/409 { error, errors[] }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/benchmarks",
+      "description": "Aggregated median + IQR + 95% bootstrap CI per hardware×model group (outlier-resistant). ?groupBy=hardware|model|quant regroups. Cursor-paginated; each item carries confidence + crossCheck + bestRun.",
+      "responseSchema": "{ snapshot, total, caveats[], items[{key, runs, prefill{median, ci95, label}, decode{…}, engines[], confidence, crossCheck, bestRun}], has_more, next_cursor }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/best",
+      "description": "Ranked answers: ?by=decode|prefill|cost plus filters (model, maxParamsB, quant, hwClass, fitCheck+contextLength). Responses carry a deterministic id replayable via /api/calc/{id}?endpoint=best. Also accepts POST.",
+      "responseSchema": "{ id, rankedBy, snapshot, matchedRuns, caveats[], results[{hardware, hwClass, modelFamily, quantization, confidence, medianDecodeTokPerSec, medianDecodeCi95, pricing{}, power?, explain}] }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diff",
+      "description": "Diff two measured runs (?runA=<id>&runB=<id>) or two constraint sets (?mode=whatif&a=<set>&b=<set>): deltas, ratios, feasible-set changes and headroom. Also accepts POST {mode,a,b} for what-if mode.",
+      "responseSchema": "{ runA, runB, diff{…} } · what-if: { entered[], left[], headroom[] }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/export",
+      "description": "Full comparable dataset as a downloadable file: ?format=csv (RFC 4180 with #-metadata preamble) or ?format=json (envelope with dataDictionary + runs array).",
+      "responseSchema": "text/csv or application/json attachment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sizing",
+      "description": "One-call deployment recommendation: pass a workload spec (?model=<family>&contextLength=&concurrency=&maxTtftSeconds=&maxTpotMs=&maxVramGb=), get ranked rigs with VRAM-fit math, expected TTFT/TPOT from benchmark medians, confidence and meetsSlo flags. Also accepts POST with a JSON body.",
+      "responseSchema": "{ workload, slo, matchedRuns, assumptions, recommendations[{hardware, vramFit, expected, confidence, meetsSlo, explain, source}] }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/parse-constraints",
+      "description": "Turn plain-language constraints into the canonical struct: ?q=self-hosted Qwen 27B at Q4 for 10 users under $1500 → constraints + ambiguities + ready-made sizingQuery. Deterministic regex/heuristics, no LLM.",
+      "responseSchema": "{ input, recognizedCount, constraints{deployment, modelFamily, paramsB, quantization, contextLength, concurrency, budgetUsdMax, …}, ambiguities[{field, message}], sizingQuery }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/snapshots",
+      "description": "Versioned dataset snapshot IDs. Pin any data endpoint with ?snapshot=<id> for reproducible results; unknown/expired IDs fall back to current data with snapshot.served=false.",
+      "responseSchema": "{ description, current, snapshots[{id, createdAt, runCount}] }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/watch",
+      "description": "List registered hardware+model watch combos (never includes secrets or webhook URLs). POST creates a watch; DELETE ?id=&secret= removes one.",
+      "responseSchema": "{ description, maxWatches, totalWatches, watches[{watchId, label, model, hardware, quant, hasWebhook, createdAt}] }"
+    },
+    {
+      "method": "POST",
+      "path": "/api/watch",
+      "description": "Create a watch for a hardware+model combo: {model?, hardware?, quant?, webhookUrl?} — at least one of model/hardware required. Returns 201 with one-time secret and a ready-made rssUrl (RSS needs no webhook).",
+      "requestSchema": "{ model?, hardware?, quant?, webhookUrl? }",
+      "responseSchema": "201 { watchId, secret, rssUrl, matchingExistingRuns }"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/watch",
+      "description": "Remove a watch: ?id=<watchId>&secret=<one-time secret from POST>. Secret also accepted as X-Watch-Secret header.",
+      "responseSchema": "204 No Content"
+    },
+    {
+      "method": "GET",
+      "path": "/api/watch/rss.xml",
+      "description": "RSS 2.0 feed of community runs for a watched combo — poll in any feed reader, no registration. Filters mirror GET /api/localmaxxing; newest matching runs first, max 50 items.",
+      "responseSchema": "application/rss+xml"
+    },
+    {
+      "method": "GET",
+      "path": "/api/watch/dispatch",
+      "description": "Cron-friendly webhook delivery: for each watch with a webhookUrl, POST unseen matching runs as a watch.new_runs payload. Set WATCH_DISPATCH_SECRET env var to require ?secret=. Also accepts POST.",
+      "responseSchema": "{ dispatched, totalNewRuns, results[{watchId, newRuns, delivered}], schemaNote, previewPayload }"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mcp",
+      "description": "MCP (Model Context Protocol) server over Streamable HTTP JSON-RPC: initialize, tools/list, tools/call, ping. Tool calls proxy to the REST handlers above. Manifest at /.well-known/mcp.json.",
+      "requestSchema": "{ jsonrpc: '2.0', id, method, params }",
+      "responseSchema": "{ jsonrpc: '2.0', id, result } (JSON-RPC 2.0)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/spec",
+      "description": "Full OpenAPI 3.1 spec with x-examples per operation — derive typed clients from this.",
+      "responseSchema": "OpenAPI 3.1 document"
+    },
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "description": "Liveness probe + upstream data freshness ({ok, upstreamFreshness, cacheAge}). Human status page at /status.html.",
+      "responseSchema": "{ ok, service, time, upstreamFreshness{status, fetchedAt, ageSeconds, ttlSeconds, rowCount, source}, cacheAge }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/runs",
+      "description": "One-shot machine-readable dump of the FULL run index (comparable AND batched/non-comparable). ?format=json|csv; ?comparable=all|true|false. JSON envelope carries schemaVersion, generatedAt, rowCount, totalRunCount, comparableFilter and a structured dataDictionary.",
+      "responseSchema": "{ schemaVersion, generatedAt, comparableFilter, rowCount, totalRunCount, comparableCount, dataDictionary[], runs[] }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/version",
+      "description": "Machine-readable version report: service name, app version (package.json), schemaVersion (wire schema_version), generatedAt and links to /api/spec, CHANGELOG-API.md and CHANGELOG.json.",
+      "responseSchema": "{ service, version, schemaVersion, generatedAt, links{} }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/capabilities.json",
+      "description": "This index — machine-readable discovery document listing every agent-facing surface with methods, kind and descriptions. Static, CDN-cached 1h.",
+      "responseSchema": "{ description, generatedAt, schema_version, surfaces[] }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/compute.json",
+      "description": "Agent-friendly wrapper over the same inference math as /api/compute. GET with ?model= plus params, or POST {\"batch\":[...]} (up to 50 sets). Flat self-describing envelope with resolved inputs and a deterministic calc id. Bare call returns the capability catalog.",
+      "responseSchema": "{ description, endpoint, generatedAt, scenario?, inputs, id, ...mathFields, warnings[], schema_version }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/benchmarks.json",
+      "description": "Agent-friendly wrapper around the raw community run search (same data as MCP search_runs / GET /api/localmaxxing). Flat per-run records with tok/s speeds, freshness stamps, echoed filters and cursor pagination. Filters: ?hardware=, ?model=, ?quant=, ?context_band=, ?max_age=, ?limit=, ?cursor=, ?snapshot=.",
+      "responseSchema": "{ description, endpoint, generatedAt, filters, results[], pagination{}, schema_version }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/scenario.json",
+      "description": "Agent-friendly loader for the built-in workload scenario presets (same SCENARIO_PRESETS as the UI quick-start chips and /api/presets). No ?id= returns the directory of every valid scenario; ?id=<preset> returns token counts plus derived totalTokens/prefillShare and next-hop pointers. Unknown ids return 400 with valid ids.",
+      "responseSchema": "{ description, endpoint, generatedAt, scenarios[] | scenario{ id, label, promptTokens, outputTokens, totalTokens, prefillShare, nextSteps{} } }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/freshness.json",
+      "description": "Agent-readable data-freshness + confidence report wrapping groupFreshness/staleness tiers, confidenceFor/aggregate and upstream cache state. Filters: ?hardware=, ?model=, ?quant=, ?context_band=, ?max_age=, ?groupBy=hardware|model|hardwareModel, ?snapshot=. Alias: /api/agent/confidence.json.",
+      "responseSchema": "{ description, generatedAt, filters, cache{}, dataset{}, groups[], summary{} }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/confidence.json",
+      "description": "Alias for GET /api/agent/freshness.json — identical handler and response shape.",
+      "responseSchema": "same as /api/agent/freshness.json"
+    }
+  ]
+}

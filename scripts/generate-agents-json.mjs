@@ -34,6 +34,7 @@ export function buildAgentsJson() {
       path: r.path,
       method: r.method,
       description: r.description,
+      returns: r.returns,
       sinceVersion: r.sinceVersion,
     })),
     auth: 'none',

@@ -123,8 +123,10 @@ export default function EngineFlagPicker({
           ))}
 
           <button
+            type="button"
             className="btn btn-accent"
             style={{ marginTop: '10px' }}
+            aria-label={`Apply engine-flag speeds to the simulation: ${adjusted.prefillSpeed} prefill / ${Math.round(adjusted.decodeSpeed)} decode tokens per second`}
             onClick={() => onApplyFlags(adjusted.prefillSpeed, Math.round(adjusted.decodeSpeed))}
           >
             <Check size={15} />
