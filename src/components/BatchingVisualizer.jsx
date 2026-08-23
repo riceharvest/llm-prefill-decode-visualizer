@@ -458,7 +458,12 @@ export default function BatchingVisualizer({
               {isPlaying ? t('common.pause') : t('batching.simulateTag')}
             </button>
 
-            <button onClick={handleReset} title={t('speedControls.resetTooltip')} className="btn">
+            <button
+              onClick={handleReset}
+              type="button"
+              title={t('speedControls.resetTooltip')}
+              aria-label={`${t('batching.resetTag')} — ${t('speedControls.resetTooltip')}`}
+              className="btn">
               <RotateCcw size={15} />
               {t('batching.resetTag')}
             </button>

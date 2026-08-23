@@ -77,8 +77,29 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Skip link (a11y): visually hidden until keyboard-focused. Kept inline
+         here so it works regardless of app CSS load order/failures. -->
+    <style>
+      .skip-link {
+        position: absolute;
+        left: -9999px;
+        top: 0;
+        z-index: 1000;
+        background: #111;
+        color: #fff;
+        padding: 0.5rem 1rem;
+        border-radius: 0 0 0.25rem 0.25rem;
+      }
+      .skip-link:focus {
+        left: 0.5rem;
+      }
+    </style>
   </head>
   <body>
+    <!-- Skip link: lets keyboard and screen-reader users jump straight to
+         the main content instead of tabbing through navigation. -->
+    <a class="skip-link" href="#root">Skip to main content</a>
     <!-- Server-rendered summary: visible to agents/crawlers without JS.
          Hidden visually but present in raw HTML (agent readiness #1). -->
     <noscript>
@@ -114,7 +135,7 @@
         <a href="/privacy.html">/privacy.html</a>.
       </p>
     </noscript>
-    <div id="root"></div>
+    <div id="root" tabindex="-1"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
