@@ -29,7 +29,8 @@ const RATE_LIMITED_RESPONSE = {
           limit: { type: 'integer' },
           remaining: { type: 'integer' },
           reset: { type: 'integer', description: 'Unix epoch seconds' },
-          retryAfterSeconds: { type: 'integer' }
+          retryAfterSeconds: { type: 'integer' },
+          note: { type: 'string', description: 'Pointer to the documented budget in /llms.txt plus the X-RateLimit-* header names.' }
         }
       }
     }
@@ -394,7 +395,7 @@ export default function handler(req, res) {
           summary: 'Ranked answers: fastest or cheapest rigs for given constraints',
           description: 'Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed. by=cost ranks by cost-efficiency instead. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel). Responses carry a deterministic `id` (hash of the resolved filters) replayable via /api/calc/{id}?endpoint=best&<same filters>.',
           parameters: [
-            { name: 'by', in: 'query', schema: { type: 'string', enum: ['decode', 'prefill', 'cost'], default: 'decode' } },
+            { name: 'by', in: 'query', schema: { type: 'string', enum: ['decode', 'prefill', 'efficiency', 'walltime', 'confidence', 'cost'] }, default: 'decode' },
             { name: 'price', in: 'query', schema: { type: 'number' }, description: 'cost mode: rig purchase price in USD (default 0)' },
             { name: 'electricityRate', in: 'query', schema: { type: 'number' }, description: 'cost mode: $/kWh (default 0.15)' },
             { name: 'powerWatts', in: 'query', schema: { type: 'number' }, description: 'cost mode: whole-rig watts; defaults to an estimate per hwClass' },
