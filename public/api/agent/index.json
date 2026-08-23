@@ -141,6 +141,54 @@
       "path": "/api/health",
       "description": "Liveness probe + upstream data freshness ({ok, upstreamFreshness, cacheAge}). Human status page at /status.html.",
       "responseSchema": "{ ok, service, time, upstreamFreshness{status, fetchedAt, ageSeconds, ttlSeconds, rowCount, source}, cacheAge }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/runs",
+      "description": "One-shot machine-readable dump of the FULL run index (comparable AND batched/non-comparable). ?format=json|csv; ?comparable=all|true|false. JSON envelope carries schemaVersion, generatedAt, rowCount, totalRunCount, comparableFilter and a structured dataDictionary.",
+      "responseSchema": "{ schemaVersion, generatedAt, comparableFilter, rowCount, totalRunCount, comparableCount, dataDictionary[], runs[] }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/version",
+      "description": "Machine-readable version report: service name, app version (package.json), schemaVersion (wire schema_version), generatedAt and links to /api/spec, CHANGELOG-API.md and CHANGELOG.json.",
+      "responseSchema": "{ service, version, schemaVersion, generatedAt, links{} }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/capabilities.json",
+      "description": "This index — machine-readable discovery document listing every agent-facing surface with methods, kind and descriptions. Static, CDN-cached 1h.",
+      "responseSchema": "{ description, generatedAt, schema_version, surfaces[] }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/compute.json",
+      "description": "Agent-friendly wrapper over the same inference math as /api/compute. GET with ?model= plus params, or POST {\"batch\":[...]} (up to 50 sets). Flat self-describing envelope with resolved inputs and a deterministic calc id. Bare call returns the capability catalog.",
+      "responseSchema": "{ description, endpoint, generatedAt, scenario?, inputs, id, ...mathFields, warnings[], schema_version }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/benchmarks.json",
+      "description": "Agent-friendly wrapper around the raw community run search (same data as MCP search_runs / GET /api/localmaxxing). Flat per-run records with tok/s speeds, freshness stamps, echoed filters and cursor pagination. Filters: ?hardware=, ?model=, ?quant=, ?context_band=, ?max_age=, ?limit=, ?cursor=, ?snapshot=.",
+      "responseSchema": "{ description, endpoint, generatedAt, filters, results[], pagination{}, schema_version }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/scenario.json",
+      "description": "Agent-friendly loader for the built-in workload scenario presets (same SCENARIO_PRESETS as the UI quick-start chips and /api/presets). No ?id= returns the directory of every valid scenario; ?id=<preset> returns token counts plus derived totalTokens/prefillShare and next-hop pointers. Unknown ids return 400 with valid ids.",
+      "responseSchema": "{ description, endpoint, generatedAt, scenarios[] | scenario{ id, label, promptTokens, outputTokens, totalTokens, prefillShare, nextSteps{} } }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/freshness.json",
+      "description": "Agent-readable data-freshness + confidence report wrapping groupFreshness/staleness tiers, confidenceFor/aggregate and upstream cache state. Filters: ?hardware=, ?model=, ?quant=, ?context_band=, ?max_age=, ?groupBy=hardware|model|hardwareModel, ?snapshot=. Alias: /api/agent/confidence.json.",
+      "responseSchema": "{ description, generatedAt, filters, cache{}, dataset{}, groups[], summary{} }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/confidence.json",
+      "description": "Alias for GET /api/agent/freshness.json — identical handler and response shape.",
+      "responseSchema": "same as /api/agent/freshness.json"
     }
   ]
 }

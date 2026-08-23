@@ -1401,6 +1401,11 @@ export default function handler(req, res) {
           snapshots: [{ id: 'snapshot-2026-08-21-a1b2c3d4', createdAt: '2026-08-21T09:14:03.000Z', runCount: 3642 }]
         }
       }
+    },
+    '/api/runs': {
+      get: {
+        request: 'curl -s "$BASE/api/runs?format=json&comparable=true"'
+      }
     }
   };
 
