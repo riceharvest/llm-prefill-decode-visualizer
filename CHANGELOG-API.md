@@ -49,6 +49,16 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- New `GET /api/runs` endpoint: one-shot machine-readable dump of the FULL
+  community run index (every upstream run, including batched/non-comparable
+  ones) so agents/crawlers can consume the whole dataset without JS or
+  pagination. `?format=json` (default) returns an envelope with a
+  `dataDictionary`; `?format=csv` returns RFC 4180 with a `#`-comment preamble.
+  Every row carries a `comparable` boolean; `?comparable=true|false|all`
+  subsets on it (default `all`). Rows share the 10-min cached upstream fetch
+  with the other benchmark endpoints — no extra upstream load. Additive
+  endpoint — no version bump.
+- Affected endpoints: `/api/runs`.
 - New `GET /api/og` endpoint (#105): renders a 1200x630 PNG Open Graph chart
   card from URL params (`preset`, `prefill`, `decode`, `scenario`, `prompt`)
   via @vercel/og. Binary image response (`image/png`, not JSON/schema-

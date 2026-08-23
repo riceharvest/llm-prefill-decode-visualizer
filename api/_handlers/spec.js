@@ -244,6 +244,59 @@ export default function handler(req, res) {
           }
         }
       },
+      '/api/runs': {
+        get: {
+          summary: 'Full run index dump (machine-readable, no pagination)',
+          description: 'One-shot dump of every community-measured run — including batched/non-comparable ones that the aggregate endpoints exclude — for agents/crawlers that want the whole dataset without JS or pagination round-trips. Each row carries a `comparable` boolean; aggregate endpoints (/api/benchmarks, /api/best) use only rows where comparable=true. JSON envelope includes a dataDictionary; ?format=csv returns RFC 4180 with a `#`-comment preamble.',
+          parameters: [
+            { name: 'format', in: 'query', schema: { type: 'string', enum: ['json', 'csv'], default: 'json' }, description: 'Response format. csv sets Content-Disposition attachment.' },
+            { name: 'comparable', in: 'query', schema: { type: 'string', enum: ['all', 'true', 'false'], default: 'all' }, description: 'Subset on the comparability flag: all (default, full index), true (single-stream comparable rows only), false (only excluded rows).' }
+          ],
+          responses: {
+            '200': {
+              description: 'Full run-index dump envelope',
+              content: {
+                'application/json': {
+                  example: {
+                    description: 'Full run index dump: every community-measured LLM benchmark run, including batched/non-comparable ones. …',
+                    schemaVersion: 1,
+                    generatedAt: '2026-08-23T05:00:00.000Z',
+                    rowCount: 4102,
+                    comparableCount: 3642,
+                    comparableOnly: false,
+                    dataDictionary: [
+                      { column: 'runId', type: 'string', description: 'Upstream run identifier (localmaxxing.com run id)' },
+                      { column: 'comparable', type: 'boolean', description: 'Whether the run passes the comparability filter (batchSize=1, single-stream, positive speeds)' }
+                    ],
+                    runs: [
+                      {
+                        runId: 58213,
+                        modelFamily: 'qwen3.6-27b',
+                        hardwareKey: 'rtx4090',
+                        engine: 'llama.cpp',
+                        quantization: 'q4_k_m',
+                        prefillTokPerSec: 3820,
+                        decodeTokPerSec: 108,
+                        contextBand: '8k-32k',
+                        comparable: true,
+                        source: 'https://localmaxxing.com/en/runs/58213'
+                      }
+                    ],
+                    schema_version: '1'
+                  }
+                },
+                'text/csv': {
+                  schema: { type: 'string' },
+                  example: '# dataset: localmaxxing community LLM benchmark runs (full index)\n# schema_version: 1\n# generated_at: 2026-08-23T05:00:00.000Z\n# rows: 4102\n# filter: none — full upstream run index; each row carries a `comparable` flag\nrunId,modelFamily,…\n'
+                }
+              }
+            },
+            '400': { description: 'Invalid parameters (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } },
+            '429': RATE_LIMITED,
+            '502': DATA_ERRORS['502']
+          }
+        }
+      },
       '/api/watch': {
         get: {
           summary: 'Watch feeds: list registered hardware+model combos (#109)',

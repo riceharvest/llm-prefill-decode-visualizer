@@ -15,6 +15,10 @@ const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 export const DEFAULT_OUTLIER_IQRS = 2.5;
 
 let cache = { rows: null, fetchedAt: 0, promise: null };
+// Unfiltered run index (all upstream rows, comparable or not) — backs the
+// machine-readable dump at /api/runs. Kept separate so the comparable-only
+// endpoints keep their exact cache semantics.
+let rawCache = { rows: null, fetchedAt: 0 };
 
 function comparable(r) {
   const ef = r.engineFlags || {};
@@ -34,7 +38,36 @@ export async function getAllRuns() {
   return (await getDataset()).rows;
 }
 
-/** Fetch all comparable runs plus the fetch timestamp of the cached set. */
+/** Fetch every upstream run — no comparability filter — from cache when fresh. */
+export async function getAllRunsRaw() {
+  if (rawCache.rows && Date.now() - rawCache.fetchedAt < CACHE_TTL_MS) {
+    return rawCache.rows;
+  }
+  const raw = await fetchAllRows();
+  rawCache.rows = raw;
+  rawCache.fetchedAt = Date.now();
+  return raw;
+}
+
+async function fetchAllRows() {
+  const rows = [];
+  for (let offset = 0; offset <= 20000; offset += PAGE) {
+    const res = await fetch(`${UPSTREAM}/leaderboard?limit=${PAGE}&offset=${offset}`, {
+      headers: { accept: 'application/json' }
+    });
+    if (!res.ok) throw new ApiError('UPSTREAM_UNAVAILABLE', `localmaxxing.com leaderboard returned HTTP ${res.status}`);
+    const data = await res.json();
+    const batch = data.rows || [];
+    rows.push(...batch);
+    if (batch.length < PAGE) break;
+  }
+  return rows;
+}
+
+/**
+ * Fetch all comparable runs (comparability filter applied), plus the fetch
+ * timestamp of the cached set.
+ */
 export async function getDataset() {
   if (cache.rows && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
     return { rows: cache.rows, fetchedAt: cache.fetchedAt };
@@ -44,20 +77,10 @@ export async function getDataset() {
   }
 
   cache.promise = (async () => {
-    const rows = [];
-    for (let offset = 0; offset <= 20000; offset += PAGE) {
-      const res = await fetch(`${UPSTREAM}/leaderboard?limit=${PAGE}&offset=${offset}`, {
-        headers: { accept: 'application/json' }
-      });
-      if (!res.ok) throw new ApiError('UPSTREAM_UNAVAILABLE', `localmaxxing.com leaderboard returned HTTP ${res.status}`);
-      const data = await res.json();
-      const batch = data.rows || [];
-      rows.push(...batch);
-      if (batch.length < PAGE) break;
-    }
-    const comparableRows = rows.filter(comparable).map(slim);
+    const raw = await getAllRunsRaw();
+    const comparableRows = raw.filter(comparable).map(slim);
     cache.rows = comparableRows;
-    cache.fetchedAt = Date.now();
+    cache.fetchedAt = rawCache.fetchedAt;
     return comparableRows;
   })();
 
@@ -99,14 +122,22 @@ function slim(r) {
     // Context-length band (issue #39): null when the run reports no usable
     // contextLength — comparisons annotate the mix instead of assuming.
     contextBand: contextBandOf(r.contextLength)?.id ?? null,
-    createdAt: r.createdAt || null,
-    engineVersion: r.engine?.engineVersion || null,
     source: `https://localmaxxing.com/en/runs/${r.id}`
   };
 }
 
 export function invalidateCache() {
   cache = { rows: null, fetchedAt: 0, promise: null };
+  rawCache = { rows: null, fetchedAt: 0 };
+}
+
+/**
+ * Slim an upstream row to the public run shape and tag whether it passes the
+ * comparability filter (batchSize=1, single-stream). Used by the /api/runs
+ * dump so consumers can filter without re-deriving the rules.
+ */
+export function slimRun(r) {
+  return { ...slim(r), comparable: comparable(r) };
 }
 
 /**

@@ -30,6 +30,12 @@
       "returns": "application/json"
     },
     {
+      "path": "/api/runs",
+      "method": "GET",
+      "description": "Full run-index dump in one response: every community-measured run (comparable and non-comparable), each row tagged `comparable`. ?comparable=true|false pre-filters; ?format=csv returns RFC 4180 CSV with a #-comment data dictionary. Best for one-shot crawls — no pagination.",
+      "returns": "application/json"
+    },
+    {
       "path": "/api/benchmarks",
       "method": "GET",
       "description": "Aggregated median + IQR speeds per hardware×model group (outlier-resistant). ?groupBy=hardware|model|quant.",
