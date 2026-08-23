@@ -23,7 +23,9 @@ const STATIC_METADATA = {
   description:
     'LLM inference performance math: TTFT, TPOT, walltime for single-turn chat, agentic loops, batched serving, speculative decoding, and KV-cache VRAM. Includes community-measured hardware benchmarks.',
   url: 'https://llm-prefill-decode-visualizer.vercel.app',
-  docs: '/llms.txt',
+  baseURL: 'https://llm-prefill-decode-visualizer.vercel.app',
+  servers: [{ url: 'https://llm-prefill-decode-visualizer.vercel.app' }],
+  docs: '/llms.txt — also see /api/agent/capabilities.json for the machine-readable surface list',
 };
 
 /** Build the full agents.json document from the route table. */
