@@ -426,6 +426,21 @@ fetches) and CDN-cached for 1h; carries the standard schema-version stamp.
 curl -s "$BASE/api/agent/capabilities.json"
 ```
 
+## `GET /api/agent/compute.json`
+
+Agent-friendly wrapper over the same inference math as `GET /api/compute`
+(`api/_handlers/agent_compute.js` — it wraps `computeBody()`, never
+re-implements math). Pass `?model=<singleTurn|speculative|batched|agentic|kvCache|flagged|cost>`
+plus parameters, or POST JSON (`{"batch":[...]}`, up to 50 sets). Responses are
+flat and self-describing: `description`, `endpoint`, `generatedAt`, echoed
+`scenario`, resolved `inputs`, the deterministic calc id and all math fields at
+the top level. A bare call returns the full capability catalog. Errors use the
+shared RFC 9457 problem+json codes.
+
+```bash
+curl -s "$BASE/api/agent/compute.json?model=singleTurn&prefill=3000&decode=120&outputTokens=200"
+```
+
 ## `GET /api/snapshots`
 
 Content-addressed dataset snapshot ids. Pin any data endpoint with

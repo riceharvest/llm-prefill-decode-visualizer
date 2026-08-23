@@ -210,6 +210,16 @@ agent-facing surface — JSON API endpoints, MCP server, feeds, manifests,
 docs — as `{ path, methods, kind, description }` entries. Static and
 CDN-cached (1h); schema-version stamped.
 
+### GET /api/agent/compute.json
+
+Agent-friendly wrapper over the inference math (`api/_handlers/
+agent_compute.js`, wrapping `api/_handlers/compute.js`). GET with
+`?model=<singleTurn|speculative|batched|agentic|kvCache|flagged|cost>` plus
+params, or POST `{"batch":[...]}` (≤50 sets). Flat self-describing envelope:
+`description`, `endpoint`, `generatedAt`, echoed `scenario`, resolved
+`inputs`, deterministic calc id, all math fields top-level. Bare call returns
+the capability catalog. Errors: shared RFC 9457 problem+json codes.
+
 ### GET /api/benchmarks
 
 Aggregated median + IQR speeds per hardware×model group (outlier-resistant),
