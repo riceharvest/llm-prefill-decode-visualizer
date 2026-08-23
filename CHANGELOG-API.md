@@ -79,6 +79,12 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- New `GET /api/agent/capabilities.json` endpoint: a machine-readable
+  discovery document listing every agent-facing surface of the app — JSON API
+  endpoints, the MCP server (`/api/mcp`, `/.well-known/mcp.json`), feeds,
+  manifests and docs — with methods, kind, and descriptions. Static and
+  CDN-cached (1h); follows the standard schema-version stamping.
+- Affected endpoints: `/api/agent/capabilities.json`.
 - Documented the two independent version numbers (#113-style clarity pass):
   `/api/spec` `info.version` (`2.6.0`, the API *release* version) vs the wire
   contract `schema_version` / `X-Schema-Version` (`"1"`, from
@@ -96,7 +102,6 @@ migrate before `Sunset`. Agents can discover the current policy at
   `?comparable=true|false|all` subsets server-side. Shares the cached upstream
   fetch with the other benchmark endpoints. Additive — no version bump.
 - Affected endpoints: `/api/runs`.
->>>>>>> origin/main
 - New `GET /api/og` endpoint (#105): renders a 1200x630 PNG Open Graph chart
   card from URL params (`preset`, `prefill`, `decode`, `scenario`, `prompt`)
   via @vercel/og. Binary image response (`image/png`, not JSON/schema-
