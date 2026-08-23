@@ -250,6 +250,11 @@ same handler). Flat JSON: `description`, `generatedAt`, echoed `filters`,
 `?model=`, `?quant=`, `?context_band=`, `?max_age=`,
 `?groupBy=hardware|model|hardwareModel`, `?snapshot=`.
 
+### GET /api/agent/confidence.json
+
+Alias for `GET /api/agent/freshness.json` — identical handler and response
+shape (`api/_handlers/agent_freshness.js`). Same filters and schema.
+
 ### GET /api/benchmarks
 
 Aggregated median + IQR speeds per hardware×model group (outlier-resistant),

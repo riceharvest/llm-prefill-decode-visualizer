@@ -488,6 +488,12 @@ upstream cache state — into flat JSON: `description`, `generatedAt`, echoed
 curl -s "$BASE/api/agent/freshness.json"
 ```
 
+## `GET /api/agent/confidence.json`
+
+Alias for `GET /api/agent/freshness.json` — identical handler, identical
+response shape (`api/_handlers/agent_freshness.js`). Use whichever name
+matches your agent's vocabulary; both carry the same filters and schema.
+
 ## `GET /api/snapshots`
 
 Content-addressed dataset snapshot ids. Pin any data endpoint with
