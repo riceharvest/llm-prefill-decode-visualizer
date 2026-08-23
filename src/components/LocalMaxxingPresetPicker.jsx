@@ -211,7 +211,9 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button onClick={togglePickOrder} className="btn" style={{ fontSize: '0.72rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-            title={pickOrder === 'model' ? t('localMaxxing.switchToHardwareTitle') : t('localMaxxing.switchToModelTitle')}>
+            title={pickOrder === 'model' ? t('localMaxxing.switchToHardwareTitle') : t('localMaxxing.switchToModelTitle')}
+            aria-label={pickOrder === 'model' ? t('localMaxxing.switchToHardwareTitle') : t('localMaxxing.switchToModelTitle')}
+            aria-pressed={pickOrder === 'hardware'}>
             <ArrowLeftRight size={13} />
             {pickOrder === 'hardware' ? t('localMaxxing.modelFirst') : t('localMaxxing.hardwareFirst')}
           </button>

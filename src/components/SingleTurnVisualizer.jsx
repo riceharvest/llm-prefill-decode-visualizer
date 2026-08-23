@@ -1090,6 +1090,7 @@ export default function SingleTurnVisualizer({
             <button
               onClick={handleReset}
               title={t('singleTurn.resetTooltip')}
+              aria-label={t('singleTurn.resetTooltip')}
               className="btn"
             >
               <RotateCcw size={15} />

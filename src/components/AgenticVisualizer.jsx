@@ -655,6 +655,7 @@ export default function AgenticVisualizer({
             <button
               onClick={handleReset}
               title={t('agentic.resetTooltip')}
+              aria-label={t('agentic.resetTooltip')}
               className="btn"
             >
               <RotateCcw size={15} />
