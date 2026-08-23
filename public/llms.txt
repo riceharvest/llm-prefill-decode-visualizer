@@ -89,6 +89,11 @@ Every `/api/compute` and `/api/best` response carries a deterministic `id` (`cal
 
 **POST /api/localmaxxing** — submit a community benchmark run for review. JSON body with required `model`, `quant`, `hardware`, `hwClass` (`discrete_gpu|unified|cpu_only`), `prefillTokPerSec`, `decodeTokPerSec`; optional `engine`, token counts, `provenance` (`engineVersion`, `command`, `sourceUrl`, `notes`) and `submitter`. Server-side validation enforces sanity bounds per hardware class (a claimed 99,999 tok/s on an RPi5 is rejected) and rejects near-duplicates of existing runs (same model family + quant + rig within 10%). Valid submissions return `202` with a `submissionId` and are queued for manual review — they never publish immediately. Validation failures return `400` with machine-readable errors: `{"error":"validation_failed","errors":[{"field","code","message"}]}`.
 
+**GET /api/runs** — one-shot machine-readable dump of the **full** run index: every community-measured run (comparable AND batched/non-comparable) as JSON or CSV — no pagination round-trips needed.
+- `/api/runs?format=json` (default): `{ schemaVersion, generatedAt, rowCount, totalRunCount, comparableCount, comparableFilter, dataDictionary[], runs[] }`. Each run carries a `comparable` boolean so you can reproduce the single-stream filter client-side; `totalRunCount` tells you how much a subset left out and `comparableCount` how many rows the aggregate endpoints use.
+- `/api/runs?format=csv`: RFC 4180 with a `#`-comment preamble carrying metadata + a data dictionary (skip `#` lines for clean tabular data); served as a dated attachment.
+- Subset server-side with `?comparable=true|false|all` (default `all`). Shares the 10-minute cache with the other benchmark endpoints.
+
 **Watch feeds (#109)** — subscribe to a hardware+model combo ("RTX 4090 + Qwen3 32B") and get notified when new community runs land for that pair.
 - **RSS (no registration):** poll `/api/watch/rss.xml?model=Qwen3+32B&hardware=RTX+4090&quant=q4_k_m` in any feed reader. Filters mirror GET /api/localmaxxing (`days=N` bounds item age, default 30); newest matching runs first, max 50 items.
 - **Register a watch:** `POST /api/watch {"model":"Qwen3 32B","hardware":"RTX 4090","quant":"q4_k_m","webhookUrl":"https://…"}` → `201 {watchId, secret, rssUrl, matchingExistingRuns}`. At least one of model/hardware is required; webhookUrl must be https and is optional (RSS works without it). The secret is shown once: it authorizes DELETE and is sent to your webhook as `X-Watch-Secret`.
@@ -190,6 +195,8 @@ Budget: 120 requests/min per client IP. Note this is enforced best-effort **per 
 
 Every JSON response carries a top-level `schema_version` field (currently `"1"`) and an `X-Schema-Version: 1` header (also on errors and OPTIONS). Additive changes never bump the version; breaking changes bump the major version and are announced ≥90 days ahead via `Deprecation`, `Sunset`, and `Link; rel="deprecation"` headers. Policy + changelog: /CHANGELOG-API.md in the repo.
 
+Note the two version numbers are independent: `/api/spec`'s `info.version` (currently `2.6.0`) is the API *release* version covering endpoints/params/docs, while wire-level `schema_version` is the response-*contract* version — additive releases bump only `info.version`. The spec mirrors the wire version as `info.x-schema-version`; see CHANGELOG-API.md § "Two version numbers".
+
 ### Errors (RFC 9457 problem+json)
 
 Every error response is a single problem object served as `application/problem+json`:
@@ -212,6 +219,6 @@ The machine-readable registry also lives in `/api/spec` (`x-error-codes` + the `
 
 ### Interactive page
 
-The human-facing UI is this same site. Deep links carry state via URL params: `?tab=single|agentic|compare|kvcache|theory`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, 1–5 tabs.
+The human-facing UI is this same site. Deep links carry state via URL params: `?tab=single|agentic|batching|compare|ab|diff|shortlist|kvcache|theory`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
 
 Source: https://github.com/riceharvest/llm-prefill-decode-visualizer
