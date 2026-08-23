@@ -1,6 +1,6 @@
 from enum import Enum
 
-class GetApiRunsFormat(str, Enum):
+class DumpRunIndexFormat(str, Enum):
     CSV = "csv"
     JSON = "json"
 

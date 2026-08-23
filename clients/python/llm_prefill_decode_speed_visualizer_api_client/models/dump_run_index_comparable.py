@@ -1,6 +1,6 @@
 from enum import Enum
 
-class GetApiRunsComparable(str, Enum):
+class DumpRunIndexComparable(str, Enum):
     ALL = "all"
     FALSE = "false"
     TRUE = "true"

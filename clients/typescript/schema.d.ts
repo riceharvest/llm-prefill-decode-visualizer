@@ -112,111 +112,7 @@ export interface paths {
          * Machine-readable dump of the FULL run index (comparable + non-comparable)
          * @description One-shot export of every community-measured run — including batched/non-comparable ones — so agents and crawlers can consume the whole dataset without JS or pagination round-trips. JSON envelope carries schemaVersion, generatedAt, rowCount, totalRunCount, comparableFilter and a structured dataDictionary; each run carries a `comparable` boolean so consumers can reproduce (or skip) the single-stream filter the aggregate endpoints use. CSV output is RFC 4180 with a `#`-comment preamble carrying metadata plus one dictionary line per column, served as a dated attachment. Shares the 10-minute cached upstream fetch with the other benchmark endpoints.
          */
-        get: {
-            parameters: {
-                query?: {
-                    format?: "json" | "csv";
-                    /** @description Subset rows on the single-stream flag: true = comparable runs only, false = non-comparable only, all = everything (default). totalRunCount always reports the unfiltered index size. */
-                    comparable?: "all" | "true" | "false";
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description {schemaVersion, generatedAt, comparableFilter, rowCount, totalRunCount, comparableCount, dataDictionary[], runs[]} for format=json; RFC 4180 text/csv attachment for format=csv */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        /**
-                         * @example {
-                         *       "description": "Full machine-readable dump of the community-measured LLM benchmark run index…",
-                         *       "schemaVersion": 1,
-                         *       "generatedAt": "2026-08-23T05:00:00.000Z",
-                         *       "comparableFilter": "all",
-                         *       "rowCount": 3642,
-                         *       "totalRunCount": 3642,
-                         *       "comparableCount": 3642,
-                         *       "dataDictionary": [
-                         *         {
-                         *           "column": "runId",
-                         *           "type": "string",
-                         *           "description": "Upstream run identifier"
-                         *         }
-                         *       ],
-                         *       "runs": [
-                         *         {
-                         *           "runId": 58213,
-                         *           "createdAt": "2026-07-30T18:22:41.000Z",
-                         *           "comparable": true,
-                         *           "modelFamily": "qwen3.6-27b",
-                         *           "modelId": "unsloth/Qwen3.6-27B-MTP-GGUF",
-                         *           "hardwareKey": "rtx4090",
-                         *           "engine": "llama.cpp",
-                         *           "quantization": "q4_k_m",
-                         *           "prefillTokPerSec": 3820,
-                         *           "decodeTokPerSec": 108,
-                         *           "contextLength": 8192,
-                         *           "contextBand": "8k-32k",
-                         *           "source": "https://localmaxxing.com/en/runs/58213"
-                         *         }
-                         *       ]
-                         *     }
-                         */
-                        "application/json": unknown;
-                        /**
-                         * @example # dataset: localmaxxing full LLM benchmark run index
-                         *     # schema_version: 1
-                         *     # generated_at: 2026-08-23T05:00:00.000Z
-                         *     # rows: 3642
-                         *     # filter: none — every community-measured run (use the `comparable` column)
-                         *     # data dictionary (column: type — description):
-                         *     runId,createdAt,comparable,…
-                         */
-                        "text/csv": string;
-                    };
-                };
-                /** @description Invalid format/comparable value (code INVALID_PARAMS) */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-                /** @description Method not allowed (code METHOD_NOT_ALLOWED) — only GET and OPTIONS are supported */
-                405: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-                /** @description Rate limited (code RATE_LIMITED) */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-                /** @description Upstream benchmark source unavailable (code UPSTREAM_UNAVAILABLE) — transient, safe to retry with backoff */
-                502: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["Problem"];
-                    };
-                };
-            };
-        };
+        get: operations["dumpRunIndex"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1351,6 +1247,111 @@ export interface operations {
                 };
             };
             429: components["responses"]["RateLimited"];
+        };
+    };
+    dumpRunIndex: {
+        parameters: {
+            query?: {
+                format?: "json" | "csv";
+                /** @description Subset rows on the single-stream flag: true = comparable runs only, false = non-comparable only, all = everything (default). totalRunCount always reports the unfiltered index size. */
+                comparable?: "all" | "true" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {schemaVersion, generatedAt, comparableFilter, rowCount, totalRunCount, comparableCount, dataDictionary[], runs[]} for format=json; RFC 4180 text/csv attachment for format=csv */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "description": "Full machine-readable dump of the community-measured LLM benchmark run index…",
+                     *       "schemaVersion": 1,
+                     *       "generatedAt": "2026-08-23T05:00:00.000Z",
+                     *       "comparableFilter": "all",
+                     *       "rowCount": 3642,
+                     *       "totalRunCount": 3642,
+                     *       "comparableCount": 3642,
+                     *       "dataDictionary": [
+                     *         {
+                     *           "column": "runId",
+                     *           "type": "string",
+                     *           "description": "Upstream run identifier"
+                     *         }
+                     *       ],
+                     *       "runs": [
+                     *         {
+                     *           "runId": 58213,
+                     *           "createdAt": "2026-07-30T18:22:41.000Z",
+                     *           "comparable": true,
+                     *           "modelFamily": "qwen3.6-27b",
+                     *           "modelId": "unsloth/Qwen3.6-27B-MTP-GGUF",
+                     *           "hardwareKey": "rtx4090",
+                     *           "engine": "llama.cpp",
+                     *           "quantization": "q4_k_m",
+                     *           "prefillTokPerSec": 3820,
+                     *           "decodeTokPerSec": 108,
+                     *           "contextLength": 8192,
+                     *           "contextBand": "8k-32k",
+                     *           "source": "https://localmaxxing.com/en/runs/58213"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": unknown;
+                    /**
+                     * @example # dataset: localmaxxing full LLM benchmark run index
+                     *     # schema_version: 1
+                     *     # generated_at: 2026-08-23T05:00:00.000Z
+                     *     # rows: 3642
+                     *     # filter: none — every community-measured run (use the `comparable` column)
+                     *     # data dictionary (column: type — description):
+                     *     runId,createdAt,comparable,…
+                     */
+                    "text/csv": string;
+                };
+            };
+            /** @description Invalid format/comparable value (code INVALID_PARAMS) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Method not allowed (code METHOD_NOT_ALLOWED) — only GET and OPTIONS are supported */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Rate limited (code RATE_LIMITED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Upstream benchmark source unavailable (code UPSTREAM_UNAVAILABLE) — transient, safe to retry with backoff */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listWatches: {

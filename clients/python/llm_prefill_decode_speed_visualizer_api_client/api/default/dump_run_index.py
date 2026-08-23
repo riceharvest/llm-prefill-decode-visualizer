@@ -8,8 +8,8 @@ from ...client import AuthenticatedClient, Client
 from ...types import Response, UNSET
 from ... import errors
 
-from ...models.get_api_runs_comparable import GetApiRunsComparable
-from ...models.get_api_runs_format import GetApiRunsFormat
+from ...models.dump_run_index_comparable import DumpRunIndexComparable
+from ...models.dump_run_index_format import DumpRunIndexFormat
 from ...models.problem import Problem
 from ...types import UNSET, Unset
 from typing import cast
@@ -18,8 +18,8 @@ from typing import cast
 
 def _get_kwargs(
     *,
-    format_: GetApiRunsFormat | Unset = GetApiRunsFormat.JSON,
-    comparable: GetApiRunsComparable | Unset = GetApiRunsComparable.ALL,
+    format_: DumpRunIndexFormat | Unset = DumpRunIndexFormat.JSON,
+    comparable: DumpRunIndexComparable | Unset = DumpRunIndexComparable.ALL,
 
 ) -> dict[str, Any]:
     
@@ -106,8 +106,8 @@ def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Res
 def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
-    format_: GetApiRunsFormat | Unset = GetApiRunsFormat.JSON,
-    comparable: GetApiRunsComparable | Unset = GetApiRunsComparable.ALL,
+    format_: DumpRunIndexFormat | Unset = DumpRunIndexFormat.JSON,
+    comparable: DumpRunIndexComparable | Unset = DumpRunIndexComparable.ALL,
 
 ) -> Response[Any | Problem]:
     """ Machine-readable dump of the FULL run index (comparable + non-comparable)
@@ -121,8 +121,8 @@ def sync_detailed(
     10-minute cached upstream fetch with the other benchmark endpoints.
 
     Args:
-        format_ (GetApiRunsFormat | Unset):  Default: GetApiRunsFormat.JSON.
-        comparable (GetApiRunsComparable | Unset):  Default: GetApiRunsComparable.ALL.
+        format_ (DumpRunIndexFormat | Unset):  Default: DumpRunIndexFormat.JSON.
+        comparable (DumpRunIndexComparable | Unset):  Default: DumpRunIndexComparable.ALL.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -148,8 +148,8 @@ comparable=comparable,
 def sync(
     *,
     client: AuthenticatedClient | Client,
-    format_: GetApiRunsFormat | Unset = GetApiRunsFormat.JSON,
-    comparable: GetApiRunsComparable | Unset = GetApiRunsComparable.ALL,
+    format_: DumpRunIndexFormat | Unset = DumpRunIndexFormat.JSON,
+    comparable: DumpRunIndexComparable | Unset = DumpRunIndexComparable.ALL,
 
 ) -> Any | Problem | None:
     """ Machine-readable dump of the FULL run index (comparable + non-comparable)
@@ -163,8 +163,8 @@ def sync(
     10-minute cached upstream fetch with the other benchmark endpoints.
 
     Args:
-        format_ (GetApiRunsFormat | Unset):  Default: GetApiRunsFormat.JSON.
-        comparable (GetApiRunsComparable | Unset):  Default: GetApiRunsComparable.ALL.
+        format_ (DumpRunIndexFormat | Unset):  Default: DumpRunIndexFormat.JSON.
+        comparable (DumpRunIndexComparable | Unset):  Default: DumpRunIndexComparable.ALL.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -185,8 +185,8 @@ comparable=comparable,
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
-    format_: GetApiRunsFormat | Unset = GetApiRunsFormat.JSON,
-    comparable: GetApiRunsComparable | Unset = GetApiRunsComparable.ALL,
+    format_: DumpRunIndexFormat | Unset = DumpRunIndexFormat.JSON,
+    comparable: DumpRunIndexComparable | Unset = DumpRunIndexComparable.ALL,
 
 ) -> Response[Any | Problem]:
     """ Machine-readable dump of the FULL run index (comparable + non-comparable)
@@ -200,8 +200,8 @@ async def asyncio_detailed(
     10-minute cached upstream fetch with the other benchmark endpoints.
 
     Args:
-        format_ (GetApiRunsFormat | Unset):  Default: GetApiRunsFormat.JSON.
-        comparable (GetApiRunsComparable | Unset):  Default: GetApiRunsComparable.ALL.
+        format_ (DumpRunIndexFormat | Unset):  Default: DumpRunIndexFormat.JSON.
+        comparable (DumpRunIndexComparable | Unset):  Default: DumpRunIndexComparable.ALL.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -227,8 +227,8 @@ comparable=comparable,
 async def asyncio(
     *,
     client: AuthenticatedClient | Client,
-    format_: GetApiRunsFormat | Unset = GetApiRunsFormat.JSON,
-    comparable: GetApiRunsComparable | Unset = GetApiRunsComparable.ALL,
+    format_: DumpRunIndexFormat | Unset = DumpRunIndexFormat.JSON,
+    comparable: DumpRunIndexComparable | Unset = DumpRunIndexComparable.ALL,
 
 ) -> Any | Problem | None:
     """ Machine-readable dump of the FULL run index (comparable + non-comparable)
@@ -242,8 +242,8 @@ async def asyncio(
     10-minute cached upstream fetch with the other benchmark endpoints.
 
     Args:
-        format_ (GetApiRunsFormat | Unset):  Default: GetApiRunsFormat.JSON.
-        comparable (GetApiRunsComparable | Unset):  Default: GetApiRunsComparable.ALL.
+        format_ (DumpRunIndexFormat | Unset):  Default: DumpRunIndexFormat.JSON.
+        comparable (DumpRunIndexComparable | Unset):  Default: DumpRunIndexComparable.ALL.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
