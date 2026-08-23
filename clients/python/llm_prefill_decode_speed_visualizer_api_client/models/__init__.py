@@ -59,6 +59,8 @@ from .contradiction_metric import ContradictionMetric
 from .create_watch_response_429 import CreateWatchResponse429
 from .cross_check import CrossCheck
 from .dispatch_watch_webhooks_response_429 import DispatchWatchWebhooksResponse429
+from .get_api_runs_comparable import GetApiRunsComparable
+from .get_api_runs_format import GetApiRunsFormat
 from .get_benchmark_aggregates_context_band import GetBenchmarkAggregatesContextBand
 from .get_benchmark_aggregates_group_by import GetBenchmarkAggregatesGroupBy
 from .get_benchmark_aggregates_hw_class import GetBenchmarkAggregatesHwClass
@@ -170,6 +172,8 @@ __all__ = (
     "CreateWatchResponse429",
     "CrossCheck",
     "DispatchWatchWebhooksResponse429",
+    "GetApiRunsComparable",
+    "GetApiRunsFormat",
     "GetBenchmarkAggregatesContextBand",
     "GetBenchmarkAggregatesGroupBy",
     "GetBenchmarkAggregatesHwClass",
