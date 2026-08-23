@@ -48,6 +48,7 @@ const LOCKED_OPERATION_IDS = {
   'GET /api/calc/{id}': 'replayCalculation',
   'GET /api/presets': 'listPresets',
   'GET /api/localmaxxing': 'listBenchmarkRuns',
+  'GET /api/runs': 'dumpRunIndex',
   'GET /api/watch': 'listWatches',
   'POST /api/watch': 'createWatch',
   'DELETE /api/watch': 'deleteWatch',

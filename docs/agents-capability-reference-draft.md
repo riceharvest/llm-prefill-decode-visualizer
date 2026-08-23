@@ -191,6 +191,18 @@ Submit a community benchmark run **for manual review** — never instant-publish
 fields. Validation failures → `400` problem+json with machine-readable codes;
 success → `202 {status: "queued", submissionId}`.
 
+### GET /api/runs
+
+One-shot machine-readable dump of the FULL run index — comparable AND
+batched/non-comparable runs (`api/_handlers/runs.js`, formatting in
+`api/_runs_dump.js`). Params: `?format=json|csv` (default json),
+`?comparable=all|true|false` (default all). JSON envelope:
+`{ schemaVersion, generatedAt, comparableFilter, rowCount, totalRunCount,
+comparableCount, dataDictionary, runs }`; every run carries a `comparable`
+boolean. CSV is RFC 4180 with a `#`-comment metadata preamble + data
+dictionary, served as a dated attachment. Non-GET → `405` problem+json
+(`METHOD_NOT_ALLOWED`).
+
 ### GET /api/benchmarks
 
 Aggregated median + IQR speeds per hardware×model group (outlier-resistant),

@@ -786,6 +786,7 @@ export default function handler(req, res) {
       },
       '/api/runs': {
         get: {
+          operationId: 'dumpRunIndex',
           summary: 'Machine-readable dump of the FULL run index (comparable + non-comparable)',
           description: 'One-shot export of every community-measured run — including batched/non-comparable ones — so agents and crawlers can consume the whole dataset without JS or pagination round-trips. JSON envelope carries schemaVersion, generatedAt, rowCount, totalRunCount, comparableFilter and a structured dataDictionary; each run carries a `comparable` boolean so consumers can reproduce (or skip) the single-stream filter the aggregate endpoints use. CSV output is RFC 4180 with a `#`-comment preamble carrying metadata plus one dictionary line per column, served as a dated attachment. Shares the 10-minute cached upstream fetch with the other benchmark endpoints.',
           parameters: [

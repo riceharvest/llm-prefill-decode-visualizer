@@ -176,6 +176,22 @@ curl -s "$BASE/api/localmaxxing?hardware=4090&limit=20"
 }
 ```
 
+## `GET /api/runs`
+
+One-shot machine-readable dump of the FULL run index — comparable AND
+batched/non-comparable runs (`api/_handlers/runs.js`). Params:
+`?format=json|csv` (default json), `?comparable=all|true|false` (default all).
+JSON envelope: `{ schemaVersion, generatedAt, comparableFilter, rowCount,
+totalRunCount, comparableCount, dataDictionary, runs }`; every run carries a
+`comparable` boolean so consumers can reproduce (or skip) the single-stream
+filter. CSV is RFC 4180 with a `#`-comment metadata preamble + data dictionary,
+served as a dated attachment. Shares the cached upstream fetch with the other
+benchmark endpoints.
+
+```bash
+curl -s "$BASE/api/runs?comparable=true" | head -c 400
+```
+
 ## `GET /api/benchmarks`
 
 Aggregated speeds: median + IQR + 95% bootstrap CI per group. Cursor pagination
@@ -465,6 +481,7 @@ truth: `api/_errors.js`, mirrored into `/api/spec` under `x-error-codes`):
 | Code | HTTP status | Meaning |
 | --- | --- | --- |
 | `INVALID_PARAMS` | 400 | Well-formed request with invalid/missing parameters. Fix the input; retry without backoff. |
+| `METHOD_NOT_ALLOWED` | 405 | HTTP method not supported on this path (e.g. POST to `/api/runs`). Check the `Allow` header; switch to GET. |
 | `NOT_FOUND` | 404 | Referenced resource does not exist (e.g. unknown watch id). Do not retry unchanged. |
 | `RATE_LIMITED` | 429 | Too many requests. Honor `Retry-After` (seconds), then retry with backoff. |
 | `UPSTREAM_UNAVAILABLE` | 502 | Transient failure fetching community benchmark data. Safe to retry with backoff. |
