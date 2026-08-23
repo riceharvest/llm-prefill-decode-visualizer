@@ -11,6 +11,7 @@ import { default as diff } from './_handlers/diff.js';
 import { default as exportHandler } from './_handlers/export.js';
 import { default as runsDump } from './_handlers/runs.js';
 import { default as health } from './_handlers/health.js';
+import { default as version } from './_handlers/version.js';
 import { default as og } from './_handlers/og.js';
 import { default as parseConstraints } from './_handlers/parse-constraints.js';
 import { default as sizing } from './_handlers/sizing.js';
@@ -81,6 +82,7 @@ export default async function handler(req, res) {
       case '/export': return exportHandler(req, res);
       case '/runs': return runsDump(req, res);
       case '/health': return health(req, res);
+      case '/version': return version(req, res);
       case '/og': return og(req, res);
       case '/parse-constraints': return parseConstraints(req, res);
       case '/sizing': return sizing(req, res);

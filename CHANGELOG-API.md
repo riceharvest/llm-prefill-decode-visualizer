@@ -79,6 +79,16 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- New `GET /api/version` endpoint: machine-readable version report for agents
+  and clients — service name, app `version` (package.json), `schemaVersion`
+  (the wire schema_version stamped on every JSON response), `generatedAt`
+  timestamp and links to `/api/spec`, `CHANGELOG-API.md` and this changelog's
+  JSON twin. Additive endpoint; no existing fields changed.
+- New root-level `CHANGELOG.json`: machine-readable keep-a-changelog-style
+  projection of `CHANGELOG-API.md` (unreleased bullets + versioned entries
+  with date/note/changes), so agents can read the API history without parsing
+  markdown. Drift-tested against this file by `api/_changelog.test.js`.
+- Affected endpoints: `/api/version`.
 - New `GET /api/agent/freshness.json` endpoint: agent-readable data-freshness
   and confidence report (alias: `/api/agent/confidence.json`, same handler).
   Wraps the existing freshness/confidence machinery (`groupFreshness()` +
