@@ -3,7 +3,13 @@
   "name": "llm-prefill-decode-visualizer",
   "description": "LLM inference performance math: TTFT, TPOT, walltime for single-turn chat, agentic loops, batched serving, speculative decoding, and KV-cache VRAM. Includes community-measured hardware benchmarks.",
   "url": "https://llm-prefill-decode-visualizer.vercel.app",
-  "docs": "/llms.txt",
+  "baseURL": "https://llm-prefill-decode-visualizer.vercel.app",
+  "servers": [
+    {
+      "url": "https://llm-prefill-decode-visualizer.vercel.app"
+    }
+  ],
+  "docs": "/llms.txt — also see /api/agent/capabilities.json for the machine-readable surface list",
   "endpoints": [
     {
       "path": "/api/agent/benchmarks.json",
@@ -57,14 +63,14 @@
     {
       "path": "/api/benchmarks",
       "method": "GET",
-      "description": "Aggregated median + IQR speeds per hardware×model group (outlier-resistant). ?groupBy=hardware|model|quant.",
+      "description": "Aggregated median + IQR speeds per hardware×model group (outlier-resistant). ?groupBy=hardware|model|quant. Cursor-paginated; for the raw run dump (no pagination) see /api/runs.",
       "returns": "application/json",
       "sinceVersion": "1.0.0"
     },
     {
       "path": "/api/best",
       "method": "GET",
-      "description": "Ranked answers: ?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M.",
+      "description": "Ranked answers: ?by=decode|prefill|cost|walltime (default decode). e.g. ?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M; ?model=<family> for that model; ?fitCheck=true&contextLength=N adds VRAM-fit. Results carry median tok/s, VRAM fit, pricing and power. For the raw run dump (no pagination) see /api/runs.",
       "returns": "application/json",
       "sinceVersion": "1.0.0"
     },
@@ -113,14 +119,14 @@
     {
       "path": "/api/localmaxxing",
       "method": "GET",
-      "description": "Community-measured single-stream benchmark runs with normalized model families. GET: no params = hardware summary; ?hardware=&model=&quant=&limit=N filters. POST: submit a new run for community benchmarking (queued, unit-audited at ingest).",
+      "description": "Community-measured single-stream benchmark runs with normalized model families. GET: no params = hardware summary; ?hardware=&model=&quant=&limit=N filters (cursor-paginated via next_cursor). POST: submit a new run for community benchmarking (queued, unit-audited at ingest). For the entire dataset in one call without pagination, use /api/runs.",
       "returns": "application/json",
       "sinceVersion": "1.0.0"
     },
     {
       "path": "/api/localmaxxing",
       "method": "POST",
-      "description": "Community-measured single-stream benchmark runs with normalized model families. GET: no params = hardware summary; ?hardware=&model=&quant=&limit=N filters. POST: submit a new run for community benchmarking (queued, unit-audited at ingest).",
+      "description": "Community-measured single-stream benchmark runs with normalized model families. GET: no params = hardware summary; ?hardware=&model=&quant=&limit=N filters (cursor-paginated via next_cursor). POST: submit a new run for community benchmarking (queued, unit-audited at ingest). For the entire dataset in one call without pagination, use /api/runs.",
       "returns": "application/json",
       "sinceVersion": "1.0.0"
     },
