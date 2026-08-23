@@ -18,6 +18,7 @@ import datetime
 
 if TYPE_CHECKING:
   from ..models.caveat import Caveat
+  from ..models.rate_limit import RateLimit
   from ..models.run import Run
   from ..models.snapshot_ref import SnapshotRef
 
@@ -47,6 +48,8 @@ class RunListEnvelope:
                 RunListEnvelopeContextBandType3Type1 | Unset): Echoed ?context_band= filter (null when unset)
             caveats (list[Caveat] | Unset):
             next_cursor (None | str | Unset): Opaque keyset cursor; pass back as ?cursor=
+            rate_limit (RateLimit | Unset): Machine-readable rate-limit state — the same numbers the X-RateLimit-* headers
+                carry, for clients that only parse bodies.
             schema_version (Literal['1'] | Unset):
      """
 
@@ -60,6 +63,7 @@ class RunListEnvelope:
     context_band: None | RunListEnvelopeContextBandType1 | RunListEnvelopeContextBandType2Type1 | RunListEnvelopeContextBandType3Type1 | Unset = UNSET
     caveats: list[Caveat] | Unset = UNSET
     next_cursor: None | str | Unset = UNSET
+    rate_limit: RateLimit | Unset = UNSET
     schema_version: Literal['1'] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -69,6 +73,7 @@ class RunListEnvelope:
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.caveat import Caveat
+        from ..models.rate_limit import RateLimit
         from ..models.run import Run
         from ..models.snapshot_ref import SnapshotRef
         total = self.total
@@ -129,6 +134,10 @@ class RunListEnvelope:
         else:
             next_cursor = self.next_cursor
 
+        rate_limit: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.rate_limit, Unset):
+            rate_limit = self.rate_limit.to_dict()
+
         schema_version = self.schema_version
 
 
@@ -153,6 +162,8 @@ class RunListEnvelope:
             field_dict["caveats"] = caveats
         if next_cursor is not UNSET:
             field_dict["next_cursor"] = next_cursor
+        if rate_limit is not UNSET:
+            field_dict["rate_limit"] = rate_limit
         if schema_version is not UNSET:
             field_dict["schema_version"] = schema_version
 
@@ -163,6 +174,7 @@ class RunListEnvelope:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.caveat import Caveat
+        from ..models.rate_limit import RateLimit
         from ..models.run import Run
         from ..models.snapshot_ref import SnapshotRef
         d = dict(src_dict)
@@ -284,6 +296,16 @@ class RunListEnvelope:
         next_cursor = _parse_next_cursor(d.pop("next_cursor", UNSET))
 
 
+        _rate_limit = d.pop("rate_limit", UNSET)
+        rate_limit: RateLimit | Unset
+        if isinstance(_rate_limit,  Unset):
+            rate_limit = UNSET
+        else:
+            rate_limit = RateLimit.from_dict(_rate_limit)
+
+
+
+
         schema_version = cast(Literal['1'] | Unset , d.pop("schema_version", UNSET))
         if schema_version != '1'and not isinstance(schema_version, Unset):
             raise ValueError(f"schema_version must match const '1', got '{schema_version}'")
@@ -299,6 +321,7 @@ class RunListEnvelope:
             context_band=context_band,
             caveats=caveats,
             next_cursor=next_cursor,
+            rate_limit=rate_limit,
             schema_version=schema_version,
         )
 

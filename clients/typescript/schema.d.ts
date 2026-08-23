@@ -420,6 +420,19 @@ export interface components {
             createdAt?: string | null;
             runCount?: number | null;
         };
+        /** @description Machine-readable rate-limit state — the same numbers the X-RateLimit-* headers carry, for clients that only parse bodies. */
+        RateLimit: {
+            /** @description Requests allowed per window */
+            limit: number;
+            /** @description Requests remaining in the current window */
+            remaining: number;
+            /** @description Unix epoch seconds when the current window resets */
+            reset: number;
+            /** @description Window length in seconds */
+            window_seconds: number;
+            /** @description Limiting policy, e.g. fixed-window per client IP */
+            policy: string;
+        };
         /** @description The single fastest measured run inside a group. */
         BestRunSummary: {
             runId: number;
@@ -756,6 +769,7 @@ export interface components {
             has_more: boolean;
             /** @description Opaque keyset cursor; pass back as ?cursor= */
             next_cursor?: string | null;
+            rate_limit?: components["schemas"]["RateLimit"];
             /** @constant */
             schema_version?: "1";
         };
@@ -839,6 +853,7 @@ export interface components {
             items: components["schemas"]["BenchmarkGroup"][];
             has_more: boolean;
             next_cursor?: string | null;
+            rate_limit?: components["schemas"]["RateLimit"];
             /** @constant */
             schema_version?: "1";
         };
@@ -866,6 +881,7 @@ export interface components {
             /** @description Human-readable group-level warnings (mixed engine versions / context bands) */
             warnings: string[];
             results: components["schemas"]["BestResult"][];
+            rate_limit?: components["schemas"]["RateLimit"];
             /** @constant */
             schema_version?: "1";
         };

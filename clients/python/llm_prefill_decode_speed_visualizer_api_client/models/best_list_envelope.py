@@ -20,6 +20,7 @@ import datetime
 if TYPE_CHECKING:
   from ..models.best_result import BestResult
   from ..models.caveat import Caveat
+  from ..models.rate_limit import RateLimit
   from ..models.snapshot_ref import SnapshotRef
 
 
@@ -50,6 +51,8 @@ class BestListEnvelope:
             max_age_days (float | None | Unset): Echoed ?max_age= filter (null when unset)
             context_band (BestListEnvelopeContextBandType1 | BestListEnvelopeContextBandType2Type1 |
                 BestListEnvelopeContextBandType3Type1 | None | Unset): Echoed ?context_band= filter (null when unset)
+            rate_limit (RateLimit | Unset): Machine-readable rate-limit state — the same numbers the X-RateLimit-* headers
+                carry, for clients that only parse bodies.
             schema_version (Literal['1'] | Unset):
      """
 
@@ -65,6 +68,7 @@ class BestListEnvelope:
     excluded_runs: int | None | Unset = UNSET
     max_age_days: float | None | Unset = UNSET
     context_band: BestListEnvelopeContextBandType1 | BestListEnvelopeContextBandType2Type1 | BestListEnvelopeContextBandType3Type1 | None | Unset = UNSET
+    rate_limit: RateLimit | Unset = UNSET
     schema_version: Literal['1'] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -75,6 +79,7 @@ class BestListEnvelope:
     def to_dict(self) -> dict[str, Any]:
         from ..models.best_result import BestResult
         from ..models.caveat import Caveat
+        from ..models.rate_limit import RateLimit
         from ..models.snapshot_ref import SnapshotRef
         ranked_by = self.ranked_by.value
 
@@ -138,6 +143,10 @@ class BestListEnvelope:
         else:
             context_band = self.context_band
 
+        rate_limit: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.rate_limit, Unset):
+            rate_limit = self.rate_limit.to_dict()
+
         schema_version = self.schema_version
 
 
@@ -165,6 +174,8 @@ class BestListEnvelope:
             field_dict["maxAgeDays"] = max_age_days
         if context_band is not UNSET:
             field_dict["contextBand"] = context_band
+        if rate_limit is not UNSET:
+            field_dict["rate_limit"] = rate_limit
         if schema_version is not UNSET:
             field_dict["schema_version"] = schema_version
 
@@ -176,6 +187,7 @@ class BestListEnvelope:
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.best_result import BestResult
         from ..models.caveat import Caveat
+        from ..models.rate_limit import RateLimit
         from ..models.snapshot_ref import SnapshotRef
         d = dict(src_dict)
         ranked_by = BestListEnvelopeRankedBy(d.pop("rankedBy"))
@@ -302,6 +314,16 @@ class BestListEnvelope:
         context_band = _parse_context_band(d.pop("contextBand", UNSET))
 
 
+        _rate_limit = d.pop("rate_limit", UNSET)
+        rate_limit: RateLimit | Unset
+        if isinstance(_rate_limit,  Unset):
+            rate_limit = UNSET
+        else:
+            rate_limit = RateLimit.from_dict(_rate_limit)
+
+
+
+
         schema_version = cast(Literal['1'] | Unset , d.pop("schema_version", UNSET))
         if schema_version != '1'and not isinstance(schema_version, Unset):
             raise ValueError(f"schema_version must match const '1', got '{schema_version}'")
@@ -319,6 +341,7 @@ class BestListEnvelope:
             excluded_runs=excluded_runs,
             max_age_days=max_age_days,
             context_band=context_band,
+            rate_limit=rate_limit,
             schema_version=schema_version,
         )
 

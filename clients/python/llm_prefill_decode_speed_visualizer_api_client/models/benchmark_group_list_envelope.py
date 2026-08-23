@@ -21,6 +21,7 @@ if TYPE_CHECKING:
   from ..models.benchmark_group_list_envelope_outlier_policy import BenchmarkGroupListEnvelopeOutlierPolicy
   from ..models.benchmark_group_list_envelope_unit_audit import BenchmarkGroupListEnvelopeUnitAudit
   from ..models.caveat import Caveat
+  from ..models.rate_limit import RateLimit
   from ..models.snapshot_ref import SnapshotRef
 
 
@@ -60,6 +61,8 @@ class BenchmarkGroupListEnvelope:
                 are included in stats.
             unit_audit (BenchmarkGroupListEnvelopeUnitAudit | Unset): Unit-consistency audit across all matching runs.
             next_cursor (None | str | Unset):
+            rate_limit (RateLimit | Unset): Machine-readable rate-limit state — the same numbers the X-RateLimit-* headers
+                carry, for clients that only parse bodies.
             schema_version (Literal['1'] | Unset):
      """
 
@@ -82,6 +85,7 @@ class BenchmarkGroupListEnvelope:
     outlier_policy: BenchmarkGroupListEnvelopeOutlierPolicy | Unset = UNSET
     unit_audit: BenchmarkGroupListEnvelopeUnitAudit | Unset = UNSET
     next_cursor: None | str | Unset = UNSET
+    rate_limit: RateLimit | Unset = UNSET
     schema_version: Literal['1'] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -94,6 +98,7 @@ class BenchmarkGroupListEnvelope:
         from ..models.benchmark_group_list_envelope_outlier_policy import BenchmarkGroupListEnvelopeOutlierPolicy
         from ..models.benchmark_group_list_envelope_unit_audit import BenchmarkGroupListEnvelopeUnitAudit
         from ..models.caveat import Caveat
+        from ..models.rate_limit import RateLimit
         from ..models.snapshot_ref import SnapshotRef
         total = self.total
 
@@ -183,6 +188,10 @@ class BenchmarkGroupListEnvelope:
         else:
             next_cursor = self.next_cursor
 
+        rate_limit: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.rate_limit, Unset):
+            rate_limit = self.rate_limit.to_dict()
+
         schema_version = self.schema_version
 
 
@@ -225,6 +234,8 @@ class BenchmarkGroupListEnvelope:
             field_dict["unitAudit"] = unit_audit
         if next_cursor is not UNSET:
             field_dict["next_cursor"] = next_cursor
+        if rate_limit is not UNSET:
+            field_dict["rate_limit"] = rate_limit
         if schema_version is not UNSET:
             field_dict["schema_version"] = schema_version
 
@@ -238,6 +249,7 @@ class BenchmarkGroupListEnvelope:
         from ..models.benchmark_group_list_envelope_outlier_policy import BenchmarkGroupListEnvelopeOutlierPolicy
         from ..models.benchmark_group_list_envelope_unit_audit import BenchmarkGroupListEnvelopeUnitAudit
         from ..models.caveat import Caveat
+        from ..models.rate_limit import RateLimit
         from ..models.snapshot_ref import SnapshotRef
         d = dict(src_dict)
         total = d.pop("total")
@@ -394,6 +406,16 @@ class BenchmarkGroupListEnvelope:
         next_cursor = _parse_next_cursor(d.pop("next_cursor", UNSET))
 
 
+        _rate_limit = d.pop("rate_limit", UNSET)
+        rate_limit: RateLimit | Unset
+        if isinstance(_rate_limit,  Unset):
+            rate_limit = UNSET
+        else:
+            rate_limit = RateLimit.from_dict(_rate_limit)
+
+
+
+
         schema_version = cast(Literal['1'] | Unset , d.pop("schema_version", UNSET))
         if schema_version != '1'and not isinstance(schema_version, Unset):
             raise ValueError(f"schema_version must match const '1', got '{schema_version}'")
@@ -418,6 +440,7 @@ class BenchmarkGroupListEnvelope:
             outlier_policy=outlier_policy,
             unit_audit=unit_audit,
             next_cursor=next_cursor,
+            rate_limit=rate_limit,
             schema_version=schema_version,
         )
 
