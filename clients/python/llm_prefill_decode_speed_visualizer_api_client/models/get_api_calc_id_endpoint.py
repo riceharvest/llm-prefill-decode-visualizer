@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class GetApiCalcIdEndpoint(str, Enum):
     BEST = "best"
     COMPUTE = "compute"

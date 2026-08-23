@@ -1,34 +1,26 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
-from ..types import UNSET, Unset
-
-
-
-
-
-
 T = TypeVar("T", bound="PostApiWatchResponse429")
-
 
 
 @_attrs_define
 class PostApiWatchResponse429:
-    """ 
-        Attributes:
-            error (str | Unset):
-            limit (int | Unset):
-            remaining (int | Unset):
-            reset (int | Unset): Unix epoch seconds
-            retry_after_seconds (int | Unset):
-     """
+    """
+    Attributes:
+        error (str | Unset):
+        limit (int | Unset):
+        remaining (int | Unset):
+        reset (int | Unset): Unix epoch seconds
+        retry_after_seconds (int | Unset):
+    """
 
     error: str | Unset = UNSET
     limit: int | Unset = UNSET
@@ -36,10 +28,6 @@ class PostApiWatchResponse429:
     reset: int | Unset = UNSET
     retry_after_seconds: int | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
-
-
-
-
 
     def to_dict(self) -> dict[str, Any]:
         error = self.error
@@ -52,11 +40,9 @@ class PostApiWatchResponse429:
 
         retry_after_seconds = self.retry_after_seconds
 
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-        })
+        field_dict.update({})
         if error is not UNSET:
             field_dict["error"] = error
         if limit is not UNSET:
@@ -69,8 +55,6 @@ class PostApiWatchResponse429:
             field_dict["retryAfterSeconds"] = retry_after_seconds
 
         return field_dict
-
-
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
@@ -92,7 +76,6 @@ class PostApiWatchResponse429:
             reset=reset,
             retry_after_seconds=retry_after_seconds,
         )
-
 
         post_api_watch_response_429.additional_properties = d
         return post_api_watch_response_429

@@ -1,19 +1,50 @@
-# 404 — Not Found
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>404 — Not Found — LLM Prefill &amp; Decode Speed Visualizer</title>
+<meta name="description" content="Page not found. Jump to the interactive visualizer, the agent guidance at /llms.txt, the OpenAPI spec at /api/spec, or the health check at /api/health.">
+<!-- No canonical: this page renders for arbitrary not-found URLs and must
+     stay indexable-neutral (Vercel serves it with a real 404 status). -->
+<meta name="robots" content="noindex">
+<style>
+  body { font-family: system-ui, sans-serif; background: #0A0D11; color: #E6EAF0; max-width: 680px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+  a { color: #22D3EE; }
+  h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 1.6em; color: #97A3B2; }
+  code { background: #161B22; border: 1px solid #30363D; border-radius: 4px; padding: 1px 5px; font-size: 0.85em; overflow-wrap: anywhere; }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "Page Not Found",
+  "url": "https://llm-prefill-decode-visualizer.vercel.app/404.html",
+  "description": "The requested path does not exist on this site. Recovery links: agent guidance, API reference, health check, homepage."
+}
+</script>
+</head>
+<body>
+<h1>404 — Not Found</h1>
+<p>The path you requested does not exist on this site.</p>
 
-The path you requested does not exist on this site.
+<h2>Where to look next</h2>
 
-## Where to look next
+<ul>
+<li><strong>Agent guidance</strong>: <a href="/llms.txt">/llms.txt</a> — machine-readable instructions, when-to-use guidance, and the full endpoint list.</li>
+<li><strong>API reference</strong>: <a href="/api/spec">/api/spec</a> — OpenAPI spec listing every endpoint.</li>
+<li><strong>Health check</strong>: <a href="/api/health">/api/health</a> — liveness + data freshness.</li>
+<li><strong>Homepage</strong>: <a href="/">/</a> — the interactive visualizer.</li>
+</ul>
 
-- **Agent guidance**: [/llms.txt](/llms.txt) — machine-readable instructions, when-to-use guidance, and the full endpoint list.
-- **API reference**: [/api/spec](/api/spec) — OpenAPI spec listing every endpoint.
-- **Health check**: [/api/health](/api/health) — liveness + data freshness.
-- **Homepage**: [/](/) — the interactive visualizer.
+<h2>Quick-start endpoints</h2>
 
-## Quick-start endpoints
+<ul>
+<li><code>GET /api/compute?model=singleTurn&amp;promptTokens=4096&amp;outputTokens=512&amp;prefillSpeed=3800&amp;decodeSpeed=105</code></li>
+<li><code>GET /api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&amp;context=65536</code></li>
+<li><code>GET /api/presets</code></li>
+</ul>
 
-- `GET /api/compute?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105`
-- `GET /api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536`
-- `GET /api/presets`
-
-Tip: send `Accept: text/markdown` on any API route to receive a markdown
-rendering of the response instead of JSON.
+<p>Tip: send <code>Accept: text/markdown</code> on any API route to receive a markdown rendering of the response instead of JSON.</p>
+</body>
+</html>
