@@ -49,6 +49,12 @@
       "returns": "application/json"
     },
     {
+      "path": "/api/runs",
+      "method": "GET",
+      "description": "One-shot machine-readable dump of the full run index (comparable AND batched/non-comparable runs). ?format=json|csv; ?comparable=all|true|false. Each run carries a `comparable` flag; JSON envelope includes dataDictionary.",
+      "returns": "application/json or text/csv"
+    },
+    {
       "path": "/api/benchmarks",
       "method": "GET",
       "description": "Aggregated median + IQR speeds per hardware×model group (outlier-resistant). ?groupBy=hardware|model|quant. Cursor-paginated like /api/localmaxxing; sorted by median decode desc.",
