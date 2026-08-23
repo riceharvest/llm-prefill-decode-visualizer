@@ -11,15 +11,16 @@
     <!-- Open Graph (#105): /api/og renders a 1200x630 chart card from the URL
          params; App.jsx keeps these tags pointed at the live config. -->
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://llm-prefill-decode-visualizer.vercel.app/" />
     <meta property="og:site_name" content="LLM Prefill & Decode Speed Visualizer" />
     <meta property="og:title" content="LLM Prefill & Decode Speed Visualizer" />
     <meta property="og:description" content="Simulate LLM prefill & decode token streaming across GPUs, Macs and cloud endpoints — tok/s, TTFT, TPOT and KV-cache math." />
-    <meta property="og:image" content="/api/og" />
+    <meta property="og:image" content="https://llm-prefill-decode-visualizer.vercel.app/api/og" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Chart of LLM prefill and decode tok/s speeds per hardware preset" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="/api/og" />
+    <meta name="twitter:image" content="https://llm-prefill-decode-visualizer.vercel.app/api/og" />
 
     <!-- JSON-LD: SoftwareApplication identity (agent readiness #6) -->
     <script type="application/ld+json">
@@ -77,8 +78,29 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Skip link (a11y): visually hidden until keyboard-focused. Kept inline
+         here so it works regardless of app CSS load order/failures. -->
+    <style>
+      .skip-link {
+        position: absolute;
+        left: -9999px;
+        top: 0;
+        z-index: 1000;
+        background: #111;
+        color: #fff;
+        padding: 0.5rem 1rem;
+        border-radius: 0 0 0.25rem 0.25rem;
+      }
+      .skip-link:focus {
+        left: 0.5rem;
+      }
+    </style>
   </head>
   <body>
+    <!-- Skip link: lets keyboard and screen-reader users jump straight to
+         the main content instead of tabbing through navigation. -->
+    <a class="skip-link" href="#root">Skip to main content</a>
     <!-- Server-rendered summary: visible to agents/crawlers without JS.
          Hidden visually but present in raw HTML (agent readiness #1). -->
     <noscript>
@@ -114,7 +136,7 @@
         <a href="/privacy.html">/privacy.html</a>.
       </p>
     </noscript>
-    <div id="root"></div>
+    <div id="root" tabindex="-1"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

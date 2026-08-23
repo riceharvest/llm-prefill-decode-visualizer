@@ -212,6 +212,6 @@ The machine-readable registry also lives in `/api/spec` (`x-error-codes` + the `
 
 ### Interactive page
 
-The human-facing UI is this same site. Deep links carry state via URL params: `?tab=single|agentic|compare|kvcache|theory`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, 1–5 tabs.
+The human-facing UI is this same site. Deep links carry state via URL params: `?tab=single|agentic|batching|compare|ab|diff|shortlist|kvcache|theory`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
 
 Source: https://github.com/riceharvest/llm-prefill-decode-visualizer
