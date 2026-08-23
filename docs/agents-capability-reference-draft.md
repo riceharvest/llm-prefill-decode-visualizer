@@ -220,6 +220,17 @@ params, or POST `{"batch":[...]}` (≤50 sets). Flat self-describing envelope:
 `inputs`, deterministic calc id, all math fields top-level. Bare call returns
 the capability catalog. Errors: shared RFC 9457 problem+json codes.
 
+### GET /api/agent/benchmarks.json
+
+Agent-friendly wrapper around the raw community run search — same data as the
+MCP `search_runs` tool and `GET /api/localmaxxing`
+(`api/_handlers/agent_benchmarks.js`). Flat per-run records with tok/s speeds
+and freshness stamps (`ageDays`, `staleness`), echoed filters, cursor
+pagination and pointers to `/api/benchmarks`, `/api/best`, `/api/spec`.
+Filters mirror `search_runs`: `?hardware=` (substring), `?model=` (substring),
+`?quant=` (exact), plus shared `?context_band=`, `?max_age=`, `?limit=`,
+`?cursor=`, `?snapshot=`.
+
 ### GET /api/benchmarks
 
 Aggregated median + IQR speeds per hardware×model group (outlier-resistant),

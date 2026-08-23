@@ -441,6 +441,21 @@ shared RFC 9457 problem+json codes.
 curl -s "$BASE/api/agent/compute.json?model=singleTurn&prefill=3000&decode=120&outputTokens=200"
 ```
 
+## `GET /api/agent/benchmarks.json`
+
+Agent-friendly wrapper around the raw community run search — same data as the
+MCP `search_runs` tool and `GET /api/localmaxxing`
+(`api/_handlers/agent_benchmarks.js`). Flat per-run records with tok/s speeds
+and freshness stamps (`ageDays`, `staleness`), echoed filters, cursor
+pagination and pointers to the related `/api/benchmarks`, `/api/best` and
+`/api/spec` endpoints. Filters mirror `search_runs`: `?hardware=` (substring),
+`?model=` (substring), `?quant=` (exact), plus the shared `?context_band=`,
+`?max_age=`, `?limit=`, `?cursor=`, `?snapshot=`.
+
+```bash
+curl -s "$BASE/api/agent/benchmarks.json?hardware=4090&limit=5"
+```
+
 ## `GET /api/snapshots`
 
 Content-addressed dataset snapshot ids. Pin any data endpoint with
