@@ -79,6 +79,13 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- Every agent-facing JSON response body now carries a machine-readable
+  `rate_limit` object — `{ limit, remaining, reset, window_seconds, policy }`
+  — mirroring the existing `X-RateLimit-*` headers, for clients that only
+  parse bodies (MCP tools, body-only HTTP wrappers). Present whenever the
+  handler ran `enforceRateLimit` (i.e. on all standard `/api/*` handlers);
+  absent otherwise. Additive field; `schema_version` stays `"1"`. Also
+  documented in the "Rate limits" section of public/llms.txt.
 - New `GET /api/agent/benchmarks.json` endpoint: agent-friendly wrapper around
   the raw community run search (same data/functionality as the MCP
   `search_runs` tool / `GET /api/localmaxxing`). Flat per-run records with
