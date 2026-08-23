@@ -203,7 +203,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   };
 
   const batchedPerUserDecodeA = presetA.decodeSpeed * decodeEffA;
-  const batchedPerUserDecodeB = presetB.decodeSpeed * decodeEffA;
+  const batchedPerUserDecodeB = presetB.decodeSpeed * decodeEffB;
 
   const ttftA = safeCp / presetA.prefillSpeed;
   const decodeTimeA = safeCo / batchedPerUserDecodeA;
@@ -213,9 +213,11 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   const decodeTimeB = safeCo / batchedPerUserDecodeB;
   const totalTimeB = ttftB + decodeTimeB;
 
-  // Aggregate throughput across the batch
-  const aggregateTokPerSecA = batchSize * safeCo / (decodeTimeA || 1);
-  const aggregateTokPerSecB = batchSize * safeCo / (decodeTimeB || 1);
+  // Aggregate throughput across the batch. Mirrors api/_math.js batched()
+  // (b × perUserDecode) so it stays correct at outputTokens=0 — deriving it
+  // from output tokens / decode time would collapse to 0 there.
+  const aggregateTokPerSecA = batchSize * batchedPerUserDecodeA;
+  const aggregateTokPerSecB = batchSize * batchedPerUserDecodeB;
 
   // Cost per request: (prompt/1M × $in) + (output/1M × $out). Blank prices → null.
   const costPerRequest = (pIn, pOut) => {

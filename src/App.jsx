@@ -29,8 +29,18 @@ import { useFocusPanelHeading } from './utils/focus';
 import { setLocale, syncDocument, t } from './i18n/strings';
 import { installTouchTooltips } from './utils/touchTooltips';
 
+// Every valid view id, in tab-bar order. Doubled as 1-9 keyboard-shortcut
+// targets and as the allow-list for the `?tab=` query param: an unknown
+// value falls back to 'single' instead of rendering a blank content area.
+const TABS = ['single', 'agentic', 'batching', 'compare', 'ab', 'diff', 'shortlist', 'kvcache', 'theory'];
+
+function readTabParam() {
+  const v = readParam('tab');
+  return TABS.includes(v) ? v : 'single';
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState(() => readParam('tab') || 'single');
+  const [activeTab, setActiveTab] = useState(readTabParam);
 
 
 
@@ -293,9 +303,8 @@ export default function App() {
       } else if (e.key === 'r' || e.key === 'R') {
         handleReset();
       } else if (/^[0-9]$/.test(e.key)) {
-        const tabs = ['single', 'agentic', 'batching', 'compare', 'ab', 'diff', 'shortlist', 'kvcache', 'theory'];
         // 1-9 map to the first nine views.
-        setActiveTab(tabs[e.key === '0' ? 9 : Number(e.key) - 1]);
+        setActiveTab(TABS[e.key === '0' ? 9 : Number(e.key) - 1]);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -354,7 +363,7 @@ export default function App() {
         </CollapsibleSection>
 
         {/* Speed controls only make sense on tabs that run a simulation */}
-        {['single', 'agentic', 'batching', 'compare', 'ab'].includes(activeTab) && (
+        {TABS.slice(0, 5).includes(activeTab) && (
           <>
             {/* Speed & Control Panel */}
             <SpeedControls

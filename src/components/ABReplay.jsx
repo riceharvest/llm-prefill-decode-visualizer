@@ -440,7 +440,9 @@ export default function ABReplay({
             </button>
             <button
               onClick={handleReset}
+              type="button"
               title="Reset the shared timeline"
+              aria-label="Reset the shared timeline"
               className="btn"
             >
               <RotateCcw size={15} />

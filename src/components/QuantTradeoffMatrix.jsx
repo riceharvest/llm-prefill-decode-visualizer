@@ -238,6 +238,14 @@ export default function QuantTradeoffMatrix({ localMaxxingContext, onApplySpeeds
                       key={row.quant}
                       className={appliedQuant === row.quant ? 'row-active' : ''}
                       onClick={() => handleLoadRow(row)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleLoadRow(row);
+                        }
+                      }}
+                      tabIndex={onApplySpeeds ? 0 : undefined}
+                      aria-label={onApplySpeeds ? `${t('quant.loadIntoSim')}: ${row.quant}` : undefined}
                       style={{ cursor: onApplySpeeds ? 'pointer' : 'default' }}
                     >
                       <td style={{ fontWeight: 700 }}>
@@ -274,6 +282,7 @@ export default function QuantTradeoffMatrix({ localMaxxingContext, onApplySpeeds
                           className="btn"
                           onClick={(e) => { e.stopPropagation(); handleLoadRow(row); }}
                           disabled={!onApplySpeeds}
+                          aria-label={`${appliedQuant === row.quant ? t('quant.loaded') : t('quant.loadIntoSim')}: ${row.quant}`}
                           style={{ padding: '3px 10px', fontSize: '0.7rem', whiteSpace: 'nowrap' }}
                         >
                           {appliedQuant === row.quant ? t('quant.loaded') : t('quant.loadIntoSim')}
