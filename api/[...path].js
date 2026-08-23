@@ -20,6 +20,9 @@ import { default as watch } from './_watch_impl.js';
 import { default as watchRss } from './_handlers/rss.xml.js';
 import { default as watchDispatch } from './_handlers/dispatch.js';
 import { default as calcId } from './_handlers/calc_id.js';
+import { default as mcp } from './mcp.js';
+
+import { withMarkdownNegotiation } from './_markdown.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -31,6 +34,7 @@ function json(res, body, status = 200) {
 }
 
 export default async function handler(req, res) {
+  withMarkdownNegotiation(req, res);
   const pathname = (req.url || '').split('?')[0].replace(/^\/api\/?/, '/');
 
   try {
@@ -55,6 +59,7 @@ export default async function handler(req, res) {
       case '/watch': return watch(req, res);
       case '/watch/rss.xml': return watchRss(req, res);
       case '/watch/dispatch': return watchDispatch(req, res);
+      case '/mcp': return mcp(req, res);
       default:
         // /api/calc/<id>
         const calcMatch = clean.match(/^\/calc\/([^/]+)$/);

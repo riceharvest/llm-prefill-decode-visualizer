@@ -1,0 +1,47 @@
+# About
+
+The **LLM Prefill & Decode Speed Visualizer** is an open-source, interactive
+tool for reasoning about LLM inference performance. It was built on a simple
+observation: most people pick hardware for local LLMs by vibes and marketing
+numbers, when the physics of prefill (compute-bound prompt ingestion) versus
+decode (bandwidth-bound token generation) tells you almost everything you
+need to know.
+
+## What it does
+
+The tool simulates two distinct phases of LLM inference:
+
+- **Prefill** — the parallel pass that ingests your entire prompt at once.
+  Its speed is limited by GPU compute (FLOPS) and it determines your
+  time-to-first-token (TTFT).
+- **Decode** — the sequential pass that generates one token per step. Its
+  speed is limited by memory bandwidth and it determines your
+  time-per-output-token (TPOT), which is what you feel as "tokens per second"
+  while reading a response.
+
+On top of those two primitives it models KV-cache VRAM growth by architecture
+and precision, prefix caching savings across agentic turns, speculative
+decoding speedups, continuous-batching throughput decay, documented engine
+launch-flag deltas (llama.cpp and vLLM), and dollar cost per million tokens
+including electricity.
+
+## Who it's for
+
+Engineers choosing hardware for local inference, developers budgeting cloud
+or self-hosted deployments, and anyone who wants to understand *why* an LLM
+feels fast or slow — with real numbers instead of marketing claims.
+
+## Under the hood
+
+Every number shown in the UI comes from a deterministic JSON API. The full
+math is auditable: each endpoint documents its formulas in the
+[OpenAPI spec](/api/spec) and returns intermediate values (not just final
+answers) so results can be checked by hand. Benchmark data comes from
+[LocalMaxxing](https://www.localmaxxing.com) community runs with confidence
+intervals attached.
+
+## Contact and source
+
+Source code and issues: [GitHub — riceharvest/llm-prefill-decode-visualizer](https://github.com/riceharvest/llm-prefill-decode-visualizer).
+See also the [privacy policy](/privacy.html) (short version: no telemetry,
+no cookies, no tracking) and [agent guidance](/llms.txt) for programmatic use.

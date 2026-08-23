@@ -1,0 +1,19 @@
+# 404 — Not Found
+
+The path you requested does not exist on this site.
+
+## Where to look next
+
+- **Agent guidance**: [/llms.txt](/llms.txt) — machine-readable instructions, when-to-use guidance, and the full endpoint list.
+- **API reference**: [/api/spec](/api/spec) — OpenAPI spec listing every endpoint.
+- **Health check**: [/api/health](/api/health) — liveness + data freshness.
+- **Homepage**: [/](/) — the interactive visualizer.
+
+## Quick-start endpoints
+
+- `GET /api/compute?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105`
+- `GET /api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536`
+- `GET /api/presets`
+
+Tip: send `Accept: text/markdown` on any API route to receive a markdown
+rendering of the response instead of JSON.

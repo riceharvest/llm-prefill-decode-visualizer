@@ -2,6 +2,28 @@
 
 An interactive tool for understanding LLM inference performance: prefill (compute-bound prompt ingestion, sets TTFT) vs decode (bandwidth-bound token generation, sets TPOT), across single-turn chat and multi-turn agentic loops.
 
+## When to use this tool
+
+Use this site (or its API) when you need to:
+
+- **Choose hardware for running an LLM locally.** Compare measured tok/s across consumer GPUs, Apple Silicon and cloud endpoints before buying — e.g. "will a 3060 12GB run Qwen 72B at 32k context?" → `/api/vram?hfId=Qwen/Qwen2.5-72B-Instruct&context=32768&vramGb=12`.
+- **Predict latency for a workload shape.** Given a prompt size and output length, get exact TTFT and TPOT for a hardware profile → `/api/compute?model=singleTurn&...`.
+- **Reason about agentic loop costs.** Multi-turn tool-calling loops re-ingest history every turn; model the walltime growth with and without prefix caching → `/api/compute?model=agentic&...`.
+- **Decide between quantizations or engine flags.** Compare KV-cache VRAM at INT4 vs FP8, or the documented delta of `--flash-attn` etc. → `/api/compute?model=kvCache&...` and `/api/compute?model=flagged&flags=flash-attn,kv-q8&...`.
+- **Budget $ per million tokens** on owned hardware including electricity and amortization → `/api/compute?model=cost&...`.
+
+Do NOT use this tool for: hosted-API pricing comparisons (it models owned
+hardware only), training-time estimates, or non-transformer architectures.
+
+## Developer resources
+
+- OpenAPI spec: `/api/spec` (also under `/v1/spec`)
+- Health & data freshness: `/api/health`
+- Changelog: `CHANGELOG-API.md` in the repo; human status page at `/status.html`
+- MCP server: `/.well-known/mcp.json` (manifest) and `/api/mcp` (Streamable HTTP JSON-RPC: initialize, tools/list, tools/call)
+- Trust pages: [/about.html](/about.html), [/contact.html](/contact.html), [/privacy.html](/privacy.html)
+- Source code: https://github.com/riceharvest/llm-prefill-decode-visualizer
+
 ## For AI agents — read this first
 
 Everything on the page is available as plain JSON over HTTP. No browser needed.
