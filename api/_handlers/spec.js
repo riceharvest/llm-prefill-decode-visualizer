@@ -442,6 +442,7 @@ const RUN_LIST_ENVELOPE = {
     items: { type: 'array', items: { $ref: '#/components/schemas/Run' } },
     has_more: { type: 'boolean' },
     next_cursor: { type: ['string', 'null'], description: 'Opaque keyset cursor; pass back as ?cursor=' },
+    rate_limit: { $ref: '#/components/schemas/RateLimit' },
     schema_version: { type: 'string', const: '1' }
   }
 };
@@ -523,6 +524,7 @@ const BENCHMARK_GROUP_LIST_ENVELOPE = {
     items: { type: 'array', items: { $ref: '#/components/schemas/BenchmarkGroup' } },
     has_more: { type: 'boolean' },
     next_cursor: { type: ['string', 'null'] },
+    rate_limit: { $ref: '#/components/schemas/RateLimit' },
     schema_version: { type: 'string', const: '1' }
   }
 };
@@ -545,6 +547,7 @@ const BEST_LIST_ENVELOPE = {
     caveats: { type: 'array', items: { $ref: '#/components/schemas/Caveat' } },
     warnings: { type: 'array', items: { type: 'string' }, description: 'Human-readable group-level warnings (mixed engine versions / context bands)' },
     results: { type: 'array', items: { $ref: '#/components/schemas/BestResult' } },
+    rate_limit: { $ref: '#/components/schemas/RateLimit' },
     schema_version: { type: 'string', const: '1' }
   }
 };
@@ -572,6 +575,18 @@ const SCHEMAS = {
   Contradiction: CONTRADICTION,
   CrossCheck: CROSS_CHECK,
   SnapshotRef: SNAPSHOT_REF,
+  RateLimit: {
+    type: 'object',
+    description: 'Machine-readable rate-limit state — the same numbers the X-RateLimit-* headers carry, for clients that only parse bodies.',
+    required: ['limit', 'remaining', 'reset', 'window_seconds', 'policy'],
+    properties: {
+      limit: { type: 'integer', description: 'Requests allowed per window' },
+      remaining: { type: 'integer', description: 'Requests remaining in the current window' },
+      reset: { type: 'integer', description: 'Unix epoch seconds when the current window resets' },
+      window_seconds: { type: 'integer', description: 'Window length in seconds' },
+      policy: { type: 'string', description: 'Limiting policy, e.g. fixed-window per client IP' }
+    }
+  },
   BestRunSummary: BEST_RUN_SUMMARY,
   // Core resource schemas
   Run: RUN,
