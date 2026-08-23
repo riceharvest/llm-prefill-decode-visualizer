@@ -1,0 +1,33 @@
+# LLM Prefill & Decode Speed Visualizer
+
+> Interactive visualizer and open JSON API for LLM inference performance: prefill vs decode latency (TTFT/TPOT), KV-cache VRAM fitting from a Hugging Face id alone, community-measured hardware benchmarks, and multi-turn agentic loop cost modeling. No auth, CORS-enabled, deterministic result ids, everything also described by an OpenAPI spec.
+
+## Docs
+
+- [README](README.md): features, setup and architecture overview
+- [Full API guide (llms.txt)](public/llms.txt): every endpoint with parameters, curl examples, response shapes, statistical caveats, error codes and rate limits
+- [API changelog](CHANGELOG-API.md): schema-versioning policy and endpoint change history
+
+## Machine-readable surfaces
+
+- [OpenAPI spec](https://llm-prefill-decode-visualizer.vercel.app/api/spec): derive every endpoint programmatically (identical under `/v1/spec`)
+- [Agent manifest](public/agents.json)
+- [MCP server](mcp/server.js): Streamable HTTP JSON-RPC at `/api/mcp`; usage in the [MCP README](mcp/README.md)
+- [Changelog feed](public/changelog.json)
+- [Status page](public/status.html)
+
+## Source map
+
+- [Frontend app](src/App.jsx): React UI with nine tabs — single-turn, agentic loop, batching, compare, A/B replay, run diff, hardware shortlist, KV-cache calculator, theory
+- [Standalone compare page](compare.html)
+- [Serverless API](api/_router.js): all `/api/*` routes and handlers (compute simulators, vram fit, best/sizing recommendations, localmaxxing benchmarks, watch feeds, snapshots)
+- [Shared math library](lib/)
+- [Python client](clients/python/pyproject.toml)
+- [TypeScript schema types](clients/typescript/schema.d.ts)
+- [Build & codegen scripts](scripts/generate-sitemap.mjs)
+
+## Typical agent workflow
+
+1. Read [the full API guide](public/llms.txt) once — it documents batching, dry-run validation, snapshot pinning and the `/v1/` prefix policy.
+2. `GET /api/spec`, then call `/api/vram?hfId=…&context=…&vramGb=…` for fit checks or `/api/sizing?model=…` for ranked hardware recommendations.
+3. Model request shapes with `GET|POST /api/compute?model=singleTurn|agentic|kvCache|cost|…`.
