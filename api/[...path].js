@@ -63,9 +63,30 @@ function applyRequestIdEcho(req, res) {
   }
 }
 
+/**
+ * Expose the agent API surface in a single response header (issue #364) so a
+ * `curl -I <site>/` (or any /api/* call) reveals the discovery map without
+ * fetching prose. Complements the <link> tags (index.html #362) and sitemap
+ * (#363). Additive only — never overrides an existing value.
+ */
+const AGENT_ENDPOINTS = '/api/spec, /llms.txt, /agents.json, /api/mcp, /api/agent/index.json';
+function applyAgentEndpointsHeader(req, res) {
+  if (res.hasHeader('X-Agent-Endpoints')) return;
+  res.setHeader('X-Agent-Endpoints', AGENT_ENDPOINTS);
+  const expose = new Set(
+    (res.getHeader('Access-Control-Expose-Headers') || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
+  );
+  for (const h of ['X-Agent-Endpoints', 'X-Schema-Version']) expose.add(h);
+  res.setHeader('Access-Control-Expose-Headers', [...expose].join(', '));
+}
+
 export default async function handler(req, res) {
   withMarkdownNegotiation(req, res);
   applyRequestIdEcho(req, res);
+  applyAgentEndpointsHeader(req, res);
   const pathname = (req.url || '').split('?')[0].replace(/^\/api\/?/, '/');
 
   try {

@@ -6,6 +6,7 @@ import { SCENARIO_PRESETS } from '../../src/utils/presets.js';
 import { fitsInMemory } from '../_vramfit.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { buildCaveats, rowCaveats } from '../_caveats.js';
+import { normalizeQueryModel } from '../_normalize.js';
 import { matchesEngineQuery } from '../_engine.js';
 import { confidence } from '../_crosscheck.js';
 import { dataQuality } from '../_unit_audit.js';
@@ -195,7 +196,7 @@ export async function bestBody(query = {}) {
     let runs = liveRuns;
 
     if (q.model) {
-      const m = String(q.model).toLowerCase();
+      const m = normalizeQueryModel(q.model);
       runs = runs.filter(r => r.modelFamily.includes(m) || r.modelId?.toLowerCase().includes(m));
     }
     if (q.maxParamsB) {

@@ -1,4 +1,6 @@
-// Generates public/sitemap.xml listing /compare/:a-vs-:b URLs (issue #107).
+// Generates public/sitemap.xml listing /compare/:a-vs-:b URLs (issue #107),
+// plus the agent-facing discovery surfaces (issue #363) so crawlers/agents that
+// read the sitemap learn the full API surface, not just the human pages.
 //
 // Live mode: pulls the current hardware groups from /api/benchmarks and emits
 // every pairwise combination of the top-N hardware by median decode speed.
@@ -62,7 +64,18 @@ async function main() {
     }
   }
 
-  const paths = ['/', ...pairs];
+  // Agent-facing discovery surfaces (issue #363). Kept in sync with
+  // api/_route_table.js and the <head> links in index.html. These are
+  // static/always-on; the dynamic /compare pairs are computed below.
+  const AGENT_PATHS = [
+    '/llms.txt',
+    '/agents.json',
+    '/api/spec',
+    '/api/agent/index.json',
+    '/.well-known/mcp.json',
+  ];
+
+  const paths = ['/', ...AGENT_PATHS, ...pairs];
   const lastmod = new Date().toISOString().slice(0, 10);
   const xml = [
     '<?xml version="1.0" encoding="UTF-8"?>',

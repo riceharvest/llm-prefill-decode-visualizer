@@ -30,7 +30,23 @@ export function normalizeModelId(hfId) {
   if (n1 && /^a\d+$/.test(n1) && n2 && /^\d+b$/.test(n2)) {
     parts.push(`${n1}.${n2}`); // rejoin dot-split active-param, e.g. a2.5b
   } else if (n1 && /^a\d+(?:\.\d+)?b$/.test(n1)) {
-    parts.push(n1);
-  }
-  return parts.join('-');
-}
+   parts.push(n1);
+ }
+ return parts.join('-');
+ }
+
+ /**
+ * Normalize a user-supplied model *query* the same way stored families are
+ * normalized, so spaced/cased variants match. Stored families use '-' as the
+ * universal separator (e.g. "qwen3-8-27b"), so collapse spaces/dots/underscores
+ * to '-' before the structural normalize. Fixes issue #365:
+ *   "Qwen3.8 27B"  → "qwen3-8-27b"  (was: 0 matches)
+ *   "deepseek v4 flash" → "deepseek-v4-flash" (was: 0 matches)
+ * Exact/cased forms still resolve identically.
+ */
+ export function normalizeQueryModel(query) {
+ const s = String(query || '').trim().toLowerCase();
+ if (!s) return s;
+ const collapsed = s.replace(/[\s_.]+/g, '-');
+ return normalizeModelId(collapsed);
+ }
