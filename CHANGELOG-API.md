@@ -49,6 +49,15 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- New `GET /api/agent/benchmarks.json` endpoint: agent-friendly wrapper around
+  the raw community run search (same data/functionality as the MCP
+  `search_runs` tool / `GET /api/localmaxxing`). Flat per-run records with
+  tok/s speeds, freshness stamps (`ageDays`, `staleness`), echoed filters,
+  cursor pagination and pointers to the related `/api/benchmarks`, `/api/best`
+  and `/api/spec` endpoints. Filters mirror `search_runs`: `?hardware=`
+  (substring), `?model=` (substring), `?quant=` (exact) plus the shared
+  `?context_band=`, `?max_age=`, `?limit=`, `?cursor=`, `?snapshot=`.
+- Affected endpoints: `/api/agent/benchmarks.json`.
 - New `GET /api/og` endpoint (#105): renders a 1200x630 PNG Open Graph chart
   card from URL params (`preset`, `prefill`, `decode`, `scenario`, `prompt`)
   via @vercel/og. Binary image response (`image/png`, not JSON/schema-

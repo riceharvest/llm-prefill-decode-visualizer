@@ -68,7 +68,6 @@ GET /api/presets
 
 ```
 GET /api/agent/benchmarks.json?hardware=h100&limit=3
-GET /api/agent/compute.json
 ```
 
 Flat, cursor-paginated records designed for tool use rather than the UI.
