@@ -3,7 +3,7 @@ import { ERROR_CODES, problemType } from '../_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
-import { sendJson } from '../_schema.js';
+import { sendJson, SCHEMA_VERSION } from '../_schema.js';
 
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
@@ -65,7 +65,14 @@ export default function handler(req, res) {
     info: {
       title: 'LLM Prefill & Decode Speed Visualizer API',
       version: '2.6.0',
-      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. URL versioning: every endpoint is also served under the /v1/ prefix (e.g. /v1/compute) — external consumers should harden onto /v1/; the unversioned /api/ paths keep working and remain the canonical docs location (/api/spec). Breaking changes will ship under a new version prefix with the previous one kept for at least 90 days (see CHANGELOG-API.md). Every response body carries a schema_version field ("1") and every response sets an X-Schema-Version header; see CHANGELOG-API.md for the versioning + deprecation policy. Human docs at /llms.txt. Rate limited to 120 requests/min per client (best-effort, per serverless instance); every response carries X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset, and exhaustion returns 429 with Retry-After. Benchmark endpoints (/api/localmaxxing, /api/benchmarks, /api/best) carry a machine-readable top-level `caveats` array (objects with code/severity/summary/detail) describing dataset limitations, and each aggregate carries a confidence block plus crossCheck. Errors follow RFC 9457 problem+json with a stable machine-readable code — see x-error-codes.'
+      // Two independent version numbers — `version` is the API *release*
+      // version (surface: endpoints/params/docs); `x-schema-version` mirrors
+      // the wire contract version (schema_version field + X-Schema-Version
+      // header on every JSON response). They are decoupled by design; see
+      // CHANGELOG-API.md § "Two version numbers (release version vs wire
+      // schema version)" for the mapping and bump rules.
+      'x-schema-version': SCHEMA_VERSION,
+      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. URL versioning: every endpoint is also served under the /v1/ prefix (e.g. /v1/compute) — external consumers should harden onto /v1/; the unversioned /api/ paths keep working and remain the canonical docs location (/api/spec). Breaking changes will ship under a new version prefix with the previous one kept for at least 90 days (see CHANGELOG-API.md). Every response body carries a schema_version field ("1") and every response sets an X-Schema-Version header; info.version (2.6.0) is the API *release* version while schema_version is the independent wire *contract* version — they are decoupled by design, see CHANGELOG-API.md § "Two version numbers" for the mapping and for the versioning + deprecation policy. Human docs at /llms.txt. Rate limited to 120 requests/min per client (best-effort, per serverless instance); every response carries X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset, and exhaustion returns 429 with Retry-After. Benchmark endpoints (/api/localmaxxing, /api/benchmarks, /api/best) carry a machine-readable top-level `caveats` array (objects with code/severity/summary/detail) describing dataset limitations, and each aggregate carries a confidence block plus crossCheck. Errors follow RFC 9457 problem+json with a stable machine-readable code — see x-error-codes.'
     },
     servers: [
       { url: BASE, description: 'Canonical unversioned host — /api/* paths' },
