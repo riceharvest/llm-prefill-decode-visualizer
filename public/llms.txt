@@ -2,6 +2,15 @@
 
 An interactive tool for understanding LLM inference performance: prefill (compute-bound prompt ingestion, sets TTFT) vs decode (bandwidth-bound token generation, sets TPOT), across single-turn chat and multi-turn agentic loops.
 
+<!-- agent-parseable:meta -->
+Base-URL: https://llm-prefill-decode-visualizer.vercel.app
+OpenAPI-Spec: /api/spec
+Tabs: single,agentic,batching,compare,ab,diff,shortlist,kvcache,theory
+Tab-URL-Template: {Base-URL}/?tab={id}
+Tab-Section-Header-Format: ### Tab: {id} — {label}
+Repo: https://github.com/riceharvest/llm-prefill-decode-visualizer
+<!-- /agent-parseable:meta -->
+
 ## When to use this tool
 
 Use this site (or its API) when you need to:
@@ -224,8 +233,83 @@ Branch on the stable `code`, never on `title`/`detail` prose:
 
 The machine-readable registry also lives in `/api/spec` (`x-error-codes` + the `Problem` schema) for generated SDKs. Batch items in `/api/compute` carry per-item `code` alongside the human-readable `error` string.
 
-### Interactive page
+## App tabs (interactive page)
 
-The human-facing UI is this same site. Deep links carry state via URL params: `?tab=single|agentic|batching|compare|ab|diff|shortlist|kvcache|theory`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
+The human-facing UI is this same site. Deep links carry state via URL params: `?tab=<id>`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
+
+<!-- tabs-section:start -->
+### Tab: single — Single-turn
+
+- Tab-ID: single
+- URL: /?tab=single
+- Purpose: Animate one chat request end to end: prompt ingestion (prefill) sets TTFT, then token-by-token generation (decode) sets TPOT and total walltime.
+- Surfaces: request timeline animation; speed controls + hardware presets; TTFT/TPOT/walltime metrics; chart + data table; SLO budget checks
+- Endpoints: GET /api/compute?model=singleTurn; GET /api/presets
+
+### Tab: agentic — Agentic loop
+
+- Tab-ID: agentic
+- URL: /?tab=agentic
+- Purpose: Simulate a multi-turn tool-calling loop that re-ingests growing history every turn; compare walltime growth with and without prefix caching.
+- Surfaces: turn-by-turn timeline; per-turn token breakdown; prefix-caching toggle; cumulative walltime chart
+- Endpoints: GET /api/compute?model=agentic
+
+### Tab: batching — Batching
+
+- Tab-ID: batching
+- URL: /?tab=batching
+- Purpose: Show concurrent users sharing one accelerator: per-user decode decays roughly B^0.25 with batch size while aggregate throughput climbs.
+- Surfaces: batch-size slider; per-user vs aggregate throughput meters; shared-compute animation
+- Endpoints: GET /api/compute?model=batched
+
+### Tab: compare — Compare
+
+- Tab-ID: compare
+- URL: /?tab=compare
+- Purpose: Side-by-side hardware comparison at fixed workload shapes, blending built-in presets with measured community benchmark medians.
+- Surfaces: hardware preset table; measured-speed columns; apply-measured-speeds action; community run counts
+- Endpoints: GET /api/benchmarks; GET /api/best; GET /api/localmaxxing; GET /api/presets
+
+### Tab: ab — A/B
+
+- Tab-ID: ab
+- URL: /?tab=ab
+- Purpose: Replay two hardware configs head-to-head on the identical workload so prefill/decode differences are visible as a race.
+- Surfaces: A/B config pickers; synchronized replay animation; per-phase winner callouts
+- Endpoints: GET /api/compute?model=singleTurn
+
+### Tab: diff — Diff
+
+- Tab-ID: diff
+- URL: /?tab=diff
+- Purpose: Diff two community benchmark runs (or two constraint sets via what-if mode) and read per-metric deltas plus a plain-language summary.
+- Surfaces: run A/B selectors; delta table; what-if constraint diffing
+- Endpoints: GET /api/diff?runA=<id>&runB=<id>; GET /api/diff?mode=whatif
+
+### Tab: shortlist — Find HW
+
+- Tab-ID: shortlist
+- URL: /?tab=shortlist
+- Purpose: Turn a workload spec into a ranked hardware shortlist: VRAM fit, expected latency vs SLO budgets, and confidence from sample counts.
+- Surfaces: workload/constraint form; ranked shortlist table; VRAM fit check; confidence badges
+- Endpoints: GET /api/sizing; GET /api/best; GET /api/vram; GET /api/parse-constraints
+
+### Tab: kvcache — KV cache
+
+- Tab-ID: kvcache
+- URL: /?tab=kvcache
+- Purpose: Compute KV-cache VRAM for a model architecture across context lengths and quantizations, including GQA head layout.
+- Surfaces: architecture/model picker; context × precision matrix; quant tradeoff matrix; multi-GPU planner
+- Endpoints: GET /api/vram; GET /api/compute?model=kvCache
+
+### Tab: theory — Theory
+
+- Tab-ID: theory
+- URL: /?tab=theory
+- Purpose: Plain-language guide to why prefill is compute-bound and decode is bandwidth-bound, with analogies, glossary and misconception callouts.
+- Surfaces: concept walkthrough; analogies toggle; jargon glossary; misconception callouts
+- Endpoints: none (static explainer content)
+
+<!-- tabs-section:end -->
 
 Source: https://github.com/riceharvest/llm-prefill-decode-visualizer
