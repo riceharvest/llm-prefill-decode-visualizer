@@ -231,6 +231,15 @@ Filters mirror `search_runs`: `?hardware=` (substring), `?model=` (substring),
 `?quant=` (exact), plus shared `?context_band=`, `?max_age=`, `?limit=`,
 `?cursor=`, `?snapshot=`.
 
+### GET /api/agent/scenario.json
+
+Agent-friendly loader for the built-in workload scenario presets — same
+`SCENARIO_PRESETS` as the UI quick-start chips and `GET /api/presets`
+(`api/_handlers/agent_scenario.js`). No `?id=` → directory mode (every valid
+scenario id with token counts). `?id=<preset>` → validated load with derived
+`totalTokens` / `prefillShare` and pointers to `/api/compute` incl. a
+ready-to-use example query. Unknown ids → 400 listing valid ids.
+
 ### GET /api/benchmarks
 
 Aggregated median + IQR speeds per hardware×model group (outlier-resistant),

@@ -456,6 +456,22 @@ pagination and pointers to the related `/api/benchmarks`, `/api/best` and
 curl -s "$BASE/api/agent/benchmarks.json?hardware=4090&limit=5"
 ```
 
+## `GET /api/agent/scenario.json`
+
+Agent-friendly loader for the built-in workload scenario presets — the same
+`SCENARIO_PRESETS` the UI quick-start chips and `GET /api/presets` expose
+(`api/_handlers/agent_scenario.js`). No `?id=` → directory mode: every valid
+scenario id with its token counts, so a planning agent can pick one without a
+second round-trip. `?id=<preset>` → validated load with derived convenience
+fields (`totalTokens`, `prefillShare`) and pointers to `/api/compute`
+including a ready-to-use example query. Unknown ids → 400 with the list of
+valid ids so an agent can self-correct.
+
+```bash
+curl -s "$BASE/api/agent/scenario.json"
+curl -s "$BASE/api/agent/scenario.json?id=ragSummary"
+```
+
 ## `GET /api/snapshots`
 
 Content-addressed dataset snapshot ids. Pin any data endpoint with
