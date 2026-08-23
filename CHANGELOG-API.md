@@ -87,6 +87,16 @@ migrate before `Sunset`. Agents can discover the current policy at
   `info.x-schema-version` so machine consumers can see both numbers in one
   place without hardcoding either.
 
+- New `GET /api/runs` endpoint: one-shot machine-readable dump of the **full**
+  run index — every community-measured run, comparable AND batched/
+  non-comparable — as JSON (`?format=json`, envelope with `schemaVersion`,
+  `generatedAt`, `rowCount`, `totalRunCount`, `comparableCount`, structured `dataDictionary`,
+  per-run `comparable` flag) or RFC 4180 CSV (`?format=csv`, `#`-preamble with
+  metadata + data dictionary, dated attachment). Optional
+  `?comparable=true|false|all` subsets server-side. Shares the cached upstream
+  fetch with the other benchmark endpoints. Additive — no version bump.
+- Affected endpoints: `/api/runs`.
+>>>>>>> origin/main
 - New `GET /api/og` endpoint (#105): renders a 1200x630 PNG Open Graph chart
   card from URL params (`preset`, `prefill`, `decode`, `scenario`, `prompt`)
   via @vercel/og. Binary image response (`image/png`, not JSON/schema-
@@ -108,6 +118,24 @@ migrate before `Sunset`. Agents can discover the current policy at
   and queue with a stored `unitAudit`; flagged submissions still return 202
   with an extra warning.
 - Affected endpoints: `/api/benchmarks`, `/api/best`, `/api/localmaxxing`.
+- Schema-drift audit (#319): `components.schemas` in `/api/spec` now declares
+  every field the endpoints actually emit. Newly documented (wire shapes were
+  unchanged — docs-only, additive): `Caveat.severity` gains the `warning`
+  value the caveat builder has always emitted; `BenchmarkGroupListEnvelope`
+  documents `matchedRuns`, `warnings`, `maxAgeDays`, `contextBand`,
+  `distinctModelFamilies`, `distinctEngines`, `engineCohortedByDefault`,
+  `freshnessTiers`, `outlierPolicy` and `unitAudit`; `BenchmarkGroup` and
+  `BestResult` document `runsInStats`, `outliersExcludedFromStats`,
+  `outlierIqrs`, `includeOutliers`, `outliers`, `contextBands`, `freshness`,
+  `engines`, `engineVersion`, `mixedEngines`, `mixedContextBands`,
+  `dataQuality` and the scenario walltime block (`ttftSeconds`,
+  `decodeSeconds`, `projectedWalltimeSeconds`,
+  `effectiveThroughputTokPerSec`, `prefillSharePct`, `decodeSharePct`);
+  `BestListEnvelope` documents `maxAgeDays` + `contextBand`.
+  Guarded by `api/_handlers/spec.wire-drift.test.js`, which generates real
+  wire responses offline and fails if an emitted field is missing from the
+  schema or a severity falls outside the enum.
+- Affected endpoints: `/api/benchmarks`, `/api/best`, `/api/localmaxxing` (docs only).
 
 ### 1 — 2026-08-21
 
