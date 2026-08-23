@@ -88,7 +88,7 @@ export interface paths {
                          *       "schema_version": "1"
                          *     }
                          */
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["ComputeResponse"];
                     };
                 };
                 /** @description Invalid parameters (code INVALID_PARAMS) */
@@ -411,7 +411,7 @@ export interface paths {
                          *           "contextLength": 8192,
                          *           "contextBand": "8k-32k",
                          *           "ageDays": 23,
-                         *           "staleness": "recent",
+                         *           "staleness": "fresh",
                          *           "source": "https://localmaxxing.com/en/runs/58213"
                          *         }
                          *       ],
@@ -419,7 +419,7 @@ export interface paths {
                          *       "next_cursor": "MTA4fCI1ODIxMyI"
                          *     }
                          */
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["RunListEnvelope"] | components["schemas"]["HardwareSummaryEnvelope"];
                     };
                 };
                 429: components["responses"]["RateLimited"];
@@ -802,7 +802,7 @@ export interface paths {
                          *       "next_cursor": "MTA1fCJydDQwOTB8cXdlbjMuNi0yN2Ii"
                          *     }
                          */
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["BenchmarkGroupListEnvelope"];
                     };
                 };
                 429: components["responses"]["RateLimited"];
@@ -954,7 +954,7 @@ export interface paths {
                          *       ]
                          *     }
                          */
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["BestListEnvelope"];
                     };
                 };
                 429: components["responses"]["RateLimited"];
@@ -1218,6 +1218,544 @@ export interface components {
              * @enum {string}
              */
             code: "INVALID_PARAMS" | "NOT_FOUND" | "RATE_LIMITED" | "UPSTREAM_UNAVAILABLE" | "INTERNAL";
+        };
+        /** @description 95% percentile bootstrap confidence interval (2,000 resamples). Overlapping intervals across groups mean they are statistically tied. */
+        Ci95Interval: {
+            /** @description 2.5th percentile */
+            lo: number;
+            /** @description 97.5th percentile */
+            hi: number;
+        };
+        /** @description Outlier-resistant distribution stats for one metric within a group. */
+        SpeedStats: {
+            /** @description First quartile */
+            q1?: number | null;
+            median: number | null;
+            /** @description Third quartile */
+            q3?: number | null;
+            min?: number | null;
+            max?: number | null;
+            /** @description 95% percentile bootstrap confidence interval (2,000 resamples). Overlapping intervals across groups mean they are statistically tied. */
+            ci95?: {
+                /** @description 2.5th percentile */
+                lo: number;
+                /** @description 97.5th percentile */
+                hi: number;
+            };
+            /**
+             * @description Rendered as "median [lo–hi]"
+             * @example 105 [101–110]
+             */
+            label?: string | null;
+        };
+        /** @description Machine-readable dataset limitation. Branch on `code`; treat `severity` as display weight. */
+        Caveat: {
+            /** @example single_stream_only */
+            code: string;
+            /**
+             * @description Display weight. `warning` marks statistical limitations that should change how the number is used (n=1 groups, mixed engines/bands); `info` is contextual.
+             * @enum {string}
+             */
+            severity: "info" | "low" | "medium" | "high" | "warning";
+            summary: string;
+            detail?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description How much to trust one aggregate: sample size, decode-IQR width, outlier density, recency and an overall grade. */
+        Confidence: {
+            /** @description Comparable runs backing this aggregate */
+            runs: number;
+            /** @description Decode IQR / median × 100; tighter is better */
+            iqrSpreadPct?: number | null;
+            /** @description Runs outside the 1.5×IQR fences */
+            outliers?: number;
+            newestRunAgeDays?: number | null;
+            /** @description 0–100 composite of sample size, spread and outliers (when computed) */
+            score?: number | null;
+            /**
+             * @description low <3 runs; high ≥10 runs with ≤40% decode IQR spread; medium otherwise
+             * @enum {string}
+             */
+            grade: "low" | "medium" | "high";
+        };
+        /** @description A multi-GPU rig whose numbers contradict the single-GPU baseline on the same model/quant — likely a misconfigured run. */
+        Contradiction: {
+            /** @enum {string} */
+            kind: "slower_than_single" | "poor_scaling";
+            /** @description Rig label, e.g. "2x RTX 4090" */
+            vs?: string;
+            gpuCount?: number;
+            /** @enum {string} */
+            metric: "decode" | "prefill";
+            singleTokPerSec?: number;
+            multiTokPerSec?: number;
+            deltaPct?: number;
+            perGpuScalingPct?: number;
+            note?: string;
+        };
+        /** @description Sanity comparison of multi-GPU rigs against the single-GPU baseline on the same model/quant. */
+        CrossCheck: {
+            /** @description Number of multi-GPU comparisons performed */
+            relatedRigComparisons: number;
+            contradictions: components["schemas"]["Contradiction"][];
+        };
+        /** @description Content-addressed dataset snapshot actually served. Pin its id via ?snapshot= for reproducible numbers (see /api/snapshots). */
+        SnapshotRef: {
+            /** @example snapshot-2026-08-21-a1b2c3d4 */
+            id: string;
+            /** Format: date-time */
+            createdAt?: string | null;
+            runCount?: number | null;
+        };
+        /** @description The single fastest measured run inside a group. */
+        BestRunSummary: {
+            runId: number;
+            modelName?: string | null;
+            hardware?: string | null;
+            engine?: string | null;
+            engineVersion?: string | null;
+            quantization?: string | null;
+            prefillTokPerSec?: number;
+            decodeTokPerSec: number;
+            /** Format: date-time */
+            createdAt?: string | null;
+            /**
+             * Format: uri
+             * @description Upstream run page
+             */
+            source?: string | null;
+        };
+        /** @description Raw comparable community run, flattened and model-normalized (modelFamily collapses repo/quant variants of the same base model). Single-stream runs only. */
+        Run: {
+            /** @description Stable upstream run id (also used as pagination tiebreak) */
+            runId: number;
+            /** Format: date-time */
+            createdAt?: string | null;
+            /** @description Normalized base-model family, e.g. qwen3.6-27b */
+            modelFamily: string;
+            /** @description Hugging Face repo id when known */
+            modelId?: string | null;
+            /** @description Upstream display name */
+            modelName?: string | null;
+            /** @description Parameter count in billions */
+            paramsB?: number | null;
+            /** @description Normalized rig key, e.g. rtx4090 */
+            hardwareKey?: string | null;
+            /** @description Human-readable rig label */
+            hardware?: string | null;
+            /** @enum {string|null} */
+            hwClass?: "discrete_gpu" | "unified" | "cpu_only" | null;
+            gpu?: string | null;
+            /** @default 1 */
+            gpuCount: number | null;
+            vramGb?: number | null;
+            chip?: string | null;
+            unifiedMemoryGb?: number | null;
+            cpu?: string | null;
+            /** @example llama.cpp */
+            engine?: string | null;
+            engineVersion?: string | null;
+            /** @example q4_k_m */
+            quantization?: string | null;
+            /** @description Measured prompt-processing speed (tok/s) */
+            prefillTokPerSec: number;
+            /** @description Measured single-stream decode speed (tok/s) */
+            decodeTokPerSec: number;
+            promptTokens?: number | null;
+            outputTokens?: number | null;
+            contextLength?: number | null;
+            /**
+             * @description Context-length bucket; null when the run reports no usable contextLength
+             * @enum {string|null}
+             */
+            contextBand?: "lt1k" | "1k-8k" | "8k-32k" | "32k+" | null;
+            /** @description Days since measurement (null when undated) */
+            ageDays?: number | null;
+            /**
+             * @description fresh <90d, aging <180d, stale otherwise, unknown when undated
+             * @enum {string|null}
+             */
+            staleness?: "fresh" | "aging" | "stale" | "unknown" | null;
+            /**
+             * Format: uri
+             * @description Link to the upstream run page
+             */
+            source?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Aggregated speeds for one group (hardware×model-family by default; regroup with ?groupBy=). Medians are outlier-resistant and carry 95% bootstrap CIs. */
+        BenchmarkGroup: {
+            /**
+             * @description Group key, e.g. "rtx4090|qwen3.6-27b"
+             * @example rtx4090|qwen3.6-27b
+             */
+            key: string;
+            /** @description Comparable runs in the group */
+            runs: number;
+            prefill: components["schemas"]["SpeedStats"];
+            decode: components["schemas"]["SpeedStats"];
+            modelFamilies?: string[];
+            engines?: string[];
+            /** @description True when the group spans multiple engine builds — check freshness before comparing */
+            mixedEngines?: boolean;
+            /** @description Present (true) only when ?context_band= filtering is off and the group mixes bands */
+            mixedContextBands?: boolean | null;
+            /** @description Unit-consistency audit over the group's runs (status ok|flagged). */
+            dataQuality?: ({
+                /** @enum {string} */
+                status?: "ok" | "flagged";
+                runsAudited?: number;
+                flaggedRuns?: number;
+                flagCounts?: {
+                    [key: string]: number;
+                };
+                flagged?: {
+                    runId?: number;
+                    codes?: string[];
+                }[];
+            } & {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Per-group flags (n=1 group, mixed engines) */
+            caveats?: components["schemas"]["Caveat"][];
+            confidence?: components["schemas"]["Confidence"];
+            crossCheck?: components["schemas"]["CrossCheck"];
+            bestRun?: components["schemas"]["BestRunSummary"];
+            /** @description Runs actually included in the stats (outliers excluded by default) */
+            runsInStats?: number;
+            /** @description Runs fenced out of the stats by the IQR outlier rule */
+            outliersExcludedFromStats?: number;
+            /** @description Outlier fence in IQRs from the group median (see top-level outlierPolicy) */
+            outlierIqrs?: number;
+            /** @description Whether outlier runs were included (echoes ?include_outliers=) */
+            includeOutliers?: boolean;
+            /** @description Flagged outlier runs (empty unless ?include_outliers=true); each carries the metrics that tripped the fence plus a z-score-style deviation. */
+            outliers?: {
+                [key: string]: unknown;
+            }[];
+            /** @description Context-length band mix inside the group — speeds depend on context, so a mixed group blends regimes. */
+            contextBands?: {
+                bands?: ({
+                    /** @enum {string} */
+                    band?: "lt1k" | "1k-8k" | "8k-32k" | "32k+";
+                    /** @description Display label, e.g. "8k–32k" */
+                    label?: string;
+                    runs?: number;
+                } & {
+                    [key: string]: unknown;
+                })[];
+                /** @description Runs reporting no usable contextLength */
+                unknownRuns?: number;
+                distinctBands?: number;
+                mixed?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
+            /** @description Recency of the runs backing this group. */
+            freshness?: {
+                /** Format: date-time */
+                newestRunAt?: string | null;
+                /** Format: date-time */
+                oldestRunAt?: string | null;
+                newestAgeDays?: number | null;
+                /** @enum {string|null} */
+                staleness?: "fresh" | "aging" | "stale" | "unknown" | null;
+                engineVersions?: string[];
+                majorReleaseWarnings?: string[];
+            } & {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description One ranked hardware×model recommendation. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel); pricing/power/vramFit are estimates anchored on the group's best-measured run and are null when no anchor exists (cpu_only, unknown GPUs). */
+        BestResult: {
+            hardware?: string | null;
+            hardwareKey: string | null;
+            /** @enum {string|null} */
+            hwClass?: "discrete_gpu" | "unified" | "cpu_only" | null;
+            gpu?: string | null;
+            /** @default 1 */
+            gpuCount: number | null;
+            vramGb?: number | null;
+            /** @description Discrete VRAM, falling back to unified memory */
+            effectiveVramGb?: number | null;
+            chip?: string | null;
+            unifiedMemoryGb?: number | null;
+            cpu?: string | null;
+            modelFamily: string;
+            exampleModel?: string | null;
+            quantization?: string | null;
+            engine?: string | null;
+            runsInGroup: number;
+            confidence: components["schemas"]["Confidence"];
+            medianPrefillTokPerSec: number;
+            medianDecodeTokPerSec: number;
+            bestDecodeTokPerSec?: number | null;
+            /** @description 95% percentile bootstrap confidence interval (2,000 resamples). Overlapping intervals across groups mean they are statistically tied. */
+            medianPrefillCi95?: {
+                /** @description 2.5th percentile */
+                lo: number;
+                /** @description 97.5th percentile */
+                hi: number;
+            };
+            medianPrefillLabel?: string | null;
+            /** @description 95% percentile bootstrap confidence interval (2,000 resamples). Overlapping intervals across groups mean they are statistically tied. */
+            medianDecodeCi95?: {
+                /** @description 2.5th percentile */
+                lo: number;
+                /** @description 97.5th percentile */
+                hi: number;
+            };
+            medianDecodeLabel?: string | null;
+            caveats?: components["schemas"]["Caveat"][];
+            /** Format: date-time */
+            newestRunAt?: string | null;
+            newestAgeDays?: number | null;
+            /** @enum {string|null} */
+            staleness?: "fresh" | "aging" | "stale" | "unknown" | null;
+            /** @description Engine builds seen in the group (mixed builds → treat deltas with caution) */
+            engineVersions?: string[];
+            majorReleaseWarnings?: string[];
+            /** @description "engine version" tags seen in the group */
+            engines?: string[];
+            /** @description Engine build when the group is single-build; null/absent when mixed */
+            engineVersion?: string | null;
+            /** @description True when the group spans multiple engine builds */
+            mixedEngines?: boolean;
+            /** @description Present (true) only when ?context_band= filtering is off and the group mixes bands */
+            mixedContextBands?: boolean | null;
+            /** @description Context-length band mix inside the group — speeds depend on context, so a mixed group blends regimes. */
+            contextBands?: {
+                bands?: ({
+                    /** @enum {string} */
+                    band?: "lt1k" | "1k-8k" | "8k-32k" | "32k+";
+                    /** @description Display label, e.g. "8k–32k" */
+                    label?: string;
+                    runs?: number;
+                } & {
+                    [key: string]: unknown;
+                })[];
+                /** @description Runs reporting no usable contextLength */
+                unknownRuns?: number;
+                distinctBands?: number;
+                mixed?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
+            /** @description Unit-consistency audit over the group's runs (status ok|flagged). */
+            dataQuality?: ({
+                /** @enum {string} */
+                status?: "ok" | "flagged";
+                runsAudited?: number;
+                flaggedRuns?: number;
+                flagCounts?: {
+                    [key: string]: number;
+                };
+                flagged?: {
+                    runId?: number;
+                    codes?: string[];
+                }[];
+            } & {
+                [key: string]: unknown;
+            }) | null;
+            /** @description Expected time to first token at the default/requested scenario shape (default 2048-in / 512-out) */
+            ttftSeconds?: number;
+            /** @description Projected decode walltime for the scenario output tokens */
+            decodeSeconds?: number;
+            /** @description Prefill + decode walltime for the scenario shape */
+            projectedWalltimeSeconds?: number;
+            /** @description Total tokens / total walltime for the scenario shape */
+            effectiveThroughputTokPerSec?: number;
+            /** @description Share of scenario walltime spent prefilling */
+            prefillSharePct?: number;
+            /** @description Share of scenario walltime spent decoding */
+            decodeSharePct?: number;
+            /** Format: uri */
+            source?: string | null;
+            /** @description Estimated fit at the requested context (present with ?fitCheck or ?contextLength): weights + KV cache vs available memory. */
+            vramFit?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description USD street-price estimate with range, per-GPU breakdown, asOf date and eBay/Craigslist verification links; null when no anchor exists. */
+            pricing?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Board power (TDP per card and total), typical whole-rig inference wattage and recommended PSU size; null when no anchor exists. */
+            power?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description One-sentence human-readable explanation combining VRAM-fit math with the measured source — pass-through ready for agent chat pipelines */
+            explain?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Computed inference metrics. Every successful result carries a deterministic `id` (calc_<hash> of the resolved inputs) replayable via /api/calc/{id}, plus a non-blocking `warnings` array flagging physically implausible inputs. */
+        ComputeResult: {
+            /** @description Deterministic content hash of the resolved request */
+            id?: string;
+            /** @description Resolved input parameters (defaults filled in) */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /** @description Implausibility warnings (empty when inputs are plausible); never affect the math or HTTP status. */
+            warnings: ({
+                /** @enum {string} */
+                code?: "decode_above_bandwidth_roofline" | "prefill_above_compute_roofline" | "ttft_below_kernel_launch_floor";
+                message?: string;
+            } & {
+                [key: string]: unknown;
+            })[];
+            /** @description Time to first token (singleTurn/batched/agentic/kvCache/cost modes) */
+            ttftSeconds?: number;
+            /** @description Time per output token in ms */
+            tpotMs?: number;
+            decodeSeconds?: number;
+            totalWalltimeSeconds?: number;
+            effectiveThroughputTokPerSec?: number;
+            prefillSharePct?: number;
+            decodeSharePct?: number;
+        } & {
+            [key: string]: unknown;
+        };
+        ComputeResponse: {
+            /** @constant */
+            schema_version: "1";
+        } & components["schemas"]["ComputeResult"];
+        /** @description Cursor-paginated raw run list, sorted by decode speed desc (runId tiebreak). Follow next_cursor until has_more is false. */
+        RunListEnvelope: {
+            description?: string;
+            snapshot?: components["schemas"]["SnapshotRef"];
+            /** Format: date-time */
+            snapshotAt?: string | null;
+            /** @description Echoed ?max_age= filter (null when unset) */
+            maxAgeDays?: number | null;
+            /**
+             * @description Echoed ?context_band= filter (null when unset)
+             * @enum {string|null}
+             */
+            contextBand?: "lt1k" | "1k-8k" | "8k-32k" | "32k+" | null;
+            /** @description Total matching runs across all pages */
+            total: number;
+            caveats?: components["schemas"]["Caveat"][];
+            items: components["schemas"]["Run"][];
+            has_more: boolean;
+            /** @description Opaque keyset cursor; pass back as ?cursor= */
+            next_cursor?: string | null;
+            /** @constant */
+            schema_version?: "1";
+        };
+        /** @description Bare call (no hardware/model/quant filter): one summary row per hardware group, largest first. */
+        HardwareSummaryEnvelope: {
+            description?: string;
+            snapshot?: components["schemas"]["SnapshotRef"];
+            /** Format: date-time */
+            snapshotAt?: string | null;
+            maxAgeDays?: number | null;
+            /** @enum {string|null} */
+            contextBand?: "lt1k" | "1k-8k" | "8k-32k" | "32k+" | null;
+            totalComparableRuns: number;
+            caveats?: components["schemas"]["Caveat"][];
+            hardwareGroups: ({
+                hardware?: string | null;
+                hardwareKey?: string | null;
+                /** @enum {string|null} */
+                hwClass?: "discrete_gpu" | "unified" | "cpu_only" | null;
+                runs?: number;
+                distinctModelFamilies?: number;
+                /** @enum {string|null} */
+                staleness?: "fresh" | "aging" | "stale" | "unknown" | null;
+                /** Format: date-time */
+                newestRunAt?: string | null;
+            } & {
+                [key: string]: unknown;
+            })[];
+            /** @constant */
+            schema_version?: "1";
+        };
+        /** @description Cursor-paginated aggregate groups, sorted by median decode desc (group-key tiebreak). Follow next_cursor until has_more is false. */
+        BenchmarkGroupListEnvelope: {
+            description?: string;
+            note?: string;
+            snapshot?: components["schemas"]["SnapshotRef"];
+            /** Format: date-time */
+            snapshotAt?: string | null;
+            /** @description Total matching groups across all pages */
+            total: number;
+            /** @description Comparable runs that survived filtering before grouping */
+            matchedRuns?: number;
+            /** @description Dataset-level flags (n=1 share, mixed engine versions) */
+            caveats?: components["schemas"]["Caveat"][];
+            /** @description Human-readable group-level warnings (mixed context bands within a group key) */
+            warnings?: string[];
+            /** @description Echoed ?max_age= filter (null when unset) */
+            maxAgeDays?: number | null;
+            /**
+             * @description Echoed ?context_band= filter (null when unset)
+             * @enum {string|null}
+             */
+            contextBand?: "lt1k" | "1k-8k" | "8k-32k" | "32k+" | null;
+            /** @description Distinct model families across all matching runs */
+            distinctModelFamilies?: number;
+            /** @description Distinct "engine version" tags across matching runs */
+            distinctEngines?: string[];
+            /** @description True when groups are keyed per engine build so mixed-engine stats never blend */
+            engineCohortedByDefault?: boolean;
+            /** @description Human-readable definition of the fresh/aging/stale tiers */
+            freshnessTiers?: string;
+            /** @description How outlier runs are fenced and whether they are included in stats. */
+            outlierPolicy?: {
+                thresholdIqrs?: number;
+                includeOutliers?: boolean;
+                note?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            /** @description Unit-consistency audit across all matching runs. */
+            unitAudit?: {
+                runsAudited?: number;
+                flaggedRuns?: number;
+                flagCounts?: {
+                    [key: string]: number;
+                };
+                note?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            items: components["schemas"]["BenchmarkGroup"][];
+            has_more: boolean;
+            next_cursor?: string | null;
+            /** @constant */
+            schema_version?: "1";
+        };
+        /** @description Ranked recommendations. Carries a deterministic `id` (hash of the resolved filters) replayable via /api/calc/{id}?endpoint=best&<same filters>. */
+        BestListEnvelope: {
+            id?: string;
+            description?: string;
+            /** @enum {string} */
+            rankedBy: "decode" | "prefill" | "cost" | "walltime";
+            snapshot?: components["schemas"]["SnapshotRef"];
+            /** Format: date-time */
+            snapshotAt?: string | null;
+            /** @description Comparable runs that survived filtering */
+            matchedRuns?: number;
+            /** @description Runs dropped by ?fitCheck= (present only with fitCheck) */
+            excludedRuns?: number | null;
+            /** @description Echoed ?max_age= filter (null when unset) */
+            maxAgeDays?: number | null;
+            /**
+             * @description Echoed ?context_band= filter (null when unset)
+             * @enum {string|null}
+             */
+            contextBand?: "lt1k" | "1k-8k" | "8k-32k" | "32k+" | null;
+            caveats: components["schemas"]["Caveat"][];
+            /** @description Human-readable group-level warnings (mixed engine versions / context bands) */
+            warnings: string[];
+            results: components["schemas"]["BestResult"][];
+            /** @constant */
+            schema_version?: "1";
         };
     };
     responses: {

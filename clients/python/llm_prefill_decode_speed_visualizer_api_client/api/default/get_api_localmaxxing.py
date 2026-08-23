@@ -1,18 +1,15 @@
 from http import HTTPStatus
-from typing import Any, cast
-from urllib.parse import quote
+from typing import Any
 
 import httpx
 
-from ...client import AuthenticatedClient, Client
-from ...types import Response, UNSET
 from ... import errors
-
+from ...client import AuthenticatedClient, Client
 from ...models.get_api_localmaxxing_context_band import GetApiLocalmaxxingContextBand
 from ...models.get_api_localmaxxing_response_429 import GetApiLocalmaxxingResponse429
-from ...types import UNSET, Unset
-from typing import cast
-
+from ...models.hardware_summary_envelope import HardwareSummaryEnvelope
+from ...models.run_list_envelope import RunListEnvelope
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
@@ -24,11 +21,7 @@ def _get_kwargs(
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
-
 ) -> dict[str, Any]:
-    
-
-    
 
     params: dict[str, Any] = {}
 
@@ -50,9 +43,7 @@ def _get_kwargs(
 
     params["snapshot"] = snapshot
 
-
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
 
     _kwargs: dict[str, Any] = {
         "method": "get",
@@ -60,20 +51,35 @@ def _get_kwargs(
         "params": params,
     }
 
-
     return _kwargs
 
 
-
-def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | GetApiLocalmaxxingResponse429 | None:
+def _parse_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> GetApiLocalmaxxingResponse429 | HardwareSummaryEnvelope | RunListEnvelope | None:
     if response.status_code == 200:
-        response_200 = cast(Any, None)
+
+        def _parse_response_200(data: object) -> HardwareSummaryEnvelope | RunListEnvelope:
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                response_200_type_0 = RunListEnvelope.from_dict(data)
+
+                return response_200_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            if not isinstance(data, dict):
+                raise TypeError()
+            response_200_type_1 = HardwareSummaryEnvelope.from_dict(data)
+
+            return response_200_type_1
+
+        response_200 = _parse_response_200(response.json())
+
         return response_200
 
     if response.status_code == 429:
         response_429 = GetApiLocalmaxxingResponse429.from_dict(response.json())
-
-
 
         return response_429
 
@@ -83,7 +89,9 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
         return None
 
 
-def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[Any | GetApiLocalmaxxingResponse429]:
+def _build_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[GetApiLocalmaxxingResponse429 | HardwareSummaryEnvelope | RunListEnvelope]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -102,9 +110,8 @@ def sync_detailed(
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
-
-) -> Response[Any | GetApiLocalmaxxingResponse429]:
-    """ Raw community benchmark runs (flattened, model-normalized)
+) -> Response[GetApiLocalmaxxingResponse429 | HardwareSummaryEnvelope | RunListEnvelope]:
+    """Raw community benchmark runs (flattened, model-normalized)
 
      Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: {
     total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow
@@ -124,19 +131,17 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | GetApiLocalmaxxingResponse429]
-     """
-
+        Response[GetApiLocalmaxxingResponse429 | HardwareSummaryEnvelope | RunListEnvelope]
+    """
 
     kwargs = _get_kwargs(
         hardware=hardware,
-model=model,
-quant=quant,
-context_band=context_band,
-limit=limit,
-cursor=cursor,
-snapshot=snapshot,
-
+        model=model,
+        quant=quant,
+        context_band=context_band,
+        limit=limit,
+        cursor=cursor,
+        snapshot=snapshot,
     )
 
     response = client.get_httpx_client().request(
@@ -144,6 +149,7 @@ snapshot=snapshot,
     )
 
     return _build_response(client=client, response=response)
+
 
 def sync(
     *,
@@ -155,9 +161,8 @@ def sync(
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
-
-) -> Any | GetApiLocalmaxxingResponse429 | None:
-    """ Raw community benchmark runs (flattened, model-normalized)
+) -> GetApiLocalmaxxingResponse429 | HardwareSummaryEnvelope | RunListEnvelope | None:
+    """Raw community benchmark runs (flattened, model-normalized)
 
      Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: {
     total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow
@@ -177,21 +182,20 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | GetApiLocalmaxxingResponse429
-     """
-
+        GetApiLocalmaxxingResponse429 | HardwareSummaryEnvelope | RunListEnvelope
+    """
 
     return sync_detailed(
         client=client,
-hardware=hardware,
-model=model,
-quant=quant,
-context_band=context_band,
-limit=limit,
-cursor=cursor,
-snapshot=snapshot,
-
+        hardware=hardware,
+        model=model,
+        quant=quant,
+        context_band=context_band,
+        limit=limit,
+        cursor=cursor,
+        snapshot=snapshot,
     ).parsed
+
 
 async def asyncio_detailed(
     *,
@@ -203,9 +207,8 @@ async def asyncio_detailed(
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
-
-) -> Response[Any | GetApiLocalmaxxingResponse429]:
-    """ Raw community benchmark runs (flattened, model-normalized)
+) -> Response[GetApiLocalmaxxingResponse429 | HardwareSummaryEnvelope | RunListEnvelope]:
+    """Raw community benchmark runs (flattened, model-normalized)
 
      Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: {
     total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow
@@ -225,26 +228,23 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | GetApiLocalmaxxingResponse429]
-     """
-
+        Response[GetApiLocalmaxxingResponse429 | HardwareSummaryEnvelope | RunListEnvelope]
+    """
 
     kwargs = _get_kwargs(
         hardware=hardware,
-model=model,
-quant=quant,
-context_band=context_band,
-limit=limit,
-cursor=cursor,
-snapshot=snapshot,
-
+        model=model,
+        quant=quant,
+        context_band=context_band,
+        limit=limit,
+        cursor=cursor,
+        snapshot=snapshot,
     )
 
-    response = await client.get_async_httpx_client().request(
-        **kwargs
-    )
+    response = await client.get_async_httpx_client().request(**kwargs)
 
     return _build_response(client=client, response=response)
+
 
 async def asyncio(
     *,
@@ -256,9 +256,8 @@ async def asyncio(
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
-
-) -> Any | GetApiLocalmaxxingResponse429 | None:
-    """ Raw community benchmark runs (flattened, model-normalized)
+) -> GetApiLocalmaxxingResponse429 | HardwareSummaryEnvelope | RunListEnvelope | None:
+    """Raw community benchmark runs (flattened, model-normalized)
 
      Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: {
     total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow
@@ -278,18 +277,18 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | GetApiLocalmaxxingResponse429
-     """
+        GetApiLocalmaxxingResponse429 | HardwareSummaryEnvelope | RunListEnvelope
+    """
 
-
-    return (await asyncio_detailed(
-        client=client,
-hardware=hardware,
-model=model,
-quant=quant,
-context_band=context_band,
-limit=limit,
-cursor=cursor,
-snapshot=snapshot,
-
-    )).parsed
+    return (
+        await asyncio_detailed(
+            client=client,
+            hardware=hardware,
+            model=model,
+            quant=quant,
+            context_band=context_band,
+            limit=limit,
+            cursor=cursor,
+            snapshot=snapshot,
+        )
+    ).parsed

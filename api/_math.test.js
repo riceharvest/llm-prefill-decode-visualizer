@@ -201,3 +201,4 @@ test('memoryLedger: no GPU selected → null verdict, math still returned', () =
   assert.ok(r.totalGb > 0);
 });
 
+

@@ -1,17 +1,12 @@
 from http import HTTPStatus
 from typing import Any, cast
-from urllib.parse import quote
 
 import httpx
 
-from ...client import AuthenticatedClient, Client
-from ...types import Response, UNSET
 from ... import errors
-
+from ...client import AuthenticatedClient, Client
 from ...models.get_api_watch_rss_xml_response_429 import GetApiWatchRssXmlResponse429
-from ...types import UNSET, Unset
-from typing import cast
-
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
@@ -20,11 +15,7 @@ def _get_kwargs(
     hardware: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     days: int | Unset = 30,
-
 ) -> dict[str, Any]:
-    
-
-    
 
     params: dict[str, Any] = {}
 
@@ -36,9 +27,7 @@ def _get_kwargs(
 
     params["days"] = days
 
-
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
 
     _kwargs: dict[str, Any] = {
         "method": "get",
@@ -46,20 +35,18 @@ def _get_kwargs(
         "params": params,
     }
 
-
     return _kwargs
 
 
-
-def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | GetApiWatchRssXmlResponse429 | None:
+def _parse_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Any | GetApiWatchRssXmlResponse429 | None:
     if response.status_code == 200:
         response_200 = cast(Any, None)
         return response_200
 
     if response.status_code == 429:
         response_429 = GetApiWatchRssXmlResponse429.from_dict(response.json())
-
-
 
         return response_429
 
@@ -69,7 +56,9 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
         return None
 
 
-def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[Any | GetApiWatchRssXmlResponse429]:
+def _build_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[Any | GetApiWatchRssXmlResponse429]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -85,9 +74,8 @@ def sync_detailed(
     hardware: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     days: int | Unset = 30,
-
 ) -> Response[Any | GetApiWatchRssXmlResponse429]:
-    """ RSS 2.0 feed of community runs for a watched combo (#109)
+    """RSS 2.0 feed of community runs for a watched combo (#109)
 
      Filters mirror GET /api/localmaxxing (model/hardware substring, quant exact). Items are the newest
     matching runs (max 50), each linking to the upstream run. Poll like any feed — no registration
@@ -105,15 +93,13 @@ def sync_detailed(
 
     Returns:
         Response[Any | GetApiWatchRssXmlResponse429]
-     """
-
+    """
 
     kwargs = _get_kwargs(
         model=model,
-hardware=hardware,
-quant=quant,
-days=days,
-
+        hardware=hardware,
+        quant=quant,
+        days=days,
     )
 
     response = client.get_httpx_client().request(
@@ -122,6 +108,7 @@ days=days,
 
     return _build_response(client=client, response=response)
 
+
 def sync(
     *,
     client: AuthenticatedClient | Client,
@@ -129,9 +116,8 @@ def sync(
     hardware: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     days: int | Unset = 30,
-
 ) -> Any | GetApiWatchRssXmlResponse429 | None:
-    """ RSS 2.0 feed of community runs for a watched combo (#109)
+    """RSS 2.0 feed of community runs for a watched combo (#109)
 
      Filters mirror GET /api/localmaxxing (model/hardware substring, quant exact). Items are the newest
     matching runs (max 50), each linking to the upstream run. Poll like any feed — no registration
@@ -149,17 +135,16 @@ def sync(
 
     Returns:
         Any | GetApiWatchRssXmlResponse429
-     """
-
+    """
 
     return sync_detailed(
         client=client,
-model=model,
-hardware=hardware,
-quant=quant,
-days=days,
-
+        model=model,
+        hardware=hardware,
+        quant=quant,
+        days=days,
     ).parsed
+
 
 async def asyncio_detailed(
     *,
@@ -168,9 +153,8 @@ async def asyncio_detailed(
     hardware: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     days: int | Unset = 30,
-
 ) -> Response[Any | GetApiWatchRssXmlResponse429]:
-    """ RSS 2.0 feed of community runs for a watched combo (#109)
+    """RSS 2.0 feed of community runs for a watched combo (#109)
 
      Filters mirror GET /api/localmaxxing (model/hardware substring, quant exact). Items are the newest
     matching runs (max 50), each linking to the upstream run. Poll like any feed — no registration
@@ -188,22 +172,19 @@ async def asyncio_detailed(
 
     Returns:
         Response[Any | GetApiWatchRssXmlResponse429]
-     """
-
+    """
 
     kwargs = _get_kwargs(
         model=model,
-hardware=hardware,
-quant=quant,
-days=days,
-
+        hardware=hardware,
+        quant=quant,
+        days=days,
     )
 
-    response = await client.get_async_httpx_client().request(
-        **kwargs
-    )
+    response = await client.get_async_httpx_client().request(**kwargs)
 
     return _build_response(client=client, response=response)
+
 
 async def asyncio(
     *,
@@ -212,9 +193,8 @@ async def asyncio(
     hardware: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     days: int | Unset = 30,
-
 ) -> Any | GetApiWatchRssXmlResponse429 | None:
-    """ RSS 2.0 feed of community runs for a watched combo (#109)
+    """RSS 2.0 feed of community runs for a watched combo (#109)
 
      Filters mirror GET /api/localmaxxing (model/hardware substring, quant exact). Items are the newest
     matching runs (max 50), each linking to the upstream run. Poll like any feed — no registration
@@ -232,14 +212,14 @@ async def asyncio(
 
     Returns:
         Any | GetApiWatchRssXmlResponse429
-     """
+    """
 
-
-    return (await asyncio_detailed(
-        client=client,
-model=model,
-hardware=hardware,
-quant=quant,
-days=days,
-
-    )).parsed
+    return (
+        await asyncio_detailed(
+            client=client,
+            model=model,
+            hardware=hardware,
+            quant=quant,
+            days=days,
+        )
+    ).parsed

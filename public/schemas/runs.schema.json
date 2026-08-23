@@ -1,0 +1,186 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/schemas/runs.schema.json",
+  "title": "GET|POST /api/localmaxxing (community benchmark runs) — request and response schema",
+  "description": "Schema for the community-measured single-stream benchmark runs endpoint. Note: there is no literal /api/runs route on the default branch — raw runs are served by GET /api/localmaxxing (?hardware=&model=&quant=&context_band=&max_age=&limit=&cursor=; a bare call returns the hardware-group summary) and new runs are submitted via POST /api/localmaxxing. The top-level schema describes the filtered GET 200 response; definitions covers the summary variant, the run item shape, the POST submission body and its 202/400/409 responses.",
+  "type": "object",
+  "properties": {
+    "description": { "type": "string", "description": "Human-readable usage notes included in every response." },
+    "snapshot": {
+      "type": ["string", "object"],
+      "description": "Content-addressed dataset snapshot id (pass back as ?snapshot=<id> to pin the dataset)."
+    },
+    "snapshotAt": { "type": "string", "format": "date-time", "description": "ISO timestamp of when the dataset was resolved." },
+    "maxAgeDays": { "type": ["integer", "null"], "description": "Echo of ?max_age= filter; null when unset." },
+    "contextBand": {
+      "type": ["string", "null"],
+      "enum": ["lt1k", "1k-8k", "8k-32k", "32k+", null],
+      "description": "Echo of ?context_band= filter; null when unset."
+    },
+    "total": { "type": "integer", "minimum": 0, "description": "Total matching runs after filtering." },
+    "caveats": {
+      "type": "array",
+      "items": { "type": "object" },
+      "description": "Data-quality caveats for the served runs."
+    },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/runItem" },
+      "description": "Page of raw comparable runs, fastest decode first."
+    },
+    "has_more": { "type": "boolean", "description": "True when another page follows." },
+    "next_cursor": { "type": ["string", "null"], "description": "Opaque cursor for the next page; follow until has_more is false." }
+  },
+  "required": ["snapshot", "snapshotAt", "total", "caveats", "items", "has_more"],
+  "definitions": {
+    "summaryResponse": {
+      "title": "Bare GET (no hardware/model/quant filter) — hardware-group summary variant",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "snapshot": { "type": ["string", "object"] },
+        "snapshotAt": { "type": "string", "format": "date-time" },
+        "maxAgeDays": { "type": ["integer", "null"] },
+        "contextBand": { "type": ["string", "null"] },
+        "totalComparableRuns": { "type": "integer", "minimum": 0 },
+        "caveats": { "type": "array", "items": { "type": "object" } },
+        "hardwareGroups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hardware": { "type": "string" },
+              "hardwareKey": { "type": "string" },
+              "hwClass": { "type": ["string", "null"], "enum": ["discrete_gpu", "unified", "cpu_only", null] },
+              "runs": { "type": "integer", "minimum": 0 },
+              "distinctModelFamilies": { "type": "integer", "minimum": 0 },
+              "staleness": { "type": "string" },
+              "newestRunAt": { "type": ["string", "null"], "format": "date-time" }
+            },
+            "required": ["hardware", "hardwareKey", "runs", "distinctModelFamilies"]
+          }
+        }
+      },
+      "required": ["snapshot", "snapshotAt", "totalComparableRuns", "caveats", "hardwareGroups"]
+    },
+    "runSubmissionRequest": {
+      "title": "POST request body — submit a run for review",
+      "type": "object",
+      "properties": {
+        "model": { "type": "string", "maxLength": 160, "description": "Model identifier or display name (required)." },
+        "quant": { "type": "string", "maxLength": 60, "description": "Quantization tag, e.g. q4_k_m (required)." },
+        "hardware": { "type": "string", "maxLength": 160, "description": "Rig label, e.g. 'RTX 4090' (required)." },
+        "hwClass": {
+          "type": "string",
+          "enum": ["discrete_gpu", "unified", "cpu_only"],
+          "description": "Hardware class driving sanity bounds (required)."
+        },
+        "prefillTokPerSec": { "type": "number", "exclusiveMinimum": 0, "description": "Measured prefill speed in tok/s (required)." },
+        "decodeTokPerSec": { "type": "number", "exclusiveMinimum": 0, "description": "Measured single-stream decode speed in tok/s (required); must not exceed prefillTokPerSec." },
+        "engine": { "type": "string", "maxLength": 80, "description": "Inference engine name+version (optional)." },
+        "submitter": { "type": "string", "maxLength": 80, "description": "Submitter credit (optional)." },
+        "promptTokens": { "type": "integer", "minimum": 1, "maximum": 10000000, "description": "Optional prompt length used in the measurement." },
+        "outputTokens": { "type": "integer", "minimum": 1, "maximum": 1000000, "description": "Optional output length generated." },
+        "contextLength": { "type": "integer", "minimum": 1, "maximum": 100000000, "description": "Optional context length of the measurement." },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "engineVersion": { "type": "string", "maxLength": 80 },
+            "command": { "type": "string", "maxLength": 500 },
+            "sourceUrl": { "type": "string", "maxLength": 300 },
+            "notes": { "type": "string", "maxLength": 1000 }
+          },
+          "description": "Optional provenance block."
+        }
+      },
+      "required": ["model", "quant", "hardware", "hwClass", "prefillTokPerSec", "decodeTokPerSec"]
+    },
+    "submissionAcceptedResponse": {
+      "title": "POST success — 202 Accepted",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "status": { "type": "string", "const": "queued" },
+        "reviewStatus": { "type": "string", "description": "Review-queue status of the new submission." },
+        "submissionId": { "type": "string", "description": "Id to reference in review." },
+        "unitAudit": { "type": "object", "description": "Advisory unit-consistency audit (present only when flagged)." },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string", "enum": ["unit_audit_flags", "similar_run_exists"] },
+              "message": { "type": "string" },
+              "existingRun": { "$ref": "#/definitions/runItem" }
+            },
+            "required": ["code", "message"]
+          }
+        }
+      },
+      "required": ["status", "reviewStatus", "submissionId"]
+    },
+    "validationErrorResponse": {
+      "title": "POST/GET failure — 400 validation_failed (or 409 duplicate_run)",
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string",
+          "enum": ["validation_failed", "duplicate_run", "queue_unavailable"]
+        },
+        "message": { "type": "string" },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": { "type": "string" },
+              "code": { "type": "string", "examples": ["required", "type", "too_long", "out_of_range", "invalid_value", "implausible", "duplicate"] },
+              "message": { "type": "string" }
+            },
+            "required": ["field", "code", "message"]
+          }
+        },
+        "existingRun": { "$ref": "#/definitions/runItem" }
+      },
+      "required": ["error"]
+    },
+    "runItem": {
+      "title": "One comparable run (flattened + normalized)",
+      "type": "object",
+      "properties": {
+        "runId": { "type": "string", "description": "Stable id of the source measurement." },
+        "createdAt": { "type": ["string", "null"], "format": "date-time" },
+        "ageDays": { "type": ["integer", "null"], "description": "Whole days since createdAt at snapshot time." },
+        "staleness": { "type": "string", "description": "Freshness tier derived from ageDays." },
+        "modelFamily": { "type": "string", "description": "Normalized family — repo/quant variants collapse." },
+        "modelId": { "type": ["string", "null"], "description": "Raw Hugging Face repo id." },
+        "modelName": { "type": ["string", "null"], "description": "Display name." },
+        "paramsB": { "type": ["number", "null"], "description": "Parameter count in billions." },
+        "hardwareKey": { "type": "string", "description": "Normalized rig key." },
+        "hardware": { "type": "string", "description": "Rig label." },
+        "hwClass": { "type": ["string", "null"], "enum": ["discrete_gpu", "unified", "cpu_only", null] },
+        "gpu": { "type": ["string", "null"], "description": "GPU name (discrete rigs)." },
+        "gpuCount": { "type": "integer", "minimum": 1 },
+        "vramGb": { "type": ["number", "null"], "description": "Total VRAM in GiB." },
+        "chip": { "type": ["string", "null"], "description": "Chip variant/family/vendor (unified-memory rigs)." },
+        "unifiedMemoryGb": { "type": ["number", "null"], "description": "Unified memory size (Apple Silicon etc.)." },
+        "cpu": { "type": ["string", "null"], "description": "CPU label (cpu_only rigs)." },
+        "engine": { "type": ["string", "null"], "description": "Engine name." },
+        "engineVersion": { "type": ["string", "null"], "description": "Engine version string." },
+        "quantization": { "type": ["string", "null"], "description": "Quantization tag." },
+        "prefillTokPerSec": { "type": "integer", "description": "Prefill speed, rounded tok/s." },
+        "decodeTokPerSec": { "type": "integer", "description": "Single-stream decode speed, rounded tok/s." },
+        "promptTokens": { "type": ["integer", "null"] },
+        "outputTokens": { "type": ["integer", "null"] },
+        "contextLength": { "type": ["integer", "null"] },
+        "contextBand": {
+          "type": ["string", "null"],
+          "enum": ["lt1k", "1k-8k", "8k-32k", "32k+", null],
+          "description": "Context-length band; null when the run reports no context length."
+        },
+        "source": { "type": "string", "description": "URL of the original measurement." }
+      },
+      "required": ["runId", "modelFamily", "hardwareKey", "hardware", "prefillTokPerSec", "decodeTokPerSec", "source"]
+    }
+  }
+}
