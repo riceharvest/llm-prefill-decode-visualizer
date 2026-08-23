@@ -82,7 +82,7 @@ test('cost: degenerate speeds yield null instead of Infinity/NaN', () => {
   assert.equal(noDecode.costUsdPerMillionTokens, null);
   assert.equal(noDecode.requestsPerHour, 0);
   assert.equal(noDecode.costUsdPerThousandRequests, null);
-
+});
 
 test('plausible inputs produce an empty warnings array', () => {
   assert.deepEqual(sanityWarnings({ promptTokens: 2048, prefillSpeed: 3800, decodeSpeed: 105 }), []);
@@ -200,4 +200,5 @@ test('memoryLedger: no GPU selected → null verdict, math still returned', () =
   assert.equal(r.verdict, null);
   assert.ok(r.totalGb > 0);
 });
-});
+
+
