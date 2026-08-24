@@ -573,6 +573,7 @@ truth: `api/_errors.js`, mirrored into `/api/spec` under `x-error-codes`):
 | Code | HTTP status | Meaning |
 | --- | --- | --- |
 | `INVALID_PARAMS` | 400 | Well-formed request with invalid/missing parameters. Fix the input; retry without backoff. |
+| `INVALID_CURSOR` | 400 | The `?cursor=` value is malformed or was minted for a different query (endpoint, filters or dataset snapshot changed). Restart the walk from page one of the current query; do not retry with the same cursor. |
 | `METHOD_NOT_ALLOWED` | 405 | HTTP method not supported on this path (e.g. POST to `/api/runs`). Check the `Allow` header; switch to GET. |
 | `NOT_FOUND` | 404 | Referenced resource does not exist (e.g. unknown watch id). Do not retry unchanged. |
 | `RATE_LIMITED` | 429 | Too many requests. Honor `Retry-After` (seconds), then retry with backoff. |

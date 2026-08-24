@@ -20,6 +20,11 @@ export const ERROR_CODES = {
     title: 'Invalid parameters',
     description: 'The request was well-formed but contains invalid or missing parameters. Fix the input and retry without backoff.'
   },
+  INVALID_CURSOR: {
+    status: 400,
+    title: 'Invalid cursor',
+    description: 'The ?cursor= value is malformed or was minted for a different query (endpoint, filters or dataset snapshot changed). Restart the walk from page one of the current query. Do not retry with the same cursor.'
+  },
   NOT_FOUND: {
     status: 404,
     title: 'Not found',

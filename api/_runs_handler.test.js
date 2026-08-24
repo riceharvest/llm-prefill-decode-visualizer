@@ -171,3 +171,63 @@ test('upstream failure surfaces a 502 problem response', async () => {
     assert.equal(problem.code, 'UPSTREAM_UNAVAILABLE');
   } finally { restore(); }
 });
+
+// ---------- pagination hard cap (#778) ----------
+
+test('?limit= caps the page while rowCount stays the total; walk covers every row once', async () => {
+  try {
+    const p1 = mockRes();
+    await handler(mockReq({ limit: '1' }), p1);
+    assert.equal(p1.statusCode, 200);
+    const b1 = JSON.parse(p1.bodyText);
+    assert.equal(b1.rowCount, 2, 'rowCount is the TOTAL matching rows, not the page size');
+    assert.equal(b1.pagination.returnedRows, 1);
+    assert.equal(b1.runs.length, 1);
+    assert.equal(b1.has_more, true);
+    assert.match(b1.next_cursor, /^[A-Za-z0-9_-]+$/);
+
+    const p2 = mockRes();
+    await handler(mockReq({ limit: '1', cursor: b1.next_cursor }), p2);
+    const b2 = JSON.parse(p2.bodyText);
+    assert.equal(b2.has_more, false);
+    assert.equal(b2.next_cursor, null);
+    // keyset order: runId ascending across pages, no duplicates
+    const ids = [b1.runs[0].runId, b2.runs[0].runId];
+    assert.deepEqual([...ids].sort(), ids, 'pages follow ascending runId order');
+    assert.notEqual(ids[0], ids[1]);
+  } finally { restore(); }
+});
+
+test('a cursor minted for a different query is rejected with 400 INVALID_CURSOR (#740 #755)', async () => {
+  try {
+    const p1 = mockRes();
+    await handler(mockReq({ limit: '1' }), p1); // all-mode walk -> has a next_cursor
+    const foreign = JSON.parse(p1.bodyText).next_cursor;
+    assert.ok(foreign);
+
+    // reuse under a different comparable filter -> 400, not a wrong page
+    const reused = mockRes();
+    await handler(mockReq({ comparable: 'true', cursor: foreign }), reused);
+    assert.equal(reused.statusCode, 400);
+    assert.match(reused.headers['content-type'], /problem\+json/);
+    assert.equal(JSON.parse(reused.bodyText).code, 'INVALID_CURSOR');
+
+    // tampered/garbage cursor still 400s as before
+    const junk = mockRes();
+    await handler(mockReq({ cursor: 'zz' }), junk);
+    assert.equal(junk.statusCode, 400);
+  } finally { restore(); }
+});
+
+test('?format=csv honors the row cap and marks truncation in trailing comments', async () => {
+  try {
+    const res = mockRes();
+    await handler(mockReq({ format: 'csv', limit: '1' }), res);
+    assert.equal(res.statusCode, 200);
+    const lines = res.bodyText.split('\r\n').filter(Boolean);
+    const dataRows = lines.filter(l => !l.startsWith('#'));
+    assert.equal(dataRows.length, 2); // header + 1 capped row
+    assert.ok(lines.some(l => l.startsWith('# truncated:')));
+    assert.ok(lines.some(l => l.includes('cursor=')));
+  } finally { restore(); }
+});
