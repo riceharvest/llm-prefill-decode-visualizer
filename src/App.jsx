@@ -19,7 +19,7 @@ import { toLocalPreset, hardwareName } from './utils/localMaxxing';
 import {
   describeConfig, permalinkHref, readPermalinkTitle, documentTitleFor
 } from './utils/permalink';
-import { readParam, writeParams } from './utils/urlState';
+import { readParam, writeParams, firstValidParam } from './utils/urlState';
 import {
   serializeSettings, parseSettings,
   createHistory, recordChange, undo as historyUndo, redo as historyRedo
@@ -28,15 +28,19 @@ import SnapshotsSidebar from './components/SnapshotsSidebar';
 import { useFocusPanelHeading } from './utils/focus';
 import { setLocale, syncDocument, t } from './i18n/strings';
 import { installTouchTooltips } from './utils/touchTooltips';
+import { installFontSentinel } from './utils/fontFallback';
 
 // Every valid view id, in tab-bar order. Doubled as 1-9 keyboard-shortcut
 // targets and as the allow-list for the `?tab=` query param: an unknown
 // value falls back to 'single' instead of rendering a blank content area.
 const TABS = ['single', 'agentic', 'batching', 'compare', 'ab', 'diff', 'shortlist', 'kvcache', 'theory'];
 
+// `?tab=` reader with documented duplicate-key precedence (#950): the first
+// VALID value wins, so ?tab=bogus&tab=diff opens Diff instead of silently
+// falling back to 'single' because only the discarded first value was
+// checked. Single-value links behave exactly as before.
 function readTabParam() {
-  const v = readParam('tab');
-  return TABS.includes(v) ? v : 'single';
+  return firstValidParam(window.location.search, 'tab', v => TABS.includes(v)) ?? 'single';
 }
 
 export default function App() {
@@ -51,6 +55,9 @@ export default function App() {
     if (lang) setLocale(lang);
     syncDocument();
     installTouchTooltips();
+    // Surface silent web-font fallback (#954): <html data-web-fonts=…> +
+    // one console.warn when Google Fonts didn't actually apply.
+    installFontSentinel();
   }, []);
   // Preset from the URL drives both the dropdown label AND the default speeds,
   // unless explicit prefill/decode params override them.
