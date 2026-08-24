@@ -34,6 +34,16 @@ function discoverRoutes() {
 // Non-agent exclusions — keep in sync with the comment above.
 const EXCLUDED = new Set(['/og']);
 
+// Transport shims (issues #372 #373 #376 #381): vercel.json rewrites
+// multi-segment paths (/api/calc/<id>, /api/watch/rss.xml, /api/watch/dispatch,
+// /api/agent/*.json) to these single-segment aliases because the platform edge
+// never routes nested /api/* paths to the function. The canonical paths are
+// already indexed; the aliases are the same surface, not new endpoints.
+EXCLUDED.add('/calc-replay');
+EXCLUDED.add('/watch-rss');
+EXCLUDED.add('/watch-dispatch');
+EXCLUDED.add('/agent-json');
+
 test('agent index: every endpoint maps to a real route in api/[...path].js', () => {
   assert.ok(Array.isArray(index.endpoints) && index.endpoints.length > 0);
   const routes = discoverRoutes();

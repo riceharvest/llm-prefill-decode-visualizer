@@ -113,6 +113,26 @@ export default async function handler(req, res) {
       case '/watch': return watch(req, res);
       case '/watch/rss.xml': return watchRss(req, res);
       case '/watch/dispatch': return watchDispatch(req, res);
+      // Single-segment aliases (issue #372 #373 #376 #381): the platform edge
+      // never routes multi-segment /api/* paths to this function, so
+      // vercel.json rewrites them to these aliases with the original path's
+      // parameters carried in the query string (?id= / ?file=).
+      case '/calc-replay': return calcId(req, res); // from /api/calc/<id> rewrite
+      case '/watch-rss': return watchRss(req, res); // from /api/watch/rss.xml rewrite
+      case '/watch-dispatch': return watchDispatch(req, res); // from /api/watch/dispatch rewrite
+      case '/agent-json': {
+        const file = String((req.query || {}).file || '');
+        const agentDoc = {
+          'capabilities.json': capabilities,
+          'compute.json': agentCompute,
+          'benchmarks.json': agentBenchmarks,
+          'scenario.json': agentScenario,
+          'freshness.json': agentFreshness,
+          'confidence.json': agentFreshness, // alias, same report
+        }[file];
+        if (!agentDoc) return json(res, { error: 'Not found', path: pathname }, 404);
+        return agentDoc(req, res);
+      }
       case '/mcp': return mcp(req, res);
       case '/agent/capabilities.json': return capabilities(req, res);
       case '/agent/compute.json': return agentCompute(req, res);
