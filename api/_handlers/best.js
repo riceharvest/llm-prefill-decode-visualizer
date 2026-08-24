@@ -216,9 +216,22 @@ export async function bestBody(query = {}) {
       const minD = Number(q.minDecode);
       if (Number.isFinite(minD)) runs = runs.filter(r => r.decodeTokPerSec >= minD);
     }
+    let excludedByMaxVramGb = 0;
+    let excludedUnknownVramGb = 0;
+    let maxVramApplied = false;
     if (q.maxVramGb) {
       const maxV = Number(q.maxVramGb);
-      if (Number.isFinite(maxV)) runs = runs.filter(r => effectiveVramGb(r) != null && effectiveVramGb(r) <= maxV);
+      if (Number.isFinite(maxV)) {
+        maxVramApplied = true;
+        runs = runs.filter(r => {
+          const v = effectiveVramGb(r);
+          // #780: unknown memory is a data gap, not an over-cap verdict —
+          // count it separately so agents can tell the two apart.
+          if (v == null) { excludedUnknownVramGb++; return false; }
+          if (v > maxV) { excludedByMaxVramGb++; return false; }
+          return true;
+        });
+      }
     }
 
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
@@ -229,6 +242,7 @@ export async function bestBody(query = {}) {
     const fitPrecisionBytes = Number(q.precisionBytes) > 0 ? Number(q.precisionBytes) : 2;
     const fitBatchSize = Math.max(1, Math.round(Number(q.batchSize)) || 1);
     let excludedByFit = 0;
+    let runsBeforeFit = 0;
     if (fitCheck) {
       const before = runs.length;
       runs = runs.filter(r => {
@@ -236,6 +250,7 @@ export async function bestBody(query = {}) {
         return fit?.fits === true;
       });
       excludedByFit = before - runs.length;
+      runsBeforeFit = before;
     }
 
     // Rank per hardware rig × model family using the group's medians,
@@ -367,6 +382,9 @@ export async function bestBody(query = {}) {
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
     warnings.push(...groups.filter(g => g.mixedContextBands)
       .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
+    if (excludedUnknownVramGb > 0) {
+      warnings.push(`${excludedUnknownVramGb} run(s) dropped by ?maxVramGb= had unknown memory (no vramGb/unifiedMemoryGb) — excluded for missing data, not for exceeding the cap (#780)`);
+    }
 
     const filters = { by, limit };
     if (q.model) filters.model = String(q.model).toLowerCase();
@@ -434,6 +452,11 @@ export async function bestBody(query = {}) {
       maxAgeDays: maxAgeDays || null,
       contextBand: contextBand || null,
       matchedRuns: runs.length,
+      // #780: make valid-constraint elimination observable. excludedRuns is
+      // the spec-documented name for the fitCheck drop count; the maxVramGb
+      // split distinguishes over-cap drops from unknown-memory data gaps.
+      ...(fitCheck ? { runsBeforeFit, excludedRuns: excludedByFit } : {}),
+      ...(maxVramApplied ? { excludedByMaxVramGb, excludedUnknownVramGb } : {}),
       caveats: buildCaveats(runs, groups),
       warnings,
       ...(by === 'walltime' ? {
