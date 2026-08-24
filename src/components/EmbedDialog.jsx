@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Copy, Check, ImageDown } from 'lucide-react';
 import { nodeToPngDataUri, exportNodeAsSvg } from '../utils/exportPng';
 import { buildEmbedHtml, buildEmbedIframe, buildEmbedMarkdown } from '../utils/embedSnippet';
+import { useFocusTrap } from '../utils/focus';
 import { t } from '../i18n/strings';
 
 // Embed dialog (#104): turns the current chart into copy-paste-ready
@@ -9,11 +10,27 @@ import { t } from '../i18n/strings';
 // base64 PNG data-URI (self-contained, no hosting); the iframe variant
 // points at the shared run URL (read-only, live). An SVG download is
 // offered alongside for higher-fidelity reuse.
+//
+// WAI-ARIA dialog pattern (#824): while open, focus moves into the panel
+// and Tab cycles inside it (useFocusTrap); Escape closes; on close the
+// previously focused element is restored.
 export default function EmbedDialog({ open, onClose, getNode, title, sourceUrl }) {
   const [dataUri, setDataUri] = useState('');
   const [error, setError] = useState('');
   const [copiedKey, setCopiedKey] = useState('');
   const copyTimer = useRef(null);
+  const dialogRef = useRef(null);
+  useFocusTrap(dialogRef, open);
+
+  // Escape closes. Capture phase so it wins over any other Escape handling.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [open, onClose]);
 
   const chartNode = open && getNode ? getNode() : null;
 
@@ -83,15 +100,20 @@ export default function EmbedDialog({ open, onClose, getNode, title, sourceUrl }
         background: 'rgba(4, 6, 9, 0.72)', backdropFilter: 'blur(2px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
       }}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title || t('embed.dialogTitle')}
     >
-      <div style={{
-        background: 'var(--bg-panel)', border: '1px solid var(--border-strong)',
-        borderRadius: '8px', width: 'min(680px, 100%)', maxHeight: '85vh',
-        display: 'flex', flexDirection: 'column', boxShadow: '0 12px 48px rgba(0,0,0,0.5)'
-      }}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title || t('embed.dialogTitle')}
+        tabIndex={-1}
+        style={{
+          background: 'var(--bg-panel)', border: '1px solid var(--border-strong)',
+          borderRadius: '8px', width: 'min(680px, 100%)', maxHeight: '85vh',
+          display: 'flex', flexDirection: 'column', boxShadow: '0 12px 48px rgba(0,0,0,0.5)',
+          outline: 'none'
+        }}
+      >
         <div className="field-head" style={{
           padding: '14px 18px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: '8px'
         }}>

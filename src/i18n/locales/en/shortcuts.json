@@ -8,7 +8,7 @@
   "undo": "Undo settings change",
   "redo": "Redo settings change",
   "groupNavigation": "Navigation",
-  "tabs": "Switch tab (1–9, then 0)",
+  "tabs": "Switch tab (1–9)",
   "help": "Open this help dialog",
   "groupControls": "Controls",
   "sliderArrows": "Adjust focused slider or time-scale option",

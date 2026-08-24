@@ -25,6 +25,7 @@ import {
   createHistory, recordChange, undo as historyUndo, redo as historyRedo
 } from './utils/settingsHistory';
 import SnapshotsSidebar from './components/SnapshotsSidebar';
+import KeyboardShortcutsDialog from './components/KeyboardShortcutsDialog';
 import { useFocusPanelHeading } from './utils/focus';
 import { setLocale, syncDocument, t } from './i18n/strings';
 import { installTouchTooltips } from './utils/touchTooltips';
@@ -42,6 +43,10 @@ function readTabParam() {
 export default function App() {
   const [activeTab, setActiveTab] = useState(readTabParam);
 
+  // Issue #810: the `?` shortcut opens the keyboard-shortcuts help dialog.
+  // The state was referenced but never declared, throwing a ReferenceError
+  // and leaving KeyboardShortcutsDialog as unreachable dead code.
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
 
   // Locale + touch tooltips: one-time setup. `?lang=` overrides the default
@@ -278,33 +283,69 @@ export default function App() {
   }, []);
 
   // Keyboard shortcuts: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z redo, Space =
-  // play/pause, R = reset, 1-9 + 0 = tabs, ? = shortcuts help dialog.
-  // Guards: modifier-held plain keys are ignored; typing in inputs/selects/
-  // textareas never triggers plain-key shortcuts; Space on a focused button
-  // lets the button handle it (the global toggle would double-fire and cancel
-  // itself out); while the shortcuts dialog is open only undo/redo stay live.
+  // play/pause, R = reset, 1-9 = tabs, ? = shortcuts help dialog.
+  // Guards (issues #810/#814/#816/#822/#825):
+  //   - Ctrl+Z never hijacks native text undo inside inputs/textareas or
+  //     contenteditable fields — the typing-context check runs FIRST (#814).
+  //   - While any modal dialog is open (shortcuts help, guided tour, embed)
+  //     it owns the keyboard: plain-key and Space shortcuts are suppressed so
+  //     R/digits/Space can't mutate state behind the backdrop (#810, #825).
+  //   - Plain-key shortcuts fire only when focus is on a non-interactive
+  //     element — not on buttons, ARIA radios, links, or tabindex=0 widgets
+  //     where the keypress belongs to the focused control (#816).
+  //   - Digits map only to tabs that exist; `0` no longer writes an
+  //     undefined tab into state and blanks the content area (#822).
   useEffect(() => {
+    const isTypingContext = (el) => (
+      el?.tagName === 'INPUT' || el?.tagName === 'SELECT' || el?.tagName === 'TEXTAREA'
+      || el?.isContentEditable === true
+    );
+
+    // True when the currently focused element would consume the keypress
+    // itself: any built-in control, anything with a tabindex, or anything
+    // carrying an interactive ARIA role (radio options are plain buttons).
+    const isInteractiveFocus = (el) => {
+      if (!el || el === document.body) return false;
+      if (isTypingContext(el)) return true;
+      const tag = el.tagName;
+      if (tag === 'BUTTON' || tag === 'A') return true;
+      const tabindex = el.getAttribute('tabindex');
+      if (tabindex !== null && tabindex !== '-1') return true;
+      const role = el.getAttribute('role');
+      return ['button', 'link', 'radio', 'checkbox', 'switch', 'menuitem',
+        'option', 'tab', 'slider', 'combobox'].includes(role);
+    };
+
     const onKey = (e) => {
+      const el = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+      // Undo/redo must yield to native text editing in typing contexts (#814).
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'z') {
+        if (isTypingContext(el)) return;
         e.preventDefault();
         if (e.shiftKey) handleRedo(); else handleUndo();
         return;
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const tag = document.activeElement?.tagName;
-      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+
+      // An open aria-modal dialog owns the keyboard while visible (#825).
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      if (isTypingContext(el)) return;
+      // Focused interactive controls consume their own keys (#816).
+      if (isInteractiveFocus(el)) return;
+
       if (e.key === '?') {
         e.preventDefault();
         setShortcutsOpen(true);
       } else if (e.code === 'Space') {
-        if (tag === 'BUTTON') return; // the button's own activation handles it
         e.preventDefault(); // stop page scroll
         setIsPlaying(p => !p);
       } else if (e.key === 'r' || e.key === 'R') {
         handleReset();
-      } else if (/^[0-9]$/.test(e.key)) {
-        // 1-9 map to the first nine views.
-        setActiveTab(TABS[e.key === '0' ? 9 : Number(e.key) - 1]);
+      } else if (/^[1-9]$/.test(e.key)) {
+        // 1-9 map to the first nine views; only existing tabs (#822).
+        const idx = Number(e.key) - 1;
+        if (idx < TABS.length) setActiveTab(TABS[idx]);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -483,6 +524,11 @@ export default function App() {
       {/* First-run guided tour overlay */}
 
       
+      {/* Keyboard-shortcuts help dialog (#810) */}
+      {shortcutsOpen && (
+        <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />
+      )}
+
       <footer className="site-footer" style={{ padding: '12px 0' }}>
         <p style={{ fontSize: '0.72rem', color: 'var(--text-subtle)' }}>
           {t('header.brandTitle')} · <a href="/llms.txt">API</a> · <a href="/api/spec">OpenAPI</a> · <kbd>Space</kbd> play · <kbd>R</kbd> reset

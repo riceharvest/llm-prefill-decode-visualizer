@@ -74,7 +74,11 @@ export default function GuidedTour({ activeTab, setActiveTab, prefillSpeed, deco
   const [stepIndex, setStepIndex] = useState(0);
   const [rect, setRect] = useState(null);
   // WAI-ARIA dialog pattern: while the tour is open, Tab cycles inside the
-  // tour card and closing restores focus to whoever opened it.
+  // tour card and closing restores focus to whoever opened it. The App-level
+  // global shortcut handler suppresses Space/R/digit plain-key shortcuts
+  // while any aria-modal dialog (this card included) is on screen, so the
+  // tour can't have the simulation reset or views switched out from under
+  // the user (#825).
   const cardRef = useRef(null);
   useFocusTrap(cardRef, true);
   const step = STEPS[stepIndex];

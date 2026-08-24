@@ -23,7 +23,7 @@ const GROUPS = [
   {
     title: () => t('shortcuts.groupNavigation'),
     items: [
-      ['1 – 9, 0', 'shortcuts.tabs'],
+      ['1 – 9', 'shortcuts.tabs'],
       ['?', 'shortcuts.help']
     ]
   },
