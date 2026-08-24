@@ -51,6 +51,23 @@ test('confidence is clamped to [0, 100] even for extreme spreads', () => {
   assert.ok(c.score >= 0 && c.score <= 100);
 });
 
+test('n=1 groups get no fabricated spread/outlier stats (#864 #852)', () => {
+  const c = confidenceFor([run('a', 'm', 778)]);
+  assert.equal(c.sampleSize, 1);
+  // was relativeIqr:0 — a single measurement reported as maximally tight
+  assert.equal(c.relativeIqr, null);
+  // was outlierDensity:1 — the run counted as an outlier of itself
+  assert.equal(c.outlierDensity, 0);
+  // score = sample factor (0.4 × 1/10) + full spread credit + zero outliers
+  assert.equal(c.score, 64);
+});
+
+test('n=2+ groups keep real IQR-based stats', () => {
+  const c = confidenceFor([...Array.from({ length: 9 }, (_, i) => run('a', 'm', 100 + i)), run('a', 'm', 500)]);
+  assert.ok(typeof c.relativeIqr === 'number' && c.relativeIqr > 0);
+  assert.ok(c.outlierDensity > 0); // the 500 run sits outside the fences
+});
+
 test('rankGroups sorts by confidence when asked', () => {
   const runs = [
     // fast but thin/noisy group
@@ -128,4 +145,39 @@ test('/api/best supports sort_by=confidence end-to-end', async t => {
   assert.deepEqual(scores, [...scores].sort((a, b) => b - a));
   assert.equal(byConfidence.body.results[0].hardwareKey, 'rig-steady');
   assert.ok(byConfidence.body.results.every(r => r.confidence.sampleSize === r.runsInGroup));
+});
+
+test('?by=cost honors powerDrawWatts alias and hwClass watt defaults (#1111)', async t => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    invalidateCache();
+  });
+
+  const row = {
+    id: 'c1', tokSPrefill: 3000, tokSOut: 100,
+    hardwareGroupKey: 'rig-a', hardwareGroupLabel: 'Rig A',
+    hardware: { hwClass: 'DISCRETE_GPU', gpuName: 'RTX 4090', vramGb: 24 },
+    model: { hfId: 'org/M-7B', displayName: 'M 7B' },
+    engine: { engineName: 'llama.cpp' },
+    batchSize: 1
+  };
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ rows: [row] }) // single short page ends pagination
+  });
+  invalidateCache();
+
+  // Default: the per-class estimate must survive UPPERCASE wire casing
+  // (discrete_gpu → 300 W), not the flat 150 W fallback.
+  const def = await callBestHandler({ by: 'cost' });
+  assert.equal(def.status, 200);
+  assert.equal(def.body.results[0].costInputs.powerDrawWatts, 300);
+
+  // compute's documented ?powerDrawWatts spelling works as an alias…
+  const aliased = await callBestHandler({ by: 'cost', powerDrawWatts: '777' });
+  assert.equal(aliased.body.results[0].costInputs.powerDrawWatts, 777);
+  // …and ?powerWatts keeps working.
+  const explicit = await callBestHandler({ by: 'cost', powerWatts: '555' });
+  assert.equal(explicit.body.results[0].costInputs.powerDrawWatts, 555);
 });

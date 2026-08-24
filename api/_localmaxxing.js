@@ -255,15 +255,20 @@ function round3(x) {
 export function confidenceFor(group) {
   const decodes = group.map(r => r.decodeTokPerSec).sort((a, b) => a - b);
   const dq = quartiles(decodes);
-  const iqr = dq.q3 - dq.q1;
-  const relIqr = dq.median > 0 ? iqr / dq.median : Infinity;
-  const lo = dq.q1 - 1.5 * iqr;
-  const hi = dq.q3 + 1.5 * iqr;
+  // quartiles() yields null q1/q3 when the group has a single run — guard
+  // instead of doing null arithmetic (#864, #852): null - null coerces IQR
+  // to 0 (fake "perfectly tight" relativeIqr) and collapses the 1.5×IQR
+  // fences to [0, 0], which counted the single run as a 100%-outlier.
+  const hasIqr = dq.q1 != null && dq.q3 != null;
+  const iqr = hasIqr ? dq.q3 - dq.q1 : null;
+  const relIqr = hasIqr && dq.median > 0 ? iqr / dq.median : null;
+  const lo = hasIqr ? dq.q1 - 1.5 * iqr : -Infinity;
+  const hi = hasIqr ? dq.q3 + 1.5 * iqr : Infinity;
   const outliers = decodes.filter(v => v < lo || v > hi).length;
   const outlierDensity = decodes.length ? outliers / decodes.length : 1;
 
   const sampleFactor = clamp01(decodes.length / SAMPLE_SATURATION);
-  const spreadFactor = clamp01(1 - relIqr);
+  const spreadFactor = clamp01(1 - (relIqr ?? 0));
   const outlierFactor = clamp01(1 - outlierDensity);
 
   const score = Math.round(

@@ -187,6 +187,10 @@ export async function bestBody(query = {}) {
       promptTokens: num(q.promptTokens, 2048),
       outputTokens: num(q.outputTokens, 512)
     };
+    // Accept compute's documented ?powerDrawWatts spelling alongside
+    // ?powerWatts (#1111) so callers copying the /api/compute?model=cost
+    // param names aren't silently ignored.
+    const requestedPowerWatts = q.powerWatts ?? q.powerDrawWatts;
 
     const snapshotAt = new Date();
     const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
@@ -260,7 +264,10 @@ export async function bestBody(query = {}) {
           const sample = g.bestRun;
           const c = cost({
             ...costInputs,
-            powerDrawWatts: num(q.powerWatts, DEFAULT_POWER_WATTS[sample.hwClass] ?? 150),
+            // hwClass arrives UPPERCASE on the wire (#482) — normalize the
+            // lookup key so the per-class watt estimates aren't dead code
+            // and every rig falls back to a flat 150 W (#1111).
+            powerDrawWatts: num(requestedPowerWatts, DEFAULT_POWER_WATTS[String(sample.hwClass ?? '').toLowerCase()] ?? 150),
             prefillSpeed: g.prefill.median,
             decodeSpeed: g.decode.median
           });
