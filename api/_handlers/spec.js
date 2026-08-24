@@ -666,7 +666,7 @@ export default function handler(req, res) {
         get: {
           operationId: 'computeInference',
           summary: 'Run inference math (TTFT, TPOT, walltime, VRAM)',
-          description: 'Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts POST with a JSON body, or a batch of up to 50 parameter sets via POST {"batch": [...]} / GET ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via /api/calc/{id}.',
+          description: 'Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts POST with a JSON body, or a batch of up to 50 parameter sets via POST {"batch": [...]} / GET ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via /api/calc/{id}. Caveat for model=batched: aggregate throughput = decodeSpeed × batchSize^(1 − decodeDecayExponent) grows monotonically with batch size by construction (defaults: ×B^0.75) — the heuristic has NO saturation point or optimal batch size, so it must not be used alone for sizing decisions. To read a scaling curve, sweep batchSize via the batch endpoint (homogeneous items, one param varied).',
           parameters: [
             { name: 'model', in: 'query', schema: { type: 'string', enum: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost'] } },
             { name: 'promptTokens', in: 'query', schema: { type: 'number' }, description: 'singleTurn/batched/agentic/cost' },
@@ -676,6 +676,7 @@ export default function handler(req, res) {
             { name: 'numTurns', in: 'query', schema: { type: 'integer' }, description: 'agentic' },
             { name: 'enablePrefixCaching', in: 'query', schema: { type: 'boolean' }, description: 'agentic' },
             { name: 'batchSize', in: 'query', schema: { type: 'integer' }, description: 'batched/kvCache' },
+            { name: 'decodeDecayExponent', in: 'query', schema: { type: 'number', minimum: 0, maximum: 1, default: 0.25 }, description: 'batched only: heuristic contention exponent controlling the shape of the batch-scaling curve. Per-user decode decays as decodeSpeed × batchSize^(−decodeDecayExponent); 0 = perfect linear scaling (aggregate = decodeSpeed × batchSize), 1 = batching gains nothing. Heuristic approximation, not a measured serving curve.' },
             { name: 'draftTokens', in: 'query', schema: { type: 'integer' }, description: 'speculative: draft tokens per step' },
             { name: 'acceptanceRate', in: 'query', schema: { type: 'number' }, description: 'speculative: 0..1. Response includes breakevenAcceptanceRate — below it speculation is slower than vanilla decode.' },
             { name: 'hardwarePriceUsd', in: 'query', schema: { type: 'number' }, description: 'cost: purchase price, amortized over amortizationMonths (default 36)' },

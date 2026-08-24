@@ -55,7 +55,7 @@ export const TABS = [
   {
     id: 'batching',
     label: 'Batching',
-    purpose: 'Show concurrent users sharing one accelerator: per-user decode decays roughly B^0.25 with batch size while aggregate throughput climbs.',
+    purpose: 'Show concurrent users sharing one accelerator: per-user decode decays as batchSize^(−decodeDecayExponent) with batch size while aggregate throughput climbs — a heuristic power law with NO saturation point, so it must not be used alone to pick an optimal batch size.',
     surfaces: ['batch-size slider', 'per-user vs aggregate throughput meters', 'shared-compute animation'],
     endpoints: ['GET /api/compute?model=batched'],
   },
