@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HardDrive, Cpu, Gauge } from 'lucide-react';
 import { formatTokens } from '../utils/presets';
-import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import { readParamNum, readParam, writeParams, readKvContextLength } from '../utils/urlState';
 import { DEFAULT_OVERHEAD_FRACTION, vramBudget } from '../../api/_math.js';
 import { GPU_CATALOG, WEIGHT_PRECISIONS, gpuById, parseParamsB, weightsGiB } from '../utils/vramPlanner';
 import Metric from './Metric';
@@ -238,7 +238,7 @@ function kvFormula(preset) {
 
 export default function KVCacheCalculator() {
   const [modelPreset, setModelPreset] = useState(() => readParam('model') || 'llama70b');
-  const [contextLength, setContextLength] = useState(() => readParamNum('ctx', 32768));
+  const [contextLength, setContextLength] = useState(() => readKvContextLength(32768));
   const [precision, setPrecision] = useState(() => {
     const p = readParamNum('prec', 2);
     return [2, 1, 0.5].includes(p) ? p : 2; // 2 bytes = FP16/BF16, 1 = FP8/INT8, 0.5 = INT4
@@ -268,9 +268,11 @@ export default function KVCacheCalculator() {
   // Measured weights size (GB) — overrides the parameter-count estimate
   const [weightsOverrideGb, setWeightsOverrideGb] = useState(() => Math.max(0, readParamNum('wgb', 0)));
 
-  // Shareable per-tab settings
+  // Shareable per-tab settings. Context length uses the namespaced `kvCtx=`
+  // key (#669) so it can never collide with single-turn's boolean `ctx=`
+  // context-scaling toggle; the legacy shared key is only read, never written.
   useEffect(() => {
-    writeParams({ model: modelPreset, ctx: contextLength, prec: precision, batch: batchSize,
+    writeParams({ model: modelPreset, kvCtx: contextLength, prec: precision, batch: batchSize,
       wp: weightPrecisionId, gpu: gpuId, oh: overheadPct, wgb: weightsOverrideGb || undefined, vram: gpuVramGb });
   }, [modelPreset, contextLength, precision, batchSize, weightPrecisionId, gpuId, overheadPct, weightsOverrideGb, gpuVramGb]);
 

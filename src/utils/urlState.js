@@ -41,3 +41,29 @@ export function demoUrl(params) {
   p.set('autoplay', '1');
   return `${window.location.pathname}?${p.toString()}`;
 }
+
+// Tabs whose simulator actually consumes the global PREFILL/DECODE sliders.
+// compare and ab render no simulation driven by those sliders (#664), so the
+// controls are hidden there instead of sitting dead on the page.
+export const SPEED_CONTROL_TABS = ['single', 'agentic', 'batching'];
+
+export function consumesSpeedControls(tab) {
+  return SPEED_CONTROL_TABS.includes(tab);
+}
+
+// KV-cache context length in tokens. Read from the namespaced `kvCtx=` key;
+// falls back to the legacy shared `ctx=` key for pre-#669 links, ignoring the
+// boolean spellings ('1'/'0'/'true'/'false') that belong to single-turn's
+// context-scaling toggle so one view can never poison the other (#669).
+export function readKvContextLength(fallback) {
+  const parseNum = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const v = readParam('kvCtx');
+  if (v !== null && v !== '') return parseNum(v);
+  const legacy = readParam('ctx');
+  if (legacy === null || legacy === '') return fallback;
+  if (legacy === '1' || legacy === 'true' || legacy === '0' || legacy === 'false') return fallback;
+  return parseNum(legacy);
+}
