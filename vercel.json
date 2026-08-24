@@ -45,6 +45,40 @@
       "destination": "/.well-known/mcp.json"
     }
   ],
+  "headers": [
+    {
+      "source": "/llms.txt",
+      "headers": [{ "key": "Vary", "value": "Accept-Encoding" }]
+    },
+    {
+      "source": "/llms-full.txt",
+      "headers": [{ "key": "Vary", "value": "Accept-Encoding" }]
+    },
+    {
+      "source": "/agents.json",
+      "headers": [{ "key": "Vary", "value": "Accept-Encoding" }]
+    },
+    {
+      "source": "/changelog.json",
+      "headers": [{ "key": "Vary", "value": "Accept-Encoding" }]
+    },
+    {
+      "source": "/schemas/:path*",
+      "headers": [{ "key": "Vary", "value": "Accept-Encoding" }]
+    },
+    {
+      "source": "/.well-known/mcp.json",
+      "headers": [{ "key": "Vary", "value": "Accept-Encoding" }]
+    },
+    {
+      "source": "/robots.txt",
+      "headers": [{ "key": "Vary", "value": "Accept-Encoding" }]
+    },
+    {
+      "source": "/sitemap.xml",
+      "headers": [{ "key": "Vary", "value": "Accept-Encoding" }]
+    }
+  ],
   "crons": [
     {
       "path": "/api/watch/dispatch",
