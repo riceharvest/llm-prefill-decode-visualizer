@@ -27,7 +27,10 @@ function json(res, body, status = 200) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, max-age=600');
+  // #516: only successful estimates are CDN-cacheable. Error bodies depend on
+  // the caller's query string and must never be stored by shared caches —
+  // sibling endpoints already send no-store on their error paths.
+  res.setHeader('Cache-Control', status === 200 ? 'public, max-age=600' : 'no-store');
   res.end(JSON.stringify(body, null, 2));
 }
 
