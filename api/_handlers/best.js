@@ -161,6 +161,7 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  * ?price=<usd>                    hardware purchase price (per rig; default 0)
  * ?electricityRate=$/kWh          default 0.15
  * ?powerWatts=W                   default estimate by hwClass (see DEFAULT_POWER_WATTS)
+ * ?powerDrawWatts=W               alias for ?powerWatts (same spelling as /api/compute model=cost)
  * ?amortizationMonths=M           spread hardware price over this many months (default 36)
  * ?promptTokens=&outputTokens=    scenario shape (defaults 2048/512)
  *
@@ -195,30 +196,67 @@ export async function bestBody(query = {}) {
     const { runs: liveRuns, snapshot } = await resolveRuns(q);
     let runs = liveRuns;
 
+    // Per-constraint survivor counts (#780): lets agents audit how much each
+    // filter eliminated instead of inferring it from a shrunken matchedRuns.
+    const filterFunnel = { raw: runs.length };
+
     if (q.model) {
       const m = normalizeQueryModel(q.model);
       runs = runs.filter(r => r.modelFamily.includes(m) || r.modelId?.toLowerCase().includes(m));
+      filterFunnel.afterModel = runs.length;
     }
     if (q.maxParamsB) {
       const maxP = Number(q.maxParamsB);
-      if (Number.isFinite(maxP)) runs = runs.filter(r => r.paramsB && r.paramsB <= maxP);
+      if (Number.isFinite(maxP)) {
+        runs = runs.filter(r => r.paramsB && r.paramsB <= maxP);
+        filterFunnel.afterMaxParamsB = runs.length;
+      }
     }
-    if (q.quant) runs = runs.filter(r => r.quantization?.toLowerCase() === String(q.quant).toLowerCase());
-    if (q.hwClass) runs = runs.filter(r => r.hwClass?.toLowerCase() === String(q.hwClass).toLowerCase());
+    if (q.quant) {
+      runs = runs.filter(r => r.quantization?.toLowerCase() === String(q.quant).toLowerCase());
+      filterFunnel.afterQuant = runs.length;
+    }
+    if (q.hwClass) {
+      runs = runs.filter(r => r.hwClass?.toLowerCase() === String(q.hwClass).toLowerCase());
+      filterFunnel.afterHwClass = runs.length;
+    }
     if (q.hardware) {
       const h = String(q.hardware).toLowerCase();
       runs = runs.filter(r => r.hardwareKey?.toLowerCase().includes(h) || r.hardware?.toLowerCase().includes(h));
+      filterFunnel.afterHardware = runs.length;
     }
-    if (q.engine) runs = runs.filter(r => matchesEngineQuery(r, String(q.engine)));
-    if (maxAgeDays) runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
+    if (q.engine) {
+      runs = runs.filter(r => matchesEngineQuery(r, String(q.engine)));
+      filterFunnel.afterEngine = runs.length;
+    }
+    if (maxAgeDays) {
+      runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
+      filterFunnel.afterMaxAge = runs.length;
+    }
     runs = filterByContextBand(runs, contextBand);
+    if (contextBand) filterFunnel.afterContextBand = runs.length;
     if (q.minDecode) {
       const minD = Number(q.minDecode);
-      if (Number.isFinite(minD)) runs = runs.filter(r => r.decodeTokPerSec >= minD);
+      if (Number.isFinite(minD)) {
+        runs = runs.filter(r => r.decodeTokPerSec >= minD);
+        filterFunnel.afterMinDecode = runs.length;
+      }
     }
+    // Unknown-memory rigs are counted separately (#780): dropping them is a
+    // data gap, not a cap violation — agents must be able to tell the two apart.
+    let excludedUnknownVramGb = null;
     if (q.maxVramGb) {
       const maxV = Number(q.maxVramGb);
-      if (Number.isFinite(maxV)) runs = runs.filter(r => effectiveVramGb(r) != null && effectiveVramGb(r) <= maxV);
+      if (Number.isFinite(maxV)) {
+        let unknownVram = 0;
+        runs = runs.filter(r => {
+          const v = effectiveVramGb(r);
+          if (v == null) { unknownVram += 1; return false; }
+          return v <= maxV;
+        });
+        excludedUnknownVramGb = unknownVram;
+        filterFunnel.afterMaxVramGb = runs.length;
+      }
     }
 
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
@@ -228,14 +266,15 @@ export async function bestBody(query = {}) {
     const fitContextLength = Math.min(1e6, Math.max(256, fitCtx > 0 ? Math.round(fitCtx) : 32768));
     const fitPrecisionBytes = Number(q.precisionBytes) > 0 ? Number(q.precisionBytes) : 2;
     const fitBatchSize = Math.max(1, Math.round(Number(q.batchSize)) || 1);
-    let excludedByFit = 0;
+    let excludedRuns = null;
     if (fitCheck) {
       const before = runs.length;
       runs = runs.filter(r => {
         const fit = fitsInMemory({ ...r, contextLength: fitContextLength, precisionBytes: fitPrecisionBytes, batchSize: fitBatchSize });
         return fit?.fits === true;
       });
-      excludedByFit = before - runs.length;
+      excludedRuns = before - runs.length;
+      filterFunnel.afterFitCheck = runs.length;
     }
 
     // Rank per hardware rig × model family using the group's medians,
@@ -260,7 +299,11 @@ export async function bestBody(query = {}) {
           const sample = g.bestRun;
           const c = cost({
             ...costInputs,
-            powerDrawWatts: num(q.powerWatts, DEFAULT_POWER_WATTS[sample.hwClass] ?? 150),
+            // ?powerWatts (best spelling) or ?powerDrawWatts (compute's
+            // documented spelling, #1111); default estimate keyed
+            // case-insensitively — upstream hwClass casing varies (#482).
+            powerDrawWatts: num(q.powerWatts ?? q.powerDrawWatts,
+              DEFAULT_POWER_WATTS[String(sample.hwClass ?? '').toLowerCase()] ?? 150),
             prefillSpeed: g.prefill.median,
             decodeSpeed: g.decode.median
           });
@@ -434,6 +477,9 @@ export async function bestBody(query = {}) {
       maxAgeDays: maxAgeDays || null,
       contextBand: contextBand || null,
       matchedRuns: runs.length,
+      filterFunnel,
+      ...(fitCheck ? { excludedRuns } : {}),
+      ...(excludedUnknownVramGb != null ? { excludedUnknownVramGb } : {}),
       caveats: buildCaveats(runs, groups),
       warnings,
       ...(by === 'walltime' ? {

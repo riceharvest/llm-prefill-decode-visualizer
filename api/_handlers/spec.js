@@ -581,7 +581,13 @@ const BEST_LIST_ENVELOPE = {
     snapshot: { $ref: '#/components/schemas/SnapshotRef' },
     snapshotAt: { type: ['string', 'null'], format: 'date-time' },
     matchedRuns: { type: 'integer', description: 'Comparable runs that survived filtering' },
+    filterFunnel: {
+      type: 'object',
+      description: 'Per-constraint survivor counts (#780): raw plus afterModel/afterQuant/afterHwClass/afterMaxVramGb/afterFitCheck/etc. — a stage appears only when that constraint was applied, so agents can audit how much each filter eliminated.',
+      additionalProperties: { type: 'integer', description: 'Runs surviving this filter stage' }
+    },
     excludedRuns: { type: ['integer', 'null'], description: 'Runs dropped by ?fitCheck= (present only with fitCheck)' },
+    excludedUnknownVramGb: { type: ['integer', 'null'], description: 'Runs dropped by ?maxVramGb= because their memory size is unknown (present only with maxVramGb) — a data gap, not a cap violation' },
     maxAgeDays: { type: ['number', 'null'], description: 'Echoed ?max_age= filter (null when unset)' },
     contextBand: { type: ['string', 'null'], enum: ['lt1k', '1k-8k', '8k-32k', '32k+', null], description: 'Echoed ?context_band= filter (null when unset)' },
     caveats: { type: 'array', items: { $ref: '#/components/schemas/Caveat' } },
