@@ -11,7 +11,7 @@ import { readParamNum, readParam, readParamBool, writeParams } from '../utils/ur
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
-import { drawItlSamples, summarizeItl, histogramItl, cumulativeItlSchedule, tokensEmittedBy } from '../utils/itl';
+import { drawItlSamples, summarizeItl, histogramItl, cumulativeItlSchedule, tokensEmittedBy, itlHistogramAriaLabel, itlZoneLegend } from '../utils/itl';
 import {
   DEFAULT_HALF_SPEED_CONTEXT,
   HALF_SPEED_CONTEXT_PRESETS,
@@ -1324,7 +1324,7 @@ export default function SingleTurnVisualizer({
                   <>
                     <div
                       role="img"
-                      aria-label={t('singleTurn.itlHistogramAria')}
+                      aria-label={itlHistogramAriaLabel(t('singleTurn.itlHistogramAria'), itlSummary)}
                       style={{
                         position: 'relative',
                         height: '4rem',
@@ -1354,6 +1354,8 @@ export default function SingleTurnVisualizer({
                       {markers.filter(() => span > 0).map(m => (
                         <div
                           key={m.key}
+                          data-marker={m.key}
+                          data-value-ms={Number.isFinite(m.value) ? m.value.toFixed(1) : undefined}
                           title={`${m.key} = ${m.value.toFixed(1)} ms`}
                           style={{
                             position: 'absolute',
@@ -1366,6 +1368,18 @@ export default function SingleTurnVisualizer({
                         />
                       ))}
                     </div>
+                    {/* Percentile-zone legend (#973): the bin fill colors encode
+                        p50/p95 thresholds — state them with their values. */}
+                    {itlZoneLegend(itlSummary).length > 0 && (
+                      <div className="itl-zone-legend" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '4px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        {itlZoneLegend(itlSummary).map(z => (
+                          <span key={z.zone} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <span aria-hidden="true" style={{ width: '10px', height: '10px', borderRadius: '2px', display: 'inline-block', background: z.zone === 'at-or-below-p50' ? 'var(--decode)' : z.zone === 'p50-to-p95' ? 'var(--agent)' : 'var(--prefill)' }} />
+                            {z.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="field-scale">
                       <span>{itlHistogram.min.toFixed(1)} ms</span>
                       <span>mean {itlSummary.mean.toFixed(1)} ms · avg = TPOT, tail = jitter</span>

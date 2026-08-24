@@ -135,3 +135,57 @@ test('crossCheck: group without single-GPU baseline reports nothing', () => {
   assert.equal(cc.relatedRigComparisons, 0);
   assert.deepEqual(cc.contradictions, []);
 });
+
+// ---------- #967: machine-actionable comparison provenance ----------
+
+test('#967: contradictions carry the runIds behind both medians', () => {
+  const runs = [
+    { ...run(130), runId: 's1' },
+    { ...run(200, { gpuCount: 4 }), runId: 'm1' },
+    { ...run(210, { gpuCount: 4 }), runId: 'm2' }
+  ];
+  const cc = crossCheck(runs);
+  assert.equal(cc.relatedRigComparisons, 1); // still an integer (back-compat)
+  const c = cc.contradictions.find(x => x.metric === 'decode');
+  assert.ok(c, 'expected a decode contradiction');
+  assert.deepEqual(c.baselineRunIds, ['s1']);
+  assert.deepEqual(c.multiGpuRunIds, ['m1', 'm2']);
+});
+
+test('#967: comparisons[] exposes passing comparisons with flagged:false (#967)', () => {
+  const runs = [
+    { ...run(130), id: 's1' }, // healthy scaling — no contradiction
+    { ...run(250, { gpuCount: 2 }), id: 'm1' }
+  ];
+  const cc = crossCheck(runs);
+  assert.equal(cc.relatedRigComparisons, 1);
+  assert.equal(cc.contradictions.length, 0);
+  assert.equal(cc.comparisons.length, 1);
+  const cmp = cc.comparisons[0];
+  assert.equal(cmp.vs, '2x RTX 3090');
+  assert.equal(cmp.gpuCount, 2);
+  assert.deepEqual(cmp.baselineRunIds, ['s1']);
+  assert.deepEqual(cmp.multiGpuRunIds, ['m1']);
+  assert.equal(cmp.flagged, false);
+});
+
+test('#967: comparisons[].flagged is true exactly when a contradiction was emitted', () => {
+  const runs = [
+    { ...run(130), runId: 's1' },
+    { ...run(90, { gpuCount: 4 }), runId: 'm1' } // slower than single → flagged
+  ];
+  const cc = crossCheck(runs);
+  assert.equal(cc.comparisons.length, 1);
+  assert.equal(cc.comparisons[0].flagged, true);
+  assert.ok(cc.contradictions.length > 0);
+});
+
+test('#967: runs without any id field yield empty (not null) id arrays', () => {
+  const cc = crossCheck([run(130), run(90, { gpuCount: 4 })]);
+  assert.deepEqual(cc.comparisons[0].baselineRunIds, []);
+  assert.deepEqual(cc.comparisons[0].multiGpuRunIds, []);
+  for (const c of cc.contradictions) {
+    assert.deepEqual(c.baselineRunIds, []);
+    assert.deepEqual(c.multiGpuRunIds, []);
+  }
+});

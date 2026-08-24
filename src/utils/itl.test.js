@@ -8,7 +8,9 @@ import {
   summarizeItl,
   histogramItl,
   cumulativeItlSchedule,
-  tokensEmittedBy
+  tokensEmittedBy,
+  itlHistogramAriaLabel,
+  itlZoneLegend
 } from './itl.js';
 
 test('makeRng is deterministic for a given seed', () => {
@@ -122,4 +124,31 @@ test('cumulative schedule is strictly increasing and emission search is exact', 
   assert.equal(tokensEmittedBy(schedule, schedule[4] + 1e-6), 5);
   assert.equal(tokensEmittedBy(schedule, schedule[schedule.length - 1] + 1), schedule.length);
   assert.equal(tokensEmittedBy([], 100), 0);
+});
+
+// ---------- #973: histogram marker values must be extractable, not hover-only ----------
+
+test('#973: aria label carries the p50/p95/p99 values it names', () => {
+  const label = itlHistogramAriaLabel('Histogram of simulated per-token latencies with p50, p95 and p99 markers', { p50: 9.31, p95: 13.94, p99: 16.02 });
+  assert.ok(label.includes('p50 = 9.3 ms'), label);
+  assert.ok(label.includes('p95 = 13.9 ms'), label);
+  assert.ok(label.includes('p99 = 16.0 ms'), label);
+  assert.ok(label.startsWith('Histogram of simulated per-token latencies'));
+});
+
+test('#973: aria label degrades safely without a finite summary', () => {
+  const base = 'base label';
+  assert.equal(itlHistogramAriaLabel(base, null), base);
+  assert.equal(itlHistogramAriaLabel(base, { p50: NaN }), base);
+  assert.equal(itlHistogramAriaLabel(null, { p50: 1 }), '');
+});
+
+test('#973: zone legend states thresholds with their values', () => {
+  const rows = itlZoneLegend({ p50: 10.0, p95: 20.0 });
+  assert.deepEqual(rows.map(r => r.zone), ['at-or-below-p50', 'p50-to-p95', 'above-p95']);
+  assert.match(rows[0].label, /≤ p50 \(10\.0 ms\)/);
+  assert.match(rows[1].label, /p50–p95 \(10\.0–20\.0 ms\)/);
+  assert.match(rows[2].label, /> p95 \(20\.0\+ ms\)/);
+  // Non-finite summary → no legend at all.
+  assert.deepEqual(itlZoneLegend({ p50: NaN }), []);
 });
