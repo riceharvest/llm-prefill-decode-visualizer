@@ -170,6 +170,11 @@ export function cost({
   const hourlyTotal = hourlyHardware + hourlyElectricity;
   const requestsPerHour = total > 0 ? 3600 / total : 0;
 
+  // $/1M tokens: hourly cost → per-second ($/3600), then ÷ tok/s throughput,
+  // ×1e6 (#868 — the missing hours→seconds conversion inflated this exactly
+  // 3600×; kept consistent with costUsdPerThousandRequests below).
+  const costUsdPerMillionTokens = throughput > 0 ? ((hourlyTotal / 3600) / throughput) * 1e6 : null;
+
   return {
     inputs: {
       hardwarePriceUsd, electricityRatePerKwh, powerDrawWatts, amortizationMonths,
@@ -180,7 +185,7 @@ export function cost({
     hardwareCostUsdPerHour: round(hourlyHardware),
     electricityCostUsdPerHour: round(hourlyElectricity),
     totalCostUsdPerHour: round(hourlyTotal),
-    costUsdPerMillionTokens: round(throughput > 0 ? (hourlyTotal / throughput) * 1e6 : null),
+    costUsdPerMillionTokens: round(costUsdPerMillionTokens),
     costUsdPerThousandRequests: round(requestsPerHour > 0 ? (hourlyTotal / requestsPerHour) * 1000 : null)
   };
 }

@@ -106,10 +106,12 @@ const TOOLS = [
       type: 'object',
       properties: {
         flags: { type: 'string', description: 'comma-separated ids: flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3' },
-        prefillSpeed: { type: 'number' },
-        decodeSpeed: { type: 'number' }
+        prefillSpeed: { type: 'number', description: 'Base prefill speed tok/s (defaults to 3800 like REST)' },
+        decodeSpeed: { type: 'number', description: 'Base decode speed tok/s (defaults to 105 like REST)' },
+        promptTokens: { type: 'number', description: 'Prompt size in tokens for the simulated single turn (default 2048)' },
+        outputTokens: { type: 'number', description: 'Generation length in tokens for the simulated single turn (default 512)' }
       },
-      required: ['flags', 'prefillSpeed', 'decodeSpeed']
+      required: ['flags']
     }
   }
 ];
@@ -202,6 +204,25 @@ export default async function handler(req, res) {
     return json(res, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400);
   }
 
+  // A message WITHOUT an id is a notification per JSON-RPC 2.0: execute
+  // nothing, reply 202 with no body (#870). Previously an id-less tools/call
+  // was executed and answered with id coerced to null — an unsolicited
+  // response a pipelining client could mis-attribute to another request.
+  if (rpc !== null && typeof rpc === 'object' && !Array.isArray(rpc) && rpc.id === undefined) {
+    res.statusCode = 202;
+    return res.end();
+  }
+
+  // Batch arrays are not supported by this stateless server: reject cleanly
+  // with -32600 instead of destructuring the array into nonsense fields (#870).
+  if (Array.isArray(rpc)) {
+    return json(res, {
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32600, message: 'Invalid Request: batch arrays are not supported; send one JSON-RPC message per POST' }
+    });
+  }
+
   const { id, method, params } = rpc || {};
   const reply = (result) => json(res, { jsonrpc: '2.0', id: id ?? null, result });
 
@@ -221,10 +242,6 @@ export default async function handler(req, res) {
           'cost_per_1m for budgeting. Speeds are tok/s; prefill is compute-bound, decode is bandwidth-bound.'
       });
 
-    case 'notifications/initialized':
-      res.statusCode = 202;
-      return res.end();
-
     case 'tools/list':
       return reply({ tools: TOOLS });
 
@@ -242,7 +259,10 @@ export default async function handler(req, res) {
       return reply({});
 
     default:
-      return json(res, { jsonrpc: '2.0', id: id ?? null, error: { code: -32601, message: `Method not found: ${method}` } }, 404);
+      // JSON-RPC application errors ride in an HTTP 200 body per the MCP
+      // Streamable HTTP transport — non-2xx is reserved for transport
+      // failures and official SDK clients discard non-2xx bodies (#870).
+      return json(res, { jsonrpc: '2.0', id: id ?? null, error: { code: -32601, message: `Method not found: ${method}` } });
   }
 }
 

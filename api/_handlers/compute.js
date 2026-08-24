@@ -141,20 +141,24 @@ function computeOne(params, dryRun = false) {
       // The response carries a per-flag audit trail (delta + source tag) so
       // agents can see exactly how each number was adjusted.
       const flags = params.flags ?? '';
-      if (dryRun) {
-        return { status: 200, body: dryRunBody('flagged', {
-          prefillSpeed: num(params.prefillSpeed, 3800),
-          decodeSpeed: num(params.decodeSpeed, 105),
-          promptTokens: num(params.promptTokens, 2048),
-          outputTokens: num(params.outputTokens, 512),
-          flags
-        }) };
-      }
+      // Validate flags on BOTH paths (#871): run the same applyEngineFlags
+      // pass the real call uses so a dry run surfaces unknown ids and unmet
+      // flag dependencies (warnings[]) instead of echoing garbage clean.
       const flaggedInputs = applyEngineFlags({
         prefillSpeed: num(params.prefillSpeed, 3800),
         decodeSpeed: num(params.decodeSpeed, 105),
         flags
       });
+      if (dryRun) {
+        return { status: 200, body: {
+          ...dryRunBody('flagged', {
+            ...flaggedInputs.inputs,
+            promptTokens: num(params.promptTokens, 2048),
+            outputTokens: num(params.outputTokens, 512)
+          }),
+          warnings: flaggedInputs.warnings
+        } };
+      }
       const promptTokens = num(params.promptTokens, 2048);
       const outputTokens = num(params.outputTokens, 512);
       return { status: 200, body: {

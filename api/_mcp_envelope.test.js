@@ -137,7 +137,9 @@ test('ping replies with an empty result under the same JSON-RPC envelope', async
 
 test('JSON-RPC errors keep the envelope: code + message, echoed id', async () => {
   const { status, body } = await rpc({ jsonrpc: '2.0', id: 13, method: 'resources/list' });
-  assert.equal(status, 404);
+  // #870: JSON-RPC application errors ride in an HTTP 200 body — non-2xx is
+  // reserved for transport failures and SDK clients discard non-2xx bodies.
+  assert.equal(status, 200);
   assert.equal(body.jsonrpc, '2.0');
   assert.equal(body.id, 13);
   assert.equal(typeof body.error.code, 'number');
