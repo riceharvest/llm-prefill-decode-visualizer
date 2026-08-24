@@ -44,7 +44,94 @@
   --radius-lg: 8px;
 
   --shadow-panel: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px -12px rgba(0,0,0,0.6);
-}* {
+}
+
+/* ---------- Theme palettes (issues #662 #668) ----------
+   theme.js writes the resolved palette onto <html data-theme="…">; these
+   override blocks make that attribute actually drive rendering. They sit
+   after :root so equal specificity resolves in their favor. Agents can read
+   document.documentElement.dataset.theme or deep-link ?theme=light|dark|
+   high-contrast (validated against src/utils/theme.js THEMES). */
+
+[data-theme='light'] {
+  --bg-app: #F5F7FA;
+  --bg-panel: #FFFFFF;
+  --bg-inset: #EDF0F4;
+  --bg-raised: #FFFFFF;
+  --bg-hover: #E2E7EE;
+
+  --text-main: #10161D;
+  --text-muted: #4A5563;
+  --text-subtle: #77828F;
+
+  --border: #D6DDE5;
+  --border-strong: #B9C4CF;
+  --border-focus: #0891B2;
+
+  --accent: #0891B2;
+  --accent-strong: #155E75;
+  --accent-dim: rgba(8, 145, 178, 0.10);
+  --accent-ink: #ECFEFF;
+
+  --prefill: #0369A1;
+  --prefill-dim: rgba(3, 105, 161, 0.08);
+  --prefill-border: rgba(3, 105, 161, 0.35);
+
+  --decode: #059669;
+  --decode-dim: rgba(5, 150, 105, 0.08);
+  --decode-border: rgba(5, 150, 105, 0.35);
+
+  --agent: #B45309;
+  --agent-dim: rgba(180, 83, 9, 0.08);
+  --agent-border: rgba(180, 83, 9, 0.35);
+
+  --danger: #DC2626;
+  --warn: #B45309;
+
+  --shadow-panel: 0 1px 0 rgba(255,255,255,0.6) inset, 0 8px 24px -12px rgba(15,23,42,0.18);
+}
+
+/* Pure black/white high-contrast palette for low-vision users and agents
+   that need maximum-luminance separation. */
+[data-theme='high-contrast'] {
+  --bg-app: #000000;
+  --bg-panel: #000000;
+  --bg-inset: #000000;
+  --bg-raised: #0A0A0A;
+  --bg-hover: #1A1A1A;
+
+  --text-main: #FFFFFF;
+  --text-muted: #E6E6E6;
+  --text-subtle: #CCCCCC;
+
+  --border: #666666;
+  --border-strong: #999999;
+  --border-focus: #00E5FF;
+
+  --accent: #00E5FF;
+  --accent-strong: #7DF9FF;
+  --accent-dim: rgba(0, 229, 255, 0.18);
+  --accent-ink: #000000;
+
+  --prefill: #67E8F9;
+  --prefill-dim: rgba(103, 232, 249, 0.16);
+  --prefill-border: rgba(103, 232, 249, 0.7);
+
+  --decode: #6EE7B7;
+  --decode-dim: rgba(110, 231, 183, 0.16);
+  --decode-border: rgba(110, 231, 183, 0.7);
+
+  --agent: #FDE047;
+  --agent-dim: rgba(253, 224, 71, 0.16);
+  --agent-border: rgba(253, 224, 71, 0.7);
+
+  --danger: #FF7B7B;
+  --warn: #FFBF47;
+
+  --shadow-panel: none;
+}
+
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -57,6 +144,12 @@ html {
      scroll-container side effects) stops them widening/panning the page.
      Set on <html> because Chromium does not propagate body clip to the viewport. */
   overflow-x: clip;
+}
+
+/* data-theme drives the UA color-scheme too, so form controls and scrollbars
+   match the palette the page actually renders (issues #662 #668). */
+html[data-theme='light'] {
+  color-scheme: light;
 }
 
 body {
@@ -111,7 +204,23 @@ a { color: var(--accent); }
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #3A4757;
-}/* ---------- Layout ---------- */
+}
+
+/* Theme-aware scrollbar thumbs (the base rules above hardcode dark colors) */
+[data-theme='light'] ::-webkit-scrollbar-thumb {
+  background: #C3CCD6;
+}
+[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
+  background: #A8B4C2;
+}
+[data-theme='high-contrast'] ::-webkit-scrollbar-thumb {
+  background: #999999;
+}
+[data-theme='high-contrast'] ::-webkit-scrollbar-thumb:hover {
+  background: #CCCCCC;
+}
+
+/* ---------- Layout ---------- */
 
 .app-shell {
   min-height: 100vh;
