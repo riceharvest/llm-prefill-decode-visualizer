@@ -169,6 +169,8 @@ function json(res, body, status = 200) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
+  // Forward-compat: expose session/rate-limit headers to browser clients (#750).
+  res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset');
   res.end(JSON.stringify(body));
 }
 
@@ -177,7 +179,14 @@ export default async function handler(req, res) {
     res.statusCode = 204;
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Mcp-Session-Id');
+    // Streamable HTTP spec headers + auth/SSE-resume headers browser-hosted
+    // clients must be able to send (see issue #750).
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Authorization, Last-Event-ID'
+    );
+    // Let browser clients read back session/rate-limit response headers.
+    res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset');
     return res.end();
   }
 
