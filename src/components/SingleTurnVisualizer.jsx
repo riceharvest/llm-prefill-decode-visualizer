@@ -431,6 +431,13 @@ export default function SingleTurnVisualizer({
     draftTokens,
     acceptance,
     effectiveDecodeSpeed,
+    ctxScaleEnabled,
+    ctxHalf,
+    imagesEnabled,
+    imageCount,
+    imageResId,
+    jitterEnabled,
+    jitterPct,
     deepLink: buildDeepLink('single')
   });
   const handleExportMd = () => downloadMarkdown(buildMarkdown(), 'single-turn-simulation.md');
@@ -443,6 +450,13 @@ export default function SingleTurnVisualizer({
     draftTokens,
     acceptance,
     effectiveDecodeSpeed,
+    ctxScaleEnabled,
+    ctxHalf,
+    imagesEnabled,
+    imageCount,
+    imageResId,
+    jitterEnabled,
+    jitterPct,
     deepLink: buildDeepLink('single')
   });
   const handleExportJson = () => downloadJson(buildJson(), 'single-turn-simulation.json');
