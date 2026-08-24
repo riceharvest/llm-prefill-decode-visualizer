@@ -160,7 +160,10 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  * Cost ranking (?by=cost) inputs:
  * ?price=<usd>                    hardware purchase price (per rig; default 0)
  * ?electricityRate=$/kWh          default 0.15
- * ?powerWatts=W                   default estimate by hwClass (see DEFAULT_POWER_WATTS)
+ * ?powerWatts=W                   whole-rig wall power under load; accepts
+ *                                 ?powerDrawWatts= as an alias (compute's
+ *                                 spelling). Default estimate by hwClass
+ *                                 (see DEFAULT_POWER_WATTS)
  * ?amortizationMonths=M           spread hardware price over this many months (default 36)
  * ?promptTokens=&outputTokens=    scenario shape (defaults 2048/512)
  *
@@ -189,6 +192,7 @@ export async function bestBody(query = {}) {
     };
 
     const snapshotAt = new Date();
+    let excludedUnknownVramGb = 0;
     const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
     const contextBand = parseContextBandParam(q.context_band ?? q.contextBand);
 
@@ -218,7 +222,18 @@ export async function bestBody(query = {}) {
     }
     if (q.maxVramGb) {
       const maxV = Number(q.maxVramGb);
-      if (Number.isFinite(maxV)) runs = runs.filter(r => effectiveVramGb(r) != null && effectiveVramGb(r) <= maxV);
+      if (Number.isFinite(maxV)) {
+        // Count rigs dropped for missing memory data separately (#780):
+        // an agent capping at N GB must be able to tell "over budget" from
+        // "memory unknown".
+        let unknownVram = 0;
+        runs = runs.filter(r => {
+          const v = effectiveVramGb(r);
+          if (v == null) { unknownVram += 1; return false; }
+          return v <= maxV;
+        });
+        excludedUnknownVramGb = unknownVram;
+      }
     }
 
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
@@ -260,7 +275,11 @@ export async function bestBody(query = {}) {
           const sample = g.bestRun;
           const c = cost({
             ...costInputs,
-            powerDrawWatts: num(q.powerWatts, DEFAULT_POWER_WATTS[sample.hwClass] ?? 150),
+            // Accept both spellings — compute documents ?powerDrawWatts=
+            // (#1111). hwClass is uppercased on the wire (e.g. DISCRETE_GPU),
+            // so normalize before the per-class watt lookup or every rig
+            // silently falls back to the flat 150 W estimate.
+            powerDrawWatts: num(q.powerWatts ?? q.powerDrawWatts, DEFAULT_POWER_WATTS[String(sample.hwClass || '').toLowerCase()] ?? 150),
             prefillSpeed: g.prefill.median,
             decodeSpeed: g.decode.median
           });
@@ -434,6 +453,12 @@ export async function bestBody(query = {}) {
       maxAgeDays: maxAgeDays || null,
       contextBand: contextBand || null,
       matchedRuns: runs.length,
+      // Fit/exclusion telemetry (#780). excludedRuns is the spec-declared
+      // BestListEnvelope field ("present only with fitCheck") — the counter
+      // was computed and discarded before. excludedUnknownVramGb separates
+      // maxVramGb drops caused by missing memory data from over-budget drops.
+      ...(fitCheck ? { excludedRuns: excludedByFit } : {}),
+      ...(q.maxVramGb ? { excludedUnknownVramGb } : {}),
       caveats: buildCaveats(runs, groups),
       warnings,
       ...(by === 'walltime' ? {
