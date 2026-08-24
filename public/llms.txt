@@ -228,11 +228,14 @@ Branch on the stable `code`, never on `title`/`detail` prose:
 |---|---|---|---|
 | `INVALID_PARAMS` | 400 | bad or missing parameters — fix the input | no (fix first) |
 | `NOT_FOUND` | 404 | referenced resource does not exist (reserved) | no |
+| `PAYLOAD_TOO_LARGE` | 413 | request body exceeds the 4 MiB app-level cap (`x-max-body-bytes` in `/api/spec`) — split it up | no (reduce first) |
 | `RATE_LIMITED` | 429 | too many requests; honor `Retry-After` | yes, after wait |
 | `UPSTREAM_UNAVAILABLE` | 502 | community-benchmark source temporarily down | yes, with backoff |
 | `INTERNAL` | 500 | unexpected server error | maybe |
 
 The machine-readable registry also lives in `/api/spec` (`x-error-codes` + the `Problem` schema) for generated SDKs. Batch items in `/api/compute` carry per-item `code` alongside the human-readable `error` string.
+
+**Request body size cap:** every POST endpoint enforces an app-level maximum request body size of **4 MiB** (`x-max-body-bytes` in `/api/spec`). Bodies over the cap are rejected with **413** problem+json, `code: "PAYLOAD_TOO_LARGE"` — before reaching the hosting platform's edge, which would otherwise answer with a bare off-contract `text/plain` 413. Check `Content-Length` before sending large batches; split work into smaller requests and retry without backoff.
 
 ## App tabs (interactive page)
 

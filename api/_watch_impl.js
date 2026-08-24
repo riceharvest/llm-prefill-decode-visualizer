@@ -1,6 +1,7 @@
 import { enforceRateLimit } from './_ratelimit.js';
 import { sendJson } from './_schema.js';
 import { sendProblemFromError } from './_errors.js';
+import { rejectOversizedBody } from './_body_limit.js';
 import { getAllRuns } from './_localmaxxing.js';
 import {
   validateWatch, saveWatch, listWatches, removeWatch,
@@ -54,6 +55,9 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
+      // App-level body cap (#926): standard problem+json 413 instead of the
+      // platform edge's bare text/plain response.
+      if (rejectOversizedBody(req, res)) return;
       const { ok, errors, watch } = validateWatch(req.body);
       if (!ok) {
         return sendJson(res, { error: 'validation_failed', errors }, { status: 400 });

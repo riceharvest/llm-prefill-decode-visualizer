@@ -7,6 +7,7 @@ import { validateSubmission, checkDuplicates, queueSubmission } from '../_submit
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson } from '../_schema.js';
 import { sendProblem, sendProblemFromError } from '../_errors.js';
+import { rejectOversizedBody } from '../_body_limit.js';
 import { decorateRun, filterByMaxAge, groupFreshness, parseMaxAgeParam } from '../_freshness.js';
 import { parseContextBandParam, filterByContextBand } from '../_contextbands.js';
 
@@ -31,6 +32,9 @@ const RUN_KEY = r => [r.decodeTokPerSec, String(r.runId)];
  * errors: { error: 'validation_failed', errors: [{ field, code, message }] }.
  */
 async function handlePost(req, res) {
+  // App-level body cap (#926): standard problem+json 413 instead of the
+  // platform edge's bare text/plain response.
+  if (rejectOversizedBody(req, res)) return;
   const body = req.body;
   const { ok, errors, submission } = validateSubmission(body);
 

@@ -79,6 +79,9 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- App-level request body size cap (#926): every body-reading endpoint (`/api/diff`, `/api/mcp`, `/api/compute`, `/api/watch`, `/api/localmaxxing`) now rejects request bodies over **4 MiB** with the standard RFC 9457 problem+json **413** (`code: PAYLOAD_TOO_LARGE`) instead of letting the hosting platform's edge answer with a bare off-contract `text/plain` 413. Stream-reading endpoints (`/api/diff`, `/api/mcp`) stop consuming and bound memory once the cap is crossed; object-body handlers pre-check `Content-Length`. Documented as `x-max-body-bytes` on every POST operation in `/api/spec` (plus a root-level default and a per-op `413` response) and in public/llms.txt.
+- Affected endpoints: `/api/diff`, `/api/mcp`, `/api/compute`, `/api/watch`, `/api/localmaxxing`.
+
 - `/api/spec` now annotates every operation with a machine-readable
   `x-rate-limit` extension: `{ enforced, limit, windowSeconds, keying, scope }`
   plus, for metered endpoints, the `X-RateLimit-*` header names and the 429

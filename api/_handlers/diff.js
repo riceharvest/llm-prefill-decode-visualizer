@@ -2,6 +2,8 @@ import { getAllRuns } from '../_localmaxxing.js';
 import { computeRunDiff, REF_PROMPT_TOKENS, REF_OUTPUT_TOKENS } from '../_diff.js';
 import { bestBody } from './best.js';
 import { computeWhatIfDiff } from '../_whatif.js';
+import { ApiError, sendProblemFromError } from '../_errors.js';
+import { readBodyBuffer, rejectOversizedBody } from '../_body_limit.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -43,12 +45,13 @@ export function parseConstraintSet(value) {
 async function readJsonBody(req) {
   if (!req || typeof req !== 'object' || req.method !== 'POST') return null;
   if (req.body && typeof req.body === 'object') return req.body;
-  if (typeof req.on !== 'function') return null;
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  if (!chunks.length) return null;
+  if (typeof req.on !== 'function' && typeof req[Symbol.asyncIterator] !== 'function') return null;
+  // Bounded accumulation (#926): stop reading and throw PAYLOAD_TOO_LARGE
+  // once the body crosses MAX_BODY_BYTES instead of buffering unbounded.
+  const buf = await readBodyBuffer(req);
+  if (!buf.length) return null;
   try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    return JSON.parse(buf.toString('utf8'));
   } catch {
     const err = new Error('request body is not valid JSON');
     err.statusCode = 400;
@@ -64,6 +67,10 @@ const WHATIF_DESCRIPTION =
 //   What-if mode: ?mode=whatif&a=<constraints>&b=<constraints> — diff two
 //   decision requests (#71), returning only the deltas.
 export default async function handler(req, res) {
+  // App-level body cap (#926): fail fast on declared-oversized bodies with
+  // the standard problem+json 413 before the platform edge can answer with
+  // its bare text/plain 413.
+  if (rejectOversizedBody(req, res)) return;
   try {
     const body = await readJsonBody(req);
     if (body === undefined) return json(res, { error: 'request body is not valid JSON' }, 400);
@@ -101,6 +108,9 @@ export default async function handler(req, res) {
       diff: computeRunDiff(runA, runB)
     });
   } catch (err) {
+    if (err instanceof ApiError && err.code === 'PAYLOAD_TOO_LARGE') {
+      return sendProblemFromError(res, req, err);
+    }
     return json(res, { error: String(err.message || err) }, 502);
   }
 }

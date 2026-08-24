@@ -575,6 +575,7 @@ truth: `api/_errors.js`, mirrored into `/api/spec` under `x-error-codes`):
 | `INVALID_PARAMS` | 400 | Well-formed request with invalid/missing parameters. Fix the input; retry without backoff. |
 | `METHOD_NOT_ALLOWED` | 405 | HTTP method not supported on this path (e.g. POST to `/api/runs`). Check the `Allow` header; switch to GET. |
 | `NOT_FOUND` | 404 | Referenced resource does not exist (e.g. unknown watch id). Do not retry unchanged. |
+| `PAYLOAD_TOO_LARGE` | 413 | Request body exceeds the 4 MiB app-level cap (`x-max-body-bytes` in `/api/spec`). Split the payload; do not retry unchanged. |
 | `RATE_LIMITED` | 429 | Too many requests. Honor `Retry-After` (seconds), then retry with backoff. |
 | `UPSTREAM_UNAVAILABLE` | 502 | Transient failure fetching community benchmark data. Safe to retry with backoff. |
 | `INTERNAL` | 500 | Unexpected server error. Not actionable; retrying may or may not help. |

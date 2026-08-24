@@ -10,6 +10,9 @@
  * implementation of every formula.
  */
 
+import { sendProblemFromError } from './_errors.js';
+import { readBodyBuffer, rejectOversizedBody } from './_body_limit.js';
+
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
 const TOOLS = [
@@ -195,10 +198,18 @@ export default async function handler(req, res) {
     return json(res, { error: 'Method not allowed' }, 405);
   }
 
+  // App-level body cap (#926): an oversized JSON-RPC message must fail with
+  // the standard problem+json 413 (code PAYLOAD_TOO_LARGE) instead of the
+  // platform edge's bare text/plain 413, which MCP clients cannot classify.
+  if (rejectOversizedBody(req, res)) return;
+
   let rpc;
   try {
     rpc = typeof req.body === 'object' && req.body !== null ? req.body : JSON.parse(await readBody(req));
-  } catch {
+  } catch (err) {
+    if (err && err.code === 'PAYLOAD_TOO_LARGE') {
+      return sendProblemFromError(res, req, err);
+    }
     return json(res, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400);
   }
 
@@ -246,11 +257,7 @@ export default async function handler(req, res) {
   }
 }
 
+/** Read the request body, bounded by the app-level size cap (#926). */
 function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    req.on('data', c => { data += c; });
-    req.on('end', () => resolve(data));
-    req.on('error', reject);
-  });
+  return readBodyBuffer(req).then(buf => buf.toString('utf8'));
 }

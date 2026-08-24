@@ -1,5 +1,6 @@
 import { enforceRateLimit, RATE_LIMIT, RATE_WINDOW_MS } from '../_ratelimit.js';
 import { ERROR_CODES, problemType } from '../_errors.js';
+import { MAX_BODY_BYTES } from '../_body_limit.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -1438,6 +1439,21 @@ export default function handler(req, res) {
     summary: 'Global default; per-operation values live under paths[*][method].x-rate-limit.',
     ...xRateLimit(true)
   };
+
+  // Request body size cap (#926): document it on every POST operation so
+  // agents can pre-flight Content-Length before sending. Oversized bodies
+  // return 413 with the standard problem+json shape (code PAYLOAD_TOO_LARGE)
+  // from our own app-level check — never the platform edge's bare text/plain
+  // 413.
+  for (const item of Object.values(spec.paths)) {
+    if (!item.post) continue;
+    item.post['x-max-body-bytes'] = MAX_BODY_BYTES;
+    item.post.responses['413'] = {
+      description: `Request body exceeds the ${MAX_BODY_BYTES} byte app-level maximum (code PAYLOAD_TOO_LARGE). Reduce the payload and retry without backoff.`,
+      content: { 'application/problem+json': { schema: { $ref: '#/components/schemas/Problem' } } }
+    };
+  }
+  spec['x-max-body-bytes'] = MAX_BODY_BYTES;
 
   // Every JSON response carries schema_version + X-Schema-Version
   // (see _schema.js / CHANGELOG-API.md). The spec itself is no exception.

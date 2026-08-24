@@ -30,6 +30,11 @@ export const ERROR_CODES = {
     title: 'Method not allowed',
     description: 'The HTTP method is not supported by this endpoint. Use GET as documented; do not retry with the same method.'
   },
+  PAYLOAD_TOO_LARGE: {
+    status: 413,
+    title: 'Payload too large',
+    description: 'The request body exceeds the maximum allowed size (4 MiB, enforced app-level before the platform edge). Reduce the payload (e.g. split batches) and retry without backoff.'
+  },
   RATE_LIMITED: {
     status: 429,
     title: 'Rate limited',

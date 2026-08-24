@@ -29,6 +29,6 @@
 
 ## Typical agent workflow
 
-1. Read [the full API guide](public/llms.txt) once — it documents batching, dry-run validation, snapshot pinning and the `/v1/` prefix policy.
+1. Read [the full API guide](public/llms.txt) once — it documents batching, dry-run validation, snapshot pinning, the request-body size cap and the `/v1/` prefix policy.
 2. `GET /api/spec`, then call `/api/vram?hfId=…&context=…&vramGb=…` for fit checks or `/api/sizing?model=…` for ranked hardware recommendations.
 3. Model request shapes with `GET|POST /api/compute?model=singleTurn|agentic|kvCache|cost|…`.

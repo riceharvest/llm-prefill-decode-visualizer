@@ -38,7 +38,7 @@
 
 ## Typical agent workflow
 
-1. Read [the full API guide](public/llms.txt) once — it documents batching, dry-run validation, snapshot pinning and the `/v1/` prefix policy.
+1. Read [the full API guide](public/llms.txt) once — it documents batching, dry-run validation, snapshot pinning, the request-body size cap and the `/v1/` prefix policy.
 2. `GET /api/spec`, then call `/api/vram?hfId=…&context=…&vramGb=…` for fit checks or `/api/sizing?model=…` for ranked hardware recommendations.
 3. Model request shapes with `GET|POST /api/compute?model=singleTurn|agentic|kvCache|cost|…`.
 
@@ -376,11 +376,14 @@ Branch on the stable `code`, never on `title`/`detail` prose:
 |---|---|---|---|
 | `INVALID_PARAMS` | 400 | bad or missing parameters — fix the input | no (fix first) |
 | `NOT_FOUND` | 404 | referenced resource does not exist (reserved) | no |
+| `PAYLOAD_TOO_LARGE` | 413 | request body exceeds the 4 MiB app-level cap (`x-max-body-bytes` in `/api/spec`) — split it up | no (reduce first) |
 | `RATE_LIMITED` | 429 | too many requests; honor `Retry-After` | yes, after wait |
 | `UPSTREAM_UNAVAILABLE` | 502 | community-benchmark source temporarily down | yes, with backoff |
 | `INTERNAL` | 500 | unexpected server error | maybe |
 
 The machine-readable registry also lives in `/api/spec` (`x-error-codes` + the `Problem` schema) for generated SDKs. Batch items in `/api/compute` carry per-item `code` alongside the human-readable `error` string.
+
+**Request body size cap:** every POST endpoint enforces an app-level maximum request body size of **4 MiB** (`x-max-body-bytes` in `/api/spec`). Bodies over the cap are rejected with **413** problem+json, `code: "PAYLOAD_TOO_LARGE"` — before reaching the hosting platform's edge, which would otherwise answer with a bare off-contract `text/plain` 413. Check `Content-Length` before sending large batches; split work into smaller requests and retry without backoff.
 
 ## App tabs (interactive page)
 
@@ -547,6 +550,9 @@ migrate before `Sunset`. Agents can discover the current policy at
 ## Changelog
 
 ### Unreleased (additive — no version bump)
+
+- App-level request body size cap (#926): every body-reading endpoint (`/api/diff`, `/api/mcp`, `/api/compute`, `/api/watch`, `/api/localmaxxing`) now rejects request bodies over **4 MiB** with the standard RFC 9457 problem+json **413** (`code: PAYLOAD_TOO_LARGE`) instead of letting the hosting platform's edge answer with a bare off-contract `text/plain` 413. Stream-reading endpoints (`/api/diff`, `/api/mcp`) stop consuming and bound memory once the cap is crossed; object-body handlers pre-check `Content-Length`. Documented as `x-max-body-bytes` on every POST operation in `/api/spec` (plus a root-level default and a per-op `413` response) and in public/llms.txt.
+- Affected endpoints: `/api/diff`, `/api/mcp`, `/api/compute`, `/api/watch`, `/api/localmaxxing`.
 
 - `/api/spec` now annotates every operation with a machine-readable
   `x-rate-limit` extension: `{ enforced, limit, windowSeconds, keying, scope }`

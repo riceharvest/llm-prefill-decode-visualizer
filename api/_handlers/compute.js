@@ -11,6 +11,7 @@ import { ENGINE_FLAGS, applyEngineFlags } from '../../src/utils/engineFlags.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson, withSchemaVersion, applySchemaHeaders } from '../_schema.js';
 import { ApiError, sendProblemFromError } from '../_errors.js';
+import { rejectOversizedBody } from '../_body_limit.js';
 import { computeCalcId } from '../_calc_id.js';
 import { normalizeParams } from '../_calc_id.js';
 import { annotate, THEORETICAL } from '../_basis.js';
@@ -330,6 +331,10 @@ export default function handler(req, res) {
     return res.status(204).end();
   }
   if (!enforceRateLimit(req, res)) return;
+
+  // App-level body cap (#926): reject declared-oversized POST bodies with the
+  // standard problem+json 413 before the platform edge answers off-contract.
+  if (rejectOversizedBody(req, res)) return;
 
   // Accept both GET (?model=singleTurn&promptTokens=...) and POST (JSON body)
   const params = req.method === 'POST' ? (req.body || {}) : req.query;
