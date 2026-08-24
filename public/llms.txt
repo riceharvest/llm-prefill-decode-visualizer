@@ -27,8 +27,10 @@ hardware only), training-time estimates, or non-transformer architectures.
 ## Developer resources
 
 - OpenAPI spec: `/api/spec` (also under `/v1/spec`)
+- Version report: `GET /api/version` — release version + wire `schema_version` in one machine-readable body
 - Health & data freshness: `/api/health`
-- Changelog: `CHANGELOG-API.md` in the repo; human status page at `/status.html`
+- Share-card image renderer: `GET /api/og?preset=<id>&prefill=<tok/s>&decode=<tok/s>` — deterministic PNG preview of a config (also under `/v1/og`)
+- Changelog: `CHANGELOG-API.md` in the repo; human status page at `/status.html`. The machine-readable `CHANGELOG.json` also lives in the repo only — it is not served over HTTP.
 - MCP server: `/.well-known/mcp.json` (manifest) and `/api/mcp` (Streamable HTTP JSON-RPC: initialize, tools/list, tools/call)
 - Trust pages: [/about.html](/about.html), [/contact.html](/contact.html), [/privacy.html](/privacy.html)
 - Full documentation: `/llms-full.txt` — all agent-facing docs (this guide, README, API changelog, MCP docs) compiled into one flat markdown file
