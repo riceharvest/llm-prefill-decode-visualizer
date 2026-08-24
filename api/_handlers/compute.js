@@ -108,8 +108,15 @@ function computeOne(params, dryRun = false) {
     }
 
     case 'agentic': {
+      const requested = Math.min(50, Math.max(1, num(params.numTurns, 4)));
+      // #783: the spec declares numTurns an integer but fractional values
+      // were accepted, floored silently by the turn loop, and echoed back
+      // verbatim in inputs (so the calc id hashed a count that never ran).
+      // Floor at parse time so `inputs.numTurns` echoes the EXECUTED count,
+      // and flag the coercion in warnings[] when it engaged.
+      const numTurns = Math.floor(requested);
       const inputs = {
-        numTurns: Math.min(50, Math.max(1, num(params.numTurns, 4))),
+        numTurns,
         basePromptTokens: num(params.basePromptTokens, 1500),
         toolOutputTokensPerTurn: num(params.toolOutputTokensPerTurn, 800),
         decodeTokensPerTurn: num(params.decodeTokensPerTurn, 250),
@@ -117,7 +124,14 @@ function computeOne(params, dryRun = false) {
         decodeSpeed: num(params.decodeSpeed, 105),
         enablePrefixCaching: params.enablePrefixCaching !== 'false' && params.enablePrefixCaching !== false
       };
-      return withId('agentic', inputs, agentic(inputs), dryRun);
+      const result = agentic(inputs);
+      if (numTurns !== requested) {
+        result.warnings.push({
+          code: 'num_turns_floored',
+          message: `numTurns=${requested} is fractional — the simulation ran ${numTurns} turns; inputs echo the executed count.`
+        });
+      }
+      return withId('agentic', inputs, result, dryRun);
     }
 
     case 'kvCache': {
@@ -141,20 +155,24 @@ function computeOne(params, dryRun = false) {
       // The response carries a per-flag audit trail (delta + source tag) so
       // agents can see exactly how each number was adjusted.
       const flags = params.flags ?? '';
-      if (dryRun) {
-        return { status: 200, body: dryRunBody('flagged', {
-          prefillSpeed: num(params.prefillSpeed, 3800),
-          decodeSpeed: num(params.decodeSpeed, 105),
-          promptTokens: num(params.promptTokens, 2048),
-          outputTokens: num(params.outputTokens, 512),
-          flags
-        }) };
-      }
+      // Validate flags on BOTH paths (#871): run the same applyEngineFlags
+      // pass the real call uses so a dry run surfaces unknown ids and unmet
+      // flag dependencies (warnings[]) instead of echoing garbage clean.
       const flaggedInputs = applyEngineFlags({
         prefillSpeed: num(params.prefillSpeed, 3800),
         decodeSpeed: num(params.decodeSpeed, 105),
         flags
       });
+      if (dryRun) {
+        return { status: 200, body: {
+          ...dryRunBody('flagged', {
+            ...flaggedInputs.inputs,
+            promptTokens: num(params.promptTokens, 2048),
+            outputTokens: num(params.outputTokens, 512)
+          }),
+          warnings: flaggedInputs.warnings
+        } };
+      }
       const promptTokens = num(params.promptTokens, 2048);
       const outputTokens = num(params.outputTokens, 512);
       return { status: 200, body: {
