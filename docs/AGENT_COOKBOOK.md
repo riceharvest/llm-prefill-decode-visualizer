@@ -43,6 +43,9 @@ client IP): 120 req/min. Exceeding it returns `429` with `Retry-After`.
 Run inference math: TTFT, TPOT, walltime, VRAM for a parameter set. Models:
 `singleTurn`, `speculative`, `batched`, `agentic`, `kvCache`, `flagged`, `cost`.
 Call without `model` to get the self-describing capability list.
+For `agentic`, `numTurns` accepts 1–200 (matching the UI slider); larger
+requests are clamped with a `num_turns_clamped` warning and the requested value
+is echoed as `inputs.numTurnsRequested`.
 
 ```bash
 curl -s "$BASE/api/compute?model=singleTurn&promptTokens=2048&outputTokens=512&prefillSpeed=3800&decodeSpeed=105"

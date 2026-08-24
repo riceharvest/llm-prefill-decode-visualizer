@@ -33,7 +33,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        numTurns: { type: 'number' },
+        numTurns: { type: 'number', minimum: 1, maximum: 200, description: 'Agentic turns; values above 200 are clamped with a num_turns_clamped warning (#749)' },
         basePromptTokens: { type: 'number' },
         toolOutputTokensPerTurn: { type: 'number' },
         decodeTokensPerTurn: { type: 'number' },

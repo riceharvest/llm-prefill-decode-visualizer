@@ -673,7 +673,7 @@ export default function handler(req, res) {
             { name: 'outputTokens', in: 'query', schema: { type: 'number' }, description: 'singleTurn/batched/agentic/cost' },
             { name: 'prefillSpeed', in: 'query', schema: { type: 'number' }, description: 'tok/s' },
             { name: 'decodeSpeed', in: 'query', schema: { type: 'number' }, description: 'tok/s' },
-            { name: 'numTurns', in: 'query', schema: { type: 'integer' }, description: 'agentic' },
+            { name: 'numTurns', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 200 }, description: 'agentic; values above 200 are clamped with a num_turns_clamped warning (#749)' },
             { name: 'enablePrefixCaching', in: 'query', schema: { type: 'boolean' }, description: 'agentic' },
             { name: 'batchSize', in: 'query', schema: { type: 'integer' }, description: 'batched/kvCache' },
             { name: 'draftTokens', in: 'query', schema: { type: 'integer' }, description: 'speculative: draft tokens per step' },

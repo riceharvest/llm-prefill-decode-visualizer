@@ -22,6 +22,14 @@ export const config = { runtime: 'nodejs' };
 // capability list and /llms.txt). Keeps responses bounded.
 export const MAX_BATCH_SIZE = 50;
 
+// Agentic-loop turn ceiling (#749). Matches the UI slider's max
+// (src/components/AgenticVisualizer.jsx) so an agent handed a share link can
+// reproduce any loop the page can build. Requests above the cap are clamped,
+// but never silently: the response echoes `inputs.numTurnsRequested`, adds a
+// `num_turns_clamped` warning, and folds both values into the calc id so
+// distinct intents never collide on one replay id.
+export const MAX_AGENTIC_TURNS = 200;
+
 const MODEL_PRESETS = {
   llama70b:  { numLayers: 80, hiddenSize: 8192, kvHeads: 8, numHeads: 64, headDim: 128 },
   llama8b:   { numLayers: 32, hiddenSize: 4096, kvHeads: 8, numHeads: 32, headDim: 128 },
@@ -108,16 +116,33 @@ function computeOne(params, dryRun = false) {
     }
 
     case 'agentic': {
+      // Clamp numTurns into [1, MAX_AGENTIC_TURNS] (#749). The requested
+      // value is echoed back and flagged so a 200-turn ask can never be
+      // mistaken for a 50-turn answer, and the calc id includes the
+      // requested value so distinct intents don't collide.
+      const rawTurns = num(params.numTurns, 4);
+      const numTurns = Math.min(MAX_AGENTIC_TURNS, Math.max(1, rawTurns));
       const inputs = {
-        numTurns: Math.min(50, Math.max(1, num(params.numTurns, 4))),
+        numTurns,
         basePromptTokens: num(params.basePromptTokens, 1500),
         toolOutputTokensPerTurn: num(params.toolOutputTokensPerTurn, 800),
         decodeTokensPerTurn: num(params.decodeTokensPerTurn, 250),
         prefillSpeed: num(params.prefillSpeed, 3800),
         decodeSpeed: num(params.decodeSpeed, 105),
-        enablePrefixCaching: params.enablePrefixCaching !== 'false' && params.enablePrefixCaching !== false
+        enablePrefixCaching: params.enablePrefixCaching !== 'false' && params.enablePrefixCaching !== false,
+        ...(rawTurns !== numTurns ? { numTurnsRequested: rawTurns } : {})
       };
-      return withId('agentic', inputs, agentic(inputs), dryRun);
+      const result = agentic(inputs);
+      if (rawTurns !== numTurns) {
+        result.warnings = [
+          ...(result.warnings || []),
+          {
+            code: 'num_turns_clamped',
+            message: `numTurns=${rawTurns} is outside the supported range 1..${MAX_AGENTIC_TURNS}; computed with ${numTurns} turns instead (see inputs.numTurnsRequested).`
+          }
+        ];
+      }
+      return withId('agentic', inputs, result, dryRun);
     }
 
     case 'kvCache': {
@@ -206,7 +231,7 @@ function capabilityList() {
       singleTurn: { params: ['promptTokens', 'outputTokens', 'prefillSpeed', 'decodeSpeed'], example: '/api/compute?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105' },
       speculative: { params: ['baseDecodeSpeed', 'draftTokens', 'acceptanceRate', 'draftCostFraction'], example: '/api/compute?model=speculative&baseDecodeSpeed=105&draftTokens=4&acceptanceRate=0.7' },
       batched: { params: ['prefillSpeed', 'decodeSpeed', 'batchSize', 'promptTokens', 'outputTokens', 'decodeDecayExponent'], example: '/api/compute?model=batched&batchSize=16&decodeSpeed=105' },
-      agentic: { params: ['numTurns', 'basePromptTokens', 'toolOutputTokensPerTurn', 'decodeTokensPerTurn', 'prefillSpeed', 'decodeSpeed', 'enablePrefixCaching'], example: '/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true' },
+      agentic: { params: ['numTurns', 'basePromptTokens', 'toolOutputTokensPerTurn', 'decodeTokensPerTurn', 'prefillSpeed', 'decodeSpeed', 'enablePrefixCaching'], numTurnsRange: `1..${MAX_AGENTIC_TURNS}`, example: '/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true', note: 'numTurns above the range is clamped with a num_turns_clamped warning and inputs.numTurnsRequested echo (#749); the calc id includes the requested value.' },
       kvCache: { params: ['architecture|numLayers+kvHeads+headDim', 'contextLength', 'precisionBytes', 'batchSize'], architectures: Object.keys(MODEL_PRESETS), example: '/api/compute?model=kvCache&architecture=llama70b&contextLength=65536' },
       flagged: {
         params: ['prefillSpeed', 'decodeSpeed', 'promptTokens', 'outputTokens', 'flags'],
