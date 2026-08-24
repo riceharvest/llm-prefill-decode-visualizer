@@ -194,6 +194,9 @@ export async function bestBody(query = {}) {
 
     const { runs: liveRuns, snapshot } = await resolveRuns(q);
     let runs = liveRuns;
+    // #780: surfaced per-filter elimination counts (see response body).
+    let excludedByMaxVramGb = 0;
+    let excludedUnknownMemory = 0;
 
     if (q.model) {
       const m = normalizeQueryModel(q.model);
@@ -217,8 +220,22 @@ export async function bestBody(query = {}) {
       if (Number.isFinite(minD)) runs = runs.filter(r => r.decodeTokPerSec >= minD);
     }
     if (q.maxVramGb) {
+      // #780: count the two exclusion reasons separately so an agent capping
+      // VRAM can tell "over cap" from "memory unknown" — unknown-memory rigs
+      // are dropped here (opposite of /api/sizing, which lets them through).
       const maxV = Number(q.maxVramGb);
-      if (Number.isFinite(maxV)) runs = runs.filter(r => effectiveVramGb(r) != null && effectiveVramGb(r) <= maxV);
+      if (Number.isFinite(maxV)) {
+        let overCap = 0;
+        let unknownMemory = 0;
+        runs = runs.filter(r => {
+          const v = effectiveVramGb(r);
+          if (v == null) { unknownMemory++; return false; }
+          if (v > maxV) { overCap++; return false; }
+          return true;
+        });
+        excludedByMaxVramGb = overCap;
+        excludedUnknownMemory = unknownMemory;
+      }
     }
 
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
@@ -229,6 +246,7 @@ export async function bestBody(query = {}) {
     const fitPrecisionBytes = Number(q.precisionBytes) > 0 ? Number(q.precisionBytes) : 2;
     const fitBatchSize = Math.max(1, Math.round(Number(q.batchSize)) || 1);
     let excludedByFit = 0;
+    const runsBeforeFit = runs.length;
     if (fitCheck) {
       const before = runs.length;
       runs = runs.filter(r => {
@@ -434,6 +452,14 @@ export async function bestBody(query = {}) {
       maxAgeDays: maxAgeDays || null,
       contextBand: contextBand || null,
       matchedRuns: runs.length,
+      // #780: make valid constraints' effects observable — how many runs the
+      // fit check and the VRAM cap removed (and why), instead of a silently
+      // shrunk matchedRuns. Fields are absent when the filter wasn't used so
+      // unconstrained responses stay byte-stable.
+      ...(fitCheck ? { runsBeforeFit, excludedByFit } : {}),
+      ...(q.maxVramGb && Number.isFinite(Number(q.maxVramGb))
+        ? { excludedByMaxVramGb, excludedUnknownMemory }
+        : {}),
       caveats: buildCaveats(runs, groups),
       warnings,
       ...(by === 'walltime' ? {
