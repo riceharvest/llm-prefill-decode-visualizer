@@ -39,6 +39,11 @@ export default function SpeedControls({
     if (nextIndex !== null) {
       e.preventDefault();
       setSimSpeedMultiplier(TIME_OPTIONS[nextIndex]);
+      // Issue #460: selection must follow focus (ARIA radio pattern) — move
+      // DOM focus to the newly selected option so SR users hear the option
+      // that actually became checked.
+      const radio = e.currentTarget.querySelectorAll('[role="radio"]')[nextIndex];
+      if (radio) radio.focus();
     }
   };
 
@@ -127,6 +132,7 @@ export default function SpeedControls({
                   onClick={() => setSimSpeedMultiplier(mult)}
                   role="radio"
                   aria-checked={simSpeedMultiplier === mult}
+                  data-active={simSpeedMultiplier === mult ? 'true' : 'false'}
                   tabIndex={TIME_OPTIONS[currentTimeIndex] === mult ? 0 : -1}
                   className={simSpeedMultiplier === mult ? 'active' : ''}
                 >

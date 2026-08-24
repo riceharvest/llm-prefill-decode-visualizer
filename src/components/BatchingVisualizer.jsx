@@ -437,7 +437,13 @@ export default function BatchingVisualizer({
       )}
 
       {/* Main Batch Simulation Stage */}
-      <section className="panel" aria-label={t('batching.simStageAria')}>
+      {/* Issue #458: machine-readable run state (batching has no phase enum;
+          completed = clock ran to the makespan). */}
+      <section
+        className="panel"
+        aria-label={t('batching.simStageAria')}
+        data-state={isPlaying ? 'running' : (makespan > 0 && elapsedSim >= makespan) ? 'completed' : 'idle'}
+      >
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -462,7 +468,10 @@ export default function BatchingVisualizer({
               onClick={handleReset}
               type="button"
               title={t('speedControls.resetTooltip')}
-              aria-label={`${t('batching.resetTag')} — ${t('speedControls.resetTooltip')}`}
+              /* Issue #453: accessible name now equals the visible label
+                 ("Reset Batch") instead of concatenating an unrelated generic
+                 "Reset visualizer" tooltip. */
+              aria-label={t('batching.resetTag')}
               className="btn"
             >
               <RotateCcw size={15} />
