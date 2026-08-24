@@ -216,9 +216,18 @@ export async function bestBody(query = {}) {
       const minD = Number(q.minDecode);
       if (Number.isFinite(minD)) runs = runs.filter(r => r.decodeTokPerSec >= minD);
     }
+    // ?maxVramGb drops rigs with unknown memory silently (#780) — count them
+    // so the response can say what the filter removed and why.
+    let maxVramDropped = 0;
+    let maxVramUnknownMemory = 0;
     if (q.maxVramGb) {
       const maxV = Number(q.maxVramGb);
-      if (Number.isFinite(maxV)) runs = runs.filter(r => effectiveVramGb(r) != null && effectiveVramGb(r) <= maxV);
+      if (Number.isFinite(maxV)) {
+        const before = runs.length;
+        maxVramUnknownMemory = runs.filter(r => effectiveVramGb(r) == null).length;
+        runs = runs.filter(r => effectiveVramGb(r) != null && effectiveVramGb(r) <= maxV);
+        maxVramDropped = before - runs.length;
+      }
     }
 
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
@@ -367,6 +376,19 @@ export async function bestBody(query = {}) {
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
     warnings.push(...groups.filter(g => g.mixedContextBands)
       .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
+    if (maxVramUnknownMemory > 0) {
+      warnings.push(`${maxVramUnknownMemory} matching run(s) dropped by ?maxVramGb= because their memory size is unknown — they may actually satisfy the budget`);
+    }
+
+    // Filter-funnel telemetry (#780): excludedByFit used to be computed and
+    // discarded, and unknown-memory drops under ?maxVramGb were invisible.
+    // Only present when a telemetry-bearing filter is engaged, so responses
+    // without these filters stay byte-identical to before.
+    const filtering = {};
+    if (fitCheck) filtering.fitCheck = { excludedByFit };
+    if (maxVramDropped > 0 || maxVramUnknownMemory > 0) {
+      filtering.maxVramGb = { dropped: maxVramDropped, unknownMemoryDropped: maxVramUnknownMemory };
+    }
 
     const filters = { by, limit };
     if (q.model) filters.model = String(q.model).toLowerCase();
@@ -436,6 +458,7 @@ export async function bestBody(query = {}) {
       matchedRuns: runs.length,
       caveats: buildCaveats(runs, groups),
       warnings,
+      ...(Object.keys(filtering).length ? { filtering } : {}),
       ...(by === 'walltime' ? {
         workload: {
           promptTokens: workload.promptTokens,
