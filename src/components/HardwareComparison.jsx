@@ -15,6 +15,7 @@ import EmbedDialog from './EmbedDialog';
 import { buildCompareBatchBody, buildSnippet } from '../utils/copyAsCode';
 import { evaluateSlo } from '../utils/slo.js';
 import { estimatePower } from '../utils/powerThermal';
+import AriaLiveRegion, { useLiveAnnouncer } from './AriaLiveRegion';
 import { t } from '../i18n/strings';
 
 
@@ -98,6 +99,23 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
       tcoHw, tcoW: tcoWatts, tcoKwh, tcoCloud, tcoCapex, tcoAmort: tcoAmortMonths
     });
   }, [hardwareA, hardwareB, testPromptTokens, testOutputTokens, batchSize, priceAIn, priceAOut, priceBIn, priceBOut, tcoHw, tcoWatts, tcoKwh, tcoCloud, tcoCapex, tcoAmortMonths]);
+
+  // Live-region announcements (#465): the compare tab previously had zero
+  // live regions, so input-driven recompute updated metrics silently. Announce
+  // "results updated: A vs B" after any workload/pricing/system input change;
+  // the initial mount is not an update, so it is skipped. Throttling comes
+  // from the shared announcer so slider drags coalesce into one utterance.
+  const { message: liveMessage, announce } = useLiveAnnouncer();
+  const firstCompareRender = useRef(true);
+  useEffect(() => {
+    if (firstCompareRender.current) {
+      firstCompareRender.current = false;
+      return;
+    }
+    const nameFor = (id) => presets.find(preset => preset.id === id)?.name || id;
+    announce(t('compare.resultsUpdated', { a: nameFor(hardwareA), b: nameFor(hardwareB) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hardwareA, hardwareB, batchSize, testPromptTokens, testOutputTokens, priceAIn, priceAOut, priceBIn, priceBOut]);
 
   useEffect(() => {
     const localPresets = presets.filter(preset => preset.localMaxxing);
@@ -477,6 +495,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   return (
     <div className="stack">
 
+      <AriaLiveRegion message={liveMessage} />
       <section className="panel" aria-label={t('compare.panelAria')} ref={chartRef}>
         <div className="field-head" style={{ marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
           <h2 className="panel-title" style={{ margin: 0 }} tabIndex={-1} data-panel-heading>

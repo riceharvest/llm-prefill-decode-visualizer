@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ListFilter, ExternalLink, RotateCcw } from 'lucide-react';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import { rigLabel, sourceRunLinkLabel } from '../utils/accessibleLabels';
 
 // Constraint-driven hardware shortlist ("find me hardware").
 //
@@ -23,18 +24,6 @@ function effectiveVramGb(row) {
   if (Number.isFinite(row.vramGb)) return row.vramGb;
   if (Number.isFinite(row.unifiedMemoryGb)) return row.unifiedMemoryGb;
   return null;
-}
-
-function rigLabel(row) {
-  const hwClass = (row.hwClass || '').toLowerCase();
-  if (hwClass === 'unified' && row.chip) {
-    return `${row.chip}${row.unifiedMemoryGb ? ` ${row.unifiedMemoryGb}GB` : ''}`;
-  }
-  if (row.gpu) {
-    const count = row.gpuCount || 1;
-    return `${count > 1 ? `${count}× ` : ''}${row.gpu}${row.vramGb ? ` ${row.vramGb}GB` : ''}`;
-  }
-  return row.cpu || row.hardware || 'Unknown system';
 }
 
 export default function HardwareShortlist() {
@@ -265,7 +254,13 @@ export default function HardwareShortlist() {
                     <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <span style={numStyle}>{row.runsInGroup}</span>
                       {row.source && (
-                        <a href={row.source} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <a
+                          href={row.source}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={sourceRunLinkLabel(row)}
+                          style={{ fontSize: '0.72rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                        >
                           View source run <ExternalLink size={11} />
                         </a>
                       )}

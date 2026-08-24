@@ -8,6 +8,7 @@ import {
 } from '../utils/quantMatrix';
 import { normalizeModelId } from '../../api/_normalize.js';
 import { t } from '../i18n/strings';
+import { tableLiveStatus } from '../utils/accessibleLabels';
 
 // Quantization tradeoff matrix (issue #47).
 //
@@ -154,6 +155,21 @@ export default function QuantTradeoffMatrix({ localMaxxingContext, onApplySpeeds
 
       <p className="hint-text" style={{ marginBottom: '14px' }}>{t('quant.intro')}</p>
 
+      {/* Persistent polite live region (#465): the matrix loads asynchronously
+          and previously updated silently. The node stays mounted so SR users
+          hear the loading → loaded/error transition; messages reuse the same
+          strings rendered in the visible status panels below. */}
+      <div className="sr-only" role="status" aria-live="polite">
+        {tableLiveStatus(status, {
+          idle: '',
+          loading: t('quant.loading'),
+          error: error ? `${t('quant.errorPrefix')} ${error}` : t('quant.errorPrefix'),
+          ready: rows.length > 0
+            ? t('quant.banner', { family, rows: rows.length, runs: matchedRuns, rowsPlural: rows.length === 1 ? '' : 's' })
+            : t('quant.noRuns')
+        })}
+      </div>
+
       {/* Model family selector */}
       <div className="grid-auto" style={{ '--grid-min': '16.25rem', marginBottom: '16px' }}>
         <div className="panel-inset field">
@@ -238,14 +254,6 @@ export default function QuantTradeoffMatrix({ localMaxxingContext, onApplySpeeds
                       key={row.quant}
                       className={appliedQuant === row.quant ? 'row-active' : ''}
                       onClick={() => handleLoadRow(row)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          handleLoadRow(row);
-                        }
-                      }}
-                      tabIndex={onApplySpeeds ? 0 : undefined}
-                      aria-label={onApplySpeeds ? `${t('quant.loadIntoSim')}: ${row.quant}` : undefined}
                       style={{ cursor: onApplySpeeds ? 'pointer' : 'default' }}
                     >
                       <td style={{ fontWeight: 700 }}>
