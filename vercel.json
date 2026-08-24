@@ -29,6 +29,14 @@
       "destination": "/about.html"
     },
     {
+      "source": "/docs",
+      "destination": "/docs.html"
+    },
+    {
+      "source": "/docs/",
+      "destination": "/docs.html"
+    },
+    {
       "source": "/contact",
       "destination": "/contact.html"
     },

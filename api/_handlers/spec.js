@@ -710,9 +710,12 @@ export default function handler(req, res) {
                 }
               }
             },
-            '400': { description: 'Invalid parameters (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } }, '500': { description: 'Internal server error (code INTERNAL)', content: { 'application/problem+json': { schema: PROBLEM } } }
-          },
-          '429': { $ref: '#/components/responses/RateLimited' }
+            '400': { description: 'Invalid parameters (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } }, '500': { description: 'Internal server error (code INTERNAL)', content: { 'application/problem+json': { schema: PROBLEM } } },
+            // #885: this 429 was previously a misplaced operation-level sibling
+            // of `responses`, which made openapi-spec-validator reject the whole
+            // document (and any hosted viewer loading /api/spec fail on parse).
+            '429': { $ref: '#/components/responses/RateLimited' }
+          }
         }
       },
       '/api/vram': {
@@ -741,7 +744,10 @@ export default function handler(req, res) {
           parameters: [
             { name: 'id', in: 'path', required: true, schema: { type: 'string', pattern: '^calc_[0-9a-f]{12}$' } },
             { name: 'endpoint', in: 'query', schema: { type: 'string', enum: ['compute', 'best'], default: 'compute' } },
-            { name: '<original request parameters>', in: 'query', description: 'The same model + params (or best filters) that minted the id. Defaults may be omitted — they resolve identically before hashing.' }
+            // #885: OpenAPI requires every parameter to carry a schema (or content) —
+            // this pass-through placeholder previously had none, which made
+            // validators reject the whole document.
+            { name: '<original request parameters>', in: 'query', description: 'The same model + params (or best filters) that minted the id. Defaults may be omitted — they resolve identically before hashing.', schema: { type: 'string', description: 'Any original request parameter, e.g. model=singleTurn&promptTokens=4096' } }
           ],
           responses: {
             '200': { description: 'Recomputed result, stamped verified:true and carrying the id' },
@@ -1047,7 +1053,7 @@ export default function handler(req, res) {
           summary: 'Ranked answers: fastest or cheapest rigs for given constraints',
           description: 'Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed. by=cost ranks by cost-efficiency instead. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel). Responses carry a deterministic `id` (hash of the resolved filters) replayable via /api/calc/{id}?endpoint=best&<same filters>.',
           parameters: [
-            { name: 'by', in: 'query', schema: { type: 'string', enum: ['decode', 'prefill', 'efficiency', 'walltime', 'confidence', 'cost'] }, default: 'decode' },
+            { name: 'by', in: 'query', schema: { type: 'string', enum: ['decode', 'prefill', 'efficiency', 'walltime', 'confidence', 'cost'], default: 'decode' } },
             { name: 'price', in: 'query', schema: { type: 'number' }, description: 'cost mode: rig purchase price in USD (default 0)' },
             { name: 'electricityRate', in: 'query', schema: { type: 'number' }, description: 'cost mode: $/kWh (default 0.15)' },
             { name: 'powerWatts', in: 'query', schema: { type: 'number' }, description: 'cost mode: whole-rig watts; defaults to an estimate per hwClass' },

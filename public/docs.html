@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>API Reference — LLM Prefill &amp; Decode Speed Visualizer</title>
+    <meta name="description" content="Interactive OpenAPI reference for the LLM Prefill & Decode Speed Visualizer API: browse every endpoint and try requests against the live API." />
+    <link rel="canonical" href="https://llm-prefill-decode-visualizer.vercel.app/docs" />
+    <!-- Agent discovery parity with index.html (#362): the docs viewer is a
+         first-class surface for both humans and agents. -->
+    <link rel="llms.txt" href="/llms.txt" />
+    <link rel="mcp" href="/api/mcp" />
+    <link rel="agents.json" href="/agents.json" type="application/json" />
+
+    <style>
+      html, body { margin: 0; padding: 0; }
+      /* Scalar's standalone build renders full-viewport; give it the floor. */
+      #api-reference { min-height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <!-- #900: minimal hosted interactive API-docs viewer. Scalar's standalone
+         CDN build reads the spec URL from #api-reference[data-url] and renders
+         a full reference UI with a built-in try-it client — no server changes
+         needed (all /api routes already send CORS *). The document is served
+         by /api/spec; the same-origin fetch keeps setup to zero. -->
+    <script id="api-reference" data-url="/api/spec"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  </body>
+</html>
