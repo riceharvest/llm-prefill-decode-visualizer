@@ -19,6 +19,7 @@ import { toLocalPreset, hardwareName } from './utils/localMaxxing';
 import {
   describeConfig, permalinkHref, readPermalinkTitle, documentTitleFor
 } from './utils/permalink';
+import { verifyShareLink } from './utils/shareIntegrity';
 import { readParam, writeParams } from './utils/urlState';
 import {
   serializeSettings, parseSettings,
@@ -109,15 +110,39 @@ export default function App() {
     activeTab
   }), [selectedPreset, selectedLmxRun, localMaxxingContext.modelId, localMaxxingContext.quantization, activeTab]);
 
+  // Share-link tamper-evidence (#917): permalinkHref() signs the params it
+  // shares; a loaded link's signature is checked once on mount. A signed link
+  // whose params or ?title= were mutated surfaces a banner and loses its
+  // ?title= privilege instead of being accepted verbatim. Unsigned links
+  // (in-app navigation, legacy shares) are not flagged — no signature to
+  // contradict.
+  const [shareLinkTampered, setShareLinkTampered] = useState(false);
+  const [shareSigGiven, setShareSigGiven] = useState('');
+  const [shareSigExpected, setShareSigExpected] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    verifyShareLink(window.location.search).then(result => {
+      if (cancelled) return;
+      if (result.status === 'tampered') {
+        setShareLinkTampered(true);
+        setShareSigGiven(result.given);
+        setShareSigExpected(result.expected);
+      }
+    }).catch(() => { /* Web Crypto unavailable: degrade to old unsigned behavior */ });
+    return () => { cancelled = true; };
+  }, []);
+
   // An opened shared link shows its own encoded title; otherwise the derived
-  // config title sits under the site brand.
+  // config title sits under the site brand. On a tampered link (#917) the
+  // encoded title is ignored — it's attacker-controllable free text.
   useEffect(() => {
     document.title = documentTitleFor(
       readPermalinkTitle(window.location.search),
       permalinkTitle,
-      t('header.brandTitle')
+      t('header.brandTitle'),
+      shareLinkTampered
     );
-  }, [permalinkTitle]);
+  }, [permalinkTitle, shareLinkTampered]);
 
   const comparisonPresets = useMemo(() => [
     ...localMaxxingContext.runs.map(run => toLocalPreset(run)),
@@ -316,7 +341,7 @@ export default function App() {
   // plus the auto-generated human-readable `title` param and #s/<slug>.
   const handleShare = async () => {
     try {
-      const href = permalinkHref({
+      const href = await permalinkHref({
         origin: window.location.origin,
         pathname: window.location.pathname,
         search: window.location.search
@@ -352,6 +377,22 @@ export default function App() {
         onApplyPreset={handleApplyPreset}
         onShare={handleShare}
       />
+
+      {/* Share-link tamper-evidence (#917): a signed link whose params or
+          ?title= were edited after signing is flagged here instead of being
+          accepted silently — mirrors the loud failure of tampered calc ids. */}
+      {shareLinkTampered && (
+        <div className="share-tamper-banner" role="alert" style={{
+          margin: '0 auto', maxWidth: '72rem', padding: '0.6rem 1rem',
+          border: '1px solid #b45309', borderRadius: 8,
+          background: '#fffbeb', color: '#92400e'
+        }}>
+          <strong>This link was modified.</strong> Its settings no longer match the
+          signature it was shared with, so its title is not shown. Verify any claims
+          by recomputing via /api/calc with a <code>calc_</code> id.
+          {' '}<small>(signature <code>{shareSigGiven}</code> ≠ expected <code>{shareSigExpected}</code>)</small>
+        </div>
+      )}
 
       <main className="app-frame stack" ref={mainRef}>
         <CollapsibleSection id="localmaxxing" title={t('common.localMaxxingTitle') || 'LocalMaxxing measured presets'} badge="LIVE">
