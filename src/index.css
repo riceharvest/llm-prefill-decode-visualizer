@@ -66,6 +66,9 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  /* Issue #1016: live viewport height — 100vh tracks the largest iOS viewport,
+     so every page was born ~toolbar-height taller than visible. */
+  min-height: 100dvh;
   /* Issue #80: hidden .why-pop tooltips are absolutely positioned and can poke
      past the right edge at large font scales. `clip` (not `hidden`: no
      scroll-container side effects) stops them widening or panning the page.
@@ -115,6 +118,8 @@ a { color: var(--accent); }
 
 .app-shell {
   min-height: 100vh;
+  /* Issue #1016: see the matching note on body above. */
+  min-height: 100dvh;
   background: var(--bg-app);
   padding-bottom: 32px;
 }
@@ -1086,7 +1091,10 @@ input[type="range"]::-moz-range-thumb {
 
   .waterfall-rows {
     overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    /* Issue #1014: legacy iOS momentum scrolling has been the default since
+       iOS 13 — the property that actually stops this scroller chaining its
+       scroll to the page edge is overscroll-behavior-x. */
+    overscroll-behavior-x: contain;
     padding-bottom: 6px;
   }
   .waterfall-rows > * { min-width: 26.875rem; }
@@ -1094,7 +1102,8 @@ input[type="range"]::-moz-range-thumb {
   /* Tables keep their horizontal scroll affordance visible */
   .table-wrap {
     overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    /* Issue #1014: see the matching note on .waterfall-rows above. */
+    overscroll-behavior-x: contain;
   }
 }
 
@@ -1109,6 +1118,24 @@ input[type="range"]::-moz-range-thumb {
    Audited controls: time-scale segmented buttons (.seg), the prefix-caching /
    chunked-prefill / analogy / spec-decode toggles (.btn), tab buttons, icon-only
    buttons, concept-check choices, and range-slider thumbs. */
+
+/* Double-tap-zoom guard (issue #1092): on real iOS Safari the second tap of a
+   rapid pair is consumed as a zoom gesture unless the element opts out with
+   touch-action: manipulation. Applied globally (not just pointer:coarse —
+   Safari does not always report coarse for Apple Pencil / trackpad setups),
+   it only disables double-tap-zoom, never pinch-zoom or scrolling. */
+.btn,
+.tab-btn,
+.seg button,
+.concept-choice,
+.btn-icon,
+.misconception-dismiss,
+select,
+input[type='range'],
+a {
+  touch-action: manipulation;
+}
+
 @media (pointer: coarse) {
   .btn,
   .tab-btn,
@@ -1468,6 +1495,9 @@ kbd {
    attribution line linking back to the full app. */
 .embed-shell {
   min-height: 100vh;
+  /* Issue #1016: live-viewport height (100vh fallback above) — inside a
+     third-party iframe the iOS toolbar delta applies to the embedder's page. */
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
