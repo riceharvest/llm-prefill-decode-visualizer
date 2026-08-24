@@ -99,5 +99,8 @@ export function sendJson(res, body, { status = 200, cacheTtl } = {}) {
   // "Rate limits".
   const rl = rateLimitBody(res);
   if (rl && payload.rate_limit === undefined) payload.rate_limit = rl;
-  res.end(JSON.stringify(payload, null, 2));
+  // Trailing newline: POSIX-text-friendly final byte, matching the client
+  // exporter (src/utils/exportJson.js serializeJson) so every JSON surface in
+  // this repo agrees on the framing.
+  res.end(JSON.stringify(payload, null, 2) + '\n');
 }

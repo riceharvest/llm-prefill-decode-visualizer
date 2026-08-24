@@ -1,5 +1,5 @@
 import { getAllRunsRaw } from '../_localmaxxing.js';
-import { runsCsvPreamble, toRunsCsv, buildRunsJsonPayload, RUNS_DATASET_VERSION } from '../_runs_dump.js';
+import { runsCsvPreamble, toRunsCsv, buildRunsJsonPayload, RUNS_DATASET_VERSION, CSV_BOM } from '../_runs_dump.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson } from '../_schema.js';
 import { ApiError, sendProblem, sendProblemFromError } from '../_errors.js';
@@ -66,6 +66,9 @@ export default async function handler(req, res) {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition',
         `attachment; filename="localmaxxing-all-runs-v${RUNS_DATASET_VERSION}${suffix}-${dateTag}.csv"`);
+      // UTF-8 BOM first so Excel decodes the em-dashes in the `#` preamble
+      // correctly; preamble + table are LF-terminated (see toRunsCsv).
+      res.write(CSV_BOM);
       res.write(runsCsvPreamble(rows.length, generatedAt, { comparableFilter: mode }));
       res.write(toRunsCsv(rows));
       return res.end();

@@ -185,7 +185,8 @@ JSON envelope: `{ schemaVersion, generatedAt, comparableFilter, rowCount,
 totalRunCount, comparableCount, dataDictionary, runs }`; every run carries a
 `comparable` boolean so consumers can reproduce (or skip) the single-stream
 filter. CSV is RFC 4180 with a `#`-comment metadata preamble + data dictionary,
-served as a dated attachment. Shares the cached upstream fetch with the other
+served as a dated attachment. Framing: UTF-8 **with BOM**, LF line endings, one
+trailing LF (naive `split('\n')` parsing is safe — no `\r` pollution). Shares the cached upstream fetch with the other
 benchmark endpoints.
 
 ```bash
@@ -303,7 +304,9 @@ set, VRAM headroom changes) plus the resolved constraint summary per side:
 
 Full comparable dataset as a downloadable file. `?format=json` for structured
 JSON (envelope + data dictionary), default CSV (RFC 4180 with `#` metadata
-preamble). Sets `Content-Disposition: attachment`.
+preamble; UTF-8 **with BOM**, LF line endings). JSON exports are pretty-printed
+UTF-8 with exactly one trailing newline — the same contract as the browser
+exporter (`serializeJson`). Sets `Content-Disposition: attachment`.
 
 ```bash
 curl -s "$BASE/api/export?format=json" -o runs.json

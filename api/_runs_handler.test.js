@@ -116,7 +116,12 @@ test('?format=csv serves RFC 4180 CSV with #-preamble as an attachment', async (
     assert.equal(res.statusCode, 200);
     assert.match(res.headers['content-type'], /text\/csv/);
     assert.match(res.headers['content-disposition'], /attachment; filename="localmaxxing-all-runs-v1-\d{8}\.csv"/);
-    const lines = res.bodyText.split('\r\n').filter(Boolean);
+    // Framing contract: UTF-8 BOM first (Excel), then LF-only text.
+    assert.ok(res.bodyText.startsWith('\ufeff# dataset:'), 'CSV must start with BOM + preamble comment');
+    const csvBody = res.bodyText.slice(1);
+    assert.ok(!csvBody.includes('\r'), 'CSV body must be LF-only after the BOM');
+    assert.ok(res.bodyText.endsWith('\n'));
+    const lines = csvBody.split('\n').filter(Boolean);
     assert.ok(lines[0].startsWith('# dataset:'));
     assert.equal(lines.filter(l => !l.startsWith('#'))[0].split(',').length >= 20, true);
     assert.equal(lines.filter(l => !l.startsWith('#')).length, 3); // header + 2 rows
