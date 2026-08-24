@@ -236,7 +236,7 @@ The machine-readable registry also lives in `/api/spec` (`x-error-codes` + the `
 
 ## App tabs (interactive page)
 
-The human-facing UI is this same site. Deep links carry state via URL params: `?tab=<id>`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
+The human-facing UI is this same site. Deep links carry state via URL params: `?tab=<id>`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`, `autoplay=1` (auto-start the simulation on load — machine-friendly; preserved by share and export links), `title=` (free-text page title a share link carries). Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
 
 <!-- tabs-section:start -->
 ### Tab: single — Single-turn

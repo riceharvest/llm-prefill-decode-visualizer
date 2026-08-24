@@ -313,7 +313,7 @@ export default function App() {
 
   // Issue #106: share a titled permalink — the current query-string state
   // (which already encodes preset, speeds, flags and every tab's sim inputs)
-  // plus the auto-generated human-readable `title` param and #s/<slug>.
+  // plus the auto-generated human-readable `title` param.
   const handleShare = async () => {
     try {
       const href = permalinkHref({

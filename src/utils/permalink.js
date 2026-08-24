@@ -2,9 +2,9 @@
 // state plus a human-readable `title` param built from the live config, so a
 // pasted link reads like content ("Qwen3 32B Q4 on RTX 4090, 8K agentic loop")
 // instead of a query string. Everything stays client-side: no backend storage,
-// the URL itself is the storage. A cosmetic slug rides along in the hash
-// (#s/qwen3-32b-rtx4090-8k-agentic-loop) so permalinks have a readable
-// identity even though the app routes purely through query params.
+// the URL itself is the storage. Share links carry only query params — no hash
+// fragment, since nothing in the app resolves an element id under #s/ (the old
+// cosmetic #s/<slug> suffix was dead weight on every link).
 
 import { HARDWARE_PRESETS } from './presets.js';
 
@@ -105,7 +105,9 @@ export function slugifyTitle(title) {
   return cut.slice(0, 80).replace(/-+$/, '');
 }
 
-// Full permalink URL: current query state + `title` param + #s/<slug>.
+// Full permalink URL: current query state + `title` param. No hash fragment —
+// the app routes purely through query params and nothing resolves #s/ ids, so
+// a slug hash would be dead weight (and would break exact-URL identity).
 // `loc` is injected ({ origin, pathname, search }) so this stays unit-testable
 // outside the browser; callers pass window.location.
 export function permalinkHref(loc, title) {
@@ -113,7 +115,7 @@ export function permalinkHref(loc, title) {
   p.set('title', title);
   const qs = p.toString();
   const base = `${loc.origin}${loc.pathname}`;
-  return `${base}?${qs}#s/${slugifyTitle(title)}`;
+  return `${base}?${qs}`;
 }
 
 // The title encoded into a shared link, if any (readParam-style decoding).
