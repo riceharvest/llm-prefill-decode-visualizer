@@ -178,7 +178,13 @@ export async function bestBody(query = {}) {
   const q = query;
   try {
     const limit = Math.min(50, Math.max(1, Number(q.limit) || 10));
-    const by = [...BY_MODES, 'cost'].includes(q.sort_by) ? q.sort_by : [...BY_MODES, 'cost'].includes(q.by) ? q.by : 'decode';
+    // Enum values are case-insensitive (#1072): ?by=PREFILL / ?sort_by=COST
+    // previously fell back silently to decode while rankedBy echoed it.
+    const byMode = v => {
+      const s = v == null ? '' : String(v).toLowerCase();
+      return [...BY_MODES, 'cost'].includes(s) ? s : null;
+    };
+    const by = byMode(q.sort_by) ?? byMode(q.by) ?? 'decode';
     const workload = resolveWorkload(q);
     const costInputs = {
       hardwarePriceUsd: num(q.hardwarePriceUsd ?? q.price, 0),

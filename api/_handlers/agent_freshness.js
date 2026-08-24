@@ -84,8 +84,11 @@ export function buildFreshnessBody(runs, params = {}, { now = new Date(), endpoi
   const quant = q.quant ? String(q.quant).toLowerCase() : null;
   const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
   const contextBand = parseContextBandParam(q.context_band ?? q.contextBand);
-  const groupBy = q.groupBy === 'hardware' ? 'hardware'
-    : q.groupBy === 'model' ? 'model'
+  // Enum values are case-insensitive (#1072): ?groupBy=HARDWARE previously
+  // fell back silently to the default grouping.
+  const groupByRaw = q.groupBy != null ? String(q.groupBy).toLowerCase() : '';
+  const groupBy = groupByRaw === 'hardware' ? 'hardware'
+    : groupByRaw === 'model' ? 'model'
     : 'hardwareModel'; // default: hardware × model family
 
   const keyFns = {

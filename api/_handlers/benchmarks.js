@@ -54,9 +54,12 @@ export default async function handler(req, res) {
 
     const crossEngine = ['1', 'true', 'yes'].includes(String(q.crossEngine).toLowerCase());
 
-    const groupBy = q.groupBy === 'model' ? 'model'
-      : q.groupBy === 'hardware' ? 'hardware'
-      : q.groupBy === 'quant' ? 'quant'
+    // Enum values are case-insensitive to match the filter values above
+    // (#1072): ?groupBy=QUANT previously fell back silently to the default.
+    const groupByRaw = q.groupBy != null ? String(q.groupBy).toLowerCase() : '';
+    const groupBy = groupByRaw === 'model' ? 'model'
+      : groupByRaw === 'hardware' ? 'hardware'
+      : groupByRaw === 'quant' ? 'quant'
       : 'hardwareModel'; // default: hardware × model family
 
     // Outlier policy: runs further than N IQRs from their group median are
