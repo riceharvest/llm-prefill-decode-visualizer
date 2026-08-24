@@ -10,7 +10,7 @@ import KVCacheCalculator from './KVCacheCalculator';
 import TheoryGuide from './TheoryGuide';
 import CurriculumMode from './CurriculumMode';
 import { HARDWARE_PRESETS } from '../utils/presets';
-import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
+import { readParam, readParamNum, readParamPosNum, readParamBool, writeParams } from '../utils/urlState';
 import { setLocale, getLocale, getDirection, t } from '../i18n/strings';
 
 // Embeddable widget view (issue #108): served at /embed?tab=…&preset=… it
@@ -41,8 +41,8 @@ export default function EmbedApp() {
   // prefill/decode params win over the preset defaults.
   const initialPresetObj =
     HARDWARE_PRESETS.find(x => x.id === readParam('preset')) || HARDWARE_PRESETS[0];
-  const [prefillSpeed] = useState(() => readParamNum('prefill', initialPresetObj.prefillSpeed));
-  const [decodeSpeed] = useState(() => readParamNum('decode', initialPresetObj.decodeSpeed));
+  const [prefillSpeed] = useState(() => readParamPosNum('prefill', initialPresetObj.prefillSpeed));
+  const [decodeSpeed] = useState(() => readParamPosNum('decode', initialPresetObj.decodeSpeed));
   const [simSpeedMultiplier] = useState(() => {
     const v = readParam('sim');
     return v === 'instant' ? 'instant' : (readParamNum('sim', 1));

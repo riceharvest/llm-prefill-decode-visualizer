@@ -483,7 +483,10 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
             <BarChart3 size={16} />
             <span>{t('compare.panelTitle')}</span>
           </h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.68rem', fontWeight: 600, marginLeft: 'auto' }}>
+          {/* Issue #429: without wrapping, the PNG/Embed/cURL/Python/TypeScript
+              export buttons clip off-screen at 390px and html/body
+              overflow-x:clip (issue #80 tooltip guard) makes them unreachable. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '0.68rem', fontWeight: 600, marginLeft: 'auto' }}>
             <span style={{ color: 'var(--text-subtle)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
               <ClipboardCopy size={12} />
               {t('compare.exportRowLabel')}

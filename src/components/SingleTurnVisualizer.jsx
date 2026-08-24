@@ -1078,7 +1078,7 @@ export default function SingleTurnVisualizer({
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="action-row">
             <button
               onClick={() => setIsPlaying(!isPlaying)}
               className={`btn ${isPlaying ? 'btn-warn' : 'btn-accent'}`}
