@@ -49,47 +49,63 @@ export async function getAllRunsRaw() {
   return rawCache.rows ?? [];
 }
 
-/** Fetch all comparable runs plus the fetch timestamp of the cached set. */
+/** Fetch all comparable runs plus the fetch timestamp of the cached set.
+ *
+ * When a refresh attempt fails but stale rows are on hand, the result carries
+ * `stale: true` (issue #855) so endpoints can surface degraded data instead of
+ * silently serving a frozen dataset as if it were current. Absent otherwise —
+ * fresh results keep their exact previous shape.
+ */
 export async function getDataset() {
   if (cache.rows && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
     return { rows: cache.rows, fetchedAt: cache.fetchedAt };
   }
-  if (cache.promise) {
-    return cache.promise.then(rows => ({ rows, fetchedAt: cache.fetchedAt }));
+  if (!cache.promise) {
+    const pending = (async () => {
+      const rows = [];
+      for (let offset = 0; offset <= 20000; offset += PAGE) {
+        const res = await fetch(`${UPSTREAM}/leaderboard?limit=${PAGE}&offset=${offset}`, {
+          headers: { accept: 'application/json' }
+        });
+        if (!res.ok) throw new ApiError('UPSTREAM_UNAVAILABLE', `localmaxxing.com leaderboard returned HTTP ${res.status}`);
+        const data = await res.json();
+        const batch = data.rows || [];
+        rows.push(...batch);
+        if (batch.length < PAGE) break;
+      }
+      const comparableRows = rows.filter(comparable).map(slim);
+      cache.rows = comparableRows;
+      cache.fetchedAt = Date.now();
+      // Full index for /api/runs: every run, tagged. Same upstream pages —
+      // zero additional requests.
+      rawCache.rows = rows.map(r => {
+        const s = slim(r);
+        if (!Number.isFinite(s.prefillTokPerSec)) s.prefillTokPerSec = null;
+        if (!Number.isFinite(s.decodeTokPerSec)) s.decodeTokPerSec = null;
+        return { ...s, comparable: comparable(r) };
+      });
+      rawCache.fetchedAt = Date.now();
+      return comparableRows;
+    })();
+    cache.promise = pending;
+    // Issue #1076: once the fetch settles (either way), drop the in-flight
+    // marker so the TTL branch above is reachable again after expiry.
+    // Previously cache.promise stayed set forever, so every post-TTL caller
+    // short-circuited into the stale-promise branch and the instance's
+    // dataset stayed frozen at its first load.
+    const settled = () => { if (cache.promise === pending) cache.promise = null; };
+    pending.then(settled, settled);
   }
 
-  cache.promise = (async () => {
-    const rows = [];
-    for (let offset = 0; offset <= 20000; offset += PAGE) {
-      const res = await fetch(`${UPSTREAM}/leaderboard?limit=${PAGE}&offset=${offset}`, {
-        headers: { accept: 'application/json' }
-      });
-      if (!res.ok) throw new ApiError('UPSTREAM_UNAVAILABLE', `localmaxxing.com leaderboard returned HTTP ${res.status}`);
-      const data = await res.json();
-      const batch = data.rows || [];
-      rows.push(...batch);
-      if (batch.length < PAGE) break;
-    }
-    const comparableRows = rows.filter(comparable).map(slim);
-    cache.rows = comparableRows;
-    cache.fetchedAt = Date.now();
-    // Full index for /api/runs: every run, tagged. Same upstream pages —
-    // zero additional requests.
-    rawCache.rows = rows.map(r => {
-      const s = slim(r);
-      if (!Number.isFinite(s.prefillTokPerSec)) s.prefillTokPerSec = null;
-      if (!Number.isFinite(s.decodeTokPerSec)) s.decodeTokPerSec = null;
-      return { ...s, comparable: comparable(r) };
-    });
-    rawCache.fetchedAt = Date.now();
-    return comparableRows;
-  })();
-
   try {
-    return { rows: await cache.promise, fetchedAt: cache.fetchedAt };
+    const rows = await cache.promise;
+    return { rows, fetchedAt: cache.fetchedAt };
   } catch (err) {
-    cache.promise = null; // allow retry; serve stale if we have it
-    if (cache.rows) return { rows: cache.rows, fetchedAt: cache.fetchedAt };
+    if (cache.rows) {
+      // Serve stale on upstream outage, but say so (#855). Concurrent waiters
+      // get the same fallback instead of a raw rejection.
+      return { rows: cache.rows, fetchedAt: cache.fetchedAt, stale: true };
+    }
     throw err;
   }
 }

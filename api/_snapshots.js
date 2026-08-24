@@ -34,7 +34,14 @@ export function computeSnapshotId(runIds, fetchedAt) {
 }
 
 function publicMeta(snap) {
-  return { id: snap.id, createdAt: snap.createdAt, runCount: snap.runCount };
+  // datasetStale is only present when the snapshot was built from rows served
+  // after a failed refresh (issue #855) — fresh snapshots keep the old shape.
+  return {
+    id: snap.id,
+    createdAt: snap.createdAt,
+    runCount: snap.runCount,
+    ...(snap.stale ? { datasetStale: true } : {})
+  };
 }
 
 /**
@@ -43,7 +50,7 @@ function publicMeta(snap) {
  * Returns `{ snapshot, runs }` where `snapshot` is the public metadata.
  */
 export async function ensureSnapshot() {
-  const { rows, fetchedAt } = await getDataset();
+  const { rows, fetchedAt, stale } = await getDataset();
   const id = computeSnapshotId(rows.map(r => r.runId), fetchedAt);
   let snap = snapshots.get(id);
   if (!snap) {
@@ -53,11 +60,14 @@ export async function ensureSnapshot() {
       runCount: rows.length,
       runs: rows
     };
+    if (stale) snap.stale = true; // dataset served after a failed refresh (#855)
     snapshots.set(id, snap);
     // Evict oldest once over capacity.
     while (snapshots.size > MAX_SNAPSHOTS) {
       snapshots.delete(snapshots.keys().next().value);
     }
+  } else if (stale && !snap.stale) {
+    snap.stale = true;
   }
   return { snapshot: publicMeta(snap), runs: rows };
 }
