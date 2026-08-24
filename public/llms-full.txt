@@ -148,6 +148,8 @@ MIT License. Created for AI researchers, inference engineers, and LLM developers
 
 # LLM Prefill & Decode Speed Visualizer
 
+> Interactive visualizer and open JSON API for LLM inference performance: prefill vs decode latency (TTFT/TPOT), KV-cache VRAM fitting from a Hugging Face id alone, community-measured hardware benchmarks, and multi-turn agentic loop cost modeling. No auth, CORS-enabled, deterministic result ids, everything also described by an OpenAPI spec.
+
 An interactive tool for understanding LLM inference performance: prefill (compute-bound prompt ingestion, sets TTFT) vs decode (bandwidth-bound token generation, sets TPOT), across single-turn chat and multi-turn agentic loops.
 
 <!-- agent-parseable:meta -->
@@ -158,6 +160,24 @@ Tab-URL-Template: {Base-URL}/?tab={id}
 Tab-Section-Header-Format: ### Tab: {id} — {label}
 Repo: https://github.com/riceharvest/llm-prefill-decode-visualizer
 <!-- /agent-parseable:meta -->
+
+## Machine-readable surfaces
+
+Parse the links, fetch the surfaces — everything below is plain JSON/XML over HTTP, no auth:
+
+- [OpenAPI spec](https://llm-prefill-decode-visualizer.vercel.app/api/spec) — derive every endpoint programmatically (identical under `/v1/spec`)
+- [Agent manifest (agents.json)](https://llm-prefill-decode-visualizer.vercel.app/agents.json) — per-endpoint summaries, params and `sinceVersion`
+- [Agent capability index](https://llm-prefill-decode-visualizer.vercel.app/api/agent/index.json)
+- [MCP server manifest](https://llm-prefill-decode-visualizer.vercel.app/.well-known/mcp.json) — Streamable HTTP JSON-RPC at `/api/mcp`
+- [Changelog feed](https://llm-prefill-decode-visualizer.vercel.app/changelog.json) — machine-readable API change history
+- [Health & data freshness](https://llm-prefill-decode-visualizer.vercel.app/api/health)
+- [Status page](/status.html) — human-readable freshness dashboard
+- [Full documentation](https://llm-prefill-decode-visualizer.vercel.app/llms-full.txt) — all agent-facing docs compiled into one flat markdown file
+- Trust pages: [/about.html](/about.html), [/contact.html](/contact.html), [/privacy.html](/privacy.html)
+
+## Connections & transport
+
+Connections are long-lived on both HTTP/1.1 and HTTP/2 — reuse one pooled connection across requests instead of opening a new one per call. There is no documented idle-close policy; idle connections have been observed surviving ≥150 s. On HTTP/2 the edge sends PING frames on idle connections (~every 75 s): these are routine liveness probes — respond normally, do not treat them as errors. No GOAWAY frame was observed within that window; if you receive one, re-establish the connection and retry in-flight requests. Server HTTP/2 SETTINGS advertise MAX_CONCURRENT_STREAMS=160, ENABLE_PUSH=0 and INITIAL_WINDOW_SIZE=1048576 bytes.
 
 ## When to use this tool
 
