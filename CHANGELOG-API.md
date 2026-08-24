@@ -188,6 +188,8 @@ migrate before `Sunset`. Agents can discover the current policy at
   schema or a severity falls outside the enum.
 - Affected endpoints: `/api/benchmarks`, `/api/best`, `/api/localmaxxing` (docs only).
 
+- `/api/compute?model=agentic` (#783): fractional `numTurns` values are now floored at parse time — `inputs.numTurns` echoes the executed integer (and the deterministic calc id hashes it), with a new `num_turns_floored` warning emitted when the coercion engages; integer inputs and the 50-turn cap are unchanged.
+
 ### 1 — 2026-08-21
 
 - Initial versioned schema. All `/api/*` JSON responses now include a
