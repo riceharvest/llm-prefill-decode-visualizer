@@ -55,3 +55,21 @@ test('x-schema-version stays in lockstep with SCHEMA_VERSION', () => {
   // value in _handlers/spec.js instead of importing it.
   assert.equal(spec.info['x-schema-version'], SCHEMA_VERSION);
 });
+
+// #1057: every documented request body must carry a machine-readable schema.
+// POST /api/watch was the only requestBody in the document and shipped an
+// example with no schema, so spec-driven clients could not type-check it.
+test('#1057 createWatch requestBody declares a schema matching validateWatch', () => {
+  const spec = callSpec();
+  const post = spec.paths['/api/watch'].post;
+  const content = post.requestBody.content['application/json'];
+  assert.ok(content.schema, 'watch requestBody must declare a schema');
+  assert.equal(content.schema.type, 'object');
+  for (const field of ['model', 'hardware', 'quant', 'webhookUrl']) {
+    assert.equal(content.schema.properties[field].type, 'string', `${field} must be typed`);
+  }
+  // At least one of model/hardware is required (validateWatch combo rule).
+  assert.deepEqual(content.schema.anyOf, [{ required: ['model'] }, { required: ['hardware'] }]);
+  // The pre-existing example is preserved alongside the new schema.
+  assert.equal(content.example.webhookUrl, 'https://example.com/hooks/llm-watch');
+});

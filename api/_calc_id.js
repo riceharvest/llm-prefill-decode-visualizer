@@ -27,6 +27,14 @@ export function normalizeParams(params) {
     } else if (typeof v === 'string' && PURE_NUMERIC.test(v.trim())) {
       const n = Number(v.trim());
       out[key] = Object.is(n, -0) ? 0 : n;
+    } else if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) {
+      // #1056: the compute handlers coerce values with Number(), so spellings
+      // like "0x800", "+2048" or "1e3" execute identically to their decimal
+      // value — they must hash identically too or /api/calc/<id> replay and
+      // dedup-by-id break. Empty/whitespace-only strings stay strings
+      // (Number('') === 0 would wrongly mint the default).
+      const n = Number(v);
+      out[key] = Object.is(n, -0) ? 0 : n;
     } else {
       out[key] = String(v);
     }

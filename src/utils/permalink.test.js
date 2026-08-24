@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   shortModelName, shortQuant, formatTokenCountShort,
   describeConfig, slugifyTitle, permalinkHref,
-  readPermalinkTitle, documentTitleFor
+  readPermalinkTitle, documentTitleFor, workloadTokensForTab
 } from './permalink.js';
 
 test('shortModelName strips the org namespace and hyphens', () => {
@@ -93,4 +93,35 @@ test('document.title prefers shared titles over derived ones', () => {
   assert.equal(documentTitleFor('Shared run', 'Derived run', brand), 'Shared run');
   assert.equal(documentTitleFor(null, 'Derived run', brand), 'Derived run · ' + brand);
   assert.equal(documentTitleFor(null, '', brand), brand);
+});
+
+// #1060: the title's workload phrase must come from the ACTIVE tab's own
+// param — never a leftover ?prompt= from a past single-turn visit (#445).
+test('#1060 workloadTokensForTab reads each tab\'s own workload param', () => {
+  const get = (name) => ({ prompt: '8192', sprompt: '1500', turns: '4', bprompt: '2000', cp: '4096', ctx: '1048576' }[name] ?? null);
+  assert.equal(workloadTokensForTab('single', get), 8192);
+  assert.equal(workloadTokensForTab('agentic', get), 6000); // sprompt × turns
+  assert.equal(workloadTokensForTab('batching', get), 2000);
+  assert.equal(workloadTokensForTab('compare', get), 4096);
+  assert.equal(workloadTokensForTab('kvcache', get), 1048576);
+});
+
+test('#1060 leftover foreign params never leak into another tab\'s title', () => {
+  // kvcache tab with a stale ?prompt= riding along: ctx wins, prompt ignored…
+  const get = (name) => (name === 'prompt' ? '131072' : name === 'ctx' ? '1048576' : null);
+  assert.equal(workloadTokensForTab('kvcache', get), 1048576);
+  // …and with no ctx at all the phrase is omitted, not replaced by prompt=.
+  const onlyPrompt = (name) => (name === 'prompt' ? '131072' : null);
+  assert.equal(workloadTokensForTab('kvcache', onlyPrompt), undefined);
+});
+
+test('#1060 garbage/negative workload values omit the phrase', () => {
+  assert.equal(workloadTokensForTab('single', () => 'abc'), undefined);
+  assert.equal(workloadTokensForTab('single', () => '-5'), undefined);
+  assert.equal(workloadTokensForTab('single', () => null), undefined);
+  // agentic: bad turns falls back to ×1 instead of dropping the base value.
+  assert.equal(workloadTokensForTab('agentic', (n) => (n === 'sprompt' ? '1500' : 'junk')), 1500);
+  // unknown tabs and non-function getters are safe.
+  assert.equal(workloadTokensForTab('theory', () => '100'), undefined);
+  assert.equal(workloadTokensForTab('single', 'not-a-fn'), undefined);
 });

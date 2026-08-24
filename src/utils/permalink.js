@@ -65,6 +65,44 @@ function hardwareDisplayName({ presetId, hardwareLabel }) {
   return beforeParen || preset.name;
 }
 
+// Per-tab workload params (#1060): each tab encodes its "workload context
+// size" under a different URL param, and the generated title must quote the
+// ACTIVE tab's own value — never a leftover `prompt=` from a past single-turn
+// visit riding along in the accumulated query string (#445).
+const TAB_WORKLOAD_PARAMS = {
+  single: ['prompt'],
+  agentic: ['sprompt', 'turns'], // per-turn base prompt × turns = loop workload
+  batching: ['bprompt'],
+  compare: ['cp'],
+  kvcache: ['ctx']
+};
+
+/**
+ * Token count that feeds describeConfig's workload phrase for a tab.
+ * `getParam(name)` returns the raw URL value (string|null) so this stays
+ * unit-testable outside the browser. Returns a number, or undefined when the
+ * active tab has no workload param (the phrase is then omitted entirely
+ * instead of quoting a foreign tab's leftover value).
+ */
+export function workloadTokensForTab(activeTab, getParam) {
+  const names = TAB_WORKLOAD_PARAMS[activeTab];
+  if (!names || typeof getParam !== 'function') return undefined;
+  const readNum = (name) => {
+    const v = Number(getParam(name));
+    return Number.isFinite(v) && v > 0 ? v : NaN;
+  };
+  const base = readNum(names[0]);
+  if (!Number.isFinite(base)) return undefined;
+  if (names.length === 1) return base;
+  // Multiplier params (agentic turns): non-positive/garbage falls back to 1.
+  let mult = 1;
+  for (let i = 1; i < names.length; i++) {
+    const m = readNum(names[i]);
+    if (Number.isFinite(m)) mult *= m;
+  }
+  return base * mult;
+}
+
 // Build the human-readable permalink title from the current config.
 //   { modelId: 'Qwen/Qwen3-32B', quantization: 'Q4_K_M',
 //     presetId: 'rtx4090_exl2', promptTokens: 8192, activeTab: 'agentic' }
