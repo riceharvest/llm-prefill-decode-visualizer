@@ -4,6 +4,7 @@ import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
 import Analogy from './Analogy';
 import { t } from '../i18n/strings';
+import { TESTIDS } from '../utils/testids';
 
 // Time-scale options (#76): rendered as an ARIA radiogroup with roving
 // tabindex — one option is tabbable, arrow keys move and select.
@@ -48,7 +49,7 @@ export default function SpeedControls({
       <div className="grid-auto" style={{ '--grid-min': '17.5rem', alignItems: 'stretch' }}>
 
         {/* Prefill Speed Input */}
-        <div className="panel-inset" data-tour="prefill-slider" style={{ borderInlineStart: '2px solid var(--prefill)' }}>          <div className="field-head" style={{ marginBottom: '10px' }}>
+        <div className="panel-inset" data-testid="panel-prefill" style={{ borderInlineStart: '2px solid var(--prefill)' }}>          <div className="field-head" style={{ marginBottom: '10px' }}>
             <span className="panel-title" style={{ color: 'var(--prefill)' }}>
               <Zap size={15} style={{ color: 'var(--prefill)' }} />
               {t('speedControls.prefillSpeed')}
@@ -64,6 +65,7 @@ export default function SpeedControls({
               max="50000"
               step="50"
               value={prefillSpeed}
+              data-testid={TESTIDS.prefillRange}
               aria-label={t('speedControls.prefillAria')}
               aria-valuetext={`${Number(prefillSpeed).toLocaleString()} tokens per second`}
               onChange={(e) => setPrefillSpeed(Number(e.target.value))}
@@ -72,6 +74,7 @@ export default function SpeedControls({
             <input
               type="number"
               value={prefillSpeed}
+              data-testid={TESTIDS.prefillInput}
               aria-label={t('speedControls.prefillValueAria')}
               onChange={(e) => setPrefillSpeed(Number(e.target.value))}
               style={{ width: '5.5rem' }}
@@ -81,7 +84,7 @@ export default function SpeedControls({
         </div>
 
         {/* Decode Speed Input */}
-        <div className="panel-inset" data-tour="decode-slider" style={{ borderInlineStart: '2px solid var(--decode)' }}>          <div className="field-head" style={{ marginBottom: '10px' }}>
+        <div className="panel-inset" data-testid="panel-decode" style={{ borderInlineStart: '2px solid var(--decode)' }}>          <div className="field-head" style={{ marginBottom: '10px' }}>
             <span className="panel-title" style={{ color: 'var(--decode)' }}>
               <Gauge size={15} style={{ color: 'var(--decode)' }} />
               {t('speedControls.decodeSpeed')}
@@ -97,6 +100,7 @@ export default function SpeedControls({
               max="1000"
               step="1"
               value={decodeSpeed}
+              data-testid={TESTIDS.decodeRange}
               aria-label={t('speedControls.decodeAria')}
               aria-valuetext={`${Number(decodeSpeed).toLocaleString()} tokens per second`}
               onChange={(e) => setDecodeSpeed(Number(e.target.value))}
@@ -105,6 +109,7 @@ export default function SpeedControls({
             <input
               type="number"
               value={decodeSpeed}
+              data-testid={TESTIDS.decodeInput}
               aria-label={t('speedControls.decodeValueAria')}
               onChange={(e) => setDecodeSpeed(Number(e.target.value))}
               style={{ width: '5.5rem' }}
@@ -128,6 +133,7 @@ export default function SpeedControls({
                   role="radio"
                   aria-checked={simSpeedMultiplier === mult}
                   tabIndex={TIME_OPTIONS[currentTimeIndex] === mult ? 0 : -1}
+                  data-testid={`${TESTIDS.timeScaleOption}-${mult === 'instant' ? 'instant' : mult + 'x'}`}
                   className={simSpeedMultiplier === mult ? 'active' : ''}
                 >
                   {timeOptionLabel(mult)}
@@ -140,6 +146,7 @@ export default function SpeedControls({
             <button
               onClick={() => setIsPlaying(!isPlaying)}
               className={`btn ${isPlaying ? 'btn-warn' : 'btn-accent'}`}
+              data-testid={TESTIDS.simToggle}
               style={{ flex: 1 }}
             >
               {isPlaying ? <Pause size={16} /> : <Play size={16} />}
@@ -150,6 +157,7 @@ export default function SpeedControls({
               onClick={onReset}
               title={t('speedControls.resetTooltip')}
               aria-label={t('speedControls.resetTooltip')}
+              data-testid={TESTIDS.simReset}
               className="btn btn-icon"
             >
               <RotateCcw size={16} />

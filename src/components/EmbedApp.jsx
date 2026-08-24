@@ -60,7 +60,7 @@ export default function EmbedApp() {
   const sloBudgets = {};
 
   return (
-    <div className="embed-shell">
+    <div className="embed-shell" data-testid="embed-root">
       <main className="embed-stage">
         {activeTab === 'single' && (
           <SingleTurnVisualizer

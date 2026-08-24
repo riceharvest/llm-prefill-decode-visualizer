@@ -341,7 +341,7 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-testid="app-root">
 
       {/* Navigation Header */}
       <Header

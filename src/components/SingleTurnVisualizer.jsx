@@ -552,7 +552,7 @@ export default function SingleTurnVisualizer({
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
       {/* Issue #63: live narration of the animated run for screen readers */}
-      <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
+      <div className="visually-hidden" role="status" aria-live="polite" data-testid="run-state">{srSummary}</div>
 
       {/* Top Parameter Cards */}
       <section className="panel" aria-label={t('singleTurn.paramsPanelAria')}>

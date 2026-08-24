@@ -469,7 +469,7 @@ export default function AgenticVisualizer({
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
       {/* Issue #63: live narration of the animated run for screen readers */}
-      <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
+      <div className="visually-hidden" role="status" aria-live="polite" data-testid="run-state">{srSummary}</div>
 
       {/* Top Configuration Card */}
       <section className="panel" aria-label={t('agentic.paramsPanelAria')}>
@@ -481,10 +481,10 @@ export default function AgenticVisualizer({
 
           {/* Prefix Caching Toggle */}
           <button
-            data-tour="prefix-caching"
             onClick={handleTogglePrefixCaching}
             className="btn"
             aria-pressed={enablePrefixCaching}
+            data-testid="prefix-caching-toggle"
             style={enablePrefixCaching
               ? { borderColor: 'var(--decode-border)', color: 'var(--decode)', background: 'var(--decode-dim)' }
               : undefined}
