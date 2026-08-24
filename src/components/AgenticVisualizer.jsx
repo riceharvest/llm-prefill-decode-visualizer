@@ -206,7 +206,14 @@ export default function AgenticVisualizer({
   // Human-readable summary of a turn's failing checks, e.g.
   // "TTFT 900 ms vs 500 ms (+80% over) · TPOT ∞".
   const fmtPct = (r) => Number.isFinite(r.marginPct) ? `${Math.abs(r.marginPct).toFixed(0)}%` : '∞';
-  const fmtMs = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${Math.round(ms)} ms`);
+  // Issue #869: guard non-finite values (TPOT is Infinity when decodeTokens is
+  // 0) — render "∞" like formatTime/fmtPct instead of the literal "Infinity s" —
+  // and keep one decimal so finite durations match the single-turn panel's
+  // precision instead of Math.round's coarser whole-ms read.
+  const fmtMs = (ms) => {
+    if (!Number.isFinite(ms)) return '∞';
+    return ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${ms.toFixed(1)} ms`;
+  };
   const turnSloDetail = (triple) => (
     [
       ['TTFT', triple.ttft],
