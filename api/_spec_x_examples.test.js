@@ -48,3 +48,32 @@ for (const [p, item] of Object.entries(spec.paths)) {
     }
   });
 }
+
+// Issue #941: x-examples.request strings used to ship a literal uninterpolated
+// `$BASE` placeholder (defined nowhere in the document), so copy-pasted or
+// agent-executed examples failed with an empty-URL curl error. Every request
+// must now resolve against the real server base URL declared in servers[0].
+test('x-examples.request contains no literal $BASE placeholder (#941)', () => {
+  for (const [p, item] of Object.entries(spec.paths)) {
+    for (const m of HTTP_OPS.filter(m => item[m])) {
+      const ex = item[m]['x-examples'];
+      assert.ok(
+        !String(ex.request).includes('$BASE'),
+        `${p} ${m} x-examples.request still ships the $BASE placeholder`
+      );
+    }
+  }
+});
+
+test('x-examples.request URLs resolve against servers[0]', () => {
+  const base = spec.servers[0].url;
+  assert.match(base, /^https:\/\//);
+  for (const [p, item] of Object.entries(spec.paths)) {
+    for (const m of HTTP_OPS.filter(m => item[m])) {
+      assert.ok(
+        String(item[m]['x-examples'].request).includes(base),
+        `${p} ${m} x-examples.request should reference the servers[0] base URL (${base})`
+      );
+    }
+  }
+});

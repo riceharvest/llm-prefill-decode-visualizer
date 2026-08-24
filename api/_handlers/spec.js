@@ -1419,8 +1419,14 @@ export default function handler(req, res) {
       const inline = op.responses?.['200']?.content?.['application/json']?.example
         ?? op.responses?.['201']?.content?.['application/json']?.example;
       const entry = X_EXAMPLES[p]?.[method] || {};
+      // Interpolate the $BASE placeholder (issue #941): X_EXAMPLES strings are
+      // written against a shell-style $BASE that nothing defines — ship fully
+      // resolvable absolute URLs matching servers[0] instead.
+      const request = typeof entry.request === 'string'
+        ? entry.request.replace(/\$BASE/g, BASE)
+        : entry.request;
       op['x-examples'] = {
-        request: entry.request,
+        request,
         ...(entry.requestBody ? { requestBody: entry.requestBody } : {}),
         response: entry.response !== undefined ? entry.response : (inline ?? null)
       };
