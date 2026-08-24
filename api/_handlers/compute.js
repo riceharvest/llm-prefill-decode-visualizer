@@ -177,7 +177,9 @@ function computeOne(params, dryRun = false) {
       const costInputs = {
         hardwarePriceUsd: num(params.hardwarePriceUsd ?? params.price, 0),
         electricityRatePerKwh: num(params.electricityRatePerKwh ?? params.electricityRate, 0.15),
-        powerDrawWatts: num(params.powerDrawWatts, 0),
+        // #1111: honor the ?powerWatts alias so both endpoints accept both
+        // spellings of the same input (compute documents powerDrawWatts).
+        powerDrawWatts: num(params.powerDrawWatts ?? params.powerWatts, 0),
         amortizationMonths: num(params.amortizationMonths, 36),
         promptTokens: num(params.promptTokens, 2048),
         outputTokens: num(params.outputTokens, 512),

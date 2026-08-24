@@ -260,7 +260,12 @@ export async function bestBody(query = {}) {
           const sample = g.bestRun;
           const c = cost({
             ...costInputs,
-            powerDrawWatts: num(q.powerWatts, DEFAULT_POWER_WATTS[sample.hwClass] ?? 150),
+            // #1111: accept compute's documented ?powerDrawWatts spelling too,
+            // and look the per-class estimate up case-insensitively — live
+            // wire hwClass values are UPPERCASE (DISCRETE_GPU), which made
+            // this table dead code and priced every rig at a flat 150 W.
+            powerDrawWatts: num(q.powerWatts ?? q.powerDrawWatts,
+              DEFAULT_POWER_WATTS[String(sample.hwClass || '').toLowerCase()] ?? 150),
             prefillSpeed: g.prefill.median,
             decodeSpeed: g.decode.median
           });

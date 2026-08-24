@@ -170,11 +170,29 @@ export function cost({
   const hourlyTotal = hourlyHardware + hourlyElectricity;
   const requestsPerHour = total > 0 ? 3600 / total : 0;
 
+  // #736: zero price and/or power default to $0/hour, which makes
+  // costUsdPerMillionTokens read as a real (tiny) number when it's really an
+  // artifact of missing inputs. Flag it without changing the math.
+  const warnings = [];
+  if (!hardwarePriceUsd) {
+    warnings.push({
+      code: 'cost_missing_hardware_price',
+      message: 'hardwarePriceUsd is 0 — amortized hardware cost contributes $0/hour, so this figure excludes the rig\'s purchase price. Pass hardwarePriceUsd for an all-in number.'
+    });
+  }
+  if (!powerDrawWatts) {
+    warnings.push({
+      code: 'cost_missing_power_draw',
+      message: 'powerDrawWatts is 0 — electricity cost contributes $0/hour, so this figure excludes energy entirely. Pass powerDrawWatts for an all-in number.'
+    });
+  }
+
   return {
     inputs: {
       hardwarePriceUsd, electricityRatePerKwh, powerDrawWatts, amortizationMonths,
       promptTokens, outputTokens, prefillSpeed, decodeSpeed
     },
+    warnings,
     effectiveThroughputTokPerSec: round(throughput),
     requestsPerHour: round(requestsPerHour),
     hardwareCostUsdPerHour: round(hourlyHardware),
