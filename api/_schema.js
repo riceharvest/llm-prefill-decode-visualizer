@@ -15,7 +15,9 @@
  *     `Deprecation` and `Sunset` headers plus a CHANGELOG-API.md entry.
  */
 
+import { createHash } from 'node:crypto';
 import { rateLimitBody } from './_ratelimit.js';
+import { wantsMarkdown } from './_markdown.js';
 
 export const SCHEMA_VERSION = '1';
 
@@ -40,7 +42,7 @@ export function applySchemaHeaders(res) {
       .map(s => s.trim())
       .filter(Boolean)
   );
-  for (const h of ['X-Schema-Version', 'Deprecation', 'Sunset']) expose.add(h);
+  for (const h of ['X-Schema-Version', 'Deprecation', 'Sunset', 'ETag']) expose.add(h);
   res.setHeader('Access-Control-Expose-Headers', [...expose].join(', '));
 }
 
@@ -73,6 +75,36 @@ export function applyDeprecationHeaders(res, { deprecatedAt, sunset, link } = {}
 }
 
 /**
+ * Strong ETag over the exact serialized body (issue #584): agents can
+ * revalidate with If-None-Match after max-age lapses instead of re-downloading.
+ */
+function etagFor(serialized) {
+  return `"${createHash('sha256').update(serialized).digest('hex').slice(0, 32)}"`;
+}
+
+/** RFC 9110 §13.1.2 If-None-Match evaluation: list match, weak-prefix tolerant, `*` matches any. */
+function ifNoneMatchHits(req, etag) {
+  const inm = req?.headers?.['if-none-match'];
+  if (!inm) return false;
+  const candidates = String(inm).split(',').map(s => s.trim()).filter(Boolean);
+  if (candidates.includes('*')) return true;
+  return candidates.some(c => c.replace(/^W\//i, '') === etag);
+}
+
+/**
+ * True when this response carries a public (shared-cacheable) Cache-Control —
+ * either preset by the handler or about to be set from opts.cacheTtl (#590).
+ */
+function resolvesPubliclyCacheable(res, cacheTtl) {
+  let cc = res.getHeader('Cache-Control');
+  if (cc == null && cacheTtl != null) {
+    cc = `public, max-age=${cacheTtl}`;
+    res.setHeader('Cache-Control', cc);
+  }
+  return typeof cc === 'string' && /\bpublic\b/.test(cc);
+}
+
+/**
  * Shared JSON sender used by every /api route: stamps the schema version,
  * sets the standard headers, and serializes with stable formatting.
  *
@@ -88,16 +120,36 @@ export function sendJson(res, body, { status = 200, cacheTtl } = {}) {
   if (!res.getHeader('Access-Control-Allow-Origin')) {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
-  if (cacheTtl != null && !res.getHeader('Cache-Control')) {
-    res.setHeader('Cache-Control', `public, max-age=${cacheTtl}`);
-  }
+  const publiclyCached = resolvesPubliclyCacheable(res, cacheTtl);
   applySchemaHeaders(res);
   const payload = withSchemaVersion(body);
-  // Agent-facing rate-limit info in the body itself (mirrors the X-RateLimit-*
-  // headers): present whenever the handler ran enforceRateLimit before
-  // sending. Additive field — does not bump schema_version. See AGENTS.md,
-  // "Rate limits".
-  const rl = rateLimitBody(res);
+
+  // Per-client rate-limit info must never ride on a shared-cacheable
+  // response (#590): the edge would replay one client's counters (body field
+  // AND X-RateLimit-* headers) to every other client for up to an hour.
+  // Uncached responses keep both, as documented in llms.txt.
+  const rl = publiclyCached ? null : rateLimitBody(res);
   if (rl && payload.rate_limit === undefined) payload.rate_limit = rl;
-  res.end(JSON.stringify(payload, null, 2));
+  if (publiclyCached && typeof res.removeHeader === 'function') {
+    for (const h of ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset']) {
+      if (res.getHeader(h) !== undefined) res.removeHeader(h);
+    }
+  }
+
+  const serialized = JSON.stringify(payload, null, 2);
+
+  // Conditional-request support (#584): strong ETag + If-None-Match → 304.
+  // Only on success responses and only for the JSON representation (the
+  // markdown variant has different bytes; Vary: Accept already covers it).
+  const req = res.req;
+  if (status === 200 && !(req && wantsMarkdown(req))) {
+    const etag = etagFor(serialized);
+    res.setHeader('ETag', etag);
+    if (ifNoneMatchHits(req, etag)) {
+      res.statusCode = 304;
+      return res.end();
+    }
+  }
+
+  res.end(serialized);
 }
