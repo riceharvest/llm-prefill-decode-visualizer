@@ -19,7 +19,7 @@ import { toLocalPreset, hardwareName } from './utils/localMaxxing';
 import {
   describeConfig, permalinkHref, readPermalinkTitle, documentTitleFor
 } from './utils/permalink';
-import { readParam, writeParams } from './utils/urlState';
+import { readParam, writeParams, resolveTabParam } from './utils/urlState';
 import {
   serializeSettings, parseSettings,
   createHistory, recordChange, undo as historyUndo, redo as historyRedo
@@ -34,13 +34,22 @@ import { installTouchTooltips } from './utils/touchTooltips';
 // value falls back to 'single' instead of rendering a blank content area.
 const TABS = ['single', 'agentic', 'batching', 'compare', 'ab', 'diff', 'shortlist', 'kvcache', 'theory'];
 
-function readTabParam() {
+function readTab() {
+  // Issue #450: unknown ?tab= values still fall back to 'single' (so the
+  // content area never renders blank) but the fallback is now detectable:
+  // a console.warn names the rejected value and the app shell carries
+  // data-tab-fallback for DOM-based consumers.
   const v = readParam('tab');
-  return TABS.includes(v) ? v : 'single';
+  const resolved = resolveTabParam(v, TABS);
+  if (!resolved.matched) {
+    console.warn(`[urlState] unknown ?tab=${JSON.stringify(v)} — falling back to '${resolved.tab}' (valid: ${TABS.join('|')})`);
+  }
+  return resolved;
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState(readTabParam);
+  const initialTab = useMemo(readTab, []);
+  const [activeTab, setActiveTab] = useState(initialTab.tab);
 
 
 
@@ -341,7 +350,7 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-tab-fallback={!initialTab.matched || undefined}>
 
       {/* Navigation Header */}
       <Header

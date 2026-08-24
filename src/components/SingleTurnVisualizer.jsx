@@ -1065,7 +1065,10 @@ export default function SingleTurnVisualizer({
       ))}
 
       {/* Main Visualizer Stage */}
-      <section className="panel" aria-label={t('singleTurn.simStageAria')}>
+      {/* Issue #458: persistent machine-readable run state — scrapers can
+          distinguish final results from mid-run values without parsing
+          transient button labels. */}
+      <section className="panel" aria-label={t('singleTurn.simStageAria')} data-state={phase}>
 
         {/* Status Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>

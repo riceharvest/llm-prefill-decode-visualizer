@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Issue #456: the app ships a single dark palette (no light variant);
+         declaring it explicitly removes the UA guesswork for browser chrome
+         and headless screenshot environments. -->
+    <meta name="theme-color" content="#0A0D11" />
     <title>LLM Prefill & Decode Speed Visualizer — TTFT, TPOT & KV-cache math for any GPU</title>
     <meta name="description" content="Interactive simulator for LLM inference performance: prefill vs decode token streaming across GPUs, Macs and cloud endpoints. Compute TTFT, TPOT, KV-cache VRAM and cost per 1M tokens." />
     <link rel="canonical" href="https://llm-prefill-decode-visualizer.vercel.app/" />

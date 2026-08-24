@@ -11,7 +11,9 @@
 
   --text-main: #E6EAF0;
   --text-muted: #97A3B2;
-  --text-subtle: #5E6A78;
+  /* Issue #451: lightened from #5E6A78 (2.90–3.53:1 — WCAG AA fail on every
+     surface) to reach ≥4.5:1 against --bg-app/panel/inset/raised/hover. */
+  --text-subtle: #8B96A5;
 
   --border: #212B36;
   --border-strong: #31404F;
@@ -234,7 +236,9 @@ a { color: var(--accent); }
 }
 /* SLO checker badges (issue #64): green = within budget, red = over budget */
 .slo-pass { color: var(--decode); border-color: var(--decode-border); background: var(--decode-dim); }
-.slo-fail { color: var(--danger); border-color: rgba(248, 113, 113, 0.45); background: rgba(248, 113, 113, 0.12); }
+/* Issue #454: fail text lifted from --danger #F87171 (4.11:1 on its own chip
+   tint — below AA for the 10.5px badge type) to a lighter red ≈6:1. */
+.slo-fail { color: #FCA5A5; border-color: rgba(248, 113, 113, 0.45); background: rgba(248, 113, 113, 0.12); }
 
 /* ---------- Buttons ---------- */
 
@@ -1532,21 +1536,13 @@ kbd {
   margin-top: 14px;
 }
 
-/* Compact hint text under speed sliders — available on hover/focus, less vertical weight */
-.hint-text {
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  opacity: 0.75;
-  transition: opacity 0.15s;
-  cursor: help;
-}
-.panel-inset:hover .hint-text,
-.panel-inset:focus-within .hint-text {
-  -webkit-line-clamp: unset;
-  opacity: 1;
-}
+/* Compact hint text under speed sliders.
+   Issue #455: hints used to be clamped to one line at opacity .75 here and
+   only expanded on parent hover/focus — the full sentence was invisible to
+   screenshot/DOM-based agents and touch users, and the extra opacity dim
+   pushed nested values below WCAG AA. The clamp/dim/hover-gating rules were
+   removed; the base .hint-text styles near the top of this file now apply
+   unchanged (full sentence, full opacity, no hover gating). */
 
 /* Compact tab bar */
 .tab-btn {

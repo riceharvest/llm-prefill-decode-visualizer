@@ -624,7 +624,7 @@ export default function AgenticVisualizer({
       ))}
 
       {/* Main Agent Loop Simulation Stage */}
-      <section className="panel" aria-label={t('agentic.simStageAria')}>
+      <section className="panel" aria-label={t('agentic.simStageAria')} data-state={currentPhase}>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -655,7 +655,10 @@ export default function AgenticVisualizer({
             <button
               onClick={handleReset}
               title={t('agentic.resetTooltip')}
-              aria-label={t('agentic.resetTooltip')}
+              /* Issue #453: accessible name must lead with the visible label
+                 ("Reset Loop") — a bare tooltip accName contradicted the text
+                 on screen. */
+              aria-label={`${t('agentic.resetLoop')} — ${t('agentic.resetTooltip')}`}
               className="btn"
             >
               <RotateCcw size={15} />
