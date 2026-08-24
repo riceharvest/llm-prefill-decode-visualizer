@@ -10,6 +10,10 @@
  * implementation of every formula.
  */
 
+import { readFileSync } from 'node:fs';
+import { SCHEMA_VERSION } from './_schema.js';
+import { applyRequestIdEcho } from './_request_id.js';
+
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
 const TOOLS = [
@@ -165,14 +169,51 @@ async function callTool(name, args) {
   };
 }
 
+/** App release version from package.json — the SAME source /api/version
+ *  reports, so the MCP handshake can no longer disagree with the REST
+ *  version surface (issue #880). 'unknown' if unreadable (e.g. a deploy
+ *  bundle without it) so initialize never throws over metadata. */
+function appVersion() {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+    );
+    return pkg.version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 function json(res, body, status = 200) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
+  // Same wire-contract stamp every /api/* JSON response carries (issue #880).
+  res.setHeader('X-Schema-Version', SCHEMA_VERSION);
+  exposeCorrelationHeaders(res);
   res.end(JSON.stringify(body));
 }
 
+/** Expose the correlation/version headers to browser fetch() consumers. */
+function exposeCorrelationHeaders(res) {
+  const expose = new Set(
+    (res.getHeader('Access-Control-Expose-Headers') || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
+  );
+  for (const h of ['X-Request-Id', 'X-Request-Id-Truncated', 'X-Schema-Version']) {
+    if (!expose.has(h)) expose.add(h);
+  }
+  res.setHeader('Access-Control-Expose-Headers', [...expose].join(', '));
+}
+
 export default async function handler(req, res) {
+  // Issue #946: api/mcp.js wins file-routing over the catch-all dispatcher,
+  // so the REST X-Request-Id echo never ran on this transport. Apply the
+  // same shared middleware here so correlation works on both surfaces.
+  applyRequestIdEcho(req, res);
+
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -209,11 +250,14 @@ export default async function handler(req, res) {
     case 'initialize':
       return reply({
         protocolVersion: '2025-06-18',
+        // Wire-contract version, same value as the X-Schema-Version header
+        // and the schema_version field on every REST response (issue #880).
+        schemaVersion: SCHEMA_VERSION,
         capabilities: { tools: {} },
         serverInfo: {
           name: 'llm-prefill-decode-visualizer',
           title: 'LLM Prefill & Decode Speed Visualizer',
-          version: '1.0.0'
+          version: appVersion()
         },
         instructions:
           'Deterministic LLM-inference math API. Use compute_single_turn for TTFT/TPOT questions, ' +
