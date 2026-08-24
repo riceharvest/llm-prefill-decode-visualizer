@@ -29,6 +29,7 @@ import { default as mcp } from './mcp.js';
 import { default as agentCompute } from './_handlers/agent_compute.js';
 import { default as agentFreshness } from './_handlers/agent_freshness.js';
 
+import { ROUTES } from './_route_table.js';
 import { withMarkdownNegotiation } from './_markdown.js';
 
 export const config = { runtime: 'nodejs' };
@@ -83,6 +84,52 @@ function applyAgentEndpointsHeader(req, res) {
   res.setHeader('Access-Control-Expose-Headers', [...expose].join(', '));
 }
 
+/**
+ * Central OPTIONS handling (issue #906).
+ *
+ * Before this, handlers without their own `req.method === 'OPTIONS'` branch
+ * fell straight through into the GET path: every probe returned 200 with the
+ * FULL representation (≈1 MB for /api/export), no `Allow` header, and — on
+ * /api/spec and /api/presets — a `public, max-age=3600` cache stamp that put
+ * probe responses into shared CDN caches keyed to the same URL GETs use.
+ *
+ * OPTIONS is now answered once here, before dispatch: 204 No Content with an
+ * `Allow` header (plus CORS preflight headers) derived from the central route
+ * table, and `Cache-Control: no-store` so probes are never cached. The
+ * per-handler OPTIONS branches remain for direct callers but are bypassed on
+ * the wire.
+ */
+const EXTRA_ALLOW_HEADERS = { '/mcp': 'Content-Type, Accept, Mcp-Session-Id' };
+
+function matchRouteMethods(clean) {
+  const exact = ROUTES.find((r) => r.path === clean);
+  if (exact) return exact.methods;
+  if (/^\/calc\/[^/]+$/.test(clean)) {
+    const dynamic = ROUTES.find((r) => r.path === '/calc/:id');
+    return dynamic ? dynamic.methods : null;
+  }
+  return null;
+}
+
+function handleOptions(req, res, clean) {
+  // Probes must never populate caches, even when the path is unknown.
+  res.setHeader('Cache-Control', 'no-store');
+  const methods = matchRouteMethods(clean);
+  if (!methods) return false; // unknown path → fall through to the 404 branch
+
+  const allow = [...methods, 'OPTIONS'].join(', ');
+  res.statusCode = 204;
+  res.setHeader('Allow', allow);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', allow);
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    EXTRA_ALLOW_HEADERS[clean] || 'Content-Type'
+  );
+  res.end();
+  return true;
+}
+
 export default async function handler(req, res) {
   withMarkdownNegotiation(req, res);
   applyRequestIdEcho(req, res);
@@ -92,6 +139,10 @@ export default async function handler(req, res) {
   try {
     // Strip /v1/ prefix if present (versioning rewrite)
     const clean = pathname.replace(/^\/v1\//, '/');
+
+    if (req.method === 'OPTIONS' && handleOptions(req, res, clean)) {
+      return;
+    }
 
     switch (clean) {
       case '/compute': return compute(req, res);
