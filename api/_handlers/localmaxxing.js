@@ -101,6 +101,7 @@ export default async function handler(req, res) {
     }
   }
   if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET, POST'); // RFC 9110 §15.5.5 (#981)
     return json(res, { error: `Method ${req.method} not allowed. Use GET to query runs or POST to submit one.` }, 405);
   }
 

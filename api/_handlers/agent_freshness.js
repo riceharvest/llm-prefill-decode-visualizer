@@ -211,6 +211,7 @@ export async function runFreshnessReport(params = {}, opts = {}) {
 export default async function handler(req, res) {
   if (!enforceRateLimit(req, res)) return;
   if ((req.method || 'GET') !== 'GET') {
+    res.setHeader('Allow', 'GET'); // RFC 9110 §15.5.5 (#981)
     return json(res, { error: `Method ${req.method} not allowed. Use GET.` }, 405);
   }
 

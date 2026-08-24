@@ -101,7 +101,15 @@ export class ApiError extends Error {
 /** Map any thrown value to an ApiError (unknown throws become INTERNAL). */
 export function toApiError(err) {
   if (err instanceof ApiError) return err;
-  return new ApiError('INTERNAL', String(err?.message || err));
+  // Plain Errors may carry intent via .status/.code — e.g.
+  // Object.assign(new Error('method not allowed'), { status: 405, code: 'METHOD_NOT_ALLOWED' })
+  // in og.js, or the { status: 502 } upstream failures in _gguf.js/_hfconfig.js.
+  // Honor recognizable values instead of collapsing them all to INTERNAL (#927).
+  const code = err && ERROR_CODES[err.code] ? err.code : 'INTERNAL';
+  const status = Number.isFinite(err?.status) && err.status >= 400 && err.status <= 599
+    ? err.status
+    : undefined;
+  return new ApiError(code, String(err?.message || err), status !== undefined ? { status } : undefined);
 }
 
 function send(res, status, body) {

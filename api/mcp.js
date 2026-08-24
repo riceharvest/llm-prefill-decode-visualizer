@@ -192,6 +192,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST, OPTIONS'); // RFC 9110 §15.5.5 (#981)
     return json(res, { error: 'Method not allowed' }, 405);
   }
 

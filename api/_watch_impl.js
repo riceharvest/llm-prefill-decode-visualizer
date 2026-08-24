@@ -109,6 +109,7 @@ export default async function handler(req, res) {
       return res.status(204).end();
     }
 
+    res.setHeader('Allow', 'GET, POST, DELETE'); // RFC 9110 §15.5.5 (#981)
     return sendJson(res, { error: `Method ${req.method} not allowed. Use GET to list watches, POST to create one, DELETE ?id=&secret= to remove one.` }, { status: 405 });
   } catch (err) {
     return sendProblemFromError(res, req, err);

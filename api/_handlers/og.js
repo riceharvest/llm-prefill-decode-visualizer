@@ -247,6 +247,7 @@ export default async function handler(req, res) {
       return res.end();
     }
     if (req.method !== 'GET') {
+      res.setHeader('Allow', 'GET, OPTIONS'); // RFC 9110 §15.5.5 (#981)
       return sendProblemFromError(res, req, Object.assign(new Error('method not allowed'), {
         status: 405,
         code: 'METHOD_NOT_ALLOWED'

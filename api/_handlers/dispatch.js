@@ -28,6 +28,7 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
   if (req.method !== 'GET' && req.method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST'); // RFC 9110 §15.5.5 (#981)
     return sendJson(res, { error: `Method ${req.method} not allowed. Use GET or POST to run a dispatch pass.` }, { status: 405 });
   }
   if (!enforceRateLimit(req, res)) return;
