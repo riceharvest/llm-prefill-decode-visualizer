@@ -10,6 +10,7 @@ import { memoryLedger, SAFETY_HEADROOM_FRACTION } from '../../api/_math.js';
 import MultiGpuPlanner from './MultiGpuPlanner';
 import ChartDataTable from './ChartDataTable';
 import { t } from '../i18n/strings';
+import { formatUtilizationPct, stackedLedgerBarAria } from '../utils/kvLedgerA11y';
 
 // KV-cache geometry pulled from each model's actual config.json on HuggingFace
 // and its architecture paper. Four KV modes:
@@ -554,7 +555,7 @@ export default function KVCacheCalculator() {
             position: 'relative', height: '26px', borderRadius: 'var(--radius-sm)',
             background: 'var(--bg-inset)', border: '1px solid var(--border)', overflow: 'hidden'
           }} role="img"
-            aria-label={`${t('kvCache.ledgerUtilization', { pct: ledger.utilizationPct ?? '—', vram: safeGpuVram })} — ${verdictLabel[ledger.verdict] || ''}`}
+            aria-label={`${t('kvCache.ledgerUtilization', { pct: formatUtilizationPct(ledger.utilizationPct), vram: safeGpuVram })} — ${verdictLabel[ledger.verdict] || ''}`}
           >
             <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
               <div style={{ width: segPct(ledger.weightsGb), background: 'var(--accent)' }} />
@@ -584,7 +585,7 @@ export default function KVCacheCalculator() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: '6px', fontWeight: 600 }}>
               <span>{t('kvCache.ledgerTotal')}</span>
-              <span>{ledger.totalGb?.toFixed(2)} GB · {t('kvCache.ledgerUtilization', { pct: ledger.utilizationPct ?? '—', vram: safeGpuVram })}</span>
+              <span>{ledger.totalGb?.toFixed(2)} GB · {t('kvCache.ledgerUtilization', { pct: formatUtilizationPct(ledger.utilizationPct), vram: safeGpuVram })}</span>
             </div>
           </div>
 
@@ -629,7 +630,7 @@ export default function KVCacheCalculator() {
                 label: t('chartTable.totalRowLabel'),
                 cells: {
                   gb: `${ledger.totalGb?.toFixed(2)} GB`,
-                  share: t('chartTable.utilizationLabel', { pct: ledger.utilizationPct ?? '—', vram: safeGpuVram })
+                  share: t('chartTable.utilizationLabel', { pct: formatUtilizationPct(ledger.utilizationPct), vram: safeGpuVram })
                 }
               },
               {
@@ -807,7 +808,21 @@ export default function KVCacheCalculator() {
         {/* Stacked ledger bar */}
         {selectedGpu && (
           <div style={{ marginBottom: '18px' }}>
-            <div style={{ position: 'relative', height: '34px', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            {/* #777: expose the bar's composition as an accessible name built
+                from the same legend strings rendered below it — segment
+                identity used to live only in hover-only title attributes. */}
+            <div
+              role="img"
+              aria-label={stackedLedgerBarAria(
+                [
+                  { label: t('kvCache.ledgerWeights'), value: `${fmtGb(weightsGb)} GB` },
+                  { label: t('kvCache.ledgerKv'), value: `${fmtGb(totalKVCacheGB)} GB` },
+                  { label: t('kvCache.ledgerOverhead', { pct: overheadPct }), value: `${fmtGb(budget.overheadGb)} GB` }
+                ],
+                t('kvCache.gpuLimitMarker', { gb: `${selectedGpu.vramGb} GB` })
+              )}
+              style={{ position: 'relative', height: '34px', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
               {(() => {
                 const scaleMax = Math.max(budget.totalGb, selectedGpu.vramGb);
                 const pct = gb => Math.min(100, (gb / scaleMax) * 100);
