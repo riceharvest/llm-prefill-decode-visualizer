@@ -217,7 +217,7 @@ function capabilityList() {
       cost: { params: ['hardwarePriceUsd', 'electricityRatePerKwh', 'powerDrawWatts', 'amortizationMonths', 'promptTokens', 'outputTokens', 'prefillSpeed', 'decodeSpeed'], example: '/api/compute?model=cost&hardwarePriceUsd=2000&electricityRatePerKwh=0.15&powerDrawWatts=450&prefillSpeed=3800&decodeSpeed=105' }
     },
     batch: {
-      description: 'Compare variants in one call: POST {"batch": [{"model": "singleTurn", "promptTokens": 4096}, ...]}. Each item is a normal parameter set including its own "model" field. Returns { results: [{ index, ok, result | error }] } — one bad item does not fail the batch.',
+      description: 'Compare variants in one call: POST {"batch": [{"model": "singleTurn", "promptTokens": 4096}, ...]}. Each item is a normal parameter set including its own "model" field. Returns { results: [{ index, ok, result | error }] } — one bad item does not fail the batch. Failed entries echo their input ("inputs", or "input" for non-object items) and carry a deterministic per-item id plus ApiError extras such as available[], so a subset retry can be correlated by id instead of index. Optionally pass a top-level "batchId" string to pin the response id across subset retries: every attempt under the same batchId returns the same id, verifiable via /api/calc/<id>?batchId=<batchId>.',
       maxSize: MAX_BATCH_SIZE,
       example: { batch: [{ model: 'singleTurn', promptTokens: 4096 }, { model: 'kvCache', architecture: 'llama70b', contextLength: 131072 }] }
     },
@@ -264,16 +264,47 @@ function runBatch(rawItems, dryRun = false) {
 
   const results = items.map((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      return { index, ok: false, code: 'INVALID_PARAMS', error: 'batch item must be an object with a "model" field' };
+      // #964: echo the offending value so a response held in isolation (async
+      // processing, log inspection, forwarded result) still says WHAT failed,
+      // not just where.
+      return {
+        index,
+        ok: false,
+        code: 'INVALID_PARAMS',
+        error: 'batch item must be an object with a "model" field',
+        input: item ?? null
+      };
     }
+    // #964: every object item carries a deterministic per-item id hashed from
+    // its content. A failed item keeps this id across subset retries, so
+    // attempt N+1 can be correlated to attempt N without trusting positional
+    // indexes (which renumber when only the failed subset is resent).
+    const itemId = computeCalcId('compute', { model: item.model || item.m || '', ...item });
     try {
       const { status, body } = computeOne(item, dryRun);
       // Stamp schema_version + the same deterministic calc id an individual
       // call would get, so batch results match standalone calls (#68).
-      if (status === 200) return { index, ok: true, result: { id: computeCalcId('compute', { model: item.model || item.m || '', ...item }), ...withSchemaVersion(body) } };
-      return { index, ok: false, code: body?.code || 'INTERNAL', error: body?.detail || body?.title || body?.error || 'unknown error' };
+      if (status === 200) return { index, ok: true, result: { id: itemId, ...withSchemaVersion(body) } };
+      return {
+        index,
+        ok: false,
+        id: itemId,
+        code: body?.code || 'INTERNAL',
+        error: body?.detail || body?.title || body?.error || 'unknown error',
+        inputs: item, // #964: echo the failed input
+        ...(body?.available ? { available: body.available } : {}) // #964
+      };
     } catch (err) {
-      return { index, ok: false, code: err instanceof ApiError ? err.code : 'INTERNAL', error: String(err.message || err) };
+      const apiErr = err instanceof ApiError ? err : null;
+      return {
+        index,
+        ok: false,
+        id: itemId,
+        code: apiErr ? err.code : 'INTERNAL',
+        error: String(err.message || err),
+        inputs: item, // #964: echo the failed input
+        ...(apiErr?.extras ?? {}) // #964: preserve available[] and other extras
+      };
     }
   });
 
@@ -303,7 +334,18 @@ export function computeBody(params = {}) {
   const rawBatch = params.batch ?? params.variants;
   if (rawBatch !== undefined) {
     const out = runBatch(rawBatch, dryRun);
-    if (out.status === 200) out.body = { id: computeCalcId('compute', params), ...out.body };
+    if (out.status === 200) {
+      // #964: a caller-supplied `batchId` pins the top-level batch id — it
+      // hashes ONLY the batchId string, so resending any subset of the
+      // batch's items under the same batchId mints the SAME id instead of a
+      // fresh one. Without batchId the id stays a hash of the full request.
+      const rawBatchId = params.batchId;
+      const batchId = rawBatchId !== undefined && rawBatchId !== null && rawBatchId !== '' && typeof rawBatchId !== 'object'
+        ? String(rawBatchId)
+        : null;
+      out.body.id = batchId ? computeCalcId('compute', { batchId }) : computeCalcId('compute', params);
+      if (batchId) out.body.batchId = batchId;
+    }
     return out;
   }
 

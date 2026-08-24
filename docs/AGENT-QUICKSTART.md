@@ -42,6 +42,12 @@ GET /api/diff?a=<calcId>&b=<calcId>
   `kvCache`. Omit `model` entirely to get a self-describing capability list.
 - `POST /api/compute` with `{"batch": [ …up to 50 parameter sets… ]}` returns
   per-index results.
+- **Partial batch failure recovery**: a failed batch item echoes its input
+  (`inputs`, or `input` for non-object items) and carries a deterministic
+  per-item id plus ApiError extras such as `available[]`. Resend just the
+  failed subset under the same top-level `batchId` string to keep the same
+  response id across attempts (indexes renumber; per-item ids do not), and
+  verify it any time via `GET /api/calc/<id>?batchId=<batchId>`.
 - Every calculation returns an id you can re-fetch later:
   `GET /api/calc/<id>`
 

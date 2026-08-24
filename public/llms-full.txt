@@ -548,6 +548,21 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- Partial batch failure recovery on `/api/compute` (#964): failed batch items
+  now echo their input (`inputs` for object items, `input` for non-object
+  values) and carry a deterministic per-item id (the same hash a standalone
+  call with those params would mint), so a subset retry correlates by id even
+  though positional indexes renumber. ApiError extras (`available[]` and
+  friends) are preserved onto failed-item entries instead of being dropped. A
+  new optional top-level `batchId` request parameter pins the response id: all
+  attempts under the same `batchId` return the same id regardless of which
+  item subset is sent, and `GET /api/calc/<id>?batchId=<batchId>` verifies the
+  id from the batchId alone (full batch payloads replay as before). Batch ids
+  without `batchId` are now hashed from deep-canonicalized array content
+  instead of a lossy `String()` coercion. Additive fields; `schema_version`
+  stays `"1"`.
+- Affected endpoints: `/api/compute`, `/api/agent/compute.json`, `/api/calc/<id>`.
+
 - `/api/spec` now annotates every operation with a machine-readable
   `x-rate-limit` extension: `{ enforced, limit, windowSeconds, keying, scope }`
   plus, for metered endpoints, the `X-RateLimit-*` header names and the 429
