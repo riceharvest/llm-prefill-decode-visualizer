@@ -173,6 +173,13 @@
       "sinceVersion": "2.6.0"
     },
     {
+      "path": "/api/runs/:id",
+      "method": "GET",
+      "description": "Look up ONE community-measured run by its runId without downloading the full /api/runs dump. Unknown ids return a problem+json 404 (code NOT_FOUND).",
+      "returns": "{ description, schemaVersion, generatedAt, run }",
+      "sinceVersion": "2.6.0"
+    },
+    {
       "path": "/api/sizing",
       "method": "GET",
       "description": "One-call hardware sizing recommendation: pass a workload spec (?model=<family>&contextLength=&concurrency=&maxTtftSeconds=&maxTpotMs=&maxVramGb=) and get ranked rigs with required-VRAM math, expected TTFT/TPOT from benchmark medians, sample confidence, and meetsSlo flags.",

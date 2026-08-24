@@ -47,6 +47,7 @@ const ENFORCED_PATHS = new Set([
   '/api/presets',
   '/api/localmaxxing',
   '/api/runs',
+  '/api/runs/{runId}',
   '/api/benchmarks',
   '/api/best',
   '/api/parse-constraints',
@@ -853,7 +854,8 @@ export default function handler(req, res) {
           description: 'One-shot export of every community-measured run — including batched/non-comparable ones — so agents and crawlers can consume the whole dataset without JS or pagination round-trips. JSON envelope carries schemaVersion, generatedAt, rowCount, totalRunCount, comparableFilter and a structured dataDictionary; each run carries a `comparable` boolean so consumers can reproduce (or skip) the single-stream filter the aggregate endpoints use. CSV output is RFC 4180 with a `#`-comment preamble carrying metadata plus one dictionary line per column, served as a dated attachment. Shares the 10-minute cached upstream fetch with the other benchmark endpoints.',
           parameters: [
             { name: 'format', in: 'query', schema: { type: 'string', enum: ['json', 'csv'], default: 'json' } },
-            { name: 'comparable', in: 'query', schema: { type: 'string', enum: ['all', 'true', 'false'], default: 'all' }, description: 'Subset rows on the single-stream flag: true = comparable runs only, false = non-comparable only, all = everything (default). totalRunCount always reports the unfiltered index size.' }
+            { name: 'comparable', in: 'query', schema: { type: 'string', enum: ['all', 'true', 'false'], default: 'all' }, description: 'Subset rows on the single-stream flag: true = comparable runs only, false = non-comparable only, all = everything (default). totalRunCount always reports the unfiltered index size.' },
+            { name: 'runId', in: 'query', schema: { type: 'string' }, description: 'Subset to ONE run by its runId (alias ?id=). An empty value is rejected with 400; an unknown id yields rowCount 0. Prefer GET /api/runs/{runId} for single-run lookups.' }
           ],
           responses: {
             '200': {
@@ -894,8 +896,52 @@ export default function handler(req, res) {
                 }
               }
             },
-            '400': { description: 'Invalid format/comparable value (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } },
+            '400': { description: 'Invalid format/comparable/runId value (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } },
             '405': { description: 'Method not allowed (code METHOD_NOT_ALLOWED) — only GET and OPTIONS are supported', content: { 'application/problem+json': { schema: PROBLEM } } },
+            '429': RATE_LIMITED,
+            '502': DATA_ERRORS['502']
+          }
+        }
+      },
+      '/api/runs/{runId}': {
+        get: {
+          operationId: 'lookupRun',
+          summary: 'Look up ONE community-measured run by its runId',
+          description: 'Resolves a single run from the full index without downloading the /api/runs dump (#766). Unknown ids return problem+json 404 with code NOT_FOUND.',
+          parameters: [
+            { name: 'runId', in: 'path', required: true, schema: { type: 'string' }, description: 'Upstream run identifier as returned in the runId field of /api/runs rows.' }
+          ],
+          responses: {
+            '200': {
+              description: '{description, schemaVersion, generatedAt, run}',
+              content: {
+                'application/json': {
+                  example: {
+                    description: 'Single community-measured benchmark run looked up by its runId. Use /api/runs for the full index.',
+                    schemaVersion: 1,
+                    generatedAt: '2026-08-23T05:00:00.000Z',
+                    run: {
+                      runId: 58213,
+                      createdAt: '2026-07-30T18:22:41.000Z',
+                      comparable: true,
+                      modelFamily: 'qwen3.6-27b',
+                      modelId: 'unsloth/Qwen3.6-27B-MTP-GGUF',
+                      hardwareKey: 'rtx4090',
+                      engine: 'llama.cpp',
+                      quantization: 'q4_k_m',
+                      prefillTokPerSec: 3820,
+                      decodeTokPerSec: 108,
+                      contextLength: 8192,
+                      contextBand: '8k-32k',
+                      source: 'https://localmaxxing.com/en/runs/58213'
+                    }
+                  }
+                }
+              }
+            },
+            '400': { description: 'Missing/empty run id (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } },
+            '404': { description: 'No run with that runId (code NOT_FOUND)', content: { 'application/problem+json': { schema: PROBLEM } } },
+            '405': { description: 'Method not allowed (code METHOD_NOT_ALLOWED)', content: { 'application/problem+json': { schema: PROBLEM } } },
             '429': RATE_LIMITED,
             '502': DATA_ERRORS['502']
           }
@@ -1405,6 +1451,11 @@ export default function handler(req, res) {
     '/api/runs': {
       get: {
         request: 'curl -s "$BASE/api/runs?format=json&comparable=true"'
+      }
+    },
+    '/api/runs/{runId}': {
+      get: {
+        request: 'curl -s "$BASE/api/runs/58213"'
       }
     }
   };
