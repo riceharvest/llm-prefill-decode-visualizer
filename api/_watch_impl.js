@@ -15,7 +15,8 @@ const DESCRIPTION =
   'The response carries watchId + secret (save the secret: it is shown once and is required to DELETE) and a ready-made rssUrl. ' +
   'RSS: GET /api/watch/rss.xml?model=&hardware=&quant= — poll it like any feed. ' +
   'Webhooks: POST /api/watch/dispatch (cron-friendly) delivers unseen matching runs to each registered webhook with an X-Watch-Secret header. ' +
-  'DELETE /api/watch?id=&secret= to unsubscribe. Storage is per-instance JSONL (WATCHES_DIR), same durability model as run submissions.';
+  'DELETE /api/watch?id=&secret= to unsubscribe. Storage is per-instance JSONL (WATCHES_DIR), same durability model as run submissions. ' +
+  'Re-POSTing an identical combo+webhookUrl returns 409 duplicate_watch with the existing watchId instead of stacking duplicate deliveries.';
 
 /**
  * GET  /api/watch — describe the feature + list registered combos (no secrets).
@@ -63,6 +64,15 @@ export default async function handler(req, res) {
       try {
         record = await saveWatch(watch);
       } catch (err) {
+        if (err.code === 'DUPLICATE_WATCH') {
+          // #1027: re-POSTing an identical combo must not stack N-fold webhook
+          // deliveries. Echo the existing id so the caller can reuse/unsubscribe.
+          return sendJson(res, {
+            error: 'duplicate_watch',
+            message: err.message,
+            watchId: err.existingWatchId
+          }, { status: 409 });
+        }
         if (String(err.message || '').includes('limit reached')) {
           return sendJson(res, { error: 'watch_limit_reached', message: err.message }, { status: 429 });
         }

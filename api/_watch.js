@@ -13,6 +13,14 @@ export const MAX_SEEN_RUN_IDS = 200;
 export const RSS_MAX_ITEMS = 50;
 /** Webhook POST timeout in ms. */
 export const WEBHOOK_TIMEOUT_MS = 5_000;
+/**
+ * Max webhook redirects followed per delivery (#1029). Every hop — including
+ * the first — is re-validated as https before the request (or the next hop's
+ * URL) is fetched, so a 30x from a validated host cannot downgrade the
+ * delivery to http://internal targets.
+ */
+export const MAX_WEBHOOK_REDIRECTS = 3;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 function isBlank(v) {
   return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
@@ -90,6 +98,22 @@ export function validateWatch(body) {
 }
 
 const norm = s => String(s || '').toLowerCase();
+
+/**
+ * Canonical identity of a watch combo (#1027): normalized model/hardware/
+ * quant plus the exact webhook target. Two registrations with the same
+ * fingerprint would deliver every dispatch N times, so saveWatch refuses
+ * exact duplicates.
+ */
+export function watchFingerprint(watch) {
+  const canon = s => String(s ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  return JSON.stringify([
+    canon(watch.model),
+    canon(watch.hardware),
+    canon(watch.quant),
+    watch.webhookUrl ? String(watch.webhookUrl).trim() : ''
+  ]);
+}
 
 /**
  * Does one community run match a watch? Mirrors the /api/localmaxxing GET
@@ -302,6 +326,18 @@ export async function saveWatch(watch) {
   if (existing.length >= MAX_WATCHES) {
     throw new Error(`watch limit reached (${MAX_WATCHES})`);
   }
+  // Duplicate registration guard (#1027): an identical combo+webhook would
+  // receive every dispatch N times. Refuse with a structured error (the
+  // handler maps it to 409 + the existing watchId); the secret is NOT
+  // re-disclosed to the duplicate caller.
+  const fp = watchFingerprint(watch);
+  const dupe = existing.find(w => watchFingerprint(w) === fp);
+  if (dupe) {
+    const err = new Error(`an identical watch already exists (${dupe.watchId}); reuse its rssUrl or DELETE it first`);
+    err.code = 'DUPLICATE_WATCH';
+    err.existingWatchId = dupe.watchId;
+    throw err;
+  }
   const record = { ...watch, watchId: newId(), secret: newSecret() };
   const { appendFile } = await import('node:fs/promises');
   await appendFile(watchesPath(), JSON.stringify(record) + '\n', 'utf8');
@@ -365,23 +401,43 @@ export function _resetWatchStore() {
  * { ok, status?, error?, skipped? } — never throws (delivery failures are
  * data, not crashes: dispatch continues with the remaining watches).
  */
-export async function deliverWebhook(watch, runs, { fetchImpl = fetch, timeoutMs = WEBHOOK_TIMEOUT_MS } = {}) {
+export async function deliverWebhook(watch, runs, { fetchImpl = fetch, timeoutMs = WEBHOOK_TIMEOUT_MS, maxRedirects = MAX_WEBHOOK_REDIRECTS } = {}) {
   if (!watch.webhookUrl) return { ok: false, skipped: true, error: 'no webhookUrl registered' };
   const body = JSON.stringify(webhookPayload(watch, runs));
   try {
-    const res = await fetchImpl(watch.webhookUrl, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        // HMAC-lite: lets receivers confirm the ping came from this deploy
-        // (share the secret out-of-band; it was returned exactly once at signup).
-        'x-watch-secret': watch.secret,
-        'user-agent': 'llm-prefill-decode-visualizer-watch/1.0'
-      },
-      body,
-      signal: AbortSignal.timeout(timeoutMs)
-    });
-    return { ok: res.ok, status: res.status };
+    let url = String(watch.webhookUrl);
+    let method = 'POST';
+    for (let hop = 0; ; hop++) {
+      // Re-validate the scheme on EVERY hop (#1029): validateWatch only gates
+      // the URL at subscribe time; a redirect from the validated host must
+      // not be allowed to downgrade https → http.
+      if (new URL(url).protocol !== 'https:') {
+        return { ok: false, error: `blocked non-https webhook ${hop ? 'redirect target' : 'URL'}: ${url}` };
+      }
+      const isGet = method === 'GET';
+      const res = await fetchImpl(url, {
+        method,
+        headers: {
+          // HMAC-lite: lets receivers confirm the ping came from this deploy
+          // (share the secret out-of-band; it was returned exactly once at signup).
+          'x-watch-secret': watch.secret,
+          'user-agent': 'llm-prefill-decode-visualizer-watch/1.0',
+          ...(isGet ? {} : { 'content-type': 'application/json' })
+        },
+        body: isGet ? undefined : body,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      if (REDIRECT_STATUSES.has(res.status)) {
+        const loc = res?.headers?.get?.('location');
+        if (!loc) return { ok: res.ok, status: res.status };
+        if (hop >= maxRedirects) return { ok: false, error: `too many webhook redirects (> ${maxRedirects})` };
+        url = new URL(loc, url).toString();
+        if (res.status === 303 && method === 'POST') method = 'GET'; // RFC 9110: 303 → GET, body dropped
+        continue;
+      }
+      return { ok: res.ok, status: res.status };
+    }
   } catch (err) {
     return { ok: false, error: String(err?.message || err) };
   }
