@@ -58,6 +58,7 @@ export function buildSingleTurnJson({
   return {
     schemaVersion: EXPORT_JSON_VERSION,
     generator: GENERATOR_ID,
+    generatorId: GENERATOR_ID,
     exportType: 'single-turn-chat',
     generatedAt,
     deepLink,
@@ -140,6 +141,7 @@ export function buildAgenticJson({
   return {
     schemaVersion: EXPORT_JSON_VERSION,
     generator: GENERATOR_ID,
+    generatorId: GENERATOR_ID,
     exportType: 'agentic-tool-loop',
     generatedAt,
     deepLink,

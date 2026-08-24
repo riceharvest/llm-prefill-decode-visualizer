@@ -29,6 +29,15 @@ const MODEL_PRESETS = {
   mistral7b: { numLayers: 32, hiddenSize: 4096, kvHeads: 8, numHeads: 32, headDim: 128 }
 };
 
+// Case/dash-insensitive architecture-id matching (#764): 'Llama-70B',
+// 'Mistral-7B', 'qwen-72b' resolve to their preset instead of silently
+// falling back to generic geometry.
+export function normalizeArchKey(id) {
+  if (id == null) return null;
+  const key = String(id).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  return key === '' ? null : key;
+}
+
 // Thin wrapper over the shared sender so every response carries
 // schema_version + X-Schema-Version (see _schema.js / CHANGELOG-API.md).
 function json(res, body, status = 200) {
@@ -121,10 +130,12 @@ function computeOne(params, dryRun = false) {
     }
 
     case 'kvCache': {
-      const presetKey = params.architecture;
-      const preset = presetKey ? MODEL_PRESETS[presetKey] : null;
+      const rawArch = params.architecture;
+      const presetKey = rawArch != null && String(rawArch).trim() !== '' ? String(rawArch).trim() : undefined;
+      const normalized = normalizeArchKey(presetKey);
+      const preset = (presetKey && (MODEL_PRESETS[presetKey] || MODEL_PRESETS[normalized])) || null;
       const inputs = {
-        architecture: presetKey || 'generic',
+        architecture: preset ? (MODEL_PRESETS[presetKey] ? presetKey : normalized) : (presetKey || 'generic'),
         numLayers: num(params.numLayers, preset?.numLayers ?? 80),
         kvHeads: num(params.kvHeads, preset?.kvHeads ?? 8),
         headDim: num(params.headDim, preset?.headDim ?? 128),
@@ -132,7 +143,19 @@ function computeOne(params, dryRun = false) {
         precisionBytes: num(params.precisionBytes, 2),
         batchSize: num(params.batchSize, 1)
       };
-      return withId('kvCache', inputs, kvCache(inputs), dryRun);
+      const result = kvCache(inputs);
+      // Auditability (#764): echo the id the caller actually sent alongside
+      // the resolved geometry inputs.
+      if (presetKey) result.inputs.requestedArchitecture = presetKey;
+      // Unknown architecture id → generic fallback is now LOUD (#764).
+      result.warnings = [];
+      if (presetKey && !preset) {
+        result.warnings.push({
+          code: 'unknown_architecture_fallback',
+          message: `Unknown architecture '${presetKey}' — computed with generic 70B-class geometry (numLayers=${inputs.numLayers}, kvHeads=${inputs.kvHeads}, headDim=${inputs.headDim}). Valid ids: ${Object.keys(MODEL_PRESETS).join(', ')}. Pass numLayers/kvHeads/headDim explicitly to override.`
+        });
+      }
+      return withId('kvCache', inputs, result, dryRun);
     }
 
     case 'flagged': {

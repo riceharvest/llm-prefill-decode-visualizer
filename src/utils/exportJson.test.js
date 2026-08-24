@@ -138,7 +138,7 @@ test('agentic export carries versioned envelope, inputs, turns and summary', () 
   assert.ok(Array.isArray(out.turns));
 
   const expected = Object.keys(buildAgenticJson(agenticInput)).sort();
-  assert.deepEqual(expected, ['deepLink', 'exportType', 'generatedAt', 'generator', 'inputs', 'schemaVersion', 'summary', 'turns']);
+  assert.deepEqual(expected, ['deepLink', 'exportType', 'generatedAt', 'generator', 'generatorId', 'inputs', 'schemaVersion', 'summary', 'turns']);
 });
 
 test('agentic per-turn rows match the timeline engine with stable names', () => {
