@@ -49,17 +49,41 @@ export async function getAllRunsRaw() {
   return rawCache.rows ?? [];
 }
 
+/**
+ * Await an in-flight upstream walk and settle it safely:
+ * - on success, clear `cache.promise` so future calls past the TTL can start a
+ *   fresh walk (without this the first resolved promise short-circuits every
+ *   later call and the 10-minute TTL never fires — issues #1076/#1101);
+ * - on failure, allow retry and serve the previous snapshot when we have one.
+ * The identity guard stops a late settler from clearing a NEWER walk's slot.
+ */
+async function settleWalk(promise) {
+  try {
+    const rows = await promise;
+    if (cache.promise === promise) cache.promise = null;
+    return { rows, fetchedAt: cache.fetchedAt };
+  } catch (err) {
+    if (cache.promise === promise) cache.promise = null; // allow retry; serve stale if we have it
+    if (cache.rows) return { rows: cache.rows, fetchedAt: cache.fetchedAt };
+    throw err;
+  }
+}
+
 /** Fetch all comparable runs plus the fetch timestamp of the cached set. */
 export async function getDataset() {
   if (cache.rows && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
     return { rows: cache.rows, fetchedAt: cache.fetchedAt };
   }
   if (cache.promise) {
-    return cache.promise.then(rows => ({ rows, fetchedAt: cache.fetchedAt }));
+    return settleWalk(cache.promise);
   }
 
   cache.promise = (async () => {
     const rows = [];
+    // Track upstream run ids so an insert between page fetches (which shifts
+    // every subsequent offset by one) cannot duplicate a row inside the
+    // cached dataset (#1102).
+    const seen = new Set();
     for (let offset = 0; offset <= 20000; offset += PAGE) {
       const res = await fetch(`${UPSTREAM}/leaderboard?limit=${PAGE}&offset=${offset}`, {
         headers: { accept: 'application/json' }
@@ -67,7 +91,14 @@ export async function getDataset() {
       if (!res.ok) throw new ApiError('UPSTREAM_UNAVAILABLE', `localmaxxing.com leaderboard returned HTTP ${res.status}`);
       const data = await res.json();
       const batch = data.rows || [];
-      rows.push(...batch);
+      for (const r of batch) {
+        if (r && r.id != null) {
+          const key = String(r.id);
+          if (seen.has(key)) continue;
+          seen.add(key);
+        }
+        rows.push(r);
+      }
       if (batch.length < PAGE) break;
     }
     const comparableRows = rows.filter(comparable).map(slim);
@@ -85,13 +116,7 @@ export async function getDataset() {
     return comparableRows;
   })();
 
-  try {
-    return { rows: await cache.promise, fetchedAt: cache.fetchedAt };
-  } catch (err) {
-    cache.promise = null; // allow retry; serve stale if we have it
-    if (cache.rows) return { rows: cache.rows, fetchedAt: cache.fetchedAt };
-    throw err;
-  }
+  return settleWalk(cache.promise);
 }
 
 function slim(r) {
