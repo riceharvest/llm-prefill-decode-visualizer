@@ -28,7 +28,7 @@ hardware only), training-time estimates, or non-transformer architectures.
 
 - OpenAPI spec: `/api/spec` (also under `/v1/spec`)
 - Health & data freshness: `/api/health`
-- Changelog: `CHANGELOG-API.md` in the repo; human status page at `/status.html`
+- Changelog: `/CHANGELOG-API.md` (schema-versioning policy + endpoint history, text/markdown) and its machine-readable JSON twin `/CHANGELOG.json` (`currentSchemaVersion`, structured `changes[]` records with type/endpoints/breaking). Both are served. Note: `/changelog.json` (lowercase) is the *UI feature feed*, not the API changelog. Human status page at `/status.html`.
 - MCP server: `/.well-known/mcp.json` (manifest) and `/api/mcp` (Streamable HTTP JSON-RPC: initialize, tools/list, tools/call)
 - Trust pages: [/about.html](/about.html), [/contact.html](/contact.html), [/privacy.html](/privacy.html)
 - Full documentation: `/llms-full.txt` — all agent-facing docs (this guide, README, API changelog, MCP docs) compiled into one flat markdown file

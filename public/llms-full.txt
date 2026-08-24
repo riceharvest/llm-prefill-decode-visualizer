@@ -176,7 +176,7 @@ hardware only), training-time estimates, or non-transformer architectures.
 
 - OpenAPI spec: `/api/spec` (also under `/v1/spec`)
 - Health & data freshness: `/api/health`
-- Changelog: `CHANGELOG-API.md` in the repo; human status page at `/status.html`
+- Changelog: `/CHANGELOG-API.md` (schema-versioning policy + endpoint history, text/markdown) and its machine-readable JSON twin `/CHANGELOG.json` (`currentSchemaVersion`, structured `changes[]` records with type/endpoints/breaking). Both are served. Note: `/changelog.json` (lowercase) is the *UI feature feed*, not the API changelog. Human status page at `/status.html`.
 - MCP server: `/.well-known/mcp.json` (manifest) and `/api/mcp` (Streamable HTTP JSON-RPC: initialize, tools/list, tools/call)
 - Trust pages: [/about.html](/about.html), [/contact.html](/contact.html), [/privacy.html](/privacy.html)
 - Full documentation: `/llms-full.txt` — all agent-facing docs (this guide, README, API changelog, MCP docs) compiled into one flat markdown file
@@ -656,6 +656,8 @@ migrate before `Sunset`. Agents can discover the current policy at
   wire responses offline and fails if an emitted field is missing from the
   schema or a severity falls outside the enum.
 - Affected endpoints: `/api/benchmarks`, `/api/best`, `/api/localmaxxing` (docs only).
+- Structured machine-readable change metadata in `CHANGELOG.json`: every substantive Unreleased bullet is additionally listed in the new top-level `changes` array as `{ description, type: "additive"|"docs"|"fix", endpoints[], breaking }`, so agents can programmatically answer "what changed and did anything I call change?" without parsing prose; every `versions[]` entry also gains a unique `id` (disambiguating the two historical version `"1"` entries by date). Additive — no format-version bump.
+- CHANGELOG.json and CHANGELOG-API.md now ship with the site: `GET /CHANGELOG.json` and `/CHANGELOG-API.md` return 200 application/json and text/markdown respectively, so the `links.changelogJson` / `links.changelogMarkdown` pointers returned by `GET /api/version` and the `capabilities.docs.changelog` reference resolve on the deployment instead of dead-ending at 404. Note the pre-existing `/changelog.json` (lowercase) remains the UI feature feed, not the API contract history.
 
 ### 1 — 2026-08-21
 
