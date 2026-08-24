@@ -19,10 +19,43 @@ function httpError(status, message) {
 
 /** Merge top-level fields into a nested text_config (multimodal repos). */
 function textConfig(cfg) {
-  if (!cfg || typeof cfg !== 'object') return {};
-  return cfg.text_config && typeof cfg.text_config === 'object'
+  if (!cfg || typeof cfg !== 'object') return { config: {}, legacyKeysUsed: [] };
+  const base = cfg.text_config && typeof cfg.text_config === 'object'
     ? { ...cfg.text_config, ...pickTopLevel(cfg) }
     : cfg;
+  return mapLegacyConfigKeys(base);
+}
+
+// Legacy GPT-2-style config keys → their modern transformers equivalents
+// (issue #853): public repos like openai-community/gpt2 ship n_layer/n_embd/
+// n_head/n_ctx and were previously rejected as unreadable, falling through to
+// a misleading 403 "gated/private".
+const LEGACY_CONFIG_ALIASES = {
+  num_hidden_layers: ['n_layer'],
+  hidden_size: ['n_embd'],
+  num_attention_heads: ['n_head'],
+  num_key_value_heads: ['n_head_kv'],
+  max_position_embeddings: ['n_ctx', 'n_positions']
+};
+
+/**
+ * Fill missing modern architecture keys from legacy GPT-2-style spellings.
+ * Returns the merged config plus the list of modern keys that were backfilled.
+ */
+export function mapLegacyConfigKeys(cfg) {
+  const out = { ...cfg };
+  const legacyKeysUsed = [];
+  for (const [modern, aliases] of Object.entries(LEGACY_CONFIG_ALIASES)) {
+    if (out[modern] !== undefined) continue;
+    for (const alias of aliases) {
+      if (Number.isFinite(out[alias])) {
+        out[modern] = out[alias];
+        legacyKeysUsed.push(`${alias}→${modern}`);
+        break;
+      }
+    }
+  }
+  return { config: out, legacyKeysUsed };
 }
 
 // Fields that live on the top-level config even for multimodal models.
@@ -147,13 +180,16 @@ async function resolveUncached(hfId, quant) {
 
   // ---- Path 1: config.json ----
   if (cfg != null) {
-    const t = textConfig(cfg);
+    const { config: t, legacyKeysUsed } = textConfig(cfg);
     const numLayers = t.num_hidden_layers;
     const hiddenSize = t.hidden_size;
     const numHeads = t.num_attention_heads ?? t.num_heads;
     if (![numLayers, hiddenSize, numHeads].every(Number.isFinite)) {
       notes.push('config.json lacks num_hidden_layers / hidden_size / num_attention_heads');
     } else {
+      if (legacyKeysUsed.length) {
+        notes.push(`mapped legacy GPT-2-style config keys (${legacyKeysUsed.join(', ')})`);
+      }
       return assemble({ hfId, notes, info,
         arch: {
           numLayers,

@@ -127,19 +127,27 @@ async function estimate(params) {
   };
 
   // Optional VRAM budget → does it fit, and what context would fit instead?
+  // The raw bound is capped at the model's own context window when known, so
+  // maxContextTokens can no longer contradict contextWindow.withinLimit
+  // (issue #854: e.g. withinLimit:false at 4,096 next to maxContextTokens 697k).
   const vramGb = num(params.vramGb, null);
   let fits = null;
   if (vramGb != null && totalGb != null) {
     const budgetBytes = vramGb * GB;
     const bytesPerCtxToken = bytesPerToken * batchSize;
+    const rawMaxContextTokens = bytesPerCtxToken > 0
+      ? Math.max(0, Math.floor((budgetBytes - weightsGb * GB) / bytesPerCtxToken))
+      : null;
+    const capped = rawMaxContextTokens != null && maxCtx != null && rawMaxContextTokens > maxCtx;
     fits = {
       vramGb,
       fits: totalGb <= vramGb,
       headroomGb: round((budgetBytes - weightsGb * GB - kvBytesTotal) / GB),
-      maxContextTokens: bytesPerCtxToken > 0
-        ? Math.max(0, Math.floor((budgetBytes - weightsGb * GB) / bytesPerCtxToken))
-        : null,
+      maxContextTokens: capped ? maxCtx : rawMaxContextTokens,
+      ...(capped ? { uncappedMaxContextTokens: rawMaxContextTokens } : {}),
+      contextWindowCapped: capped,
       note: 'maxContextTokens ignores activation/overhead — treat as an upper bound'
+        + (capped ? "; capped to the model's own context window" : '')
     };
   }
 
