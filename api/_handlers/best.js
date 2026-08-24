@@ -103,11 +103,11 @@ export function rankGroups(groups, by, workload, limit) {
       };
     })
     .sort((a, b) =>
-      by === 'walltime' ? a._rawWalltime - b._rawWalltime
+      ((by === 'walltime' ? a._rawWalltime - b._rawWalltime
       : by === 'confidence' ? (b.confidence?.score ?? 0) - (a.confidence?.score ?? 0)
       : by === 'prefill' ? b.medianPrefillTokPerSec - a.medianPrefillTokPerSec
       : by === 'efficiency' ? (b.medianDecodeTokPerSec / Math.max(1, b.exampleModel ? 1 : 1)) - (a.medianDecodeTokPerSec / Math.max(1, a.exampleModel ? 1 : 1))
-      : b.medianDecodeTokPerSec - a.medianDecodeTokPerSec
+      : b.medianDecodeTokPerSec - a.medianDecodeTokPerSec)) || byGroupKey(a, b)
     )
     .slice(0, limit)
     .map(({ _rawWalltime, ...entry }) => entry);
@@ -128,6 +128,15 @@ function num(v, fallback) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
+
+// Deterministic final tie-break for ranked lists (#812 #813 #793): equal sort
+// keys used to resolve by upstream insertion order, so the same calc_ id
+// could replay to a different rank order or top-N membership. The composite
+// group identity (hardwareKey|modelFamily) is stable content that total-orders
+// whatever the primary metric leaves tied.
+const byGroupKey = (a, b) =>
+  String(a.hardwareKey ?? '').localeCompare(String(b.hardwareKey ?? '')) ||
+  String(a.modelFamily ?? '').localeCompare(String(b.modelFamily ?? ''));
 
 // Rough wall-power estimates when the caller doesn't pass ?powerWatts.
 // Whole-rig figures (idle-ish load while serving), not TDP sums.
@@ -187,6 +196,10 @@ export async function bestBody(query = {}) {
       promptTokens: num(q.promptTokens, 2048),
       outputTokens: num(q.outputTokens, 512)
     };
+    // Accept compute's documented ?powerDrawWatts spelling alongside
+    // ?powerWatts (#1111) so callers copying the /api/compute?model=cost
+    // param names aren't silently ignored.
+    const requestedPowerWatts = q.powerWatts ?? q.powerDrawWatts;
 
     const snapshotAt = new Date();
     const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
@@ -260,7 +273,10 @@ export async function bestBody(query = {}) {
           const sample = g.bestRun;
           const c = cost({
             ...costInputs,
-            powerDrawWatts: num(q.powerWatts, DEFAULT_POWER_WATTS[sample.hwClass] ?? 150),
+            // hwClass arrives UPPERCASE on the wire (#482) — normalize the
+            // lookup key so the per-class watt estimates aren't dead code
+            // and every rig falls back to a flat 150 W (#1111).
+            powerDrawWatts: num(requestedPowerWatts, DEFAULT_POWER_WATTS[String(sample.hwClass ?? '').toLowerCase()] ?? 150),
             prefillSpeed: g.prefill.median,
             decodeSpeed: g.decode.median
           });
@@ -297,7 +313,7 @@ export async function bestBody(query = {}) {
             costUsdPerThousandRequests: c.costUsdPerThousandRequests
           };
         })
-        .sort((a, b) => (a.costUsdPerMillionTokens ?? Infinity) - (b.costUsdPerMillionTokens ?? Infinity))
+        .sort((a, b) => ((a.costUsdPerMillionTokens ?? Infinity) - (b.costUsdPerMillionTokens ?? Infinity)) || byGroupKey(a, b))
         .slice(0, limit);
     } else {
       ranked = rankGroups(groups, by, workload, limit);
@@ -305,7 +321,7 @@ export async function bestBody(query = {}) {
         // rankGroups doesn't know the confidence metric — sort here (#36).
         const confByKey = new Map(groups.map(g => [g.key, g.confidence ?? 0]));
         ranked = ranked.slice().sort((x, y) =>
-          (confByKey.get(`${y.hardwareKey}|${y.modelFamily}`)?.score ?? 0) - (confByKey.get(`${x.hardwareKey}|${x.modelFamily}`)?.score ?? 0));
+          ((confByKey.get(`${y.hardwareKey}|${y.modelFamily}`)?.score ?? 0) - (confByKey.get(`${x.hardwareKey}|${x.modelFamily}`)?.score ?? 0)) || byGroupKey(x, y));
       }    }
     if (fitCheck) {
       // Attach the estimated fit verdict for each ranked group's best run.
