@@ -145,7 +145,13 @@ export function agentic(options = {}) {
     inputs: options,
     warnings: sanityWarnings({ promptTokens: basePromptTokens, prefillSpeed, decodeSpeed }),
     turns,
-    finalContextTokens: turns.length ? turns[turns.length - 1].totalPromptTokens + decodeTokensPerTurn : 0,
+    // Context entering the *next* prefill: the last turn's prompt, plus its
+    // decode output, plus the pending tool result that will be appended before
+    // the next turn prefills (issue #790 — previously omitted the tool output,
+    // understating the next prefill's context by toolOutputTokensPerTurn).
+    finalContextTokens: turns.length
+      ? turns[turns.length - 1].totalPromptTokens + decodeTokensPerTurn + toolOutputTokensPerTurn
+      : 0,
     totalWalltimeSeconds: round(cumulativeWalltime),
     walltimeWithoutCachingSeconds: round(noCacheTotal),
     cachingSavesSeconds: round(noCacheTotal - cumulativeWalltime),

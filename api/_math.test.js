@@ -159,6 +159,22 @@ test('implausible inputs flow through to the compute results', () => {
   assert.ok(agent.warnings.some(w => w.code === 'ttft_below_kernel_launch_floor'));
 });
 
+test('agentic: finalContextTokens includes the last turn\u2019s pending tool output (#790)', () => {
+  const r = agentic({
+    numTurns: 3,
+    basePromptTokens: 1000,
+    toolOutputTokensPerTurn: 800,
+    decodeTokensPerTurn: 250
+  });
+  // Next prefill sees: base + every turn's decode + tool output = 1000 + 3*(250+800)
+  assert.equal(r.finalContextTokens, 4150);
+  const last = r.turns[r.turns.length - 1];
+  assert.equal(
+    r.finalContextTokens,
+    last.totalPromptTokens + 250 + 800
+  );
+});
+
 test('memoryLedger: LLaMA-70B FP16 + 32k KV vs RTX 4090 24GB — fail', () => {
   const kv = kvCache({ numLayers: 80, kvHeads: 8, headDim: 128, contextLength: 32768, precisionBytes: 2 });
   const r = memoryLedger({
