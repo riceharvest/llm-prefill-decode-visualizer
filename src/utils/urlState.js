@@ -32,6 +32,24 @@ export function writeParams(updates) {
   const qs = p.toString();
   const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
   window.history.replaceState(null, '', url);
+  // history.replaceState fires no event, so subscribers (e.g. App's permalink
+  // title, issue #727) have no way to notice params that changed outside their
+  // own React state. Announce the rewrite.
+  if (typeof window.dispatchEvent === 'function' && typeof globalThis.CustomEvent === 'function') {
+    window.dispatchEvent(new CustomEvent(URL_PARAMS_EVENT));
+  }
+}
+
+// Event dispatched after every writeParams() rewrite of the query string.
+const URL_PARAMS_EVENT = 'llmpd:url-params';
+
+/**
+ * Subscribe to query-string rewrites made through writeParams().
+ * Returns an unsubscribe function.
+ */
+export function subscribeUrlParams(listener) {
+  window.addEventListener(URL_PARAMS_EVENT, listener);
+  return () => window.removeEventListener(URL_PARAMS_EVENT, listener);
 }
 
 // Build a shareable "try it" URL for a demo: sets the given params and marks

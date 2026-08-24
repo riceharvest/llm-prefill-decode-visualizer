@@ -19,7 +19,8 @@ import { toLocalPreset, hardwareName } from './utils/localMaxxing';
 import {
   describeConfig, permalinkHref, readPermalinkTitle, documentTitleFor
 } from './utils/permalink';
-import { readParam, writeParams } from './utils/urlState';
+import { readParam, writeParams, subscribeUrlParams } from './utils/urlState';
+import { copyText } from './utils/shareClipboard';
 import {
   serializeSettings, parseSettings,
   createHistory, recordChange, undo as historyUndo, redo as historyRedo
@@ -98,6 +99,12 @@ export default function App() {
   const selectedLmxRun = useMemo(() => (
     localMaxxingContext.runs.find(r => r.id === localMaxxingContext.selectedRunId) || null
   ), [localMaxxingContext]);
+  // Per-tab inputs (e.g. ?prompt=) are written to the URL by the visualizers
+  // via history.replaceState, which fires no event — without this subscription
+  // the permalink title below kept citing the prompt length from mount time
+  // (issue #727).
+  const [promptParam, setPromptParam] = useState(() => readParam('prompt'));
+  useEffect(() => subscribeUrlParams(() => setPromptParam(readParam('prompt'))), []);
   const permalinkTitle = useMemo(() => describeConfig({
     presetId: selectedPreset,
     hardwareLabel: selectedPreset.startsWith('lmx:') && selectedLmxRun
@@ -105,9 +112,9 @@ export default function App() {
       : undefined,
     modelId: selectedLmxRun?.model?.hfId || localMaxxingContext.modelId,
     quantization: selectedLmxRun?.engine?.quantization || localMaxxingContext.quantization,
-    promptTokens: Number(readParam('prompt')) || undefined,
+    promptTokens: Number(promptParam) || undefined,
     activeTab
-  }), [selectedPreset, selectedLmxRun, localMaxxingContext.modelId, localMaxxingContext.quantization, activeTab]);
+  }), [selectedPreset, selectedLmxRun, localMaxxingContext.modelId, localMaxxingContext.quantization, activeTab, promptParam]);
 
   // An opened shared link shows its own encoded title; otherwise the derived
   // config title sits under the site brand.
@@ -314,18 +321,13 @@ export default function App() {
   // Issue #106: share a titled permalink — the current query-string state
   // (which already encodes preset, speeds, flags and every tab's sim inputs)
   // plus the auto-generated human-readable `title` param and #s/<slug>.
-  const handleShare = async () => {
-    try {
-      const href = permalinkHref({
-        origin: window.location.origin,
-        pathname: window.location.pathname,
-        search: window.location.search
-      }, permalinkTitle);
-      await navigator.clipboard.writeText(href);
-    } catch {
-      // clipboard may be unavailable; no-op
-    }
-  };
+  // Issue #726: report whether the copy actually succeeded so the header can
+  // skip the ✓ feedback when the clipboard is unavailable or refuses.
+  const handleShare = () => copyText(permalinkHref({
+    origin: window.location.origin,
+    pathname: window.location.pathname,
+    search: window.location.search
+  }, permalinkTitle));
 
   // Issue #108: copy a ready-to-paste <iframe> snippet pointing at /embed
   // with the exact same settings query string as the share link, so what the

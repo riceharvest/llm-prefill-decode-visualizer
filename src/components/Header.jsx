@@ -30,7 +30,10 @@ export default function Header({
   const [copied, setCopied] = useState(false);
 
   const handleShare = async () => {
-    await onShare();
+    // Issue #726: onShare resolves to true only when the copy actually
+    // landed — never show a success ✓ for a failed clipboard write.
+    const ok = await onShare();
+    if (ok !== true) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
