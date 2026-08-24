@@ -19,7 +19,7 @@ import { toLocalPreset, hardwareName } from './utils/localMaxxing';
 import {
   describeConfig, permalinkHref, readPermalinkTitle, documentTitleFor
 } from './utils/permalink';
-import { readParam, writeParams } from './utils/urlState';
+import { readParam, writeParams, consumesSpeedControls } from './utils/urlState';
 import {
   serializeSettings, parseSettings,
   createHistory, recordChange, undo as historyUndo, redo as historyRedo
@@ -362,33 +362,34 @@ export default function App() {
           />
         </CollapsibleSection>
 
-        {/* Speed controls only make sense on tabs that run a simulation */}
-        {TABS.slice(0, 5).includes(activeTab) && (
-          <>
-            {/* Speed & Control Panel */}
-            <SpeedControls
-              prefillSpeed={prefillSpeed}
-              setPrefillSpeed={setPrefillSpeed}
-              decodeSpeed={decodeSpeed}
-              setDecodeSpeed={setDecodeSpeed}
-              simSpeedMultiplier={simSpeedMultiplier}
-              setSimSpeedMultiplier={setSimSpeedMultiplier}
-              isPlaying={isPlaying}
-              setIsPlaying={setIsPlaying}
-              onReset={handleReset}
-            />
+        {/* Speed controls only on tabs whose simulator consumes them (#664):
+            compare and ab ignore prefill/decodeSpeed, so the sliders would be
+            dead controls there. */}
+        {consumesSpeedControls(activeTab) && (
+          <SpeedControls
+            prefillSpeed={prefillSpeed}
+            setPrefillSpeed={setPrefillSpeed}
+            decodeSpeed={decodeSpeed}
+            setDecodeSpeed={setDecodeSpeed}
+            simSpeedMultiplier={simSpeedMultiplier}
+            setSimSpeedMultiplier={setSimSpeedMultiplier}
+            isPlaying={isPlaying}
+            setIsPlaying={setIsPlaying}
+            onReset={handleReset}
+          />
+        )}
 
-            {/* Engine flag modeling: documented llama.cpp/vLLM flag deltas */}
-            <CollapsibleSection id="engine-flags" title="Engine flags" badge="SIMULATED DELTAS">
-              <EngineFlagPicker
-                prefillSpeed={prefillSpeed}
-                decodeSpeed={decodeSpeed}
-                selectedFlags={selectedFlags}
-                onToggleFlag={handleToggleFlag}
-                onApplyFlags={handleApplyFlags}
-              />
-            </CollapsibleSection>
-          </>
+        {/* Engine flag modeling: documented llama.cpp/vLLM flag deltas */}
+        {TABS.slice(0, 5).includes(activeTab) && (
+          <CollapsibleSection id="engine-flags" title="Engine flags" badge="SIMULATED DELTAS">
+            <EngineFlagPicker
+              prefillSpeed={prefillSpeed}
+              decodeSpeed={decodeSpeed}
+              selectedFlags={selectedFlags}
+              onToggleFlag={handleToggleFlag}
+              onApplyFlags={handleApplyFlags}
+            />
+          </CollapsibleSection>
         )}
 
         {/* Settings history + named snapshots (#96) — collapsed by default */}
