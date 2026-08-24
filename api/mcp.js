@@ -10,6 +10,10 @@
  * implementation of every formula.
  */
 
+import { readFileSync } from 'node:fs';
+import { clientKey, rateLimit, RATE_WINDOW_MS } from './_ratelimit.js';
+import { applySchemaHeaders, SCHEMA_VERSION } from './_schema.js';
+
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
 const TOOLS = [
@@ -165,10 +169,46 @@ async function callTool(name, args) {
   };
 }
 
+/** App release version from package.json — the same source /api/version
+ *  reads — so the MCP handshake no longer reports a third, hardcoded
+ *  version beside /api/version and /api/spec (#880). 'unknown' if the
+ *  deploy bundle ships without package.json so metadata never 500s. */
+function appVersion() {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+    );
+    return pkg.version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/** Custom response headers browser fetch() consumers must be able to read
+ *  (CORS-safelisted response headers would otherwise hide them). */
+const EXPOSED_HEADERS = [
+  'X-RateLimit-Limit',
+  'X-RateLimit-Remaining',
+  'X-RateLimit-Reset',
+  'Retry-After'
+];
+
+function exposeAgentHeaders(res) {
+  const expose = new Set(
+    (res.getHeader('Access-Control-Expose-Headers') || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
+  );
+  for (const h of EXPOSED_HEADERS) expose.add(h);
+  res.setHeader('Access-Control-Expose-Headers', [...expose].join(', '));
+}
+
 function json(res, body, status = 200) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
+  exposeAgentHeaders(res);
   res.end(JSON.stringify(body));
 }
 
@@ -178,7 +218,33 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Mcp-Session-Id');
+    applySchemaHeaders(res);
     return res.end();
+  }
+
+  // MCP calls count against the same fixed-window bucket as the agent's own
+  // REST calls (#877): stamp X-RateLimit-Limit/-Remaining/-Reset on every
+  // response so an MCP-only client can pace itself like a REST client.
+  const rl = rateLimit(clientKey(req));
+  res.setHeader('X-RateLimit-Limit', String(rl.limit));
+  res.setHeader('X-RateLimit-Remaining', String(rl.remaining));
+  res.setHeader('X-RateLimit-Reset', String(rl.resetEpochSec));
+  applySchemaHeaders(res);
+
+  if (!rl.allowed) {
+    // Keep the JSON-RPC envelope even on exhaustion — a bare HTTP error body
+    // would break strict clients. Retry-After carries the backoff hint and
+    // `data` mirrors it in-band (#877).
+    res.setHeader('Retry-After', String(rl.retryAfterSec));
+    return json(res, {
+      jsonrpc: '2.0',
+      id: null,
+      error: {
+        code: -32000,
+        message: `Rate limit exceeded: max ${rl.limit} requests per ${RATE_WINDOW_MS / 1000}s per client (per serverless instance).`,
+        data: { retryAfterSeconds: rl.retryAfterSec, reset: rl.resetEpochSec }
+      }
+    }, 429);
   }
 
   if (req.method === 'GET') {
@@ -213,8 +279,14 @@ export default async function handler(req, res) {
         serverInfo: {
           name: 'llm-prefill-decode-visualizer',
           title: 'LLM Prefill & Decode Speed Visualizer',
-          version: '1.0.0'
+          // Same release version /api/version reports (package.json) — not a
+          // third, transport-specific literal (#880).
+          version: appVersion()
         },
+        // Wire schema version so an MCP-only client can run the
+        // compatibility check from CHANGELOG-API.md at handshake time,
+        // before invoking any tool (#880). Mirrors X-Schema-Version.
+        schema_version: SCHEMA_VERSION,
         instructions:
           'Deterministic LLM-inference math API. Use compute_single_turn for TTFT/TPOT questions, ' +
           'compute_agentic_loop for multi-turn walltime, kv_cache_vram or vram_from_hf_id for VRAM fit, ' +
