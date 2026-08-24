@@ -1,6 +1,7 @@
 import { getAllRuns, aggregate } from '../_localmaxxing.js';
 import { kvCache } from '../_math.js';
 import { explainRecommendation } from '../_explain.js';
+import { cacheControlFor } from '../_http_cache.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -8,7 +9,7 @@ function json(res, body, status = 200) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, max-age=600');
+  res.setHeader('Cache-Control', cacheControlFor(status, 600));
   res.end(JSON.stringify(body, null, 2));
 }
 

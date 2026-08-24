@@ -11,8 +11,7 @@ import { ENGINE_FLAGS, applyEngineFlags } from '../../src/utils/engineFlags.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson, withSchemaVersion, applySchemaHeaders } from '../_schema.js';
 import { ApiError, sendProblemFromError } from '../_errors.js';
-import { computeCalcId } from '../_calc_id.js';
-import { normalizeParams } from '../_calc_id.js';
+import { computeCalcId, normalizeParams, computeBatchId } from '../_calc_id.js';
 import { annotate, THEORETICAL } from '../_basis.js';
 import { empiricalDecayExponentCaveat, heuristicFlagDeltasCaveat } from '../_caveats.js';
 
@@ -303,7 +302,16 @@ export function computeBody(params = {}) {
   const rawBatch = params.batch ?? params.variants;
   if (rawBatch !== undefined) {
     const out = runBatch(rawBatch, dryRun);
-    if (out.status === 200) out.body = { id: computeCalcId('compute', params), ...out.body };
+    if (out.status === 200) {
+      // Envelope id is a hash of the PARSED, normalized items (#942) — not
+      // the raw body, whose String()-coercion made all equal-length batches
+      // collide and GET-string vs POST-array spellings disagree.
+      let items = rawBatch;
+      if (typeof items === 'string') {
+        try { items = JSON.parse(items); } catch { /* runBatch already rejected unparseable strings */ }
+      }
+      out.body = { id: Array.isArray(items) ? computeBatchId(items) : computeCalcId('compute', params), ...out.body };
+    }
     return out;
   }
 

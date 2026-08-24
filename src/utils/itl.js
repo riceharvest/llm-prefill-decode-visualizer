@@ -143,3 +143,18 @@ export function tokensEmittedBy(schedule, elapsedMs) {
   }
   return lo;
 }
+
+// Output-token ceiling for the single-turn view (#938). drawItlSamples +
+// summarizeItl are O(outputTokens) and run synchronously inside a render
+// useMemo; the slider caps at 4096 but the number twin and ?output= URL param
+// accepted unbounded values — 10,000,000 tokens froze the tab ~8s pre-paint.
+// clampItlTokenCount bounds every entry path (URL, typed input, presets) to
+// the same range the UI exposes. Non-finite / non-positive values fall back
+// to `fallback` so garbage params can't produce NaN token counts either.
+export const MAX_ITL_TOKENS = 4096;
+
+export function clampItlTokenCount(v, fallback = 512) {
+  const n = Math.floor(Number(v));
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(n, MAX_ITL_TOKENS);
+}

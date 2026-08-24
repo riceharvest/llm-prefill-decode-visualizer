@@ -11,7 +11,7 @@ import { readParamNum, readParam, readParamBool, writeParams } from '../utils/ur
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
-import { drawItlSamples, summarizeItl, histogramItl, cumulativeItlSchedule, tokensEmittedBy } from '../utils/itl';
+import { drawItlSamples, summarizeItl, histogramItl, cumulativeItlSchedule, tokensEmittedBy, clampItlTokenCount } from '../utils/itl';
 import {
   DEFAULT_HALF_SPEED_CONTEXT,
   HALF_SPEED_CONTEXT_PRESETS,
@@ -50,7 +50,7 @@ export default function SingleTurnVisualizer({
   sloBudgets
 }) {
   const [promptTokens, setPromptTokens] = useState(() => readParamNum('prompt', 2048));
-  const [outputTokens, setOutputTokens] = useState(() => readParamNum('output', 512));
+  const [outputTokens, setOutputTokens] = useState(() => clampItlTokenCount(readParamNum('output', 512)));
   // Speculative decoding: draft model proposes k tokens per step, target verifies.
   // Effective tok/s ≈ decodeSpeed × (k+1) × acceptance / (1 + k × acceptance × draftCost)
   // where draftCost is draft-model TPOT as a fraction of target TPOT (~0.15-0.3 typical).
@@ -1040,7 +1040,9 @@ export default function SingleTurnVisualizer({
                 value={outputTokens}
                 aria-label={t('singleTurn.outputValueAria')}
                 onChange={(e) => {
-                  setOutputTokens(Number(e.target.value));
+                  // #938: same ceiling as the slider — unbounded typed/URL
+                  // values froze the tab in O(outputTokens) ITL sampling.
+                  setOutputTokens(clampItlTokenCount(Number(e.target.value)));
                   handleReset();
                 }}
                 style={{ width: '5rem' }}
