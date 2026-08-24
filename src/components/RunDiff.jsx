@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { GitCompare } from 'lucide-react';
 import { readParam, writeParams } from '../utils/urlState';
+import {
+  RUN_ID_HINT,
+  formatSecondsAuto,
+  runMetaLine,
+  diffStatusState,
+  buildDiffTableRows
+} from '../utils/runDiffView';
 
 // Minimal run-diff panel: two LocalMaxxing run ids in, per-metric deltas,
 // ratios and the API's plain-language summary out. Data comes from
@@ -11,10 +18,11 @@ export default function RunDiff() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [copyNote, setCopyNote] = useState('');
 
   const runDiff = async () => {
     if (!runA.trim() || !runB.trim()) {
-      setError('Enter two run ids (find them via the LocalMaxxing picker or /api/localmaxxing).');
+      setError(RUN_ID_HINT);
       return;
     }
     setLoading(true);
@@ -33,25 +41,42 @@ export default function RunDiff() {
     }
   };
 
-  const rowStyle = { display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '0.82rem' };
-  const rowDivider = { paddingTop: '8px', borderTop: '1px solid var(--border)' };
+  // #388: export/copy the exact /api/diff payload already in memory —
+  // no second network call needed.
+  const copyJson = async () => {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(result, null, 2));
+      setCopyNote('Copied /api/diff JSON.');
+    } catch {
+      setCopyNote('Copy failed — use the /api/diff link below.');
+    }
+  };
+
   const numStyle = { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 };
   const winColor = w => (w === 'B' ? 'var(--decode)' : w === 'A' ? 'var(--prefill)' : 'var(--text-muted)');
+  const cellStyle = { padding: '6px 8px', borderBottom: '1px solid var(--border)', textAlign: 'right', whiteSpace: 'nowrap' };
+  const labelCellStyle = { ...cellStyle, textAlign: 'left', color: 'var(--text-muted)' };
 
-  const metricRows = result ? [
-    ['Prefill (tok/s)', result.diff.metrics.prefill, 0],
-    ['Decode (tok/s)', result.diff.metrics.decode, 0],
-    ['TTFT @ 2k prompt (s)', result.diff.metrics.ttft, 2],
-    ['TPOT (s)', result.diff.metrics.tpot, 3],
-    ['Walltime @ 2k/512 (s)', result.diff.metrics.walltime, 2]
-  ] : [];
+  const fmtCell = (row, value) =>
+    row.kind === 'time' ? formatSecondsAuto(value) : (value?.toLocaleString?.() ?? '—');
+
+  const status = diffStatusState({ loading, result, error });
+  const rows = buildDiffTableRows(result);
+  const metaA = result ? runMetaLine('A', result.runA) : null;
+  const metaB = result ? runMetaLine('B', result.runB) : null;
 
   return (
-    <section className="panel" aria-label="Run diff">
+    <section className="panel" aria-label="Run diff" data-state={status.state}>
       <h2 className="panel-title" style={{ marginBottom: '14px' }} tabIndex={-1} data-panel-heading>
         <GitCompare size={16} />
         <span>Run Diff (measured A vs B)</span>
       </h2>
+
+      {/* #390: machine-readable async state for SR users and DOM-polling agents */}
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {status.announcement}
+      </div>
 
       <div className="panel-inset" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '14px' }}>
         <input
@@ -83,31 +108,53 @@ export default function RunDiff() {
 
       {result && (
         <>
+          {/* #391: per-side identity so the reader can verify the comparison */}
+          {(metaA || metaB) && (
+            <div className="panel-inset" style={{ marginBottom: '14px', fontSize: '0.75rem', lineHeight: 1.5, fontFamily: 'var(--font-mono)' }}>
+              {metaA && <div>{metaA}</div>}
+              {metaB && <div>{metaB}</div>}
+            </div>
+          )}
+
           <div className="panel-inset" style={{ marginBottom: '14px', fontSize: '0.82rem', lineHeight: 1.5 }}>
             {result.diff.summary}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--text-muted)' }}>
-            {metricRows.map(([label, m, digits]) => (
-              <div key={label} style={{ ...rowStyle, ...rowDivider }}>
-                <span>{label}</span>
-                <span style={{ display: 'flex', gap: '12px', alignItems: 'baseline' }}>
-                  <span style={{ ...numStyle, color: winColor(m.winner) }}>
-                    {m.a?.toLocaleString?.() ?? '—'} → {m.b?.toLocaleString?.() ?? '—'}
-                  </span>
-                  {m.deltaPct !== null && (
-                    <span style={{ ...numStyle, fontSize: '0.72rem', color: winColor(m.winner) }}>
-                      {m.deltaPct > 0 ? '+' : ''}{(m.deltaPct * 100).toFixed(digits)}%
-                    </span>
-                  )}
-                  {m.ratio !== null && m.winner !== 'tie' && (
-                    <span style={{ ...numStyle, fontSize: '0.72rem', color: winColor(m.winner) }}>
-                      {m.ratio.toFixed(2)}×
-                    </span>
-                  )}
-                </span>
-              </div>
-            ))}
+          {/* #388: real table semantics + raw values in data-* attributes */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }} data-testid="diff-metrics-table">
+            <caption className="visually-hidden">Per-metric comparison of run A vs run B</caption>
+            <thead>
+              <tr>
+                <th scope="col" style={labelCellStyle}>Metric</th>
+                <th scope="col" style={cellStyle}>A</th>
+                <th scope="col" style={cellStyle}>B</th>
+                <th scope="col" style={cellStyle}>Δ (B−A)</th>
+                <th scope="col" style={cellStyle}>Ratio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(row => (
+                <tr key={row.key} data-metric={row.key} data-winner={row.winner ?? ''}>
+                  <th scope="row" style={labelCellStyle}>{row.label}</th>
+                  <td style={{ ...cellStyle, ...numStyle }} data-a={row.a ?? ''}>{fmtCell(row, row.a)}</td>
+                  <td style={{ ...cellStyle, ...numStyle }} data-b={row.b ?? ''}>{fmtCell(row, row.b)}</td>
+                  <td style={{ ...cellStyle, ...numStyle, color: winColor(row.winner) }} data-delta={row.delta ?? ''}
+                      title={row.deltaPct != null ? `${row.deltaPct > 0 ? '+' : ''}${(row.deltaPct * 100).toFixed(2)}%` : undefined}>
+                    {row.kind === 'time'
+                      ? (row.delta == null ? '—' : `${row.delta > 0 ? '+' : ''}${formatSecondsAuto(row.delta)}`)
+                      : (row.delta?.toLocaleString?.() ?? '—')}
+                  </td>
+                  <td style={{ ...cellStyle, ...numStyle, color: winColor(row.winner) }} data-ratio={row.ratio ?? ''}>
+                    {row.ratio != null && row.winner !== 'tie' ? `${row.ratio.toFixed(2)}×` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' }}>
+            <button className="btn btn-icon" onClick={copyJson}>Copy JSON</button>
+            {copyNote && <span className="hint-text">{copyNote}</span>}
           </div>
 
           <p className="hint-text" style={{ marginTop: '10px' }}>
