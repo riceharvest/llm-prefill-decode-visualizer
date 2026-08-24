@@ -10,6 +10,8 @@ function mockRes() {
     headers: {},
     body: null,
     setHeader(k, v) { this.headers[k] = v; },
+    getHeader(k) { return this.headers[String(k).toLowerCase()]; },
+    hasHeader(k) { return String(k).toLowerCase() in this.headers; },
     status(c) { this.statusCode = c; return this; },
     end(b) { this.body = b ? JSON.parse(b) : null; }
   };
