@@ -16,7 +16,7 @@ import ChartDataTable from './ChartDataTable';
 import Metric from './Metric';
 import Analogy from './Analogy';
 import SloBadge from './SloBadge';
-import { evaluateAgenticSlo, evaluateMetric } from '../utils/slo.js';
+import { evaluateAgenticSlo } from '../utils/slo.js';
 
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
@@ -226,8 +226,10 @@ export default function AgenticVisualizer({
     if (!checks.length) return null;
     return { pass: checks.every(r => r.pass), marginPct: Math.min(...checks.map(r => r.marginPct)) };
   };
-  // Whole-loop walltime vs the walltime budget (header badge).
-  const evaluateAgenticSloWalltime = evaluateMetric(totalAgentWalltime, sloBudgets?.walltimeSec);
+  // Whole-loop walltime vs the walltime budget (header badge). #682: this is
+  // the same verdict evaluateAgenticSlo produces, so the badge and the banner
+  // can never disagree about the loop-total scope.
+  const evaluateAgenticSloWalltime = agenticSlo.loopTotal;
 
   // Markdown walkthrough export (download + clipboard)
   const [mdCopied, setMdCopied] = useState(false);
@@ -762,20 +764,53 @@ export default function AgenticVisualizer({
             )}
           </div>
         )}
-        {sloEnabled && agenticSlo.failingTurns.length === 0 && (
-          <div
-            className="panel-inset"
-            style={{
-              borderColor: 'var(--decode-border)',
-              background: 'var(--decode-dim)',
-              marginBottom: '18px',
-              fontSize: '0.8rem',
-              color: 'var(--decode)'
-            }}
-          >
-            {t('slo.agenticAllPass')}
-          </div>
-        )}
+        {/* #682: the all-clear banner consults BOTH scopes — per-turn checks
+            AND the whole-loop walltime. A loop whose turns all pass but whose
+            total walltime overruns the budget gets a scoped warning instead of
+            a false "everything passes". */}
+        {sloEnabled && agenticSlo.failingTurns.length === 0 && (() => {
+          const loopOver = agenticSlo.loopTotal && !agenticSlo.loopTotal.pass;
+          if (!loopOver) {
+            return (
+              <div
+                className="panel-inset"
+                style={{
+                  borderColor: 'var(--decode-border)',
+                  background: 'var(--decode-dim)',
+                  marginBottom: '18px',
+                  fontSize: '0.8rem',
+                  color: 'var(--decode)'
+                }}
+              >
+                {t('slo.agenticAllPass')}
+              </div>
+            );
+          }
+          return (
+            <div
+              className="panel-inset"
+              role="alert"
+              aria-label={t('slo.agenticTurnsPassLoopOver', {
+                value: formatTime(agenticSlo.loopTotal.value),
+                budget: formatTime(agenticSlo.loopTotal.budget)
+              })}
+              style={{
+                borderColor: 'var(--danger)',
+                background: 'rgba(248, 113, 113, 0.08)',
+                marginBottom: '18px',
+                fontSize: '0.8rem',
+                color: 'var(--text-muted)'
+              }}
+            >
+              <strong style={{ color: 'var(--danger)' }}>
+                {t('slo.agenticTurnsPassLoopOver', {
+                  value: formatTime(agenticSlo.loopTotal.value),
+                  budget: formatTime(agenticSlo.loopTotal.budget)
+                })}
+              </strong>
+            </div>
+          );
+        })()}
 
         {/* Live Side-by-Side Prefill vs Decode Stream */}
         <div className="panel-inset" style={{ marginBottom: '20px' }}>
