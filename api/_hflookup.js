@@ -203,9 +203,35 @@ export function lookupHfArch(hfIdRaw) {
  */
 export function guessArchFromName(hfIdRaw) {
   const name = String(hfIdRaw || '').split('/').pop() || '';
-  const m = name.toLowerCase().match(/(\d+(?:\.\d+)?)\s*b(?![a-z0-9])/);
-  if (!m) return null;
-  const paramsB = Number(m[1]);
+  const lower = name.toLowerCase();
+
+  // Mixture-of-Experts ids carry size tags that are NOT the total parameter
+  // count (#1073): "8x7b" is experts×size-per-expert, and an "a2.7b" tag is
+  // the ACTIVE parameter count. Grabbing the last plain digit-tag under-counted
+  // Mixtral-8x7B as 7B (6.7x low) and Qwen1.5-MoE-A2.7B as its active 2.7B.
+  const moe = lower.match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*b(?![a-z0-9])/);
+  let m;
+  let paramsB;
+  const notes = [];
+  if (moe) {
+    // Experts×size product: a coarse upper-bound estimate of the total.
+    const experts = Number(moe[1]);
+    const perExpert = Number(moe[2]);
+    if (!Number.isFinite(experts) || !Number.isFinite(perExpert) || experts <= 0 || perExpert <= 0) return null;
+    paramsB = experts * perExpert;
+    m = moe;
+    notes.push(
+      `'${name}' looks like a Mixture-of-Experts id (${experts} experts × ${perExpert}B); total estimated as the experts×size product ~${paramsB}B — the true total can be lower, so treat weights AND KV as upper-bound estimates.`
+    );
+  } else {
+    // Strip active-parameter tags before scanning for the total so ids like
+    // "...-A2.7B" don't report their ACTIVE count as the total; if no other
+    // size tag exists we fall through to null (fail loudly, unchanged contract).
+    m = lower.replace(/(^|[^a-z0-9])a(\d+(?:\.\d+)?)b(?![a-z0-9])/g, '$1')
+      .match(/(\d+(?:\.\d+)?)\s*b(?![a-z0-9])/);
+    if (!m) return null;
+    paramsB = Number(m[1]);
+  }
   if (!Number.isFinite(paramsB) || paramsB <= 0) return null;
 
   let numLayers = 80;
@@ -221,6 +247,7 @@ export function guessArchFromName(hfIdRaw) {
     weightsSource: `parameter count parsed from the model-name tag '${m[0]}' (~${paramsB}B)`,
     weightsSourceKind: 'params×quant',
     notes: [
+      ...notes,
       `huggingface.co could not be reached/used — architecture guessed from the '${m[0]}' name tag: ${numLayers} layers, 8 KV heads × 128 dim (dense-bucket heuristic). Treat weights AND KV as rough estimates.`,
       'KV-cache math assumes GQA with 8 KV heads and a 128 head dim; models with different attention shapes will drift.'
     ]

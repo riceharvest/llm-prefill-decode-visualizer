@@ -91,3 +91,22 @@ test('guessArchFromName returns null without a parseable size anchor', () => {
   assert.equal(guessArchFromName('org/v2-final'), null);
   assert.equal(guessArchFromName(null), null);
 });
+
+test('guessArchFromName treats experts×size tags as the MoE total (#1073)', () => {
+  // Mixtral-8x7B used to parse as 7B (the last plain tag) — 6.7x low.
+  const mixtral = guessArchFromName('mistralai/Mixtral-8x7B-Instruct-v0.1');
+  assert.equal(mixtral.paramsTotal, 56_000_000_000);
+  assert.equal(mixtral.architecture.numLayers, 80);
+  assert.ok(mixtral.notes.some((n) => n.includes('Mixture-of-Experts')));
+  const big = guessArchFromName('org/Foo-8x22B');
+  assert.equal(big.paramsTotal, 176_000_000_000);
+});
+
+test('guessArchFromName never reports an active-parameter tag as total (#1073)', () => {
+  // Active-only id (no total tag): fail loudly instead of inventing one.
+  assert.equal(guessArchFromName('Qwen/Qwen1.5-MoE-A2.7B'), null);
+  // Total + active id: the TOTAL tag wins, active tag is ignored.
+  const qwen3 = guessArchFromName('Qwen/Qwen3-30B-A3B');
+  assert.equal(qwen3.paramsTotal, 30_000_000_000);
+  assert.equal(qwen3.architecture.numLayers, 64);
+});
