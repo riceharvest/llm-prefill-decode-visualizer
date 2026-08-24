@@ -12,7 +12,14 @@ async function callHandler(url, headers = {}) {
     statusCode: 0,
     headers: {},
     setHeader(k, v) { this.headers[k] = v; },
-    getHeader(k) { return this.headers[String(k).toLowerCase()]; },
+    getHeader(k) {
+      const want = String(k).toLowerCase();
+      for (const [hk, hv] of Object.entries(this.headers)) {
+        if (hk.toLowerCase() === want) return hv;
+      }
+      return undefined;
+    },
+    hasHeader(k) { return this.getHeader(k) !== undefined; },
     end(body) {
       captured.status = this.statusCode;
       captured.body = body;
@@ -52,10 +59,35 @@ test('no X-Request-Id is set when the client sends none', async () => {
   assert.ok(!('X-Request-Id' in headers), 'must not invent a request id');
 });
 
-test('overlong request ids are truncated defensively', async () => {
+test('overlong request ids are truncated defensively — and flagged', async () => {
   const huge = 'x'.repeat(1000);
   const { headers } = await callHandler('/api/nope-does-not-exist', {
     'x-request-id': huge
   });
   assert.equal(headers['X-Request-Id'], 'x'.repeat(200));
+  assert.equal(headers['X-Request-Id-Truncated'], 'true',
+    'truncation must be signalled, not silent (issue #949)');
+});
+
+test('ids at or under the 200-char cap are not flagged as truncated', async () => {
+  const exact = 'y'.repeat(200);
+  const { headers } = await callHandler('/api/nope-does-not-exist', {
+    'x-request-id': exact
+  });
+  assert.equal(headers['X-Request-Id'], exact);
+  assert.ok(!('X-Request-Id-Truncated' in headers));
+});
+
+test('duplicate X-Request-Id headers echo the first value deterministically', async () => {
+  const { headers } = await callHandler('/api/nope-does-not-exist', {
+    'x-request-id': ['first-id', 'second-id']
+  });
+  assert.equal(headers['X-Request-Id'], 'first-id');
+});
+
+test('surrounding whitespace is trimmed before echoing', async () => {
+  const { headers } = await callHandler('/api/nope-does-not-exist', {
+    'x-request-id': '  padded-id  '
+  });
+  assert.equal(headers['X-Request-Id'], 'padded-id');
 });

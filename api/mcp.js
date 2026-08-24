@@ -10,6 +10,11 @@
  * implementation of every formula.
  */
 
+// Shared X-Request-Id echo (issue #946): /api/mcp is its own serverless
+// function in production, so it never flows through [...path].js — apply the
+// identical correlation contract here, on every response path.
+import { applyRequestIdEcho } from './_request_id.js';
+
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
 const TOOLS = [
@@ -173,6 +178,8 @@ function json(res, body, status = 200) {
 }
 
 export default async function handler(req, res) {
+  applyRequestIdEcho(req, res);
+
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     res.setHeader('Access-Control-Allow-Origin', '*');
