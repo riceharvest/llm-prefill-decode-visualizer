@@ -234,6 +234,38 @@ Branch on the stable `code`, never on `title`/`detail` prose:
 
 The machine-readable registry also lives in `/api/spec` (`x-error-codes` + the `Problem` schema) for generated SDKs. Batch items in `/api/compute` carry per-item `code` alongside the human-readable `error` string.
 
+### Global speed controls (UI sliders) vs /api/compute params
+
+The interactive page exposes two global speed inputs — PREFILL tok/s and DECODE tok/s — and their value means something different per tab. When reproducing UI numbers through the API, use the matching model or the results will silently disagree:
+
+- **Single-turn** (`model=singleTurn`): prefill = prompt-ingestion rate (`ttftSeconds = promptTokens / prefillSpeed`), decode = pure stream rate (`tpotMs = 1000 / decodeSpeed`).
+- **Agentic** (`model=agentic`): with prefix caching enabled (the default), turns ≥ 2 prefill only the new tool output (`toolOutputTokensPerTurn`) — the growing history is served from cache — so the same prefill speed applies to a shrinking token count each turn.
+- **Batching UI**: decode acts as a per-engine-step time floor, not a delivered rate — step duration is `max(1000/decodeSpeed, chunkTokens/prefillSpeed)`, so observed per-request inter-token latency spikes above `1000/decodeSpeed` whenever a prefill chunk shares the step.
+- **Batched API** (`model=batched`): models sharing statistically instead — per-user decode decays as `decodeSpeed × batchSize^-0.25`, ignoring scheduling entirely — so batching-tab step timings and this endpoint's numbers intentionally differ for identical inputs.
+
+There is no endpoint that reads or writes the live UI slider state; always pass explicit `prefillSpeed`/`decodeSpeed` values per call.
+
+### Building share links programmatically
+
+The UI's Share button emits `<origin><pathname>?<current query state>&title=<text>#s/<slug>`. You can construct an equivalent link without executing app JavaScript:
+
+- Start from any deep link's query string (e.g. `?tab=agentic&preset=rtx4090_exl2&prompt=8192`) and append `title=<free text>` (URL-encoded). `title` is cosmetic metadata only: it sets the document title of the opened link, never the simulated state.
+- Append the fragment `#s/<slug>`, where `slug` derives from the title: lowercase; `&` becomes `and`; every run of characters outside `[a-z0-9]` collapses to a single `-`; leading/trailing dashes are trimmed; the result is capped at 80 characters on a word boundary. Example: title `"Qwen3 32B Q4 on RTX 4090 & 8K agentic loop"` → `#s/qwen3-32b-q4-on-rtx-4090-and-8k-agentic-loop`.
+- The app routes purely through query params; the `#s/<slug>` slug is a readable identity that is never parsed back into state, so a mismatch between it and `title` is harmless.
+
+### Edge challenges (platform-level 403)
+
+Requests are normally answered under the contracts above, but the site sits behind Vercel's firewall, which can serve a platform-level challenge instead: HTTP **403** with an **HTML** body (never `application/problem+json`), typically stamped with an `x-vercel-mitigated: challenge` header. This is triggered by traffic-shape heuristics (e.g. sustained bursts from one IP), not by anything invalid in your request.
+
+If you receive one:
+
+- Do **not** burst-retry. Challenge windows typically last on the order of ~10 minutes and rapid retries extend the lockout. Drop to a low request rate (well under the 120/min budget), wait, and probe sparingly (e.g. `GET /api/health`) until JSON responses resume.
+- These responses come from the edge before the application runs: no `Retry-After`, no problem+json body, and the RFC 9457 error contract does not apply.
+- User-Agent spoofing does not help: exemption is decided against Vercel's verified-bot directory, not the UA header.
+- Vercel automatically allows verified bots (search engines, webhook providers) and requests originating from the site owner's own account (functions, cron jobs). General-purpose automated clients are explicitly **not** exempt — treat long crawls as at-risk even at documented rates.
+
+Site operators have documented mitigations (see Vercel's firewall docs): a Custom Rule with action `bypass` scoped to `/api/*` plus `/llms.txt` keeps agent traffic challenge-free while browser traffic stays protected; System Bypass Rules exempt specific IPs/CIDRs; Attack Mode is intended for active attacks rather than permanent use and can be toggled programmatically via the Vercel REST API (`POST /v1/security/attack-mode`).
+
 ## App tabs (interactive page)
 
 The human-facing UI is this same site. Deep links carry state via URL params: `?tab=<id>`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
