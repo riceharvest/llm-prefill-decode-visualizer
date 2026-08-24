@@ -68,6 +68,22 @@ test('rankGroups sorts by confidence when asked', () => {
   assert.ok(byConfidence.every(r => r.confidence && typeof r.confidence.score === 'number'));
 });
 
+test('n=1 group: no null-arithmetic artifacts (relativeIqr/outlierDensity null, sample-only score)', () => {
+  const c = confidenceFor([run('a', 'm', 778)]);
+  assert.equal(c.sampleSize, 1);
+  assert.equal(c.relativeIqr, null);
+  assert.equal(c.outlierDensity, null);
+  // sample-only score: round(100 * WEIGHTS.sample * clamp01(1/10)) = 4 — must not get the
+  // fake +40 spread credit nor the -20 all-outlier penalty of the old bug
+  assert.equal(c.score, 4);
+});
+
+test('n=1 groups rank below legitimate multi-run groups on ?by=confidence', () => {
+  const single = confidenceFor([run('a', 'm', 778)]);
+  const dense = confidenceFor(Array.from({ length: 5 }, (_, i) => run('a', 'm', 100 + i)));
+  assert.ok(single.score < dense.score);
+});
+
 async function callBestHandler(query) {
   const captured = {};
   const res = {

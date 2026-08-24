@@ -255,6 +255,22 @@ function round3(x) {
 export function confidenceFor(group) {
   const decodes = group.map(r => r.decodeTokPerSec).sort((a, b) => a - b);
   const dq = quartiles(decodes);
+
+  // Fewer than two runs has no meaningful spread: quartiles() returns
+  // q1/q3 = null for n<=1, and the arithmetic below would coerce the IQR to 0
+  // (fake "perfectly tight" spread) while collapsing the outlier fences to
+  // [0, 0] (the single run then counts as a 100% outlier). Same convention as
+  // bootstrapMedianCI() below and _crosscheck.js confidence(): return nulls
+  // instead of artifacts and score on sample size alone.
+  if (dq.q1 == null || dq.q3 == null) {
+    return {
+      score: Math.round(100 * WEIGHTS.sample * clamp01(decodes.length / SAMPLE_SATURATION)),
+      sampleSize: decodes.length,
+      relativeIqr: null,
+      outlierDensity: null
+    };
+  }
+
   const iqr = dq.q3 - dq.q1;
   const relIqr = dq.median > 0 ? iqr / dq.median : Infinity;
   const lo = dq.q1 - 1.5 * iqr;
