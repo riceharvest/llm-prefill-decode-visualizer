@@ -184,8 +184,11 @@ export default async function handler(req, res) {
           tpotMs,
           perUserDecodeTokPerSec: Math.round(perUserDecode * 10) / 10,
           aggregateDecodeTokPerSec: Math.round(perUserDecode * b * 10) / 10,
-          ttftIqr: [g.prefill.q1, g.prefill.q3].map(v => v != null && workload.promptTokens ? Math.round((workload.promptTokens / v) * 1e4) / 1e4 : null),
-          tpotIqrMs: [g.decode.q1, g.decode.q3].map(v => v != null ? Math.round((1000 / (v * Math.pow(b, -0.25))) * 100) / 100 : null),
+          // (#763) IQR bounds are ordered ascending [p25, p75] as named.
+          // Speeds' q3 (fast) maps to the 25th-percentile time and q1 (slow)
+          // to the 75th — so times come out [q3→lo, q1→hi], never descending.
+          ttftIqr: [g.prefill.q3, g.prefill.q1].map(v => v != null && workload.promptTokens ? Math.round((workload.promptTokens / v) * 1e4) / 1e4 : null),
+          tpotIqrMs: [g.decode.q3, g.decode.q1].map(v => v != null ? Math.round((1000 / (v * Math.pow(b, -0.25))) * 100) / 100 : null),
           measuredSingleStream: true,
           note: b > 1 ? 'measured speeds are single-stream; per-user decode decayed ~B^-0.25 for concurrency' : undefined
         },
