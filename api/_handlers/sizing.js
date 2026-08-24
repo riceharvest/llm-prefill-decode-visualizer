@@ -64,6 +64,11 @@ function confidenceLevel(runs) {
  * ?maxTtftSeconds=1          SLO cap on expected TTFT
  * ?maxTpotMs=40              SLO cap on expected TPOT
  * ?maxVramGb=48              budget cap: rig memory must fit under this
+ *
+ * Units (#738 #866): every memory figure — maxVramGb, memoryGb and the whole
+ * vramFit block — is GiB (binary, 1024-based), not decimal GB. The response
+ * states this in its top-level `units` block.
+ *
  * ?numLayers=&kvHeads=&headDim=   explicit KV arch (skips the estimate)
  * ?quant=q4_k_m&hwClass=…    same filters as /api/best
  * ?limit=N                   default 5, max 25
@@ -220,7 +225,8 @@ export default async function handler(req, res) {
       .slice(0, limit);
 
     return json(res, {
-      description: 'Ranked hardware sizing for a workload spec. VRAM fit = weights + KV cache at target context × concurrency + overhead. Expected TTFT/TPOT come from aggregated benchmark medians (single-stream); confidence reflects sample count.',
+      description: 'Ranked hardware sizing for a workload spec. VRAM fit = weights + KV cache at target context × concurrency + overhead. Expected TTFT/TPOT come from aggregated benchmark medians (single-stream); confidence reflects sample count. All memory figures (memoryGb/maxVramGb and the vramFit block) are GiB — binary, 1024-based, not decimal GB (#738 #866).',
+      units: { memory: 'GiB', note: 'all memory figures are GiB — binary, 1024-based, NOT decimal GB' },
       workload,
       slo,
       matchedRuns: runs.length,
@@ -228,6 +234,7 @@ export default async function handler(req, res) {
         kvArchitecture: explicitArch || 'estimated from parameter count (exposed per recommendation in vramFit)',
         precisionBytes: 2,
         overheadGb: 1.5,
+        memoryUnits: 'GiB — every memory figure (overheadGb, vramFit) is binary GiB, not decimal GB',
         quantBitsFallback: 'unparseable quantization labels assume 4.25 bits-per-weight'
       },
       recommendations

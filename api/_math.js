@@ -191,6 +191,9 @@ export function kvCache({ numLayers = 80, kvHeads = 8, headDim = 128, contextLen
   return {
     inputs: { numLayers, kvHeads, headDim, contextLength, precisionBytes, batchSize },
     bytesPerToken,
+    // Binary (1024-based) units under historically SI-looking names — declared
+    // explicitly so agents don't convert totalGb with ×1e9 (#738 #866).
+    units: { memory: 'GiB', kbPerToken: 'KiB', totalMb: 'MiB', note: 'all values are binary (÷1024ⁿ), NOT decimal KB/MB/GB' },
     kbPerToken: round(bytesPerToken / 1024),
     totalGb: round(totalBytes / (1024 ** 3)),
     totalMb: round(totalBytes / (1024 ** 2)),

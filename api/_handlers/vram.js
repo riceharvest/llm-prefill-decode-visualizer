@@ -14,6 +14,11 @@
 //   /api/vram?hfId=...&context=...&vramGb=24            → fits + max context
 //   /api/vram?hfId=...&numTurns=40&tokensPerTurn=1200   → per-turn KV growth
 //                                                          with overflow turns
+//
+// Units (#738 #866): every memory figure in the response is GiB (binary,
+// 1024-based), never decimal GB. The response states this explicitly in its
+// top-level `units` block so agents budgeting against spec-sheet decimal-GB
+// numbers can't mis-read it.
 
 import { resolveModel } from '../_hfconfig.js';
 import { resolveQuant } from '../_quant.js';
@@ -55,8 +60,9 @@ async function estimate(params) {
       body: {
         error: 'missing hfId — pass ?hfId=org/model (e.g. meta-llama/Llama-3.1-8B-Instruct)',
         params: ['hfId (required)', 'context (tokens, default 32768)', 'quant (default q4_k_m)',
-          'batchSize (default 1)', 'kvPrecisionBytes (default 2 = FP16)', 'vramGb (optional budget)',
+          'batchSize (default 1)', 'kvPrecisionBytes (default 2 = FP16)', 'vramGb (optional budget, GiB)',
           'numTurns + tokensPerTurn (optional per-turn KV projection)'],
+        units: 'all memory figures are GiB (binary, 1024-based), not decimal GB',
         examples: [
           '/api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m',
           '/api/vram?hfId=Qwen/Qwen2.5-32B&context=131072&quant=q4_k_m&vramGb=24'
@@ -176,6 +182,11 @@ async function estimate(params) {
   return {
     status: 200,
     body: {
+      units: {
+        memory: 'GiB',
+        note: 'all memory figures (weights, KV cache, totals, headroom, vramGb budgets) are GiB — binary, 1024-based, NOT decimal GB',
+        kvRate: 'bytes/token'
+      },
       inputs: {
         hfId: resolved.hfId, context, quant: params.quant ?? 'q4_k_m',
         resolvedQuant: quant.key, quantAssumed: quant.assumed,
