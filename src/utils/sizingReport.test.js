@@ -192,3 +192,49 @@ test('handles missing optional data gracefully', () => {
   assert.doesNotMatch(md, /## Total cost of ownership/);
   assert.match(md, /### Groq LPU/);
 });
+
+test('#1012: markdown renders amortized capex + price source that JSON/YAML carry', () => {
+  const report = buildReport();
+  const md = buildSizingReportMarkdown(report);
+
+  // tco.monthlyCapexUsd — the break-even math is unreproducible from MD without it.
+  assert.match(md, /\| Capex \(amortized\) \| \$104\.17\/mo \|/);
+  const capexAt = md.indexOf('| Capex (amortized) |');
+  const breakevenAt = md.indexOf('| Break-even volume |');
+  assert.ok(capexAt !== -1 && breakevenAt !== -1 && capexAt < breakevenAt,
+    'capex row should precede the break-even row it feeds');
+
+  // systems[].cost.priceSourceUrl
+  const withSource = buildSizingReport({
+    generatedAt: '2026-08-22T12:00:00.000Z',
+    deepLink: '',
+    scenario: baseScenario,
+    systemA: { ...systemA, sourceUrl: 'https://example.test/run/abc123' },
+    systemB: null,
+    tco: null
+  });
+  const srcMd = buildSizingReportMarkdown(withSource);
+  assert.match(srcMd, /\| Price source \| https:\/\/example\.test\/run\/abc123 \|/);
+  // Absent source stays absent (no empty row).
+  const plainMd = buildSizingReportMarkdown(buildReport());
+  assert.ok(!plainMd.includes('| Price source |'));
+});
+
+test('#1012: format parity — canonical fields present in JSON are rendered in MD', () => {
+  const report = buildReport();
+  const parsed = JSON.parse(buildSizingReportJson(report));
+  const md = buildSizingReportMarkdown(report);
+
+  assert.notEqual(parsed.tco.monthlyCapexUsd, undefined);
+  assert.ok(md.includes('Capex (amortized)'), 'monthlyCapexUsd missing from MD');
+
+  const withSource = { ...systemA, sourceUrl: 'https://example.test/src' };
+  const rep2 = buildSizingReport({
+    generatedAt: '2026-08-22T12:00:00.000Z', deepLink: '', scenario: baseScenario,
+    systemA: withSource, systemB: null, tco: null
+  });
+  const parsed2 = JSON.parse(buildSizingReportJson(rep2));
+  const md2 = buildSizingReportMarkdown(rep2);
+  assert.notEqual(parsed2.systems[0].cost.priceSourceUrl, undefined);
+  assert.ok(md2.includes('https://example.test/src'), 'priceSourceUrl missing from MD');
+});

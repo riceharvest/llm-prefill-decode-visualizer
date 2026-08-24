@@ -260,6 +260,7 @@ export function buildSizingReportMarkdown(report) {
       const range = sys.cost.streetPriceRangeUsd ? ` ($${sys.cost.streetPriceRangeUsd[0].toLocaleString()}–$${sys.cost.streetPriceRangeUsd[1].toLocaleString()})` : '';
       lines.push(`| Street price | $${sys.cost.streetPriceUsd.toLocaleString()}${range} |`);
     }
+    if (sys.cost.priceSourceUrl) lines.push(`| Price source | ${sys.cost.priceSourceUrl} |`);
     if (sys.cost.perRequestUsd != null) lines.push(`| Cost per request | $${sys.cost.perRequestUsd.toFixed(4)} |`);
     lines.push('');
   }
@@ -291,6 +292,7 @@ export function buildSizingReportMarkdown(report) {
     if (report.tco.localMarginalUsdPerMtok != null) lines.push(`| Local marginal cost | $${report.tco.localMarginalUsdPerMtok}/Mtok |`);
     if (report.tco.cloudUsdPerMtok != null) lines.push(`| Cloud price | $${report.tco.cloudUsdPerMtok}/Mtok |`);
     if (report.tco.monthlyElectricityUsd != null) lines.push(`| Electricity (24/7) | $${report.tco.monthlyElectricityUsd.toFixed(2)}/mo |`);
+    if (report.tco.monthlyCapexUsd != null) lines.push(`| Capex (amortized) | $${report.tco.monthlyCapexUsd.toFixed(2)}/mo |`);
     if (report.tco.breakEvenTokensPerMonth != null) {
       lines.push(`| Break-even volume | ${report.tco.breakEvenTokensPerMonth.toLocaleString()} tok/mo |`);
     } else if (report.tco.cloudUsdPerMtok != null) {

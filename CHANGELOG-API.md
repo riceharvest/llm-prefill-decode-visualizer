@@ -187,6 +187,7 @@ migrate before `Sunset`. Agents can discover the current policy at
   wire responses offline and fails if an emitted field is missing from the
   schema or a severity falls outside the enum.
 - Affected endpoints: `/api/benchmarks`, `/api/best`, `/api/localmaxxing` (docs only).
+- `/api/compute` `model=flagged` and `model=cost` now mint their deterministic calc id over the resolved inputs, like the other five models (#1020): explicit defaults (`prefillSpeed=3800` etc.), documented aliases (`price=` vs `hardwarePriceUsd=`, `electricityRate=` vs `electricityRatePerKwh=`) and dry_run echoes no longer mint different ids for an identical computation. Previously-minted flagged/cost ids will fail `/api/calc/<id>` replay (400 "Calc id does not match") — re-send the parameters without the id to get the new one. singleTurn/speculative/batched/agentic/kvCache ids are unchanged.
 
 ### 1 — 2026-08-21
 

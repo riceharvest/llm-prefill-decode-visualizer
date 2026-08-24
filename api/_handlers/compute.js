@@ -141,36 +141,36 @@ function computeOne(params, dryRun = false) {
       // The response carries a per-flag audit trail (delta + source tag) so
       // agents can see exactly how each number was adjusted.
       const flags = params.flags ?? '';
-      if (dryRun) {
-        return { status: 200, body: dryRunBody('flagged', {
-          prefillSpeed: num(params.prefillSpeed, 3800),
-          decodeSpeed: num(params.decodeSpeed, 105),
-          promptTokens: num(params.promptTokens, 2048),
-          outputTokens: num(params.outputTokens, 512),
-          flags
-        }) };
-      }
-      const flaggedInputs = applyEngineFlags({
+      // Resolved inputs: the id is hashed over THESE (#1020), like every
+      // other branch — explicit defaults and flag spelling must not mint a
+      // different citation id for an identical computation.
+      const inputs = {
         prefillSpeed: num(params.prefillSpeed, 3800),
         decodeSpeed: num(params.decodeSpeed, 105),
+        promptTokens: num(params.promptTokens, 2048),
+        outputTokens: num(params.outputTokens, 512),
+        flags
+      };
+      if (dryRun) return withId('flagged', inputs, null, true);
+      const flaggedInputs = applyEngineFlags({
+        prefillSpeed: inputs.prefillSpeed,
+        decodeSpeed: inputs.decodeSpeed,
         flags
       });
-      const promptTokens = num(params.promptTokens, 2048);
-      const outputTokens = num(params.outputTokens, 512);
-      return { status: 200, body: {
-        inputs: { ...flaggedInputs.inputs, promptTokens, outputTokens },
+      return withId('flagged', inputs, {
+        inputs: { ...flaggedInputs.inputs, promptTokens: inputs.promptTokens, outputTokens: inputs.outputTokens },
         adjusted: flaggedInputs.adjusted,
         totalPrefillDeltaPct: flaggedInputs.totalPrefillDeltaPct,
         totalDecodeDeltaPct: flaggedInputs.totalDecodeDeltaPct,
         adjustments: flaggedInputs.adjustments,
         warnings: flaggedInputs.warnings,
         simulation: singleTurn({
-          promptTokens,
-          outputTokens,
+          promptTokens: inputs.promptTokens,
+          outputTokens: inputs.outputTokens,
           prefillSpeed: flaggedInputs.adjusted.prefillSpeed,
           decodeSpeed: flaggedInputs.adjusted.decodeSpeed
         })
-      } };
+      });
     }
 
     case 'cost': {
@@ -184,8 +184,10 @@ function computeOne(params, dryRun = false) {
         prefillSpeed: num(params.prefillSpeed, 3800),
         decodeSpeed: num(params.decodeSpeed, 105)
       };
-      if (dryRun) return { status: 200, body: dryRunBody('cost', costInputs) };
-      return { status: 200, body: cost(costInputs) };
+      // Aliases are resolved into costInputs BEFORE hashing (#1020), so the
+      // documented `price=`/`electricityRate=` spellings and the canonical
+      // ones mint the same id. Same id as dry_run (#17/#1020).
+      return withId('cost', costInputs, cost(costInputs), dryRun);
     }
 
     case '':
@@ -292,7 +294,8 @@ function runBatch(rawItems, dryRun = false) {
 /**
  * Shared core for /api/compute and /api/calc/<id> replay (issue #68).
  * Returns { status, body }; successful bodies carry a deterministic `id`
- * hashed from the raw request parameters.
+ * hashed from the resolved request (aliases collapsed, defaults filled in —
+ * #68/#1020).
  */
 export function computeBody(params = {}) {
   // dry_run mode (#17): validate + echo parsed params without executing.
