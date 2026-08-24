@@ -710,9 +710,9 @@ export default function handler(req, res) {
                 }
               }
             },
-            '400': { description: 'Invalid parameters (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } }, '500': { description: 'Internal server error (code INTERNAL)', content: { 'application/problem+json': { schema: PROBLEM } } }
-          },
-          '429': { $ref: '#/components/responses/RateLimited' }
+            '400': { description: 'Invalid parameters (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } }, '500': { description: 'Internal server error (code INTERNAL)', content: { 'application/problem+json': { schema: PROBLEM } } },
+            '429': { $ref: '#/components/responses/RateLimited' }
+          }
         }
       },
       '/api/vram': {
@@ -741,7 +741,7 @@ export default function handler(req, res) {
           parameters: [
             { name: 'id', in: 'path', required: true, schema: { type: 'string', pattern: '^calc_[0-9a-f]{12}$' } },
             { name: 'endpoint', in: 'query', schema: { type: 'string', enum: ['compute', 'best'], default: 'compute' } },
-            { name: '<original request parameters>', in: 'query', description: 'The same model + params (or best filters) that minted the id. Defaults may be omitted — they resolve identically before hashing.' }
+            { name: '<original request parameters>', in: 'query', description: 'The same model + params (or best filters) that minted the id. Defaults may be omitted — they resolve identically before hashing.', schema: { type: 'object', additionalProperties: true } }
           ],
           responses: {
             '200': { description: 'Recomputed result, stamped verified:true and carrying the id' },
@@ -1047,7 +1047,7 @@ export default function handler(req, res) {
           summary: 'Ranked answers: fastest or cheapest rigs for given constraints',
           description: 'Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed. by=cost ranks by cost-efficiency instead. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel). Responses carry a deterministic `id` (hash of the resolved filters) replayable via /api/calc/{id}?endpoint=best&<same filters>.',
           parameters: [
-            { name: 'by', in: 'query', schema: { type: 'string', enum: ['decode', 'prefill', 'efficiency', 'walltime', 'confidence', 'cost'] }, default: 'decode' },
+            { name: 'by', in: 'query', schema: { type: 'string', enum: ['decode', 'prefill', 'efficiency', 'walltime', 'confidence', 'cost'], default: 'decode' } },
             { name: 'price', in: 'query', schema: { type: 'number' }, description: 'cost mode: rig purchase price in USD (default 0)' },
             { name: 'electricityRate', in: 'query', schema: { type: 'number' }, description: 'cost mode: $/kWh (default 0.15)' },
             { name: 'powerWatts', in: 'query', schema: { type: 'number' }, description: 'cost mode: whole-rig watts; defaults to an estimate per hwClass' },
@@ -1439,7 +1439,9 @@ export default function handler(req, res) {
     ...xRateLimit(true)
   };
 
-  // Every JSON response carries schema_version + X-Schema-Version
-  // (see _schema.js / CHANGELOG-API.md). The spec itself is no exception.
-  return sendJson(res, spec, { cacheTtl: 3600 });
+  // Every response sets schema_version + X-Schema-Version headers. The spec
+  // document itself skips the body envelope (schema_version/rate_limit keys
+  // would break OpenAPI metaschema validation) and carries x-schema-version
+  // as a specification extension instead — see _schema.js sendJson.
+  return sendJson(res, spec, { cacheTtl: 3600, envelope: false });
 }

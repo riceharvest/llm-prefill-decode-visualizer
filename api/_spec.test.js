@@ -30,11 +30,11 @@ function callSpec() {
   const res = fakeRes();
   handler(req, res);
   assert.equal(res.statusCode, 200);
-  return JSON.parse(res.bodyText);
+  return { spec: JSON.parse(res.bodyText), res };
 }
 
 test('spec exposes both version numbers with a stable mapping', () => {
-  const spec = callSpec();
+  const { spec, res } = callSpec();
 
   // Release version: semver, tracks the API surface.
   assert.match(spec.info.version, /^\d+\.\d+\.\d+$/, 'info.version must be semver');
@@ -45,11 +45,14 @@ test('spec exposes both version numbers with a stable mapping', () => {
   assert.equal(spec.info['x-schema-version'], '1');
 
   // The wire stamp on the spec response itself must agree with the mirror.
-  assert.equal(spec.schema_version, spec.info['x-schema-version']);
+  // The spec document cannot carry a bare schema_version body key (that would
+  // fail OpenAPI 3.1 metaschema validation), so the stamp rides on the
+  // X-Schema-Version header like on every other response (#885).
+  assert.equal(res.getHeader('x-schema-version'), spec.info['x-schema-version']);
 });
 
 test('x-schema-version stays in lockstep with SCHEMA_VERSION', () => {
-  const spec = callSpec();
+  const { spec } = callSpec();
   // If this fails, either _schema.js bumped without updating the doc mapping
   // in CHANGELOG-API.md ("Two version numbers"), or someone hardcoded the
   // value in _handlers/spec.js instead of importing it.

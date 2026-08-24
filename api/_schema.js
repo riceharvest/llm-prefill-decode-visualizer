@@ -82,7 +82,7 @@ export function applyDeprecationHeaders(res, { deprecatedAt, sunset, link } = {}
  * @param {number} [opts.status=200]
  * @param {number} [opts.cacheTtl]  seconds; omit for no Cache-Control
  */
-export function sendJson(res, body, { status = 200, cacheTtl } = {}) {
+export function sendJson(res, body, { status = 200, cacheTtl, envelope = true } = {}) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   if (!res.getHeader('Access-Control-Allow-Origin')) {
@@ -92,7 +92,11 @@ export function sendJson(res, body, { status = 200, cacheTtl } = {}) {
     res.setHeader('Cache-Control', `public, max-age=${cacheTtl}`);
   }
   applySchemaHeaders(res);
-  const payload = withSchemaVersion(body);
+  // OpenAPI documents (served by /api/spec) must stay metaschema-valid: the
+  // envelope keys below are not OpenAPI keywords, so the spec opts out and
+  // carries `x-schema-version` instead (specification extensions are legal).
+  const payload = envelope ? withSchemaVersion(body) : body;
+  if (!envelope) return res.end(JSON.stringify(payload, null, 2));
   // Agent-facing rate-limit info in the body itself (mirrors the X-RateLimit-*
   // headers): present whenever the handler ran enforceRateLimit before
   // sending. Additive field — does not bump schema_version. See AGENTS.md,
