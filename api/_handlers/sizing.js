@@ -92,10 +92,24 @@ export default async function handler(req, res) {
       promptTokens: Math.round(num(params.promptTokens, 2048)),
       outputTokens: Math.round(num(params.outputTokens, 512))
     };
-    const slo = {
-      maxTtftSeconds: params.maxTtftSeconds != null ? num(params.maxTtftSeconds, null) : null,
-      maxTpotMs: params.maxTpotMs != null ? num(params.maxTpotMs, null) : null
-    };
+    // SLO caps (#731): distinguish "absent" from "present but invalid".
+    // A present-but-non-positive (or non-numeric) cap used to be silently
+    // dropped to null, i.e. the STRICTER constraint weakened the ranking to
+    // unconstrained. A zero/negative latency budget has no valid
+    // interpretation other than fail-closed, so reject with 400.
+    const slo = {};
+    for (const key of ['maxTtftSeconds', 'maxTpotMs']) {
+      if (params[key] == null || params[key] === '') { slo[key] = null; continue; }
+      const n = Number(params[key]);
+      if (!Number.isFinite(n) || n <= 0) {
+        return json(res, {
+          error: `Invalid ${key}=${JSON.stringify(params[key])} — SLO caps must be positive numbers. Pass a positive cap or omit the parameter; a zero/negative latency budget is rejected rather than treated as unconstrained.`,
+          param: key,
+          value: params[key]
+        }, 400);
+      }
+      slo[key] = n;
+    }
 
     // Explicit arch overrides, else estimated per group below.
     const explicitArch = ['numLayers', 'kvHeads', 'headDim'].every(k => params[k] != null)

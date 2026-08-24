@@ -138,9 +138,17 @@ async function estimate(params) {
       headroomGb: round((budgetBytes - weightsGb * GB - kvBytesTotal) / GB),
       maxContextTokens: bytesPerCtxToken > 0
         ? Math.max(0, Math.floor((budgetBytes - weightsGb * GB) / bytesPerCtxToken))
-        : null,
-      note: 'maxContextTokens ignores activation/overhead — treat as an upper bound'
+        : null
     };
+    // The budget may admit more context than the model itself supports
+    // (#854): cap maxContextTokens at max_position_embeddings so agents
+    // don't plan a workload the model cannot represent.
+    if (maxCtx != null && fits.maxContextTokens != null && fits.maxContextTokens > maxCtx) {
+      fits.maxContextTokens = maxCtx;
+      fits.contextWindowClamped = true;
+    }
+    fits.note = 'maxContextTokens ignores activation/overhead — treat as an upper bound'
+      + (fits.contextWindowClamped ? '; capped at the model max_position_embeddings' : '');
   }
 
   // Optional agentic projection: KV growth per turn with the exact turn where
