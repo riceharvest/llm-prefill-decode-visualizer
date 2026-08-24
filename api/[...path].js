@@ -90,8 +90,12 @@ export default async function handler(req, res) {
   const pathname = (req.url || '').split('?')[0].replace(/^\/api\/?/, '/');
 
   try {
-    // Strip /v1/ prefix if present (versioning rewrite)
-    const clean = pathname.replace(/^\/v1\//, '/');
+    // Strip /v1/ prefix if present (versioning rewrite), then tolerate a
+    // trailing slash so /api/spec/ and /api/spec resolve identically
+    // (issues #943/#953). vercel.json's "trailingSlash": false normally
+    // 308-redirects slashed URLs before they reach this function; this is
+    // the safety net for clients/environments where it did not apply.
+    const clean = pathname.replace(/^\/v1\//, '/').replace(/\/+$/, '') || '/';
 
     switch (clean) {
       case '/compute': return compute(req, res);
