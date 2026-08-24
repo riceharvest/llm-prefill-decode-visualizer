@@ -1,6 +1,7 @@
 import { getAllRuns, aggregate } from '../_localmaxxing.js';
 import { kvCache } from '../_math.js';
 import { explainRecommendation } from '../_explain.js';
+import { locateQuantComponent } from '../_quant_tag.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -26,9 +27,23 @@ export function bitsPerWeight(quantization) {
   const q = String(quantization || '').toLowerCase();
   const m = q.match(/^q(\d+(?:\.\d+)?)(?:[_-](\d+))?/);
   if (m) return Number(m[1]) + (m[2] !== undefined ? Number(m[2]) / 100 : /k/.test(q.slice(m[0].length)) ? 0.25 : 0);
-  if (/^(fp|bf)?16|f16$/.test(q)) return 16;
-  if (/^(fp|bf)?8|f8$/.test(q)) return 8;
-  if (/int?4|^q4/.test(q)) return 4;
+  if (/^(fp|bf)?16$|^f16$/.test(q)) return 16;
+  if (/^(fp|bf)?8$|^f8$/.test(q)) return 8;
+  if (/^int?4$|^q4$|^q4(?=[_-])/.test(q)) return 4;
+
+  // Composite/mixed tags (#1071): the whole-string rules above only anchor at
+  // the start, so a tag like 'GPTQ-INT4-G64-sym-local+DFlash-BF16-local' used
+  // to fall through to unanchored substring latching that disagreed with
+  // _vramfit.js. Resolve via the shared anchored scanner instead: both fit
+  // paths now pick the SAME weight-storage component (earliest in tag order).
+  const comp = locateQuantComponent(q);
+  if (comp && comp.text !== q) {
+    if (comp.kind === 'int') return Number(comp.bitBase) === 4 ? 4 : 4.25; // sizing table has no int8 row
+    if (comp.kind === 'f16') return 16;
+    if (comp.kind === 'f8') return 8;
+    if (comp.kind === 'gguf') return bitsPerWeight(comp.text); // reuse leading-q math on 'q4_k_m' etc.
+    // mlx: sizing's plain-digits table has no effective-rate rows — fallback
+  }
   return 4.25;
 }
 
