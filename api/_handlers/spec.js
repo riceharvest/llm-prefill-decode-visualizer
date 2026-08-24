@@ -88,6 +88,36 @@ const SNAPSHOT_PARAM = {
 const PROBLEM = { $ref: '#/components/schemas/Problem' };
 const RATE_LIMITED = { description: 'Rate limited (code RATE_LIMITED)', content: { 'application/problem+json': { schema: PROBLEM } } };
 
+// Operation tag taxonomy (#706) — mirrors the surface grouping that
+// /api/agent/capabilities.json maintains (discovery → math → data → ops), so
+// tag-aware OpenAPI tooling can group/filter this spec the same way. Every
+// operation carries exactly one of these tags; see PATH_TAGS below.
+export const API_TAGS = [
+  { name: 'math', description: 'Deterministic inference math: TTFT/TPOT/walltime simulation, VRAM estimation, deterministic replay and built-in presets feeding the math.' },
+  { name: 'data', description: 'Community-measured benchmark data: raw runs, aggregates, ranked recommendations, sizing and reproducible snapshots.' },
+  { name: 'feeds', description: 'Watch subscriptions with RSS and webhook delivery of new matching runs.' },
+  { name: 'utility', description: 'Input helpers that translate agent-friendly input into canonical API queries.' },
+  { name: 'ops', description: 'Operational surfaces: health/readiness probing.' }
+];
+export const PATH_TAGS = {
+  '/api/compute': 'math',
+  '/api/vram': 'math',
+  '/api/calc/{id}': 'math',
+  '/api/presets': 'math',
+  '/api/localmaxxing': 'data',
+  '/api/runs': 'data',
+  '/api/benchmarks': 'data',
+  '/api/best': 'data',
+  '/api/sizing': 'data',
+  '/api/snapshots': 'data',
+  '/api/watch': 'feeds',
+  '/api/watch/rss.xml': 'feeds',
+  '/api/watch/dispatch': 'feeds',
+  '/api/parse-constraints': 'utility',
+  '/api/health': 'ops'
+};
+
+
 const COMPUTE_ERRORS = {
   '400': { description: 'Invalid parameters (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } },
   '429': RATE_LIMITED,
@@ -661,6 +691,11 @@ export default function handler(req, res) {
       { url: BASE, description: 'Canonical unversioned host — /api/* paths' },
       { url: BASE + '/v1', description: 'Versioned prefix (/v1/compute, /v1/benchmarks, …) — preferred for external consumers; maps 1:1 onto the /api/* paths' }
     ],
+    tags: API_TAGS,
+    externalDocs: {
+      url: BASE + '/llms.txt',
+      description: 'Human-and-machine quick-start guide with worked examples per endpoint. Other discovery surfaces not spec-ed here: /agents.json (provider manifest), /.well-known/mcp.json (MCP manifest), /api/agent/capabilities.json (all agent-facing surfaces in one list), /api/version.'
+    },
     paths: {
       '/api/compute': {
         get: {
@@ -1408,6 +1443,17 @@ export default function handler(req, res) {
       }
     }
   };
+
+  // Stamp every operation with its taxonomy tag (#706) so tag-aware tooling
+  // can group the spec. PATH_TAGS must cover every spec'd path — asserted by
+  // api/_spec_tags.test.js.
+  for (const [path, item] of Object.entries(spec.paths)) {
+    const tag = PATH_TAGS[path];
+    if (!tag) continue;
+    for (const method of ['get', 'post', 'put', 'delete', 'patch']) {
+      if (item[method] && !item[method].tags) item[method].tags = [tag];
+    }
+  }
 
   // Attach x-examples to every operation. Response defaults to the inline
   // example already present on the 2xx response, so GET endpoints whose spec
