@@ -18,6 +18,8 @@
 import { resolveModel } from '../_hfconfig.js';
 import { resolveQuant } from '../_quant.js';
 import { lookupHfArch, guessArchFromName } from '../_hflookup.js';
+import { enforceRateLimit } from '../_ratelimit.js';
+import { problemBody } from '../_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -29,6 +31,33 @@ function json(res, body, status = 200) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'public, max-age=600');
   res.end(JSON.stringify(body, null, 2));
+}
+
+/**
+ * RFC 9457 problem+json error shape (#514): every /api/vram validation and
+ * upstream failure carries type/title/status/code so agents can branch on the
+ * stable code. Legacy flat members (`error`, `params`, `examples`) are kept
+ * alongside as back-compat extras so existing clients keep working.
+ */
+function problem(res, req, status, code, detail, extras = {}) {
+  const body = {
+    ...problemBody({ status, code, detail, instance: (req?.url || '').split('?')[0] }),
+    error: detail,
+    ...extras
+  };
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'application/problem+json');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(JSON.stringify(body, null, 2));
+}
+
+/** Map an upstream failure status to a stable ERROR_CODES registry entry. */
+function errorCodeForStatus(status) {
+  if (status === 404) return 'NOT_FOUND';
+  if (status === 502 || status === 503 || status === 504) return 'UPSTREAM_UNAVAILABLE';
+  if (status === 400) return 'INVALID_PARAMS';
+  return 'INTERNAL';
 }
 
 function num(v, fallback) {
@@ -52,8 +81,9 @@ async function estimate(params) {
   if (!hfId) {
     return {
       status: 400,
-      body: {
-        error: 'missing hfId — pass ?hfId=org/model (e.g. meta-llama/Llama-3.1-8B-Instruct)',
+      problem: true,
+      detail: "missing hfId — pass ?hfId=org/model (e.g. meta-llama/Llama-3.1-8B-Instruct)",
+      extras: {
         params: ['hfId (required)', 'context (tokens, default 32768)', 'quant (default q4_k_m)',
           'batchSize (default 1)', 'kvPrecisionBytes (default 2 = FP16)', 'vramGb (optional budget)',
           'numTurns + tokensPerTurn (optional per-turn KV projection)'],
@@ -222,13 +252,18 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
+  // Self-throttling signal on every response incl. validation failures (#515).
+  if (!enforceRateLimit(req, res)) return;
+
   const params = req.method === 'POST' ? (req.body || {}) : req.query;
 
   try {
-    const { status, body } = await estimate(params);
+    const { status, problem: isProblem, detail, extras, body } = await estimate(params);
+    if (isProblem) return problem(res, req, status, 'INVALID_PARAMS', detail, extras);
     return json(res, body, status);
   } catch (err) {
     const status = Number.isInteger(err.status) ? err.status : 500;
-    return json(res, { error: String(err.message || err) }, status);
+    const detail = String(err.message || err);
+    return problem(res, req, status, errorCodeForStatus(status), detail);
   }
 }

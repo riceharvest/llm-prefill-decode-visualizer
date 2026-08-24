@@ -375,6 +375,13 @@ export async function bestBody(query = {}) {
     if (q.hwClass) filters.hwClass = String(q.hwClass).toLowerCase();
     if (q.hardware) filters.hardware = String(q.hardware).toLowerCase();
     if (contextBand) filters.contextBand = contextBand;
+    // Result-changing cohort filters must be part of the content hash (#513):
+    // otherwise distinct queries collide on one "deterministic" id and
+    // /api/calc/<id> replay cannot tell which filtered ranking was meant.
+    if (q.engine) filters.engine = String(q.engine);
+    if (maxAgeDays) filters.max_age = maxAgeDays;
+    if (q.minDecode && Number.isFinite(Number(q.minDecode))) filters.minDecode = Number(q.minDecode);
+    if (q.maxVramGb && Number.isFinite(Number(q.maxVramGb))) filters.maxVramGb = Number(q.maxVramGb);
 
     // Attach effective VRAM (discrete, falling back to unified) per row (#53).
     const sampleByKey = new Map(groups.map(g => [g.key, g.bestRun]));

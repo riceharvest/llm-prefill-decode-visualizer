@@ -449,14 +449,15 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - URL: /?tab=kvcache
 - Purpose: Compute KV-cache VRAM for a model architecture across context lengths and quantizations, including GQA head layout.
 - Surfaces: architecture/model picker; context × precision matrix; quant tradeoff matrix; multi-GPU planner
+- Params: model=<arch-id> — architecture chip id (llama70b, llama8b, mistral7b, qwen3627b, dsv4flash, kimik3, …); ctx=<tokens> — context length; prec=<bytes> — KV cache precision per element (2 = FP16, 1 = FP8, 0.5 = INT4); batch=<n> — concurrent sequences (shared with the Compare tab); wprec=<bytes> — weight precision used by the VRAM budget planner (2 / 1 / 0.5); oh=<pct> — framework overhead percent; vram=<gb> — target GPU VRAM budget in GB; gpu=<gpu-id> — target GPU select id (e.g. rtx4090); wgb=<gb> — measured-weights override in GB; gpus=<1|2|4> — multi-GPU planner: GPU count; par=<tp|pp> — multi-GPU planner: tensor vs pipeline parallelism; bus=<pcie|nvlink> — multi-GPU planner: interconnect; card=<card-id> — multi-GPU planner: per-card VRAM preset id
 - Endpoints: GET /api/vram; GET /api/compute?model=kvCache
 
 ### Tab: theory — Theory
 
 - Tab-ID: theory
 - URL: /?tab=theory
-- Purpose: Plain-language guide to why prefill is compute-bound and decode is bandwidth-bound, with analogies, glossary and misconception callouts.
-- Surfaces: concept walkthrough; analogies toggle; jargon glossary; misconception callouts
+- Purpose: Plain-language guide to why prefill is compute-bound and decode is bandwidth-bound, with worked analogies, a jargon glossary and one-click Try-it demo configurations.
+- Surfaces: concept walkthrough; inline plain-language analogies; jargon glossary with popovers; template gallery of Try-it demo deep links
 - Endpoints: none (static explainer content)
 
 <!-- tabs-section:end -->

@@ -115,3 +115,30 @@ test('regenerating llms.txt is idempotent (byte-identical output)', () => {
   const after = readFileSync(join(root, 'public', 'llms.txt'), 'utf8');
   assert.equal(after, before, 're-running generate-llms-txt.mjs changed llms.txt');
 });
+
+// #505: the theory section must not document surfaces that don't exist on the
+// view. AnalogyToggle / MisconceptionCallout components live on other tabs —
+// TheoryGuide.jsx never mounts either one.
+test('theory tab section documents only surfaces that actually exist (#505)', () => {
+  const section = renderTabSection(TABS.find(t => t.id === 'theory'));
+  assert.doesNotMatch(section, /analogies toggle/i);
+  assert.doesNotMatch(section, /misconception/i);
+  // The committed doc must agree with the generator.
+  const start = llmsTxt.indexOf('### Tab: theory');
+  const committed = llmsTxt.slice(start, llmsTxt.indexOf('<!-- tabs-section:end -->', start));
+  assert.ok(committed.startsWith('### Tab: theory'));
+  assert.doesNotMatch(committed, /analogies toggle|misconception callouts/i);
+});
+
+// #512: the kvcache view reads ~13 deep-link params that were entirely
+// undocumented; the section must carry them so agents can construct links.
+test('kvcache tab section documents its deep-link params (#512)', () => {
+  const start = llmsTxt.indexOf('### Tab: kvcache');
+  const committed = llmsTxt.slice(start, llmsTxt.indexOf('### Tab:', start + 1));
+  assert.ok(committed.startsWith('### Tab: kvcache'));
+  assert.match(committed, /^- Params: /m);
+  for (const p of ['model=', 'ctx=', 'prec=', 'batch=', 'wprec=', 'oh=', 'vram=',
+    'gpu=', 'wgb=', 'gpus=', 'par=', 'bus=', 'card=']) {
+    assert.ok(committed.includes(`${p}`), `kvcache Params line should mention ${p}`);
+  }
+});

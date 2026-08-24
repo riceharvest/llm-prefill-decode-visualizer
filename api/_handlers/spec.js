@@ -50,6 +50,7 @@ const ENFORCED_PATHS = new Set([
   '/api/benchmarks',
   '/api/best',
   '/api/parse-constraints',
+  '/api/vram', // metered since #515 — validation failures carry quota headers too
   '/api/watch',
   '/api/watch/rss.xml',
   '/api/watch/dispatch'

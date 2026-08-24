@@ -30,6 +30,8 @@ import { default as agentCompute } from './_handlers/agent_compute.js';
 import { default as agentFreshness } from './_handlers/agent_freshness.js';
 
 import { withMarkdownNegotiation } from './_markdown.js';
+import { enforceRateLimit } from './_ratelimit.js';
+import { problemBody } from './_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -79,8 +81,31 @@ function applyAgentEndpointsHeader(req, res) {
       .map(s => s.trim())
       .filter(Boolean)
   );
-  for (const h of ['X-Agent-Endpoints', 'X-Schema-Version']) expose.add(h);
+  for (const h of ['X-Agent-Endpoints', 'X-Schema-Version',
+    // Quota self-throttling must be readable by browser agents cross-origin (#515).
+    'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset', 'Retry-After']) expose.add(h);
   res.setHeader('Access-Control-Expose-Headers', [...expose].join(', '));
+}
+
+/**
+ * Unknown /api/* path: documented problem+json contract (#514) instead of an
+ * ad-hoc `{error, path}` body. The `instance`/`path` echo the FULL requested
+ * path (with the /api prefix) so log correlation round-trips correctly, and
+ * rate-limit headers are stamped like on every other endpoint (#515).
+ */
+function apiNotFound(req, res) {
+  enforceRateLimit(req, res);
+  const requestedPath = (req.url || '').split('?')[0] || '/';
+  const body = {
+    ...problemBody({ status: 404, code: 'NOT_FOUND', detail: `No API endpoint matches ${requestedPath}`, instance: requestedPath }),
+    error: 'Not found',
+    path: requestedPath
+  };
+  res.statusCode = 404;
+  res.setHeader('Content-Type', 'application/problem+json');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-store');
+  return res.end(JSON.stringify(body, null, 2));
 }
 
 export default async function handler(req, res) {
@@ -127,7 +152,7 @@ export default async function handler(req, res) {
           req.query = { ...req.query, id: calcMatch[1] };
           return calcId(req, res);
         }
-        return json(res, { error: 'Not found', path: pathname }, 404);
+        return apiNotFound(req, res);
     }
   } catch (err) {
     return json(res, { error: String(err.message || err) }, 500);

@@ -92,13 +92,32 @@ export const TABS = [
     label: 'KV cache',
     purpose: 'Compute KV-cache VRAM for a model architecture across context lengths and quantizations, including GQA head layout.',
     surfaces: ['architecture/model picker', 'context × precision matrix', 'quant tradeoff matrix', 'multi-GPU planner'],
+    // Deep-link params the view reads at mount and rewrites into share links
+    // (issue #512 — previously zero params were documented for this tab).
+    params: [
+      'model=<arch-id> — architecture chip id (llama70b, llama8b, mistral7b, qwen3627b, dsv4flash, kimik3, …)',
+      'ctx=<tokens> — context length',
+      'prec=<bytes> — KV cache precision per element (2 = FP16, 1 = FP8, 0.5 = INT4)',
+      'batch=<n> — concurrent sequences (shared with the Compare tab)',
+      'wprec=<bytes> — weight precision used by the VRAM budget planner (2 / 1 / 0.5)',
+      'oh=<pct> — framework overhead percent',
+      'vram=<gb> — target GPU VRAM budget in GB',
+      'gpu=<gpu-id> — target GPU select id (e.g. rtx4090)',
+      'wgb=<gb> — measured-weights override in GB',
+      'gpus=<1|2|4> — multi-GPU planner: GPU count',
+      'par=<tp|pp> — multi-GPU planner: tensor vs pipeline parallelism',
+      'bus=<pcie|nvlink> — multi-GPU planner: interconnect',
+      'card=<card-id> — multi-GPU planner: per-card VRAM preset id'
+    ],
     endpoints: ['GET /api/vram', 'GET /api/compute?model=kvCache'],
   },
   {
     id: 'theory',
     label: 'Theory',
-    purpose: 'Plain-language guide to why prefill is compute-bound and decode is bandwidth-bound, with analogies, glossary and misconception callouts.',
-    surfaces: ['concept walkthrough', 'analogies toggle', 'jargon glossary', 'misconception callouts'],
+    // Corrected in issue #505: the view has never shipped an analogies toggle
+    // or misconception callouts (those components live on other tabs).
+    purpose: 'Plain-language guide to why prefill is compute-bound and decode is bandwidth-bound, with worked analogies, a jargon glossary and one-click Try-it demo configurations.',
+    surfaces: ['concept walkthrough', 'inline plain-language analogies', 'jargon glossary with popovers', 'template gallery of Try-it demo deep links'],
     endpoints: [],
   },
 ];
@@ -128,6 +147,9 @@ export function renderTabSection(tab) {
     `- URL: /?tab=${tab.id}`,
     `- Purpose: ${tab.purpose}`,
     `- Surfaces: ${tab.surfaces.join('; ')}`,
+    ...(Array.isArray(tab.params) && tab.params.length
+      ? [`- Params: ${tab.params.join('; ')}`]
+      : []),
   ];
   if (tab.endpoints.length > 0) {
     lines.push(`- Endpoints: ${tab.endpoints.join('; ')}`);
