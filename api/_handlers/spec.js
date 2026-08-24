@@ -978,9 +978,9 @@ export default function handler(req, res) {
         get: {
           operationId: 'getBenchmarkAggregates',
           summary: 'Aggregated speeds: median + IQR + 95% bootstrap CI per group',
-          description: 'Outlier-resistant stats per hardware×model-family group (default). Each median carries a 95% percentile bootstrap confidence interval (2,000 resamples) in ci95 {lo, hi}, plus a "median [lo–hi]" label string. Regroup with ?groupBy=hardware|model|quant. Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak). Each group carries confidence {runs, iqrSpreadPct, outliers, newestRunAgeDays, grade} and cross_check {relatedRigComparisons, contradictions[]} comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.',
+          description: "Outlier-resistant stats per hardware×model-family group (default). Each median carries a 95% percentile bootstrap confidence interval (2,000 resamples) in ci95 {lo, hi}, plus a \"median [lo–hi]\" label string. Regroup with ?groupBy=hardware|model|quant (quant = hardware×quantization cohorts keyed '<hardwareKey>|<quantization>', not pure-quant groups). Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak). Each group carries confidence {runs, iqrSpreadPct, outliers, newestRunAgeDays, grade} and cross_check {relatedRigComparisons, contradictions[]} comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.",
           parameters: [
-            { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['hardwareModel', 'hardware', 'model', 'quant'] } },
+            { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['hardwareModel', 'hardware', 'model', 'quant'] }, description: "Cohort each group aggregates over: hardwareModel = hardware×model-family×engine-build (default); hardware = one cohort per rig (hardwareKey); model = one cohort per modelFamily across all hardware; quant = hardware×QUANTIZATION cohorts keyed '<hardwareKey>|<quantization>' — NOT pure-quantization groups across rigs (filter with ?quant= instead)" },
             { name: 'hardware', in: 'query', schema: { type: 'string' } },
             { name: 'model', in: 'query', schema: { type: 'string' } },
             { name: 'quant', in: 'query', schema: { type: 'string' } },
@@ -1016,7 +1016,7 @@ export default function handler(req, res) {
                         mixedEngines: false,
                         caveats: [],
                         confidence: { runs: 14, iqrSpreadPct: 12.38, outliers: 0, newestRunAgeDays: 3, grade: 'high' },
-                        crossCheck: { relatedRigComparisons: [], contradictions: [] },
+                        crossCheck: { relatedRigComparisons: 2, contradictions: [] },
                         bestRun: {
                           runId: 58213,
                           modelName: 'unsloth/Qwen3.6-27B-MTP-GGUF',
