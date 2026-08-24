@@ -28,6 +28,27 @@ export function resolveDirection(locale) {
 }
 
 /**
+ * Per-locale namespace coverage (#758): which namespaces a locale actually
+ * translates vs which fall back to English silently. Lets callers surface a
+ * machine-readable "partially translated" signal instead of leaving the
+ * fallback invisible at every layer.
+ */
+export function localeCoverage(locales, locale) {
+  const en = locales.en || {};
+  const target = locales[locale] || locales.en || {};
+  const enNamespaces = Object.keys(en).filter(ns => ns !== 'meta');
+  const translated = enNamespaces.filter(ns => target[ns] !== undefined);
+  const fallback = enNamespaces.filter(ns => target[ns] === undefined);
+  return {
+    locale,
+    translated,
+    fallback,
+    // True when the locale exists but renders some namespaces in English.
+    partial: fallback.length > 0
+  };
+}
+
+/**
  * Build the translator API over a locales registry ({ en: {...}, ar: {...} }).
  * Falls back: current locale → English → the key itself, so partial
  * translations never render blank UI.

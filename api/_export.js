@@ -74,6 +74,11 @@ export function buildJsonPayload(rows, generatedAt) {
   return {
     description: 'Full comparable dataset: community-measured single-stream LLM benchmark runs (batchSize=1, concurrency<=1).',
     schemaVersion: DATASET_VERSION,
+    // Additive envelope fields (#762): canonical generator id + machine-
+    // readable type discriminator so this payload is recognizable by the
+    // same shape check as the client-side export artifacts.
+    generatorId: 'llm-prefill-decode-visualizer',
+    exportType: 'dataset-export',
     generatedAt,
     rowCount: rows.length,
     dataDictionary: COLUMNS.map(c => ({ column: c.key, type: c.type, description: c.description })),

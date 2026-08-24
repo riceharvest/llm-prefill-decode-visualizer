@@ -17,7 +17,7 @@
 // Missing keys fall back to English, then to the key itself, so partial
 // translations never render blank UI.
 
-import { createTranslator } from './translate.js';
+import { createTranslator, localeCoverage } from './translate.js';
 import { getPlainMode } from '../utils/plainLanguage.js';
 
 let localeModules = {};
@@ -62,6 +62,15 @@ const translator = createTranslator(locales, 'en');
 export const t = translator.t;
 export const tArray = translator.tArray;
 
+/**
+ * Namespace coverage for the ACTIVE locale (#758): { locale, translated,
+ * fallback, partial }. Exposes which namespaces silently render English so
+ * extractors can detect partially-fallback pages.
+ */
+export function getCoverage() {
+  return localeCoverage(locales, translator.getLocale());
+}
+
 /** Switch the active locale and keep <html lang>/<html dir> in sync. */
 export function setLocale(locale) {
   translator.setLocale(locale);
@@ -74,11 +83,22 @@ export const getLocale = translator.getLocale;
 export const getDirection = translator.getDirection;
 
 /** Reflect the active locale onto the document: lang + direction. RTL
- *  locales flip the entire layout via [dir='rtl'] CSS logical properties. */
+ *  locales flip the entire layout via [dir='rtl'] CSS logical properties.
+ *  Also stamps data-partial-i18n when the active locale silently falls
+ *  back to English for any namespace (#758), so extractors can detect
+ *  partially-translated pages from the DOM alone. */
 export function syncDocument() {
   if (typeof document === 'undefined') return;
   document.documentElement.lang = getLocale();
   document.documentElement.dir = getDirection();
+  const coverage = getCoverage();
+  if (coverage.partial) {
+    document.documentElement.setAttribute('data-partial-i18n', '');
+    document.documentElement.setAttribute('data-i18n-fallback-namespaces', coverage.fallback.join(','));
+  } else {
+    document.documentElement.removeAttribute('data-partial-i18n');
+    document.documentElement.removeAttribute('data-i18n-fallback-namespaces');
+  }
 }
 
 // --- Plain-language mode (#79): rewrite dense jargon using plain equivalents.

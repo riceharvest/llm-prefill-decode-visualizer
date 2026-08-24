@@ -16,7 +16,7 @@
 //
 // No ?id= → directory mode: every valid scenario id with its counts, so a
 // planning agent can pick one without a second round-trip.
-import { SCENARIO_PRESETS } from '../../src/utils/presets.js';
+import { HARDWARE_PRESETS, SCENARIO_PRESETS } from '../../src/utils/presets.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson } from '../_schema.js';
 
@@ -70,6 +70,14 @@ function json(res, body, status = 200) {
   return sendJson(res, body, { status, cacheTtl: 3600 });
 }
 
+// Example speeds for nextSteps (#761): taken from a REAL /api/presets entry
+// (the default rig) instead of hardcoded fictional numbers that belong to no
+// exposed hardware — an agent following the guided pipeline gets grounded
+// math it can trace back to a preset id.
+const EXAMPLE_PRESET = HARDWARE_PRESETS[0] || { id: 'rtx4090_exl2', prefillSpeed: 3800, decodeSpeed: 105 };
+const EXAMPLE_SPEEDS = `prefillSpeed=${EXAMPLE_PRESET.prefillSpeed}&decodeSpeed=${EXAMPLE_PRESET.decodeSpeed}`;
+const SPEEDS_NOTE = `Example speeds are the '${EXAMPLE_PRESET.id}' preset from /api/presets (prefillSpeed=${EXAMPLE_PRESET.prefillSpeed}, decodeSpeed=${EXAMPLE_PRESET.decodeSpeed}); swap in any other preset's measured speeds for a different rig.`;
+
 export default function handler(req, res) {
   if (!enforceRateLimit(req, res)) return;
 
@@ -86,7 +94,7 @@ export default function handler(req, res) {
       scenarios,
       nextSteps: [
         { step: 'Pick a scenario id from this list.', example: `${ENDPOINT}?id=codegen` },
-        { step: 'Run the inference math for it.', example: '/api/compute?model=singleTurn&promptTokens=2048&outputTokens=4096&prefillSpeed=5000&decodeSpeed=120' },
+        { step: 'Run the inference math for it.', example: `/api/compute?model=singleTurn&promptTokens=2048&outputTokens=4096&${EXAMPLE_SPEEDS}`, note: SPEEDS_NOTE },
         { step: 'Full parameter reference.', example: '/api/spec' }
       ]
     });
@@ -110,7 +118,7 @@ export default function handler(req, res) {
     requestedId,
     scenario: toAgentScenario(scenario),
     nextSteps: [
-      { step: 'Run the inference math for this workload.', example: `/api/compute?model=singleTurn&promptTokens=${scenario.promptTokens}&outputTokens=${scenario.outputTokens}&prefillSpeed=5000&decodeSpeed=120` },
+      { step: 'Run the inference math for this workload.', example: `/api/compute?model=singleTurn&promptTokens=${scenario.promptTokens}&outputTokens=${scenario.outputTokens}&${EXAMPLE_SPEEDS}`, note: SPEEDS_NOTE },
       { step: 'Check a specific rig fits it.', example: `/api/sizing?promptTokens=${scenario.promptTokens}&outputTokens=${scenario.outputTokens}` },
       { step: 'Full parameter reference.', example: '/api/spec' }
     ]

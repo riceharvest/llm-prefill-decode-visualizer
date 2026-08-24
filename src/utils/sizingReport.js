@@ -36,6 +36,14 @@ export function buildSizingReport({
   return {
     schema: 'sizing-report',
     version: 1,
+    // Additive unification fields (#762): same canonical spellings the
+    // simulation exports and /api/export use, so one consumer check
+    // (payload.schemaVersion / payload.generatorId / payload.exportType)
+    // recognizes every JSON export artifact. Legacy schema/version/generator
+    // fields are kept for existing consumers.
+    schemaVersion: 1,
+    generatorId: 'llm-prefill-decode-visualizer',
+    exportType: 'sizing-report',
     generatedAt: generatedAt || null,
     generator: 'LLM Prefill & Decode Visualizer',
     deepLink: deepLink || null,
