@@ -84,6 +84,32 @@ test('cost: degenerate speeds yield null instead of Infinity/NaN', () => {
   assert.equal(noDecode.costUsdPerThousandRequests, null);
 });
 
+test('cost: bare call warns that price AND power defaulted to 0 (#736)', () => {
+  const r = cost();
+  const codes = r.warnings.map(w => w.code);
+  assert.ok(codes.includes('cost_missing_hardware_price'), 'missing-price warning expected');
+  assert.ok(codes.includes('cost_missing_power_draw'), 'missing-power warning expected');
+  for (const w of r.warnings) {
+    assert.equal(typeof w.message, 'string');
+    assert.ok(w.message.length > 0);
+  }
+});
+
+test('cost: fully-specified inputs produce an empty warnings array (#736)', () => {
+  const r = cost({
+    hardwarePriceUsd: 2000, powerDrawWatts: 450,
+    electricityRatePerKwh: 0.15, prefillSpeed: 3800, decodeSpeed: 105
+  });
+  assert.deepEqual(r.warnings, []);
+});
+
+test('cost: partial inputs warn only about the missing side (#736)', () => {
+  const priced = cost({ hardwarePriceUsd: 2000 });
+  assert.deepEqual(priced.warnings.map(w => w.code), ['cost_missing_power_draw']);
+  const powered = cost({ powerDrawWatts: 450 });
+  assert.deepEqual(powered.warnings.map(w => w.code), ['cost_missing_hardware_price']);
+});
+
 test('plausible inputs produce an empty warnings array', () => {
   assert.deepEqual(sanityWarnings({ promptTokens: 2048, prefillSpeed: 3800, decodeSpeed: 105 }), []);
   // boundary values are still plausible

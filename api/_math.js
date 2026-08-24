@@ -170,11 +170,29 @@ export function cost({
   const hourlyTotal = hourlyHardware + hourlyElectricity;
   const requestsPerHour = total > 0 ? 3600 / total : 0;
 
+  // Non-blocking cost-input sanity flags (issue #736): a bare call defaults
+  // hardwarePriceUsd=0 AND powerDrawWatts=0, which yields a valid-looking
+  // $0.00/1M tokens with no hint that the cost inputs were never supplied.
+  const warnings = [];
+  if (!(hardwarePriceUsd > 0)) {
+    warnings.push({
+      code: 'cost_missing_hardware_price',
+      message: 'hardwarePriceUsd is 0 or missing — amortized hardware cost contributes nothing, so this is an electricity-only estimate (or $0 if powerDrawWatts is also unset). Pass ?price=<usd> (or hardwarePriceUsd=) for a real all-in figure.'
+    });
+  }
+  if (!(powerDrawWatts > 0)) {
+    warnings.push({
+      code: 'cost_missing_power_draw',
+      message: 'powerDrawWatts is 0 or missing — electricity cost contributes nothing. Pass powerDrawWatts=<watts> for a real all-in figure.'
+    });
+  }
+
   return {
     inputs: {
       hardwarePriceUsd, electricityRatePerKwh, powerDrawWatts, amortizationMonths,
       promptTokens, outputTokens, prefillSpeed, decodeSpeed
     },
+    warnings,
     effectiveThroughputTokPerSec: round(throughput),
     requestsPerHour: round(requestsPerHour),
     hardwareCostUsdPerHour: round(hourlyHardware),
