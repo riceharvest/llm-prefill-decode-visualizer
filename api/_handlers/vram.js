@@ -141,6 +141,13 @@ async function estimate(params) {
         : null,
       note: 'maxContextTokens ignores activation/overhead — treat as an upper bound'
     };
+    // Cap at the model's own context window (issue #854): an unbounded
+    // "max context" above maxPositionEmbeddings contradicts the sibling
+    // contextWindow.withinLimit verdict in the same response.
+    if (fits.maxContextTokens != null && maxCtx != null && fits.maxContextTokens > maxCtx) {
+      fits.maxContextTokens = maxCtx;
+      fits.note += ' — capped at the model context window (max_position_embeddings)';
+    }
   }
 
   // Optional agentic projection: KV growth per turn with the exact turn where

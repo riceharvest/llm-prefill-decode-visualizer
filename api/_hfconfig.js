@@ -148,12 +148,19 @@ async function resolveUncached(hfId, quant) {
   // ---- Path 1: config.json ----
   if (cfg != null) {
     const t = textConfig(cfg);
-    const numLayers = t.num_hidden_layers;
-    const hiddenSize = t.hidden_size;
-    const numHeads = t.num_attention_heads ?? t.num_heads;
+    // Legacy GPT-2-style configs (issue #853): n_layer / n_embd / n_head /
+    // n_positions / n_ctx instead of the modern names. Public repos shipping
+    // only these were misreported as gated/private.
+    const numLayers = t.num_hidden_layers ?? t.n_layer;
+    const hiddenSize = t.hidden_size ?? t.n_embd;
+    const numHeads = t.num_attention_heads ?? t.num_heads ?? t.n_head;
     if (![numLayers, hiddenSize, numHeads].every(Number.isFinite)) {
       notes.push('config.json lacks num_hidden_layers / hidden_size / num_attention_heads');
     } else {
+      if (t.num_hidden_layers == null || t.hidden_size == null
+        || (t.num_attention_heads == null && t.num_heads == null)) {
+        notes.push('resolved from legacy GPT-2-style config fields (n_layer/n_embd/n_head)');
+      }
       return assemble({ hfId, notes, info,
         arch: {
           numLayers,
@@ -161,7 +168,11 @@ async function resolveUncached(hfId, quant) {
           numHeads,
           kvHeads: Number.isFinite(t.num_key_value_heads) ? t.num_key_value_heads : numHeads,
           headDim: Number.isFinite(t.head_dim) ? t.head_dim : hiddenSize / numHeads,
-          maxContextLength: Number.isFinite(t.max_position_embeddings) ? t.max_position_embeddings : null
+          maxContextLength: Number.isFinite(t.max_position_embeddings)
+            ? t.max_position_embeddings
+            : Number.isFinite(t.n_positions)
+              ? t.n_positions
+              : Number.isFinite(t.n_ctx) ? t.n_ctx : null
         },
         paramsTotal: Number.isFinite(info?.safetensors?.total) && info.safetensors.total > 0
           ? info.safetensors.total
