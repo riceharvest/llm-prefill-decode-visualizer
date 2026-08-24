@@ -63,10 +63,7 @@ export default function App() {
   const [selectedPreset, setSelectedPreset] = useState(initialPreset);
   const [prefillSpeed, setPrefillSpeed] = useState(() => Number(readParam('prefill')) || initialPresetObj.prefillSpeed);
   const [decodeSpeed, setDecodeSpeed] = useState(() => Number(readParam('decode')) || initialPresetObj.decodeSpeed);
-  const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => {
-    const v = readParam('sim');
-    return v === 'instant' ? 'instant' : (Number(v) || 1);
-  });
+  const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => readSimMultiplier());
   const [isPlaying, setIsPlaying] = useState(false);
   // Engine flags (issue #70): comma-separated ids persisted in the URL. The
   // picker shows their documented deltas; "Apply to simulation" bakes the

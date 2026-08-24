@@ -10,7 +10,7 @@ import KVCacheCalculator from './KVCacheCalculator';
 import TheoryGuide from './TheoryGuide';
 import CurriculumMode from './CurriculumMode';
 import { HARDWARE_PRESETS } from '../utils/presets';
-import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
+import { readParam, readParamNum, readParamBool, readSimMultiplier, writeParams } from '../utils/urlState';
 import { setLocale, getLocale, getDirection, t } from '../i18n/strings';
 
 // Embeddable widget view (issue #108): served at /embed?tab=…&preset=… it
@@ -43,10 +43,7 @@ export default function EmbedApp() {
     HARDWARE_PRESETS.find(x => x.id === readParam('preset')) || HARDWARE_PRESETS[0];
   const [prefillSpeed] = useState(() => readParamNum('prefill', initialPresetObj.prefillSpeed));
   const [decodeSpeed] = useState(() => readParamNum('decode', initialPresetObj.decodeSpeed));
-  const [simSpeedMultiplier] = useState(() => {
-    const v = readParam('sim');
-    return v === 'instant' ? 'instant' : (readParamNum('sim', 1));
-  });
+  const [simSpeedMultiplier] = useState(() => readSimMultiplier());
   // autoplay=1 starts the simulation on load (same convention as demoUrl).
   const [isPlaying, setIsPlaying] = useState(() => readParamBool('autoplay', false));
   const [resetKey] = useState(0);
