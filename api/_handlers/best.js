@@ -189,6 +189,7 @@ export async function bestBody(query = {}) {
     };
 
     const snapshotAt = new Date();
+    let excludedUnknownVramGb = 0;
     const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
     const contextBand = parseContextBandParam(q.context_band ?? q.contextBand);
 
@@ -218,7 +219,17 @@ export async function bestBody(query = {}) {
     }
     if (q.maxVramGb) {
       const maxV = Number(q.maxVramGb);
-      if (Number.isFinite(maxV)) runs = runs.filter(r => effectiveVramGb(r) != null && effectiveVramGb(r) <= maxV);
+      if (Number.isFinite(maxV)) {
+        // Count rigs dropped for UNKNOWN memory separately (#780): an agent
+        // capping VRAM should be able to tell "over budget" from "no data".
+        let unknownVram = 0;
+        runs = runs.filter(r => {
+          const v = effectiveVramGb(r);
+          if (v == null) { unknownVram++; return false; }
+          return v <= maxV;
+        });
+        excludedUnknownVramGb = unknownVram;
+      }
     }
 
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
@@ -434,6 +445,12 @@ export async function bestBody(query = {}) {
       maxAgeDays: maxAgeDays || null,
       contextBand: contextBand || null,
       matchedRuns: runs.length,
+      // #780: surface constraint-elimination telemetry. excludedRuns is the
+      // field the OpenAPI spec already declares (present only with fitCheck);
+      // excludedUnknownVramGb separates "dropped for missing memory data"
+      // from "over budget" when ?maxVramGb= is applied.
+      ...(fitCheck ? { excludedRuns: excludedByFit } : {}),
+      ...(excludedUnknownVramGb > 0 ? { excludedUnknownVramGb } : {}),
       caveats: buildCaveats(runs, groups),
       warnings,
       ...(by === 'walltime' ? {

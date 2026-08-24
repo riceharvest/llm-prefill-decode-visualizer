@@ -582,6 +582,7 @@ const BEST_LIST_ENVELOPE = {
     snapshotAt: { type: ['string', 'null'], format: 'date-time' },
     matchedRuns: { type: 'integer', description: 'Comparable runs that survived filtering' },
     excludedRuns: { type: ['integer', 'null'], description: 'Runs dropped by ?fitCheck= (present only with fitCheck)' },
+    excludedUnknownVramGb: { type: 'integer', description: 'Runs dropped by ?maxVramGb= because their memory size is unknown (present only when maxVramGb dropped such runs)' },
     maxAgeDays: { type: ['number', 'null'], description: 'Echoed ?max_age= filter (null when unset)' },
     contextBand: { type: ['string', 'null'], enum: ['lt1k', '1k-8k', '8k-32k', '32k+', null], description: 'Echoed ?context_band= filter (null when unset)' },
     caveats: { type: 'array', items: { $ref: '#/components/schemas/Caveat' } },
