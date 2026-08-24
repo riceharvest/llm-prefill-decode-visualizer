@@ -161,6 +161,7 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  * ?price=<usd>                    hardware purchase price (per rig; default 0)
  * ?electricityRate=$/kWh          default 0.15
  * ?powerWatts=W                   default estimate by hwClass (see DEFAULT_POWER_WATTS)
+ * ?powerDrawWatts=W               alias for powerWatts (same spelling as /api/compute)
  * ?amortizationMonths=M           spread hardware price over this many months (default 36)
  * ?promptTokens=&outputTokens=    scenario shape (defaults 2048/512)
  *
@@ -187,6 +188,11 @@ export async function bestBody(query = {}) {
       promptTokens: num(q.promptTokens, 2048),
       outputTokens: num(q.outputTokens, 512)
     };
+
+    // ?powerWatts and the /api/compute-documented spelling ?powerDrawWatts are
+    // both accepted (#1111) — previously only powerWatts was read, so agents
+    // copying compute's documented param were silently ignored.
+    const powerWattsParam = q.powerDrawWatts ?? q.powerWatts;
 
     const snapshotAt = new Date();
     const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
@@ -216,9 +222,21 @@ export async function bestBody(query = {}) {
       const minD = Number(q.minDecode);
       if (Number.isFinite(minD)) runs = runs.filter(r => r.decodeTokPerSec >= minD);
     }
+    // maxVramGb: count unknown-memory drops separately (#780) — a rig with no
+    // vramGb/unifiedMemoryGb is excluded for MISSING DATA, not because it
+    // exceeded the cap; agents must be able to tell the two apart.
+    let excludedUnknownVramGb = 0;
+    let appliedMaxVramGb = null;
     if (q.maxVramGb) {
       const maxV = Number(q.maxVramGb);
-      if (Number.isFinite(maxV)) runs = runs.filter(r => effectiveVramGb(r) != null && effectiveVramGb(r) <= maxV);
+      if (Number.isFinite(maxV)) {
+        appliedMaxVramGb = maxV;
+        runs = runs.filter(r => {
+          const v = effectiveVramGb(r);
+          if (v == null) { excludedUnknownVramGb += 1; return false; }
+          return v <= maxV;
+        });
+      }
     }
 
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
@@ -229,6 +247,7 @@ export async function bestBody(query = {}) {
     const fitPrecisionBytes = Number(q.precisionBytes) > 0 ? Number(q.precisionBytes) : 2;
     const fitBatchSize = Math.max(1, Math.round(Number(q.batchSize)) || 1);
     let excludedByFit = 0;
+    let runsBeforeFit = null;
     if (fitCheck) {
       const before = runs.length;
       runs = runs.filter(r => {
@@ -236,6 +255,9 @@ export async function bestBody(query = {}) {
         return fit?.fits === true;
       });
       excludedByFit = before - runs.length;
+      // Surface the already-computed exclusion counter (#780): the spec
+      // documents `excludedRuns`, so emit it instead of dropping it.
+      runsBeforeFit = before;
     }
 
     // Rank per hardware rig × model family using the group's medians,
@@ -260,7 +282,10 @@ export async function bestBody(query = {}) {
           const sample = g.bestRun;
           const c = cost({
             ...costInputs,
-            powerDrawWatts: num(q.powerWatts, DEFAULT_POWER_WATTS[sample.hwClass] ?? 150),
+            // hwClass arrives UPPERCASE on the wire (DISCRETE_GPU / UNIFIED /
+            // CPU_ONLY) — normalize before the table lookup so the per-class
+            // watt estimates are not dead code falling back to a flat 150W (#1111).
+            powerDrawWatts: num(powerWattsParam, DEFAULT_POWER_WATTS[String(sample.hwClass ?? '').toLowerCase()] ?? 150),
             prefillSpeed: g.prefill.median,
             decodeSpeed: g.decode.median
           });
@@ -367,6 +392,10 @@ export async function bestBody(query = {}) {
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
     warnings.push(...groups.filter(g => g.mixedContextBands)
       .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
+    // Exclusion telemetry (#780): make valid constraints' effects observable.
+    if (excludedUnknownVramGb > 0) {
+      warnings.push(`${excludedUnknownVramGb} run(s) were excluded by ?maxVramGb=${appliedMaxVramGb} because their memory size is unknown (no vramGb/unifiedMemoryGb) — not because they exceeded the cap.`);
+    }
 
     const filters = { by, limit };
     if (q.model) filters.model = String(q.model).toLowerCase();
@@ -434,6 +463,10 @@ export async function bestBody(query = {}) {
       maxAgeDays: maxAgeDays || null,
       contextBand: contextBand || null,
       matchedRuns: runs.length,
+      // Exclusion telemetry (#780): emitted only when the corresponding filter
+      // ran, so payloads stay byte-stable for requests that don't use it.
+      ...(fitCheck ? { excludedRuns: excludedByFit, runsBeforeFit } : {}),
+      ...(appliedMaxVramGb != null ? { excludedUnknownVramGb } : {}),
       caveats: buildCaveats(runs, groups),
       warnings,
       ...(by === 'walltime' ? {
