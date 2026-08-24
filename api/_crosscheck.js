@@ -80,7 +80,15 @@ export function confidence(runs, now = Date.now()) {
  *    single-card baseline — plausible for CPU-bound setups but suspicious
  *    enough to flag.
  */
-export function crossCheck(runs) {
+export function crossCheck(runs, { hardwareHomogeneous = true } = {}) {
+  // Baseline scope (#986): when the caller's group buckets mix hardware
+  // (?groupBy=model/quant or ?crossEngine=true), the "single-card baseline"
+  // is a median across unrelated GPUs and the comparison is only indicative.
+  // Contradictions then carry an explicit baselineScope caveat instead of
+  // asserting comparability that no longer holds.
+  const baselineScope = hardwareHomogeneous
+    ? null
+    : 'mixed-hardware bucket: the single-card baseline is a median across unrelated GPUs under this grouping';
   const buckets = new Map();
   for (const r of runs) {
     const k = `${r.modelFamily}|${String(r.quantization || '').toLowerCase()}`;
@@ -158,6 +166,7 @@ export function crossCheck(runs) {
 
   return {
     relatedRigComparisons: comparisons,
-    contradictions
+    contradictions,
+    ...(baselineScope ? { baselineHardwareHomogeneous: false, baselineScope } : {})
   };
 }

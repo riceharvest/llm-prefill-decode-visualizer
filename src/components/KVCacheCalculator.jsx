@@ -7,6 +7,7 @@ import { GPU_CATALOG, WEIGHT_PRECISIONS, gpuById, parseParamsB, weightsGiB } fro
 import Metric from './Metric';
 import Analogy from './Analogy';
 import { memoryLedger, SAFETY_HEADROOM_FRACTION } from '../../api/_math.js';
+import { resolveBudgetVramGb, gpuSelectionPatch } from '../utils/kvGpuState';
 import MultiGpuPlanner from './MultiGpuPlanner';
 import ChartDataTable from './ChartDataTable';
 import { t } from '../i18n/strings';
@@ -295,11 +296,19 @@ export default function KVCacheCalculator() {
 
   const overheadFraction = overheadPct / 100;
   const selectedGpu = gpuById(gpuId);
+  // #988: one VRAM source of truth for BOTH panels — the planner honors the
+  // same explicit-ledger override the ledger does, instead of silently using
+  // the gpu preset capacity and rendering contradictory fits.
+  const budgetVramGb = resolveBudgetVramGb(selectedGpu, gpuVramGb);
+  const applyGpuPatch = patch => {
+    if ('gpuVramGb' in patch) setGpuVramGb(patch.gpuVramGb);
+    setGpuId(patch.gpuId);
+  };
   const budget = vramBudget({
     weightsGb,
     kvGb: totalKVCacheGB,
     overheadFraction,
-    gpuVramGb: selectedGpu ? selectedGpu.vramGb : null
+    gpuVramGb: budgetVramGb
   });
   const gpuVerdicts = GPU_CATALOG.map(gpu => ({
     gpu,
@@ -786,12 +795,13 @@ export default function KVCacheCalculator() {
           <div className="panel-inset field">
             <div className="field-head">
               <span className="field-label">{t('kvCache.targetGpu')}</span>
-              <span className="field-value" style={{ color: 'var(--accent)' }}>{selectedGpu ? `${selectedGpu.vramGb} GB` : '—'}</span>
+              {/* #988: show the effective budget VRAM (override-aware), matching the ledger */}
+              <span className="field-value" style={{ color: 'var(--accent)' }}>{budgetVramGb != null ? `${fmtGb(budgetVramGb)} GB` : '—'}</span>
             </div>
             <select
               value={gpuId}
               aria-label={t('kvCache.targetGpuAria')}
-              onChange={(e) => setGpuId(e.target.value)}
+              onChange={(e) => applyGpuPatch(gpuSelectionPatch(e.target.value, GPU_CATALOG))}
               style={{ width: '100%', marginTop: '4px' }}
             >
               {GPU_CATALOG.map(gpu => (
@@ -809,15 +819,15 @@ export default function KVCacheCalculator() {
           <div style={{ marginBottom: '18px' }}>
             <div style={{ position: 'relative', height: '34px', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
               {(() => {
-                const scaleMax = Math.max(budget.totalGb, selectedGpu.vramGb);
+                const scaleMax = Math.max(budget.totalGb, budgetVramGb);
                 const pct = gb => Math.min(100, (gb / scaleMax) * 100);
-                const limitPos = pct(selectedGpu.vramGb);
+                const limitPos = pct(budgetVramGb);
                 return (
                   <>
                     <div title={t('kvCache.ledgerWeights')} style={{ position: 'absolute', inset: 0, width: `${pct(weightsGb)}%`, background: 'linear-gradient(180deg, var(--prefill), color-mix(in srgb, var(--prefill) 70%, black))' }} />
                     <div title={t('kvCache.ledgerKv')} style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(weightsGb)}%`, width: `${Math.max(0, pct(weightsGb + totalKVCacheGB) - pct(weightsGb))}%`, background: 'var(--decode)' }} />
                     <div title={t('kvCache.ledgerOverhead', { pct: overheadPct })} style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(weightsGb + totalKVCacheGB)}%`, width: `${Math.max(0, pct(budget.totalGb) - pct(weightsGb + totalKVCacheGB))}%`, background: 'repeating-linear-gradient(45deg, var(--agent), var(--agent) 4px, transparent 4px, transparent 8px)', backgroundColor: 'color-mix(in srgb, var(--agent) 35%, transparent)' }} />
-                    <div title={t('kvCache.gpuLimitMarker', { gb: `${selectedGpu.vramGb} GB` })} style={{ position: 'absolute', top: 0, bottom: 0, left: `${limitPos}%`, width: '2px', background: 'white', boxShadow: '0 0 6px rgba(255,255,255,0.9)' }} />
+                    <div title={t('kvCache.gpuLimitMarker', { gb: `${fmtGb(budgetVramGb)} GB` })} style={{ position: 'absolute', top: 0, bottom: 0, left: `${limitPos}%`, width: '2px', background: 'white', boxShadow: '0 0 6px rgba(255,255,255,0.9)' }} />
                   </>
                 );
               })()}
@@ -826,7 +836,7 @@ export default function KVCacheCalculator() {
               <span><span style={{ display: 'inline-block', width: '9px', height: '9px', background: 'var(--prefill)', marginRight: '5px', borderRadius: '2px' }} />{t('kvCache.ledgerWeights')} {fmtGb(weightsGb)} GB</span>
               <span><span style={{ display: 'inline-block', width: '9px', height: '9px', background: 'var(--decode)', marginRight: '5px', borderRadius: '2px' }} />{t('kvCache.ledgerKv')} {fmtGb(totalKVCacheGB)} GB</span>
               <span><span style={{ display: 'inline-block', width: '9px', height: '9px', border: '1px solid var(--agent)', marginRight: '5px', borderRadius: '2px' }} />{t('kvCache.ledgerOverhead', { pct: overheadPct })} {fmtGb(budget.overheadGb)} GB</span>
-              <span style={{ opacity: 0.75 }}>{t('kvCache.gpuLimitMarker', { gb: `${selectedGpu.vramGb} GB` })}</span>
+              <span style={{ opacity: 0.75 }}>{t('kvCache.gpuLimitMarker', { gb: `${fmtGb(budgetVramGb)} GB` })}</span>
             </div>
           </div>
         )}
@@ -883,7 +893,7 @@ export default function KVCacheCalculator() {
           {gpuVerdicts.map(({ gpu, verdict }) => (
             <button
               key={gpu.id}
-              onClick={() => setGpuId(gpu.id)}
+              onClick={() => applyGpuPatch(gpuSelectionPatch(gpu.id, GPU_CATALOG))}
               data-tooltip={`${t('kvCache.gpuVerdictAria', {
                 name: gpu.name,
                 verdict: verdict === 'pass' ? t('kvCache.verdictPass') : verdict === 'warn' ? t('kvCache.verdictWarn') : t('kvCache.verdictFail')

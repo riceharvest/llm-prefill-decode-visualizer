@@ -6,6 +6,7 @@ import { generateRequests, simulateBatching, simulateStaticBatching } from '../u
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import Metric from './Metric';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
+import { requestRowA11y, isRowActivateKey } from '../utils/batchingRows';
 import { t } from '../i18n/strings';
 
 // Chunk-size slider stops. 0 = chunked prefill OFF (whole prompt per step).
@@ -569,6 +570,12 @@ export default function BatchingVisualizer({
                 <div
                   key={req.id}
                   onClick={() => setSelectedRequestId(isSelected ? null : req.id)}
+                  onKeyDown={e => {
+                    if (!isRowActivateKey(e)) return;
+                    e.preventDefault();
+                    setSelectedRequestId(isSelected ? null : req.id);
+                  }}
+                  {...requestRowA11y(req, isSelected)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

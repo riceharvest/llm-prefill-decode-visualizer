@@ -105,7 +105,10 @@ export default async function handler(req, res) {
       engines: g.engines,
       mixedEngines: g.mixedEngines,
       confidence: { ...confidence(members.get(g.key) || []), ...(g.confidence || {}) },
-      crossCheck: crossCheck(members.get(g.key) || []),
+      // #986: only the default hardwareModel grouping buckets one hardware
+      // per group; model/quant/crossEngine groups mix GPUs, so crossCheck's
+      // single-card baseline spans unrelated rigs — flag it on the wire.
+      crossCheck: crossCheck(members.get(g.key) || [], { hardwareHomogeneous: groupBy === 'hardwareModel' }),
       dataQuality: dataQuality(members.get(g.key) || []),
       bestRun: {
         runId: g.bestRun.runId,

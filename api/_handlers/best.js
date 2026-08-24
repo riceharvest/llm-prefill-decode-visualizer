@@ -224,7 +224,10 @@ export async function bestBody(query = {}) {
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
     // plus KV cache at the requested context. Estimates only — see _vramfit.js.
     const fitCtx = Number(q.contextLength);
-    const fitCheck = q.fitCheck === 'true' || (Number.isFinite(fitCtx) && fitCtx > 0);
+    // Accept JSON-native booleans (#984): POST/what-if constraint sets arrive
+    // as real booleans ({"fitCheck": true}); only strings were honored before,
+    // making fitCheck transport-dependent between GET and JSON-body callers.
+    const fitCheck = q.fitCheck === true || q.fitCheck === 'true' || (Number.isFinite(fitCtx) && fitCtx > 0);
     const fitContextLength = Math.min(1e6, Math.max(256, fitCtx > 0 ? Math.round(fitCtx) : 32768));
     const fitPrecisionBytes = Number(q.precisionBytes) > 0 ? Number(q.precisionBytes) : 2;
     const fitBatchSize = Math.max(1, Math.round(Number(q.batchSize)) || 1);
