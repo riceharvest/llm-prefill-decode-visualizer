@@ -359,6 +359,17 @@ a { color: var(--accent); }
   gap: 8px;
 }
 
+/* Issues #428: the Simulate/Reset/Export/Copy action rows on the single-turn
+   and agentic views were non-wrapping flex rows, so at 390px the trailing
+   buttons clipped off-screen and html/body overflow-x:clip (the issue #80
+   tooltip guard) made them unreachable — no horizontal panning exists. */
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .field-label {
   font-size: 0.74rem;
   font-weight: 600;
@@ -1057,6 +1068,17 @@ input[type="range"]::-moz-range-thumb {
   text-align: center;
   color: var(--text-subtle);
   font-size: 0.76rem;
+}
+
+/* Issue #430: the footer's API / OpenAPI links rendered ~18×14 px — far
+   below the 44×44 px minimum touch target on mobile. Inline-flex + min-height
+   gives them a full-height tap area without changing the compact type. */
+.site-footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 8px;
+  vertical-align: middle;
 }
 
 /* ---------- Mobile-first compact layout (#85 / #64) ----------

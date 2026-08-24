@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HardDrive, Cpu, Gauge } from 'lucide-react';
 import { formatTokens } from '../utils/presets';
-import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import { readParam, readParamNum, readKvBatchSize, writeParams } from '../utils/urlState';
 import { DEFAULT_OVERHEAD_FRACTION, vramBudget } from '../../api/_math.js';
 import { GPU_CATALOG, WEIGHT_PRECISIONS, gpuById, parseParamsB, weightsGiB } from '../utils/vramPlanner';
 import Metric from './Metric';
@@ -243,7 +243,9 @@ export default function KVCacheCalculator() {
     const p = readParamNum('prec', 2);
     return [2, 1, 0.5].includes(p) ? p : 2; // 2 bytes = FP16/BF16, 1 = FP8/INT8, 0.5 = INT4
   });
-  const [batchSize, setBatchSize] = useState(() => readParamNum('batch', 1));
+  // Issue #431: this tab owns ?kvb= — ?batch= belongs to the Compare tab and
+  // the two silently overwrote each other when switching tabs.
+  const [batchSize, setBatchSize] = useState(() => readKvBatchSize(window.location.search));
   // Target GPU for the memory ledger: preset id + its VRAM (editable for
   // cards that aren't in the list — editing clears the preset id).
   const [gpuVramGb, setGpuVramGb] = useState(() => {
@@ -270,7 +272,7 @@ export default function KVCacheCalculator() {
 
   // Shareable per-tab settings
   useEffect(() => {
-    writeParams({ model: modelPreset, ctx: contextLength, prec: precision, batch: batchSize,
+    writeParams({ model: modelPreset, ctx: contextLength, prec: precision, kvb: batchSize,
       wp: weightPrecisionId, gpu: gpuId, oh: overheadPct, wgb: weightsOverrideGb || undefined, vram: gpuVramGb });
   }, [modelPreset, contextLength, precision, batchSize, weightPrecisionId, gpuId, overheadPct, weightsOverrideGb, gpuVramGb]);
 

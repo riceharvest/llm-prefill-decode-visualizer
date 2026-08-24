@@ -19,7 +19,7 @@ import { toLocalPreset, hardwareName } from './utils/localMaxxing';
 import {
   describeConfig, permalinkHref, readPermalinkTitle, documentTitleFor
 } from './utils/permalink';
-import { readParam, writeParams } from './utils/urlState';
+import { readParam, readParamPosNum, writeParams, ogImageParams } from './utils/urlState';
 import {
   serializeSettings, parseSettings,
   createHistory, recordChange, undo as historyUndo, redo as historyRedo
@@ -61,8 +61,12 @@ export default function App() {
   })();
   const initialPresetObj = HARDWARE_PRESETS.find(x => x.id === initialPreset) || HARDWARE_PRESETS[0];
   const [selectedPreset, setSelectedPreset] = useState(initialPreset);
-  const [prefillSpeed, setPrefillSpeed] = useState(() => Number(readParam('prefill')) || initialPresetObj.prefillSpeed);
-  const [decodeSpeed, setDecodeSpeed] = useState(() => Number(readParam('decode')) || initialPresetObj.decodeSpeed);
+  // Issue #434: prefill/decode are physical tok/s — non-finite, zero and
+  // negative URL values fall back to the preset default instead of 0 silently
+  // swapping for it or a negative value sticking in the number twin while the
+  // slider clamps to its minimum.
+  const [prefillSpeed, setPrefillSpeed] = useState(() => readParamPosNum('prefill', initialPresetObj.prefillSpeed));
+  const [decodeSpeed, setDecodeSpeed] = useState(() => readParamPosNum('decode', initialPresetObj.decodeSpeed));
   const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => {
     const v = readParam('sim');
     return v === 'instant' ? 'instant' : (Number(v) || 1);
@@ -209,10 +213,13 @@ export default function App() {
   // /api/og with the current config so shared links preview the actual chart.
   // Crawlers that don't run JS still get the static defaults from index.html.
   useEffect(() => {
-    const qs = new URLSearchParams({ preset: selectedPreset });
-    qs.set('prefill', String(prefillSpeed));
-    qs.set('decode', String(decodeSpeed));
-    const ogUrl = `/api/og?${qs.toString()}`;
+    // Issue #435: carry the workload params the OG endpoint honors (prompt
+    // size changes the TTFT headline) so shared links preview the right chart.
+    const ogUrl = `/api/og?${ogImageParams(window.location.search, {
+      preset: selectedPreset,
+      prefill: prefillSpeed,
+      decode: decodeSpeed
+    }).toString()}`;
     for (const selector of ['meta[property="og:image"]', 'meta[name="twitter:image"]']) {
       document.querySelector(selector)?.setAttribute('content', ogUrl);
     }
