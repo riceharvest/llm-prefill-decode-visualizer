@@ -14,12 +14,22 @@ export function slugify(text) {
 
 /**
  * Parse "/compare/:a-vs-:b" into { a, b } slugs.
- * Returns null for anything that isn't a well-formed /compare/ path.
+ * Returns null for anything that isn't a well-formed /compare/ path —
+ * including paths with malformed percent-escapes (#910): decodeURIComponent
+ * would throw URIError during render and blank the whole SPA (no
+ * ErrorBoundary), so an undecodable slug is treated as not-found instead.
  */
+function safeDecode(s) {
+  try { return decodeURIComponent(s); } catch { return null; }
+}
+
 export function parseComparePath(pathname) {
   const m = /^\/compare\/([^/]+?)-vs-([^/]+?)\/?$/.exec(String(pathname || ''));
   if (!m || !m[1] || !m[2]) return null;
-  return { a: decodeURIComponent(m[1]), b: decodeURIComponent(m[2]) };
+  const a = safeDecode(m[1]);
+  const b = safeDecode(m[2]);
+  if (a === null || b === null) return null;
+  return { a, b };
 }
 
 /**

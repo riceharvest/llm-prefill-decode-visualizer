@@ -92,3 +92,21 @@ test('idle gap before first arrival produces no empty busy steps', () => {
   const sim = simulateBatching({ requests: late, maxBatchSize: 4, chunkSize: 256, ...PARAMS });
   assert.equal(sim.steps[0].tStart, 2);
 });
+
+test('non-positive or NaN maxBatchSize terminates instead of hanging (#1078)', () => {
+  const reqs = workload();
+  for (const maxBatchSize of [0, -1, NaN]) {
+    const sim = simulateBatching({ requests: reqs, maxBatchSize, chunkSize: 512, ...PARAMS });
+    assert.deepEqual(sim.steps, [], `steps empty for bmax=${maxBatchSize}`);
+    for (const r of sim.requests) {
+      assert.equal(r.firstTokenTime, null);
+      assert.equal(r.finishTime, null);
+    }
+  }
+});
+
+test('static batching with non-positive cohort size terminates (#1078)', () => {
+  const sim = simulateStaticBatching({ requests: workload(), maxBatchSize: 0, ...PARAMS });
+  assert.deepEqual(sim.steps, []);
+  assert.equal(sim.makespan, 0);
+});

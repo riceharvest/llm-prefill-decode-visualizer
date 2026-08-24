@@ -19,8 +19,13 @@
             return /\d/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1);
           }).join(' ');
         }
-        var a = decodeURIComponent(m[1]);
-        var b = decodeURIComponent(m[2]);
+        // A malformed percent-escape (%zz, trailing %) throws URIError — fall
+        // back to the raw slug so the metadata script never dies pre-paint (#910).
+        function decode(slug) {
+          try { return decodeURIComponent(slug); } catch (e) { return slug; }
+        }
+        var a = decode(m[1]);
+        var b = decode(m[2]);
         var pa = pretty(a), pb = pretty(b);
         document.title = pa + ' vs ' + pb + ' LLM inference speed — tok/s compared | LLM Prefill & Decode Visualizer';
         function meta(name, content, attr) {

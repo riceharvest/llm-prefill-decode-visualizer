@@ -112,6 +112,11 @@ export function simulateBatching({
 
     if (running.length === 0) {
       // Batch empty but next arrival is in the future — skip idle time.
+      // If nothing can ever be admitted (maxBatchSize <= 0 or NaN, e.g. a
+      // ?bmax=0 share link), stop instead of looping forever (#1078):
+      // queuedIdx can never advance when no slot exists, so the skip below
+      // would re-fire on every iteration with `steps` still empty.
+      if (!(maxBatchSize >= 1)) break;
       t = Math.max(t, state.get(order[queuedIdx]).arrivalTime);
       continue;
     }
@@ -204,6 +209,12 @@ export function simulateBatching({
  * for). Used only for the comparison banner; shares the timing model above.
  */
 export function simulateStaticBatching({ requests, maxBatchSize, prefillSpeed, decodeSpeed }) {
+  // A non-positive/NaN cohort size would make `start += maxBatchSize` never
+  // advance (infinite loop) — bail out to empty metrics instead (#1078).
+  if (!(maxBatchSize >= 1)) {
+    return { steps: [], requests: [], makespan: 0, summary: summarize([], [], maxBatchSize) };
+  }
+
   const decodeStepTime = decodeSpeed > 0 ? 1 / decodeSpeed : Infinity; // seconds
   const steps = [];
   const enriched = [];

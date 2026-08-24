@@ -23,7 +23,7 @@ export default function BatchingVisualizer({
   const [numRequests, setNumRequests] = useState(() => readParamNum('breqs', 12));
   const [meanPromptTokens, setMeanPromptTokens] = useState(() => readParamNum('bprompt', 2000));
   const [meanOutputTokens, setMeanOutputTokens] = useState(() => readParamNum('bgen', 256));
-  const [maxBatchSize, setMaxBatchSize] = useState(() => readParamNum('bmax', 8));
+  const [maxBatchSize, setMaxBatchSize] = useState(() => Math.max(1, Math.round(readParamNum('bmax', 8))));
   const [chunkStopIndex, setChunkStopIndex] = useState(() => {
     const v = readParamNum('bchunk', 512);
     const idx = CHUNK_STOPS.indexOf(v);
@@ -371,9 +371,14 @@ export default function BatchingVisualizer({
                 aria-valuetext={`batch size ${maxBatchSize}`}
                 onChange={(e) => { setMaxBatchSize(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
-              <input type="number" value={maxBatchSize}
+              <input type="number" min="1" value={maxBatchSize}
                 aria-label={t('batching.maxBatchValueAria')}
-                onChange={(e) => { setMaxBatchSize(Number(e.target.value)); handleReset(); }}
+                onChange={(e) => {
+                  // Clamp non-positive input: 0/negative would hang the
+                  // synchronous simulateBatching render (#1078).
+                  const v = Math.round(Number(e.target.value));
+                  if (Number.isFinite(v) && v >= 1) { setMaxBatchSize(v); handleReset(); }
+                }}
                 style={{ width: '4rem' }} />
             </div>
           </div>
