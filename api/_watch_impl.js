@@ -11,10 +11,10 @@ export const config = { runtime: 'nodejs' };
 
 const DESCRIPTION =
   'Watch feeds (#109): subscribe to a hardware+model combination (e.g. "RTX 4090 + Qwen3 32B") and get notified when new community LocalMaxxing runs land for that pair. ' +
-  'POST { model?, hardware?, quant?, webhookUrl? } to create a watch — at least one of model/hardware is required; webhookUrl (https) adds webhook delivery on top of the RSS feed. ' +
+  'POST { model?, hardware?, quant?, webhookUrl?, includeExisting? } to create a watch — at least one of model/hardware is required; webhookUrl (https) adds webhook delivery on top of the RSS feed; includeExisting=true opts into receiving matching runs dated before the watch was created (backfilled/imported data) on the first dispatch (#699). ' +
   'The response carries watchId + secret (save the secret: it is shown once and is required to DELETE) and a ready-made rssUrl. ' +
-  'RSS: GET /api/watch/rss.xml?model=&hardware=&quant= — poll it like any feed. ' +
-  'Webhooks: POST /api/watch/dispatch (cron-friendly) delivers unseen matching runs to each registered webhook with an X-Watch-Secret header. ' +
+  'RSS: GET /api/watch/rss.xml?model=&hardware=&quant=&page=&perPage= — poll it like any feed; it supports ETag/If-None-Match (304), Last-Modified, and cursor pagination (#696). ' +
+  'Webhooks: POST /api/watch/dispatch (cron-friendly) delivers unseen matching runs to each registered webhook with an X-Watch-Secret header; failed deliveries are retried with capped exponential backoff and dead-lettered after repeated failures instead of losing the runs (#694). ' +
   'DELETE /api/watch?id=&secret= to unsubscribe. Storage is per-instance JSONL (WATCHES_DIR), same durability model as run submissions.';
 
 /**
@@ -39,6 +39,8 @@ export default async function handler(req, res) {
       } catch { /* store unavailable — describe the feature anyway */ }
 
       // Never expose secrets or webhook URLs in the public listing.
+      // Delivery-health fields (#694) let an agent detect that its
+      // subscription went deaf (backoff / dead-letter) instead of guessing.
       return sendJson(res, {
         description: DESCRIPTION,
         maxWatches: MAX_WATCHES,
@@ -48,7 +50,15 @@ export default async function handler(req, res) {
           label: watchLabel(w),
           model: w.model, hardware: w.hardware, quant: w.quant,
           hasWebhook: !!w.webhookUrl,
-          createdAt: w.createdAt
+          includeExisting: !!w.includeExisting,
+          createdAt: w.createdAt,
+          ...(w.webhookUrl ? {
+            lastDispatchAt: w.lastDispatchAt ?? null,
+            consecutiveFailures: w.consecutiveFailures ?? 0,
+            deadLettered: !!w.deadLettered,
+            ...(w.nextRetryAt ? { nextRetryAt: w.nextRetryAt } : {}),
+            ...(w.lastDeliveryError ? { lastDeliveryError: w.lastDeliveryError } : {})
+          } : {})
         }))
       }, { cacheTtl: 60 });
     }
