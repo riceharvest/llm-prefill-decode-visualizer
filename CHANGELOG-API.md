@@ -79,6 +79,9 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- Every app-emitted 429 now carries a `Retry-After` header: `watch_limit_reached` responses from `/api/watch` — previously the only 429 without one — now set `Retry-After` (3600s) plus a machine-readable `retryAfterSeconds` body field. Separately documented the Vercel edge bot-protection block (#466 #526 #541 #554 #710): bursts below the advertised 120/min budget can trip Vercel Security Checkpoint, which returns an HTML 403 (`x-vercel-mitigated: challenge`) on every path — including `/llms.txt` and `/api/health` — with no JSON body and no Retry-After. The detection signature and the recommended ~600s backoff are centralized in `api/_waf.js`, mirrored into a new root-level `x-bot-protection` object in `/api/spec` and a new "Edge bot protection" paragraph in the "Rate limits" section of public/llms.txt. Docs-only for the edge layer (the app cannot intercept it); additive fields elsewhere — no version bump.
+- Affected endpoints: `/api/watch`, `/api/spec` (docs), public/llms.txt.
+
 - `/api/spec` now annotates every operation with a machine-readable
   `x-rate-limit` extension: `{ enforced, limit, windowSeconds, keying, scope }`
   plus, for metered endpoints, the `X-RateLimit-*` header names and the 429

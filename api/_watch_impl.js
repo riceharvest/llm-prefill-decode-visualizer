@@ -9,6 +9,12 @@ import {
 
 export const config = { runtime: 'nodejs' };
 
+// Conservative Retry-After (seconds) advertised on watch_limit_reached 429s —
+// the cap frees up as other watches expire/are deleted, so we suggest an hour
+// rather than a hard window. Keeps the "every app-emitted 429 carries
+// Retry-After" guarantee (see api/_waf.js).
+export const WATCH_LIMIT_RETRY_AFTER_SECONDS = 3600;
+
 const DESCRIPTION =
   'Watch feeds (#109): subscribe to a hardware+model combination (e.g. "RTX 4090 + Qwen3 32B") and get notified when new community LocalMaxxing runs land for that pair. ' +
   'POST { model?, hardware?, quant?, webhookUrl? } to create a watch — at least one of model/hardware is required; webhookUrl (https) adds webhook delivery on top of the RSS feed. ' +
@@ -64,7 +70,15 @@ export default async function handler(req, res) {
         record = await saveWatch(watch);
       } catch (err) {
         if (String(err.message || '').includes('limit reached')) {
-          return sendJson(res, { error: 'watch_limit_reached', message: err.message }, { status: 429 });
+          // App-emitted 429s always carry Retry-After (see api/_waf.js — the
+          // edge WAF block is the one layer that cannot). The watch cap frees
+          // up when other watches are deleted; advertise a conservative hour.
+          res.setHeader('Retry-After', String(WATCH_LIMIT_RETRY_AFTER_SECONDS));
+          return sendJson(res, {
+            error: 'watch_limit_reached',
+            message: err.message,
+            retryAfterSeconds: WATCH_LIMIT_RETRY_AFTER_SECONDS
+          }, { status: 429 });
         }
         return sendJson(res, { error: 'watch_store_unavailable', message: String(err.message || err) }, { status: 503 });
       }
