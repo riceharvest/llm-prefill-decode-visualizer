@@ -319,7 +319,9 @@ export default function App() {
       const href = permalinkHref({
         origin: window.location.origin,
         pathname: window.location.pathname,
-        search: window.location.search
+        // #445/#446: share the active view's params + globals, not the union
+        // of every view ever visited this session.
+        search: scopeShareSearch(window.location.search, activeTab)
       }, permalinkTitle);
       await navigator.clipboard.writeText(href);
     } catch {
@@ -332,7 +334,10 @@ export default function App() {
   // visitor sees embedded matches what the author configured.
   const handleEmbed = async () => {
     try {
-      const src = `${window.location.origin}/embed${window.location.search}`;
+      // Same scoping as share links (#445/#446): the iframe should encode the
+      // view being embedded, not stale state from every other view.
+      const scopedQs = scopeShareSearch(window.location.search, activeTab);
+      const src = `${window.location.origin}/embed?${scopedQs}`;
       const snippet = `<iframe src="${src}" width="100%" height="520" frameborder="0" loading="lazy" title="${t('header.brandTitle')}"></iframe>`;
       await navigator.clipboard.writeText(snippet);
     } catch {

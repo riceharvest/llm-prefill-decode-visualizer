@@ -41,3 +41,59 @@ export function demoUrl(params) {
   p.set('autoplay', '1');
   return `${window.location.pathname}?${p.toString()}`;
 }
+
+// Cross-view share-link fidelity (#445 #446): which query params each view
+// owns, plus a pure helper that scopes a query string down to one view's
+// params plus the global ones. Every visualizer merges its params into ONE
+// shared query string and nothing prunes them, so after touring the views a
+// share link carried the union of everything ever visited (~30 params) — a
+// Diff link shipped 25 params Diff ignores, and five different workload
+// namespaces (prompt/sprompt/bprompt/cp/abp) coexisted in one URL (#446).
+// The registry below doubles as the machine-readable manifest mapping each
+// view to its param names.
+export const GLOBAL_URL_PARAMS = [
+  'tab', 'preset', 'prefill', 'decode', 'lang', 'autoplay',
+  // The LocalMaxxing preset picker is mounted on every tab, so its state is global.
+  'lmxOrder', 'lmxModel', 'lmxQuant', 'lmxRun', 'lmxHw'
+];
+
+// Tabs that render SpeedControls + EngineFlagPicker: only these consume the
+// time-scale multiplier and engine-flag selection, so only these keep
+// ?sim=/?flags= in their share links (#448's "flags ride into views that
+// have no control for them").
+export const SIMULATOR_TABS = ['single', 'agentic', 'batching', 'compare', 'ab'];
+
+export const TAB_URL_PARAMS = {
+  single: ['prompt', 'output', 'spec', 'draftK', 'acc', 'ctx', 'ctxHalf', 'img', 'imgN', 'imgRes', 'jit', 'jitPct'],
+  agentic: ['turns', 'sprompt', 'tool', 'thought', 'cache'],
+  batching: ['breqs', 'bprompt', 'bgen', 'bmax', 'bchunk', 'barr'],
+  compare: ['hwA', 'hwB', 'cp', 'co', 'batch', 'piA', 'poA', 'piB', 'poB', 'tcoHw', 'tcoW', 'tcoKwh', 'tcoCloud', 'tcoCapex', 'tcoAmort', 'qtm'],
+  ab: ['abA', 'abB', 'abp', 'abo'],
+  diff: ['runA', 'runB'],
+  shortlist: ['sd', 'sv', 'sm', 'sq'],
+  kvcache: ['model', 'ctx', 'prec', 'batch', 'wp', 'gpu', 'oh', 'wgb', 'vram', 'gpus', 'par', 'bus', 'card', 'wprec'],
+  theory: []
+};
+// Known cross-view key collisions (ctx: single-turn ↔ kvcache, batch:
+// compare ↔ kvcache — see #669/#837): a shared link from EITHER tab keeps
+// such keys. Disambiguating them is its own issue and deliberately not
+// changed here.
+
+// Pure: filter a query string down to the active view's params + globals.
+// Used where links LEAVE the app (share button, embed snippet); the live
+// address bar keeps accumulating so in-session state still survives tab
+// switches — only what gets shared is scoped.
+export function scopeShareSearch(search, activeTab) {
+  const allowed = new Set(GLOBAL_URL_PARAMS);
+  for (const k of TAB_URL_PARAMS[activeTab] || []) allowed.add(k);
+  if (SIMULATOR_TABS.includes(activeTab)) {
+    allowed.add('sim');
+    allowed.add('flags');
+  }
+  const src = new URLSearchParams(search || '');
+  const out = new URLSearchParams();
+  for (const [k, v] of src) {
+    if (allowed.has(k)) out.append(k, v);
+  }
+  return out.toString();
+}
