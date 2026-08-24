@@ -255,15 +255,23 @@ function round3(x) {
 export function confidenceFor(group) {
   const decodes = group.map(r => r.decodeTokPerSec).sort((a, b) => a - b);
   const dq = quartiles(decodes);
-  const iqr = dq.q3 - dq.q1;
-  const relIqr = dq.median > 0 ? iqr / dq.median : Infinity;
-  const lo = dq.q1 - 1.5 * iqr;
-  const hi = dq.q3 + 1.5 * iqr;
-  const outliers = decodes.filter(v => v < lo || v > hi).length;
+  // With fewer than two runs quartiles() returns null q1/q3, and JS null
+  // coercion (null - null === 0) used to fabricate relativeIqr 0 while
+  // collapsing the 1.5×IQR fences to [0, 0] — counting every lone run as a
+  // 100%-outlier group (#852, #864). A single run carries no spread
+  // information and cannot be an outlier of itself.
+  const hasFences = decodes.length >= 2 && dq.q1 != null && dq.q3 != null;
+  const iqr = hasFences ? dq.q3 - dq.q1 : null;
+  const relIqr = hasFences && dq.median > 0 ? iqr / dq.median : Infinity;
+  const lo = hasFences ? dq.q1 - 1.5 * iqr : Infinity;
+  const hi = hasFences ? dq.q3 + 1.5 * iqr : -Infinity;
+  const outliers = hasFences ? decodes.filter(v => v < lo || v > hi).length : 0;
   const outlierDensity = decodes.length ? outliers / decodes.length : 1;
 
   const sampleFactor = clamp01(decodes.length / SAMPLE_SATURATION);
-  const spreadFactor = clamp01(1 - relIqr);
+  // A lone run has no spread evidence: grant full spread credit instead of the
+  // null-artifact 0, so it is not double-punished on both spread and outliers.
+  const spreadFactor = decodes.length === 1 ? 1 : clamp01(1 - relIqr);
   const outlierFactor = clamp01(1 - outlierDensity);
 
   const score = Math.round(
@@ -273,7 +281,7 @@ export function confidenceFor(group) {
   return {
     score: Math.max(0, Math.min(100, score)),
     sampleSize: decodes.length,
-    relativeIqr: round3(relIqr),
+    relativeIqr: decodes.length === 1 ? null : round3(relIqr),
     outlierDensity: round3(outlierDensity)
   };
 }

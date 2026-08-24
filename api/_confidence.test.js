@@ -51,6 +51,42 @@ test('confidence is clamped to [0, 100] even for extreme spreads', () => {
   assert.ok(c.score >= 0 && c.score <= 100);
 });
 
+// --- n=1 groups: null-quartile regression (#852, #864) ---
+
+test('single-run group: no fabricated relativeIqr 0 / outlierDensity 1 (#852 #864)', () => {
+  const c = confidenceFor([run('a', 'm', 778)]);
+  // A lone run carries no spread information and cannot be an outlier of itself.
+  assert.equal(c.sampleSize, 1);
+  assert.equal(c.relativeIqr, null);
+  assert.equal(c.outlierDensity, 0);
+  // score = round(100*(0.4*clamp01(1/10) + 0.4*1 + 0.2*1)) = 64, not the
+  // null-coercion artifact 44 (outlierDensity 1 used to cost exactly 20 pts).
+  assert.equal(c.score, 64);
+});
+
+test('empty group still scores 0', () => {
+  const c = confidenceFor([]);
+  assert.equal(c.sampleSize, 0);
+  assert.equal(c.relativeIqr, null);
+  assert.equal(c.outlierDensity, 1);
+  assert.equal(c.score, 0);
+});
+
+test('n=2 identical runs keep genuine tight-spread semantics (iqr truly is 0)', () => {
+  const c = confidenceFor([run('a', 'm', 778), run('a', 'm', 778)]);
+  assert.equal(c.relativeIqr, 0);
+  assert.equal(c.outlierDensity, 0);
+});
+
+test('multi-run confidence values are unchanged by the n=1 guard', () => {
+  // sorted [60, 100, 150]: q1=60, median=100, q3=150 → relIqr = 90/100 = 0.9
+  const runs = [run('a', 'm', 100), run('a', 'm', 150), run('a', 'm', 60)];
+  const c = confidenceFor(runs);
+  assert.equal(c.sampleSize, 3);
+  assert.ok(Math.abs(c.relativeIqr - 0.9) < 0.01);
+  assert.equal(c.outlierDensity, 0);
+});
+
 test('rankGroups sorts by confidence when asked', () => {
   const runs = [
     // fast but thin/noisy group
