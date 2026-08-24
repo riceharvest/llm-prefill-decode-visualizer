@@ -3,6 +3,7 @@ import { Layers, Play, Pause, RotateCcw } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, writeParams } from '../utils/urlState';
 import { generateRequests, simulateBatching, simulateStaticBatching } from '../utils/batchScheduling';
+import { finishedCountAt, progressBucket } from '../utils/liveSummary.js';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import Metric from './Metric';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
@@ -261,15 +262,17 @@ export default function BatchingVisualizer({
   // Screen-reader run summary (issue #63): aria-live narration of the batch
   // playhead, bucket-rounded to 25% of the makespan so the rAF loop produces
   // a few announcements per run instead of one per frame.
-  const srFinishedCount = requests.filter(
-    r => r.finishTime !== null && r.finishTime <= elapsedSim
-  ).length;
-  const srElapsedBucket = Math.min(4, Math.floor((elapsedSim / Math.max(1e-9, makespan)) * 4));
+  // Issue #1041: the finished count is evaluated at the START of the current
+  // 25% bucket and the running count is dropped entirely — raw per-request
+  // counters changed on every request start/finish (~24x per run), so each
+  // change re-announced the whole summary and defeated the bucketing.
+  const srBucket = progressBucket(elapsedSim, makespan, 4);
+  const srFinishedCount = finishedCountAt(requests, srBucket.start);
   const srSummary = elapsedSim <= 0
     ? 'Batching simulation idle. Set the workload and press Start.'
     : elapsedSim >= makespan
       ? `Batch complete in ${formatTime(makespan)}: ${numRequests} requests finished, ${formatTokens(summary.totalOutputTokens)} output tokens generated.`
-      : `${srFinishedCount} of ${numRequests} requests finished, ${runningIds.length} currently running. About ${srElapsedBucket * 25} percent of the ${formatTime(makespan)} schedule elapsed.`;
+      : `${srFinishedCount} of ${numRequests} requests finished so far. About ${srBucket.index * 25} percent of the ${formatTime(makespan)} schedule elapsed.`;
 
   return (
     <div className="stack">
