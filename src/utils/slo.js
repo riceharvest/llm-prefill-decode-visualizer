@@ -56,6 +56,20 @@ export function saveSloBudgets(budgets, storage = typeof localStorage !== 'undef
   }
 }
 
+/** Format a millisecond duration for SLO verdict strings ("540 ms", "5.42 s").
+ *  Non-finite values render as '∞' (matching formatTime/fmtPct) instead of the
+ *  literal string "Infinity": evaluateMetric deliberately passes infinite
+ *  values through with pass:false (e.g. TPOT when a turn decodes zero tokens),
+ *  so the fail-detail path receives value:Infinity here.
+ *  Finite sub-second values keep one decimal so a marginal 9.52 ms TPOT does
+ *  not round up into a misleading "10 ms" against a 9 ms budget. */
+export function formatMs(ms) {
+  if (!Number.isFinite(ms)) return '∞';
+  if (ms >= 1000) return `${(ms / 1000).toFixed(2)} s`;
+  const v = Math.round(ms * 10) / 10;
+  return `${Number.isInteger(v) ? v : v.toFixed(1)} ms`;
+}
+
 /**
  * Evaluate one metric against its budget.
  * Returns null when either value or budget is unusable (check disabled).

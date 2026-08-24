@@ -7,7 +7,8 @@ import {
   saveSloBudgets,
   evaluateMetric,
   evaluateSlo,
-  evaluateAgenticSlo
+  evaluateAgenticSlo,
+  formatMs
 } from './slo.js';
 
 function fakeStorage(initial = {}) {
@@ -113,4 +114,20 @@ test('evaluateAgenticSlo handles empty loops and disabled budgets', () => {
   const r = evaluateAgenticSlo([turn()], { ttftMs: null, tpotMs: null, walltimeSec: null });
   assert.deepEqual(r.failingTurns, []);
   assert.equal(r.worstTurn, null);
+});
+
+test('formatMs renders non-finite values as the infinity glyph, never "Infinity"', () => {
+  // evaluateMetric passes value:Infinity through with pass:false when a turn
+  // decodes zero tokens (TPOT = Infinity), so the SLO fail-detail string used
+  // to print literal "Infinity s" into DOM text and the accessibility tree.
+  assert.equal(formatMs(Infinity), '\u221e');
+  assert.equal(formatMs(-Infinity), '\u221e');
+  assert.equal(formatMs(NaN), '\u221e');
+});
+
+test('formatMs keeps one decimal below 1 s and seconds above it', () => {
+  // A marginal 9.52 ms TPOT must not round up to "10 ms" against a 9 ms budget.
+  assert.equal(formatMs(9.52), '9.5 ms');
+  assert.equal(formatMs(540), '540 ms');
+  assert.equal(formatMs(5419), '5.42 s');
 });

@@ -16,7 +16,7 @@ import ChartDataTable from './ChartDataTable';
 import Metric from './Metric';
 import Analogy from './Analogy';
 import SloBadge from './SloBadge';
-import { evaluateAgenticSlo, evaluateMetric } from '../utils/slo.js';
+import { evaluateAgenticSlo, evaluateMetric, formatMs } from '../utils/slo.js';
 
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
@@ -206,7 +206,9 @@ export default function AgenticVisualizer({
   // Human-readable summary of a turn's failing checks, e.g.
   // "TTFT 900 ms vs 500 ms (+80% over) · TPOT ∞".
   const fmtPct = (r) => Number.isFinite(r.marginPct) ? `${Math.abs(r.marginPct).toFixed(0)}%` : '∞';
-  const fmtMs = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${Math.round(ms)} ms`);
+  // Shared formatter: guards non-finite ('\u221e' instead of literal "Infinity s"),
+  // keeps one decimal below 1 s so marginal reads don't round into false fails.
+  const fmtMs = formatMs;
   const turnSloDetail = (triple) => (
     [
       ['TTFT', triple.ttft],
