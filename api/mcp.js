@@ -10,6 +10,8 @@
  * implementation of every formula.
  */
 
+import { applyRequestIdEcho } from './_request_id.js';
+
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
 const TOOLS = [
@@ -173,6 +175,11 @@ function json(res, body, status = 200) {
 }
 
 export default async function handler(req, res) {
+  // Echo a client-supplied X-Request-Id on every MCP response. This function
+  // wins file-routing over api/[...path].js for /api/mcp, so the shared echo
+  // middleware must be applied here too or agents lose request↔response
+  // correlation on the agent-native transport (#946).
+  applyRequestIdEcho(req, res);
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     res.setHeader('Access-Control-Allow-Origin', '*');

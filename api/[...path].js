@@ -30,6 +30,7 @@ import { default as agentCompute } from './_handlers/agent_compute.js';
 import { default as agentFreshness } from './_handlers/agent_freshness.js';
 
 import { withMarkdownNegotiation } from './_markdown.js';
+import { applyRequestIdEcho } from './_request_id.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -38,29 +39,6 @@ function json(res, body, status = 200) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.end(JSON.stringify(body, null, 2));
-}
-
-/**
- * Echo a client-supplied X-Request-Id header back on every response so
- * agents can correlate a request with server logs and retries. Purely
- * pass-through: when the client sends no request id, none is generated.
- */
-function applyRequestIdEcho(req, res) {
-  const id = req.headers?.['x-request-id'];
-  if (!id) return;
-  const value = String(id).slice(0, 200); // bound header size
-  res.setHeader('X-Request-Id', value);
-  // Expose it to browser fetch() consumers alongside the other custom headers.
-  const expose = new Set(
-    (res.getHeader('Access-Control-Expose-Headers') || '')
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean)
-  );
-  if (!expose.has('X-Request-Id')) {
-    expose.add('X-Request-Id');
-    res.setHeader('Access-Control-Expose-Headers', [...expose].join(', '));
-  }
 }
 
 /**
