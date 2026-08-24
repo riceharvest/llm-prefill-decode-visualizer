@@ -25,11 +25,13 @@ export default async function handler(req, res) {
   // CORS preflight + method guard (agents/crawlers are first-class consumers).
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
     return res.status(204).end();
   }
-  if (req.method !== 'GET') {
-    res.setHeader('Allow', 'GET, OPTIONS');
+  // HEAD is allowed through as a sizing probe (#902): the dispatcher captures
+  // the body and reports Content-Length without sending it.
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.setHeader('Allow', 'GET, HEAD, OPTIONS');
     return sendProblem(res, req, {
       code: 'METHOD_NOT_ALLOWED',
       detail: `${req.method} is not supported here. Use GET to fetch the full run index.`

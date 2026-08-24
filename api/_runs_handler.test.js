@@ -153,7 +153,7 @@ test('non-GET methods return a 405 problem+json with an Allow header', async () 
       await handler({ ...mockReq({}), method }, res);
       assert.equal(res.statusCode, 405);
       assert.match(res.headers['content-type'], /problem\+json/);
-      assert.equal(res.headers.allow, 'GET, OPTIONS');
+      assert.equal(res.headers.allow, 'GET, HEAD, OPTIONS');
       const problem = JSON.parse(res.bodyText);
       assert.equal(problem.code, 'METHOD_NOT_ALLOWED');
     }

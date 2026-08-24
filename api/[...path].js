@@ -83,7 +83,57 @@ function applyAgentEndpointsHeader(req, res) {
   res.setHeader('Access-Control-Expose-Headers', [...expose].join(', '));
 }
 
+/**
+ * HEAD support (issue #902): handlers build their full body string before
+ * `res.end()`, but never set Content-Length — so HEAD responses carry no size
+ * information and agents cannot pre-size downloads. For HEAD requests we
+ * capture what the handler would have written, derive Content-Length from it,
+ * and suppress the actual body write so the probe stays as cheap as possible
+ * while still reporting the exact GET size.
+ */
+function applyHeadContentLength(req, res) {
+  if ((req.method || 'GET').toUpperCase() !== 'HEAD') return;
+  const chunks = [];
+  const originalWrite = typeof res.write === 'function' ? res.write.bind(res) : null;
+  const originalEnd = res.end.bind(res);
+  const hasHeader = typeof res.hasHeader === 'function' ? res.hasHeader.bind(res) : () => false;
+
+  res.write = function headWrite(chunk, encoding, cb) {
+    if (chunk != null && typeof chunk !== 'function') {
+      chunks.push(
+        typeof chunk === 'string'
+          ? Buffer.from(chunk, typeof encoding === 'string' ? encoding : 'utf8')
+          : Buffer.from(chunk)
+      );
+    }
+    const done = typeof encoding === 'function' ? encoding : cb;
+    if (typeof done === 'function') done();
+    return true;
+  };
+
+  res.end = function headEnd(chunk, encoding) {
+    if (chunk != null && typeof chunk !== 'function') {
+      res.write(chunk, typeof chunk === 'string' ? encoding : undefined);
+    }
+    const total = chunks.reduce((n, b) => n + b.length, 0);
+    if (!hasHeader('Content-Length')) {
+      res.setHeader('Content-Length', String(total));
+    }
+    res.setHeader('Accept-Ranges', 'none');
+    // Restore the originals so nothing downstream observes the patched methods,
+    // then end without ever writing a body for HEAD.
+    if (originalWrite) res.write = originalWrite;
+    res.end = originalEnd;
+    return originalEnd();
+  };
+}
+
 export default async function handler(req, res) {
+  // Install HEAD body-capture first so it sits innermost: any other res.end
+  // wrapper below (e.g. markdown negotiation) sees our patched methods and
+  // hands us the exact body that would have been sent, so Content-Length
+  // always matches what a GET with the same negotiation returns.
+  applyHeadContentLength(req, res);
   withMarkdownNegotiation(req, res);
   applyRequestIdEcho(req, res);
   applyAgentEndpointsHeader(req, res);
