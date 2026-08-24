@@ -4,8 +4,7 @@ import { ERROR_CODES, problemType } from '../_errors.js';
 export const config = { runtime: 'nodejs' };
 
 import { sendJson, SCHEMA_VERSION } from '../_schema.js';
-
-const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
+import { requestBaseUrl } from '../_base_url.js';
 
 // Shared rate-limit documentation (issue #14). Budget: RATE_LIMIT per
 // RATE_WINDOW_MS — see api/_ratelimit.js; keep in sync with /llms.txt.
@@ -643,6 +642,10 @@ const SCHEMAS = {
 
 export default function handler(req, res) {
   if (!enforceRateLimit(req, res)) return;
+  // Derived from the serving host (#928): preview/self-hosted deployments must
+  // not hand clients a spec pointing back at production. VISUALIZER_API_URL
+  // overrides; production URL is only a headerless fallback (see _base_url.js).
+  const BASE = requestBaseUrl(req);
   const spec = {
     openapi: '3.1.0',
     info: {

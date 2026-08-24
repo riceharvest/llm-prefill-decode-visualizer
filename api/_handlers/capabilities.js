@@ -3,10 +3,9 @@
 // MCP server, feeds, manifests and human/machine docs) in one structured list.
 // Static by design: no upstream fetches, cheap to serve, CDN-cacheable.
 import { sendJson } from '../_schema.js';
+import { requestBaseUrl } from '../_base_url.js';
 
 export const config = { runtime: 'nodejs' };
-
-const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
 function surface(path, methods, kind, description) {
   return { path, methods, kind, description };
@@ -69,6 +68,10 @@ export default function handler(req, res) {
     res.setHeader('Allow', 'GET');
     return sendJson(res, { ok: false, error: 'method_not_allowed' }, { status: 405 });
   }
+  // Derived from the serving host (#833): preview/self-hosted deployments must
+  // not advertise the production origin. VISUALIZER_API_URL overrides;
+  // production URL is only a headerless fallback (see _base_url.js).
+  const BASE = requestBaseUrl(req);
   return sendJson(res, {
     ok: true,
     service: 'llm-prefill-decode-visualizer',
