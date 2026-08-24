@@ -3,6 +3,7 @@ import { Layers, Play, Pause, RotateCcw } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, writeParams } from '../utils/urlState';
 import { generateRequests, simulateBatching, simulateStaticBatching } from '../utils/batchScheduling';
+import { clockToRunState, runStateToBusy } from '../utils/viewState';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import Metric from './Metric';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
@@ -30,6 +31,12 @@ export default function BatchingVisualizer({
     return idx >= 0 ? idx : 5;
   });
   const [arrivalIntervalMs, setArrivalIntervalMs] = useState(() => readParamNum('barr', 150));
+  // Workload PRNG seed (issue #692): ?bseed= makes the ±40% length/arrival
+  // jitter reproducible and lets agents sample different draws. Same default
+  // (42) as generateRequests so existing links render identically.
+  const [workloadSeed, setWorkloadSeed] = useState(() =>
+    Math.max(0, Math.floor(readParamNum('bseed', 42)))
+  );
 
   const chunkSize = CHUNK_STOPS[chunkStopIndex];
   const chunkingOn = chunkSize > 0;
@@ -41,9 +48,10 @@ export default function BatchingVisualizer({
       bgen: meanOutputTokens,
       bmax: maxBatchSize,
       bchunk: chunkSize,
-      barr: arrivalIntervalMs
+      barr: arrivalIntervalMs,
+      bseed: workloadSeed
     });
-  }, [numRequests, meanPromptTokens, meanOutputTokens, maxBatchSize, chunkSize, arrivalIntervalMs]);
+  }, [numRequests, meanPromptTokens, meanOutputTokens, maxBatchSize, chunkSize, arrivalIntervalMs, workloadSeed]);
 
   // --- Misconception callout: fires the moment chunked prefill is disabled ---
   const [showChunkCallout, setShowChunkCallout] = useState(false);
@@ -66,8 +74,9 @@ export default function BatchingVisualizer({
     numRequests,
     meanPromptTokens,
     meanOutputTokens,
-    arrivalIntervalMs
-  }), [numRequests, meanPromptTokens, meanOutputTokens, arrivalIntervalMs]);
+    arrivalIntervalMs,
+    seed: workloadSeed
+  }), [numRequests, meanPromptTokens, meanOutputTokens, arrivalIntervalMs, workloadSeed]);
 
   const sim = useMemo(() => simulateBatching({
     requests,
@@ -425,6 +434,33 @@ export default function BatchingVisualizer({
             </div>
           </div>
 
+          {/* Workload Seed (issue #692) */}
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Workload seed</span>
+              <span className="field-value">#{workloadSeed}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input type="number" min="0" step="1" value={workloadSeed}
+                aria-label="Workload random seed"
+                aria-valuetext={`seed ${workloadSeed}`}
+                onChange={(e) => {
+                  const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                  setWorkloadSeed(v);
+                  handleReset();
+                }}
+                style={{ flex: 1 }} />
+              <button type="button" className="btn" style={{ padding: '4px 10px', fontSize: '0.72rem' }}
+                aria-label="Re-roll workload seed"
+                onClick={() => { setWorkloadSeed(Math.floor(Math.random() * 0x100000000)); handleReset(); }}>
+                Re-roll
+              </button>
+            </div>
+            <p className="hint-text" style={{ fontSize: '0.68rem', marginTop: '6px', marginBottom: 0 }}>
+              URL param ?bseed= — same seed, same ±40% length/arrival jitter.
+            </p>
+          </div>
+
         </div>
       </section>
 
@@ -437,7 +473,12 @@ export default function BatchingVisualizer({
       )}
 
       {/* Main Batch Simulation Stage */}
-      <section className="panel" aria-label={t('batching.simStageAria')}>
+      <section
+        className="panel"
+        aria-label={t('batching.simStageAria')}
+        data-state={clockToRunState(elapsedSim, makespan)}
+        aria-busy={runStateToBusy(clockToRunState(elapsedSim, makespan))}
+      >
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

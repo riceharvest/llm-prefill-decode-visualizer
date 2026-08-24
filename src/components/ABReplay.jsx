@@ -7,6 +7,7 @@ import {
   formatTokens
 } from '../utils/presets';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import { clockToRunState, runStateToBusy } from '../utils/viewState';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 
 // Map an /api/presets hardware entry onto the internal preset shape so the
@@ -417,7 +418,12 @@ export default function ABReplay({
       </section>
 
       {/* Synchronized stage: shared transport + both lanes */}
-      <section className="panel" aria-label="Synchronized A/B simulation stage">
+      <section
+        className="panel"
+        aria-label="Synchronized A/B simulation stage"
+        data-state={clockToRunState(simTime, masterTotal)}
+        aria-busy={runStateToBusy(clockToRunState(simTime, masterTotal))}
+      >
 
         {/* Shared transport controls */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
