@@ -45,7 +45,7 @@ export default function TheoryGuide() {
   };
 
   return (
-    <div className="stack">
+    <div className="stack" data-view="theory" role="tabpanel">
 
       <section className="panel" aria-label={t('theory.panelAria')}>
         <h2 className="panel-title" style={{ marginBottom: '16px' }} tabIndex={-1} data-panel-heading>

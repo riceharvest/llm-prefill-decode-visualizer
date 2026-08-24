@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ListFilter, ExternalLink, RotateCcw } from 'lucide-react';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import { isStaleQuantFilter } from '../utils/hardwareShortlist';
 
 // Constraint-driven hardware shortlist ("find me hardware").
 //
@@ -112,11 +113,17 @@ export default function HardwareShortlist() {
     return true;
   }), [rows, minDecode, maxVram, quant]);
 
+  // Issue #804: a quantization restored from ?sq= on a share link can be absent
+  // from the current top-50 options (model filter changed, dataset drifted).
+  // Without this guard the select renders "Any quant" while results stay
+  // silently filtered on the stale value. Surface it instead.
+  const staleQuant = status === 'ready' && isStaleQuantFilter(quant, rows);
+
   const rowStyle = { display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '0.82rem' };
   const numStyle = { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 };
 
   return (
-    <div className="stack">
+    <div className="stack" data-view="shortlist" role="tabpanel">
 
       <section className="panel" aria-label="Hardware shortlist">
         <h2 className="panel-title" style={{ marginBottom: '14px' }} tabIndex={-1} data-panel-heading>
@@ -193,9 +200,21 @@ export default function HardwareShortlist() {
               {quantOptions.map(q => (
                 <option key={q} value={q}>{q}</option>
               ))}
+              {staleQuant && (
+                <option value={quant}>{`${quant} (not in current results)`}</option>
+              )}
             </select>
           </div>
         </div>
+
+        {staleQuant && (
+          <div className="panel-inset" role="note" style={{ fontSize: '0.82rem', color: 'var(--warning, var(--text-muted))' }}>
+            Quantization filter “{quant}” (restored from this link) is not present
+            in the current results{matchedRuns > 0 ? ` (${matchedRuns} runs scanned)` : ''}.
+            The shortlist stays filtered on it and may come back empty — pick another
+            quant or clear the filter to see everything.
+          </div>
+        )}
 
         {/* Results */}
         {status === 'loading' && (

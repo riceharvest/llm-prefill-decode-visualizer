@@ -90,6 +90,26 @@ async function fetchJson(path, signal) {
 }
 
 /**
+ * True when a stored quantization filter (e.g. restored from ?sq= on a share
+ * link) matches no quantization present in the current result set. The UI must
+ * surface this case (#804): otherwise the select shows "Any quant" while the
+ * shortlist keeps filtering on the stale value.
+ *
+ * Match is case-insensitive — /api/best quant spellings have drifted casing
+ * across dataset refreshes, and a link that used to work shouldn't suddenly
+ * count as stale just because upstream re-cased a tag.
+ */
+export function isStaleQuantFilter(quant, rows) {
+  const q = String(quant || '').trim();
+  if (!q) return false;
+  const needle = q.toLowerCase();
+  return !rows.some(row => {
+    const rowQ = row.quantization == null ? 'Unknown' : String(row.quantization);
+    return rowQ.toLowerCase() === needle;
+  });
+}
+
+/**
  * Query the ranked-shortlist endpoints. Tries /api/best with constraint
  * params; enriches each ranked entry with a verified-run count from
  * /api/localmaxxing. If the serverless endpoints aren't available, falls

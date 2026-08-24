@@ -336,7 +336,7 @@ export default function KVCacheCalculator() {
   const segPct = gb => `${Math.min(100, (gb / barScaleGb) * 100)}%`;
 
   return (
-    <div className="stack">
+    <div className="stack" data-view="kvcache" role="tabpanel">
 
       <section className="panel" aria-label={t('kvCache.panelAria')}>
         <h2 className="panel-title" style={{ marginBottom: '12px' }} tabIndex={-1} data-panel-heading>

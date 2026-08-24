@@ -272,7 +272,7 @@ export default function BatchingVisualizer({
       : `${srFinishedCount} of ${numRequests} requests finished, ${runningIds.length} currently running. About ${srElapsedBucket * 25} percent of the ${formatTime(makespan)} schedule elapsed.`;
 
   return (
-    <div className="stack">
+    <div className="stack" data-view="batching" role="tabpanel">
 
       {/* Issue #63: live narration of the animated playhead for screen readers */}
       <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
