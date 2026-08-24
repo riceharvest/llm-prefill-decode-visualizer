@@ -23,11 +23,35 @@ export const config = { runtime: 'nodejs' };
 export const MAX_BATCH_SIZE = 50;
 
 const MODEL_PRESETS = {
-  llama70b:  { numLayers: 80, hiddenSize: 8192, kvHeads: 8, numHeads: 64, headDim: 128 },
-  llama8b:   { numLayers: 32, hiddenSize: 4096, kvHeads: 8, numHeads: 32, headDim: 128 },
-  qwen72b:   { numLayers: 80, hiddenSize: 8192, kvHeads: 8, numHeads: 64, headDim: 128 },
-  mistral7b: { numLayers: 32, hiddenSize: 4096, kvHeads: 8, numHeads: 32, headDim: 128 }
+  llama70b:  { numLayers: 80, hiddenSize: 8192, kvHeads: 8, numHeads: 64, headDim: 128, maxContext: 131072 },
+  llama8b:   { numLayers: 32, hiddenSize: 4096, kvHeads: 8, numHeads: 32, headDim: 128, maxContext: 131072 },
+  qwen72b:   { numLayers: 80, hiddenSize: 8192, kvHeads: 8, numHeads: 64, headDim: 128, maxContext: 131072 },
+  mistral7b: { numLayers: 32, hiddenSize: 4096, kvHeads: 8, numHeads: 32, headDim: 128, maxContext: 131072 }
 };
+
+// Documented KV-cache precisions (/api/spec declares enum [2, 1, 0.5]).
+const PRECISION_BYTES_ENUM = [2, 1, 0.5];
+
+// Integer-valued kvCache inputs where values < 1 are physically invalid
+// (#775): zero or negative context/batch/layers cancel signs and yield
+// plausible-looking garbage.
+function positiveIntParam(params, name, fallback) {
+  const raw = params[name];
+  if (raw === undefined || raw === null || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    throw new ApiError('INVALID_PARAMS', `${name} must be a number (got '${raw}')`, {
+      extras: { param: name, received: String(raw) }
+    });
+  }
+  const rounded = Math.round(n);
+  if (rounded < 1) {
+    throw new ApiError('INVALID_PARAMS', `${name} must be >= 1 (got ${n}) — non-positive values are physically invalid for KV-cache geometry`, {
+      extras: { param: name, received: n }
+    });
+  }
+  return rounded;
+}
 
 // Thin wrapper over the shared sender so every response carries
 // schema_version + X-Schema-Version (see _schema.js / CHANGELOG-API.md).
@@ -122,17 +146,56 @@ function computeOne(params, dryRun = false) {
 
     case 'kvCache': {
       const presetKey = params.architecture;
+      if (presetKey && !MODEL_PRESETS[presetKey]) {
+        throw new ApiError('INVALID_PARAMS', `Unknown architecture '${presetKey}'`, {
+          extras: { available: Object.keys(MODEL_PRESETS) }
+        });
+      }
       const preset = presetKey ? MODEL_PRESETS[presetKey] : null;
+
+      // Input validation (#775): reject non-numeric and non-positive values
+      // instead of silently defaulting or multiplying sign-cancelled garbage.
       const inputs = {
         architecture: presetKey || 'generic',
-        numLayers: num(params.numLayers, preset?.numLayers ?? 80),
-        kvHeads: num(params.kvHeads, preset?.kvHeads ?? 8),
-        headDim: num(params.headDim, preset?.headDim ?? 128),
-        contextLength: num(params.contextLength, 32768),
-        precisionBytes: num(params.precisionBytes, 2),
-        batchSize: num(params.batchSize, 1)
+        numLayers: positiveIntParam(params, 'numLayers', preset?.numLayers ?? 80),
+        kvHeads: positiveIntParam(params, 'kvHeads', preset?.kvHeads ?? 8),
+        headDim: positiveIntParam(params, 'headDim', preset?.headDim ?? 128),
+        contextLength: positiveIntParam(params, 'contextLength', 32768),
+        precisionBytes: (() => {
+          const raw = params.precisionBytes;
+          if (raw === undefined || raw === null || raw === '') return 2;
+          const n = Number(raw);
+          if (!Number.isFinite(n) || !PRECISION_BYTES_ENUM.includes(n)) {
+            throw new ApiError('INVALID_PARAMS', `precisionBytes must be one of ${PRECISION_BYTES_ENUM.join(', ')} (FP16/FP8/INT4); got '${raw}'`, {
+              extras: { param: 'precisionBytes', allowed: PRECISION_BYTES_ENUM }
+            });
+          }
+          return n;
+        })(),
+        batchSize: positiveIntParam(params, 'batchSize', 1)
       };
-      return withId('kvCache', inputs, kvCache(inputs), dryRun);
+
+      const warnings = [];
+
+      // Context-window check (#828): mirrors /api/vram's contextWindow
+      // (withinLimit / overflowTokens) against the architecture's own
+      // max_position_embeddings. Generic geometry has no known limit → null.
+      const maxCtx = preset?.maxContext ?? null;
+      const withinLimit = maxCtx == null ? null : inputs.contextLength <= maxCtx;
+      const overflowTokens = maxCtx != null ? Math.max(0, inputs.contextLength - maxCtx) : null;
+      if (withinLimit === false) {
+        warnings.push({
+          code: 'context_exceeds_model_limit',
+          message: `contextLength ${inputs.contextLength.toLocaleString('en-US')} exceeds ${inputs.architecture}'s maximum context of ${maxCtx.toLocaleString('en-US')} by ${overflowTokens.toLocaleString('en-US')} tokens — the result is a hypothetical, not a runnable configuration`
+        });
+      }
+
+      const result = {
+        ...kvCache(inputs),
+        warnings, // always present (#798) — ComputeResult requires it
+        ...(maxCtx != null ? { contextWindow: { maxPositionEmbeddings: maxCtx, requested: inputs.contextLength, withinLimit, overflowTokens } } : {})
+      };
+      return withId('kvCache', inputs, result, dryRun);
     }
 
     case 'flagged': {
@@ -222,8 +285,8 @@ function capabilityList() {
       example: { batch: [{ model: 'singleTurn', promptTokens: 4096 }, { model: 'kvCache', architecture: 'llama70b', contextLength: 131072 }] }
     },
     sanity: {
-      description: 'Non-blocking implausibility warnings. Every successful result carries a "warnings" array (empty when inputs are plausible) flagging outputs that violate known physical bounds: decode above the memory-bandwidth roofline, prefill above the compute roofline, or TTFT below the kernel-launch floor. Warnings never change the math or the HTTP status.',
-      codes: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor'],
+      description: 'Non-blocking implausibility warnings. Every successful result carries a "warnings" array (empty when inputs are plausible) flagging outputs that violate known physical bounds: decode above the memory-bandwidth roofline, prefill above the compute roofline, TTFT below the kernel-launch floor, or (kvCache) a contextLength beyond the architecture max context. Warnings never change the math or the HTTP status.',
+      codes: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor', 'context_exceeds_model_limit'],
       example: '/api/compute?model=singleTurn&promptTokens=64&prefillSpeed=900000&decodeSpeed=5000'
     },
     dryRun: {
