@@ -16,6 +16,8 @@ import TheoryGuide from './components/TheoryGuide';
 import SloBudgetsPanel, { useSloBudgets } from './components/SloBudgetsPanel';
 import { HARDWARE_PRESETS } from './utils/presets';
 import { toLocalPreset, hardwareName } from './utils/localMaxxing';
+import { clampMeasuredSpeedPair, formatClampNotice } from './utils/speedRanges';
+import { isDanglingLmxPreset } from './utils/lmxState';
 import {
   describeConfig, permalinkHref, readPermalinkTitle, documentTitleFor
 } from './utils/permalink';
@@ -229,23 +231,47 @@ export default function App() {
     setIsPlaying(false);
   };
 
+  // Measured-speed apply paths clamp to the sliders' declared ranges (#850):
+  // without this, a 36,716 tok/s community run pins the range thumb at max
+  // while state/URL carry the raw value, and the first drag silently rewrites
+  // the applied measurement. When clamping engages we surface a non-blocking
+  // note instead of desyncing silently.
+  const [speedClampNotice, setSpeedClampNotice] = useState('');
+
   const handleApplyLocalMaxxingRun = useCallback((run) => {
+    const pair = clampMeasuredSpeedPair(run.tokSPrefill, run.tokSOut);
+    if (!pair) return;
     setSelectedPreset(`lmx:${run.id}`);
-    setPrefillSpeed(run.tokSPrefill);
-    setDecodeSpeed(run.tokSOut);
+    setPrefillSpeed(pair.prefill);
+    setDecodeSpeed(pair.decode);
     setIsPlaying(false);
+    setSpeedClampNotice(formatClampNotice(pair.clamped));
   }, []);
 
   // Quantization matrix (issue #47): clicking a measured quant row bakes its
   // best-run speeds straight into the sim, same as applying a preset.
   const handleApplyMeasuredSpeeds = useCallback((prefill, decode) => {
-    const p = Number(prefill);
-    const d = Number(decode);
-    if (!Number.isFinite(p) || !Number.isFinite(d) || p <= 0 || d <= 0) return;
-    setPrefillSpeed(p);
-    setDecodeSpeed(d);
+    const pair = clampMeasuredSpeedPair(prefill, decode);
+    if (!pair) return;
+    setPrefillSpeed(pair.prefill);
+    setDecodeSpeed(pair.decode);
     setIsPlaying(false);
+    setSpeedClampNotice(formatClampNotice(pair.clamped));
   }, []);
+
+  // Wizard deselection (#851): when the picker clears its selection while that
+  // exact run's lmx preset is live at App level, reset to a real hardware
+  // preset (speeds included) instead of leaving an unresolvable
+  // `preset=lmx:<id>` orphan with unattributed measured numbers.
+  const handleClearAppliedLmxRun = useCallback((clearedRunId) => {
+    if (!isDanglingLmxPreset(selectedPreset, clearedRunId)) return;
+    const fallback = HARDWARE_PRESETS.find(x => x.id === 'rtx4090_exl2') || HARDWARE_PRESETS[0];
+    setSelectedPreset(fallback.id);
+    setPrefillSpeed(fallback.prefillSpeed);
+    setDecodeSpeed(fallback.decodeSpeed);
+    setIsPlaying(false);
+    setSpeedClampNotice('');
+  }, [selectedPreset]);
 
   const handleLocalMaxxingContext = useCallback((context) => {
     setLocalMaxxingContext(context);
@@ -359,8 +385,17 @@ export default function App() {
             selectedPreset={selectedPreset}
             onApplyRun={handleApplyLocalMaxxingRun}
             onContextChange={handleLocalMaxxingContext}
+            onClearAppliedRun={handleClearAppliedLmxRun}
           />
         </CollapsibleSection>
+
+        {/* Non-blocking note when a measured apply path had to be clamped
+            to the slider ranges (#850) — never silent, never modal. */}
+        {speedClampNotice && (
+          <p role="status" className="tag tag-accent" style={{ margin: 0, fontSize: '0.75rem', fontWeight: 500 }}>
+            {speedClampNotice}
+          </p>
+        )}
 
         {/* Speed controls only make sense on tabs that run a simulation */}
         {TABS.slice(0, 5).includes(activeTab) && (

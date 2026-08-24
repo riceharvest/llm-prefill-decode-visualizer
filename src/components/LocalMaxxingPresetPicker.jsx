@@ -21,7 +21,7 @@ const selectStyle = {
   width: '100%'
 };
 
-export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, onContextChange }) {
+export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, onContextChange, onClearAppliedRun }) {
   const initialRunId = useRef(readParam('lmxRun'));
   const restoredRun = useRef(false);
   // Selection order: 'model' = model → quant → hardware (original flow).
@@ -145,6 +145,18 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
 
   // Runs the current selection resolves to (used for both flows downstream)
   const effectiveRuns = pickOrder === 'hardware' ? hwEligibleRuns : eligibleRuns;
+
+  // Wizard deselection (#851): every path that clears selectedRunId (pick-order
+  // toggle, model load, hardware/model/quant change) used to orphan a live
+  // `preset=lmx:<id>` at App level — the URL lost lmxRun while the measured
+  // speeds kept running unattributed. Tell App so it can reset the dangling
+  // preset in lockstep with the picker.
+  const prevSelectedRunIdRef = useRef(selectedRunId);
+  useEffect(() => {
+    const prev = prevSelectedRunIdRef.current;
+    prevSelectedRunIdRef.current = selectedRunId;
+    if (!selectedRunId && prev && onClearAppliedRun) onClearAppliedRun(prev);
+  }, [selectedRunId, onClearAppliedRun]);
 
   useEffect(() => {
     onContextChange({
