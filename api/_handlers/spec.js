@@ -1112,7 +1112,8 @@ export default function handler(req, res) {
                           estimateUsd: 1650,
                           lowUsd: 1400,
                           highUsd: 1900,
-                          perGpu: [{ gpu: 'RTX 4090', estimateUsd: 1650 }],
+                          perGpu: { estimateUsd: 1650, lowUsd: 1400, highUsd: 1900 },
+                          gpuCount: 1,
                           asOf: '2026-08-01',
                           links: {
                             ebay: 'https://www.ebay.com/sch/i.html?_nkw=rtx+4090',
