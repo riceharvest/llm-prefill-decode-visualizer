@@ -434,7 +434,7 @@ const COMPUTE_RESULT = {
       items: {
         type: 'object',
         properties: {
-          code: { type: 'string', enum: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor'] },
+          code: { type: 'string', enum: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor', 'cost_hardware_price_unspecified', 'cost_power_draw_unspecified'] },
           message: { type: 'string' }
         },
         additionalProperties: true

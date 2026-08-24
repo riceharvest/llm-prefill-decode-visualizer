@@ -185,7 +185,25 @@ function computeOne(params, dryRun = false) {
         decodeSpeed: num(params.decodeSpeed, 105)
       };
       if (dryRun) return { status: 200, body: dryRunBody('cost', costInputs) };
-      return { status: 200, body: cost(costInputs) };
+      // #736 / #798 (cost side): cost mode shipped no warnings array at all
+      // while silently defaulting hardwarePriceUsd/powerDrawWatts to 0 —
+      // producing $0.00/1M-token totals that look authoritative. Always carry
+      // the documented non-blocking warnings array; flag each zero default.
+      const body = cost(costInputs);
+      const warnings = [];
+      if (!params.hardwarePriceUsd && !params.price) {
+        warnings.push({
+          code: 'cost_hardware_price_unspecified',
+          message: 'hardwarePriceUsd not provided — defaulted to $0, so hardware amortization contributes nothing to the totals. Pass &hardwarePriceUsd=<usd> (e.g. 2000) for a realistic total.'
+        });
+      }
+      if (!params.powerDrawWatts) {
+        warnings.push({
+          code: 'cost_power_draw_unspecified',
+          message: 'powerDrawWatts not provided — defaulted to 0 W, so electricity contributes nothing to the totals. Pass &powerDrawWatts=<watts> (e.g. 450; see the per-hwClass estimates used by /api/best?by=cost).'
+        });
+      }
+      return { status: 200, body: { ...body, warnings } };
     }
 
     case '':
@@ -223,7 +241,7 @@ function capabilityList() {
     },
     sanity: {
       description: 'Non-blocking implausibility warnings. Every successful result carries a "warnings" array (empty when inputs are plausible) flagging outputs that violate known physical bounds: decode above the memory-bandwidth roofline, prefill above the compute roofline, or TTFT below the kernel-launch floor. Warnings never change the math or the HTTP status.',
-      codes: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor'],
+      codes: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor', 'cost_hardware_price_unspecified', 'cost_power_draw_unspecified'],
       example: '/api/compute?model=singleTurn&promptTokens=64&prefillSpeed=900000&decodeSpeed=5000'
     },
     dryRun: {

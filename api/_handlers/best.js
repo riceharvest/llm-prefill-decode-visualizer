@@ -260,7 +260,12 @@ export async function bestBody(query = {}) {
           const sample = g.bestRun;
           const c = cost({
             ...costInputs,
-            powerDrawWatts: num(q.powerWatts, DEFAULT_POWER_WATTS[sample.hwClass] ?? 150),
+            // #1111: accept the powerDrawWatts spelling documented on /api/compute,
+            // MCP and the spec alongside ?powerWatts, and look up hwClass
+            // case-insensitively — the dataset ships UPPERCASE classes
+            // ('DISCRETE_GPU'), which made the table below dead code (every
+            // rig silently ranked at a flat 150 W).
+            powerDrawWatts: num(q.powerWatts ?? q.powerDrawWatts, DEFAULT_POWER_WATTS[String(sample.hwClass ?? '').toLowerCase()] ?? 150),
             prefillSpeed: g.prefill.median,
             decodeSpeed: g.decode.median
           });
