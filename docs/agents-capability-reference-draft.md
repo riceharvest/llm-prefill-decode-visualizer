@@ -133,9 +133,12 @@ Returns `{ hfId, quant, contextTokens, weightsGb, kvCacheGb, totalGb, model: {�
   budget (`api/_vramfit.js`).
 - Add `&numTurns=40&tokensPerTurn=1200` → per-turn KV-growth projection with
   `firstContextOverflowTurn` and `firstVramOverflowTurn`.
-- `quant` accepts GGUF/GPTQ tags (`fp16, fp8, q8_0, q6_k, q5_k_m, q4_k_m, q4_0, q3_k_m, q2_k…`,
-  mapping in `api/_quant.js`); unknown tags assume ~4-bit and set
-  `inputs.quantAssumed: true`.
+- `quant` accepts GGUF/GPTQ tags. Canonical values with exact bits-per-weight
+  resolution: fp32, fp16/bf16, fp8, q8_0, q6_k, q5_k_m, q5_0, q4_k_m, q4_0,
+  q4_1, iq4_nl, q3_k_l, q3_k_m, q3_k_s, q2_k — machine-readable enum in
+  `/api/spec` and `/.well-known/mcp.json`, per-tag bpw table under
+  `quantVocabulary` in a bare `GET /api/compute`; unknown tags assume
+  Q4_K_M's ~4.85 bpw and set `inputs.quantAssumed: true`.
 - Resolution tiers, visible via `model.resolutionSource`: `builtin-table`
   (offline, common families), `huggingface` (config.json / GGUF header),
   `name-heuristic` (HF unreachable/gated; coarse estimate spelled out in

@@ -1,4 +1,5 @@
 import { enforceRateLimit, RATE_LIMIT, RATE_WINDOW_MS } from '../_ratelimit.js';
+import { QUANT_ENUM } from '../_quant.js';
 import { ERROR_CODES, problemType } from '../_errors.js';
 
 export const config = { runtime: 'nodejs' };
@@ -723,7 +724,7 @@ export default function handler(req, res) {
           parameters: [
             { name: 'hfId', in: 'query', required: true, schema: { type: 'string' }, description: 'Hugging Face repo id or URL, e.g. meta-llama/Llama-3.1-8B-Instruct' },
             { name: 'context', in: 'query', schema: { type: 'integer', default: 32768 }, description: 'context length in tokens' },
-            { name: 'quant', in: 'query', schema: { type: 'string', default: 'q4_k_m' }, description: 'quant tag (fp16, q8_0, q6_k, q5_k_m, q4_k_m, q4_0, q3_k_m, q2_k, fp8, …); unknown tags assume ~4.85 bpw and are flagged' },
+            { name: 'quant', in: 'query', schema: { type: 'string', default: 'q4_k_m', enum: QUANT_ENUM, description: 'Canonical quant tags with exact table resolution. Any other string is accepted but flagged (quantAssumed) at ~4.85 bpw.' }, description: 'quant tag — one of the enum values (fp32, fp16/bf16, fp8, q8_0, q6_k, q5_k_m, q5_0, q4_k_m, q4_0, q4_1, iq4_nl, q3_k_l/m/s, q2_k); unknown tags assume ~4.85 bpw and are flagged' },
             { name: 'batchSize', in: 'query', schema: { type: 'integer', default: 1 } },
             { name: 'kvPrecisionBytes', in: 'query', schema: { type: 'number', default: 2 }, description: 'KV cache precision: 2=FP16, 1=FP8, 0.5=INT4' },
             { name: 'vramGb', in: 'query', schema: { type: 'number' }, description: 'optional VRAM budget → fits flag + maxContextTokens (upper bound)' },

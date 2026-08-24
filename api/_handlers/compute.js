@@ -14,6 +14,7 @@ import { ApiError, sendProblemFromError } from '../_errors.js';
 import { computeCalcId } from '../_calc_id.js';
 import { normalizeParams } from '../_calc_id.js';
 import { annotate, THEORETICAL } from '../_basis.js';
+import { QUANT_CATALOG } from '../_quant.js';
 import { empiricalDecayExponentCaveat, heuristicFlagDeltasCaveat } from '../_caveats.js';
 
 export const config = { runtime: 'nodejs' };
@@ -230,6 +231,11 @@ function capabilityList() {
       description: 'Add &dry_run=true (or "dry_run": true in a POST body) to validate a request and echo the parsed parameters (defaults filled in, numbers coerced) WITHOUT executing any math — a cheap sanity check for agents debugging malformed payloads. Works on GET and POST, and applies per-item inside a batch. The response carries the same deterministic id the real call would return. Unknown models and malformed batches fail exactly as they would for a real call.',
       response: '{ dry_run: true, model, inputs, id?, note }',
       example: '/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true&dry_run=true'
+    },
+    quantVocabulary: {
+      description: 'Accepted `quant` values for /api/vram, /api/sizing and /api/best (#882). Each canonical tag resolves to an exact bits-per-weight figure; any other string is still accepted but flagged via quantAssumed at the ~4.85 bpw fallback. Enumerated in /api/spec (?quant= parameter) and /.well-known/mcp.json.',
+      tags: QUANT_CATALOG,
+      example: '/api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_0'
     },
     otherEndpoints: ['/api/vram', '/api/presets', '/api/localmaxxing', '/llms.txt']
   };
