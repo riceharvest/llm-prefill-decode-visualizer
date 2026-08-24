@@ -28,8 +28,10 @@ import { default as agentScenario } from './_handlers/agent_scenario.js';
 import { default as mcp } from './mcp.js';
 import { default as agentCompute } from './_handlers/agent_compute.js';
 import { default as agentFreshness } from './_handlers/agent_freshness.js';
+import { default as versions } from './_handlers/versions.js';
 
 import { withMarkdownNegotiation } from './_markdown.js';
+import { applyVersionTrustHeaders } from './_versions.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -88,6 +90,10 @@ export default async function handler(req, res) {
   applyRequestIdEcho(req, res);
   applyAgentEndpointsHeader(req, res);
   const pathname = (req.url || '').split('?')[0].replace(/^\/api\/?/, '/');
+  // Version trust (issue #685): if the request targets a deprecated URL
+  // prefix, stamp Deprecation/Sunset/Link headers centrally — handlers never
+  // need to remember. No-op while every prefix is 'current'.
+  applyVersionTrustHeaders(req, res, pathname);
 
   try {
     // Strip /v1/ prefix if present (versioning rewrite)
@@ -104,6 +110,7 @@ export default async function handler(req, res) {
       case '/runs': return runsDump(req, res);
       case '/health': return health(req, res);
       case '/version': return version(req, res);
+      case '/versions': return versions(req, res);
       case '/og': return og(req, res);
       case '/parse-constraints': return parseConstraints(req, res);
       case '/sizing': return sizing(req, res);

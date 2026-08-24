@@ -99,6 +99,18 @@ migrate before `Sunset`. Agents can discover the current policy at
   with date/note/changes), so agents can read the API history without parsing
   markdown. Drift-tested against this file by `api/_changelog.test.js`.
 - Affected endpoints: `/api/version`.
+- New `GET /api/versions` endpoint (version discovery, #685): enumerates every
+  served URL prefix (`/api`, `/v1`) with its wire `schema_version`, lifecycle
+  `status` (`current|deprecated`), `canonical` flag, `deprecatedAt` and
+  `sunset`. The deprecation machinery is now wired centrally:
+  `applyVersionTrustHeaders()` in `api/_versions.js` runs on every request and
+  stamps `Deprecation` / `Sunset` / `Link rel="deprecation"` on any response
+  served under a prefix marked `deprecated` — the previously dead
+  `applyDeprecationHeaders()` helper is now on the hot path, so the 90-day
+  notice is automatic. `/api/version` now reports exactly one spelling of the
+  schema field: the universal `schema_version` stamp (#700; the duplicate
+  camelCase `schemaVersion` alias was removed). Additive — no version bump.
+- Affected endpoints: `/api/versions`, `/api/version`.
 - New `GET /api/agent/freshness.json` endpoint: agent-readable data-freshness
   and confidence report (alias: `/api/agent/confidence.json`, same handler).
   Wraps the existing freshness/confidence machinery (`groupFreshness()` +
