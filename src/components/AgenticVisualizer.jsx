@@ -464,7 +464,7 @@ export default function AgenticVisualizer({
         : `Agent loop complete in ${formatTime(totalAgentWalltime)} across ${numTurns} turns.`;
 
   return (
-    <div className="stack">
+    <div className="stack" data-view="agentic" role="tabpanel">
 
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />

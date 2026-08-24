@@ -547,7 +547,7 @@ export default function SingleTurnVisualizer({
 
 
   return (
-    <div className="stack">
+    <div className="stack" data-view="single" role="tabpanel">
 
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />

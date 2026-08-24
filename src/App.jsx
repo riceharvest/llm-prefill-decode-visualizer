@@ -353,7 +353,7 @@ export default function App() {
         onShare={handleShare}
       />
 
-      <main className="app-frame stack" ref={mainRef}>
+      <main className="app-frame stack" ref={mainRef} data-active-tab={activeTab}>
         <CollapsibleSection id="localmaxxing" title={t('common.localMaxxingTitle') || 'LocalMaxxing measured presets'} badge="LIVE">
           <LocalMaxxingPresetPicker
             selectedPreset={selectedPreset}

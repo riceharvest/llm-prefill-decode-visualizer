@@ -327,7 +327,7 @@ export default function ABReplay({
   );
 
   return (
-    <div className="stack">
+    <div className="stack" data-view="ab" role="tabpanel">
 
       {/* Issue #63: live narration of the synchronized replay for screen readers */}
       <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>

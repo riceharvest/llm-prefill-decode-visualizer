@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildShortlist, effectiveVramGb } from './hardwareShortlist.js';
+import { buildShortlist, effectiveVramGb, isStaleQuantFilter } from './hardwareShortlist.js';
 
 function run(overrides = {}) {
   return {
@@ -65,4 +65,32 @@ test('groups rig × model pairs and ranks by median decode with source links', (
   assert.equal(list[0].medianDecodeTokPerSec, 35); // median of 30 & 40
   assert.equal(list[0].runsInGroup, 2);
   assert.match(list[0].source, /\/runs\/a$/); // links to the fastest run
+});
+
+// Issue #804: a quantization restored from ?sq= on a share link must be
+// detectable as stale when it no longer appears in the current results —
+// otherwise the select shows "Any quant" while the shortlist stays filtered.
+test('isStaleQuantFilter: empty filter is never stale', () => {
+  assert.equal(isStaleQuantFilter('', [{ quantization: 'Q4_K_M' }]), false);
+  assert.equal(isStaleQuantFilter(null, []), false);
+  assert.equal(isStaleQuantFilter('   ', []), false);
+});
+
+test('isStaleQuantFilter: present value (exact or re-cased) is not stale', () => {
+  const rows = [{ quantization: 'IQ4_XS' }, { quantization: 'Q4_K_M' }];
+  assert.equal(isStaleQuantFilter('IQ4_XS', rows), false);
+  // casing drift upstream shouldn't strand an old link
+  assert.equal(isStaleQuantFilter('iq4_xs', rows), false);
+  assert.equal(isStaleQuantFilter('q4_k_m', rows), false);
+});
+
+test('isStaleQuantFilter: absent value is stale (incl. empty result set)', () => {
+  assert.equal(isStaleQuantFilter('AWQ_8', [{ quantization: 'IQ4_XS' }]), true);
+  assert.equal(isStaleQuantFilter('Q4_K_M', []), true);
+});
+
+test('isStaleQuantFilter: missing quantization field counts as Unknown', () => {
+  assert.equal(isStaleQuantFilter('Unknown', [{}]), false);
+  assert.equal(isStaleQuantFilter('unknown', [{ quantization: null }]), false);
+  assert.equal(isStaleQuantFilter('Unknown', [{ quantization: 'Q4_K_M' }]), true);
 });

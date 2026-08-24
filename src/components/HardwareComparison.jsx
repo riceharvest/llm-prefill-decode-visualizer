@@ -475,7 +475,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   };
 
   return (
-    <div className="stack">
+    <div className="stack" data-view="compare" role="tabpanel">
 
       <section className="panel" aria-label={t('compare.panelAria')} ref={chartRef}>
         <div className="field-head" style={{ marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
