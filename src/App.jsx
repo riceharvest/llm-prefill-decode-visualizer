@@ -25,6 +25,8 @@ import {
   createHistory, recordChange, undo as historyUndo, redo as historyRedo
 } from './utils/settingsHistory';
 import SnapshotsSidebar from './components/SnapshotsSidebar';
+import KeyboardShortcutsDialog from './components/KeyboardShortcutsDialog';
+import { isTypingContext, isInteractiveContext, tabForDigit } from './utils/keyboardShortcuts';
 import { useFocusPanelHeading } from './utils/focus';
 import { setLocale, syncDocument, t } from './i18n/strings';
 import { installTouchTooltips } from './utils/touchTooltips';
@@ -41,6 +43,10 @@ function readTabParam() {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(readTabParam);
+  // Keyboard-shortcuts help dialog, opened with the `?` shortcut (#810 —
+  // the component existed as dead code and the old handler referenced an
+  // undefined setShortcutsOpen, throwing a ReferenceError on every `?`).
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
 
 
@@ -278,33 +284,34 @@ export default function App() {
   }, []);
 
   // Keyboard shortcuts: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z redo, Space =
-  // play/pause, R = reset, 1-9 + 0 = tabs, ? = shortcuts help dialog.
-  // Guards: modifier-held plain keys are ignored; typing in inputs/selects/
-  // textareas never triggers plain-key shortcuts; Space on a focused button
-  // lets the button handle it (the global toggle would double-fire and cancel
-  // itself out); while the shortcuts dialog is open only undo/redo stay live.
+  // play/pause, R = reset, 1-9 = tabs, ? = shortcuts help dialog.
+  // Guards: typing in inputs/selects/textareas/contenteditable never triggers
+  // any global shortcut — including Ctrl/Cmd+Z, which must keep native text
+  // undo (#814); plain-key shortcuts stay silent while an interactive element
+  // (button, link, ARIA radio/option/menuitem/tab) holds focus (#816); digits
+  // without a matching view are ignored instead of selecting an undefined tab
+  // and blanking the content area (#822).
   useEffect(() => {
     const onKey = (e) => {
+      if (isTypingContext(document.activeElement)) return;
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) handleRedo(); else handleUndo();
         return;
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const tag = document.activeElement?.tagName;
-      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if (isInteractiveContext(document.activeElement)) return;
       if (e.key === '?') {
         e.preventDefault();
         setShortcutsOpen(true);
       } else if (e.code === 'Space') {
-        if (tag === 'BUTTON') return; // the button's own activation handles it
         e.preventDefault(); // stop page scroll
         setIsPlaying(p => !p);
       } else if (e.key === 'r' || e.key === 'R') {
         handleReset();
       } else if (/^[0-9]$/.test(e.key)) {
-        // 1-9 map to the first nine views.
-        setActiveTab(TABS[e.key === '0' ? 9 : Number(e.key) - 1]);
+        const tab = tabForDigit(e.key, TABS); // out-of-range digits → ignored (#822)
+        if (tab) setActiveTab(tab);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -488,6 +495,11 @@ export default function App() {
           {t('header.brandTitle')} · <a href="/llms.txt">API</a> · <a href="/api/spec">OpenAPI</a> · <kbd>Space</kbd> play · <kbd>R</kbd> reset
         </p>
       </footer>
+
+      {/* Keyboard-shortcuts help dialog (? key) — wired up in #810 */}
+      {shortcutsOpen && (
+        <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />
+      )}
 
     </div>
   );
