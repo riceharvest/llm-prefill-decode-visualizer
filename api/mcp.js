@@ -173,6 +173,13 @@ function json(res, body, status = 200) {
 }
 
 export default async function handler(req, res) {
+  // /api/mcp is file-routed by Vercel and never passes through the catch-all
+  // router's shared middleware (api/[...path].js). The platform compresses
+  // this JSON per Accept-Encoding, so — like every other API route — the
+  // response must declare Vary: Accept-Encoding or a CDN may cross-serve an
+  // identity body to a gzip-capable client (or vice versa) (#1002).
+  res.setHeader('Vary', 'Accept-Encoding');
+
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     res.setHeader('Access-Control-Allow-Origin', '*');

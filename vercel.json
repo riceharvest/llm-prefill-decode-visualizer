@@ -45,6 +45,12 @@
       "destination": "/.well-known/mcp.json"
     }
   ],
+  "headers": [
+    {
+      "source": "/api/agent/index.json",
+      "headers": [{ "key": "Vary", "value": "Accept-Encoding" }]
+    }
+  ],
   "crons": [
     {
       "path": "/api/watch/dispatch",
