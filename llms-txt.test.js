@@ -24,6 +24,13 @@ test('llms.txt has at least two H2 sections with no duplicates', () => {
   assert.deepEqual(dupes, [], `duplicate H2 headings: ${dupes.join(', ')}`);
 });
 
+test('llms.txt reveals the machine-readable endpoint indexes (#888)', () => {
+  // The primary prose doc must point agents at the two complete indexes —
+  // /api/spec alone omits live endpoints.
+  assert.match(content, /\/agents\.json/, 'llms.txt must mention the agent manifest');
+  assert.match(content, /\/api\/agent\/index\.json/, 'llms.txt must mention the endpoint index');
+});
+
 test('every relative link target in llms.txt exists in the repo', () => {
   const links = [...content.matchAll(/\[([^\]]+)\]\(([^)\s]+)\)/g)];
   assert.ok(links.length >= 8, `expected >= 8 links, found ${links.length}`);

@@ -26,6 +26,9 @@ const STATIC_METADATA = {
   baseURL: 'https://llm-prefill-decode-visualizer.vercel.app',
   servers: [{ url: 'https://llm-prefill-decode-visualizer.vercel.app' }],
   docs: '/llms.txt — also see /api/agent/capabilities.json for the machine-readable surface list',
+  // Cross-reference the sibling hand-maintained per-endpoint index so agents
+  // holding either discovery document can find the other (issue #887).
+  endpointIndex: '/api/agent/index.json',
 };
 
 /** Build the full agents.json document from the route table. */

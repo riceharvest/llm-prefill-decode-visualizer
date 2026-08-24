@@ -5,6 +5,8 @@ An interactive tool for understanding LLM inference performance: prefill (comput
 <!-- agent-parseable:meta -->
 Base-URL: https://llm-prefill-decode-visualizer.vercel.app
 OpenAPI-Spec: /api/spec
+Agent-Manifest: /agents.json
+Endpoint-Index: /api/agent/index.json
 Tabs: single,agentic,batching,compare,ab,diff,shortlist,kvcache,theory
 Tab-URL-Template: {Base-URL}/?tab={id}
 Tab-Section-Header-Format: ### Tab: {id} — {label}

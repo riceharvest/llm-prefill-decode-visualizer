@@ -110,6 +110,8 @@ export function renderMetaBlock(tabs = TABS) {
     META_START,
     `Base-URL: ${BASE_URL}`,
     'OpenAPI-Spec: /api/spec',
+    'Agent-Manifest: /agents.json',
+    'Endpoint-Index: /api/agent/index.json',
     `Tabs: ${ids}`,
     'Tab-URL-Template: {Base-URL}/?tab={id}',
     'Tab-Section-Header-Format: ### Tab: {id} — {label}',

@@ -1,10 +1,12 @@
 {
   "$schema": "https://llm-prefill-decode-visualizer.vercel.app/api/spec",
   "name": "llm-prefill-decode-visualizer",
-  "description": "Machine-readable index of every agent-facing endpoint on the LLM Prefill & Decode Speed Visualizer API. All endpoints return JSON (except /api/watch/rss.xml, which returns RSS XML), support CORS, require no auth, and are also served under the /v1/ prefix (replace /api/ with /v1/). Full request/response details: GET /api/spec (OpenAPI 3.1). Human + agent docs: /llms.txt.",
+  "description": "Machine-readable index of every agent-facing endpoint on the LLM Prefill & Decode Speed Visualizer API. All endpoints return JSON (except /api/watch/rss.xml, which returns RSS XML, and /api/og, which returns a PNG image), support CORS, require no auth, and are also served under the /v1/ prefix (replace /api/ with /v1/). Full request/response details: GET /api/spec (OpenAPI 3.1). Human + agent docs: /llms.txt. A parallel generated manifest of the same surface lives at /agents.json.",
   "baseURL": "https://llm-prefill-decode-visualizer.vercel.app",
   "openapi": "/api/spec",
   "docs": "/llms.txt",
+  "agentsManifest": "/agents.json",
+  "mcpManifest": "/.well-known/mcp.json",
   "endpoints": [
     {
       "method": "GET",
@@ -18,6 +20,12 @@
       "description": "Batch up to 50 parameter sets in one round trip: {\"batch\": [{\"model\": ..., ...}]} (also accepted as \"variants\" or ?batch=[...] on GET). Per-item ok/error status; supports per-item dry_run.",
       "requestSchema": "{ batch: [{ model, ...params }] } (max 50 items)",
       "responseSchema": "{ batch: true, count, okCount, errorCount, results: [{ index, ok, result | error }] }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/og",
+      "description": "Renders a 1200x630 PNG Open Graph chart card from URL params (preset, prefill, decode, scenario, prompt). The one non-JSON surface in this index: returns image/png; errors use problem+json.",
+      "responseSchema": "image/png binary"
     },
     {
       "method": "GET",
@@ -125,6 +133,18 @@
     },
     {
       "method": "POST",
+      "path": "/api/watch/dispatch",
+      "description": "Same delivery pass as GET /api/watch/dispatch (POST unseen matching runs to each watch's webhookUrl). Auth identical: when WATCH_DISPATCH_SECRET is set, pass ?secret= or the x-dispatch-secret header.",
+      "responseSchema": "{ dispatched, totalNewRuns, results[{watchId, newRuns, delivered}], schemaNote, previewPayload }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mcp",
+      "description": "MCP server discovery metadata: server name, transport, protocol version and pointers to the manifest (/.well-known/mcp.json), spec and this endpoint. POST the same path for JSON-RPC 2.0 tool calls.",
+      "responseSchema": "{ server, transport: 'streamable-http', protocolVersion, endpoints{manifest, spec, thisEndpoint} }"
+    },
+    {
+      "method": "POST",
       "path": "/api/mcp",
       "description": "MCP (Model Context Protocol) server over Streamable HTTP JSON-RPC: initialize, tools/list, tools/call, ping. Tool calls proxy to the REST handlers above. Manifest at /.well-known/mcp.json.",
       "requestSchema": "{ jsonrpc: '2.0', id, method, params }",
@@ -157,7 +177,7 @@
     {
       "method": "GET",
       "path": "/api/agent/capabilities.json",
-      "description": "This index — machine-readable discovery document listing every agent-facing surface with methods, kind and descriptions. Static, CDN-cached 1h.",
+      "description": "Machine-readable capability/discovery document listing every agent-facing surface of the app with methods, kind and descriptions (a different document from this per-endpoint index; see also /agents.json). Static, CDN-cached 1h.",
       "responseSchema": "{ description, generatedAt, schema_version, surfaces[] }"
     },
     {
@@ -165,6 +185,13 @@
       "path": "/api/agent/compute.json",
       "description": "Agent-friendly wrapper over the same inference math as /api/compute. GET with ?model= plus params, or POST {\"batch\":[...]} (up to 50 sets). Flat self-describing envelope with resolved inputs and a deterministic calc id. Bare call returns the capability catalog.",
       "responseSchema": "{ description, endpoint, generatedAt, scenario?, inputs, id, ...mathFields, warnings[], schema_version }"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent/compute.json",
+      "description": "Batch form of the compute wrapper: {\"batch\": [...]} up to 50 parameter sets in one round trip — same math, deterministic ids and per-item ok/error status as POST /api/compute, flat envelope.",
+      "requestSchema": "{ batch: [{ model, ...params }] } (max 50 items)",
+      "responseSchema": "{ description, generatedAt, batch: true, count, okCount, errorCount, results[{ index, ok, result | error }], schema_version }"
     },
     {
       "method": "GET",

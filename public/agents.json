@@ -10,6 +10,7 @@
     }
   ],
   "docs": "/llms.txt — also see /api/agent/capabilities.json for the machine-readable surface list",
+  "endpointIndex": "/api/agent/index.json",
   "endpoints": [
     {
       "path": "/api/agent/benchmarks.json",
