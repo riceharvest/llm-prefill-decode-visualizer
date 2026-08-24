@@ -65,9 +65,17 @@ export default function App() {
   const [decodeSpeed, setDecodeSpeed] = useState(() => Number(readParam('decode')) || initialPresetObj.decodeSpeed);
   const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => {
     const v = readParam('sim');
-    return v === 'instant' ? 'instant' : (Number(v) || 1);
+    // readParamPosNum rejects 0/negative so a bad share link can't freeze the
+    // sim clock (#1040) — same contract as EmbedApp below.
+    return v === 'instant' ? 'instant' : readParamPosNum('sim', 1);
   });
   const [isPlaying, setIsPlaying] = useState(false);
+  // #818: playback state must not carry across view switches — arriving on a
+  // new tab with the old tab's run still "playing" starts that simulation
+  // mid-flight. Reset whenever the active view changes.
+  useEffect(() => {
+    setIsPlaying(false);
+  }, [activeTab]);
   // Engine flags (issue #70): comma-separated ids persisted in the URL. The
   // picker shows their documented deltas; "Apply to simulation" bakes the
   // composed speeds into prefill/decode and clears the selection so toggling
