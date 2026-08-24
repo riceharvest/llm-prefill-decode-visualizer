@@ -63,6 +63,16 @@ const WHATIF_DESCRIPTION =
 //   Default mode: ?runA=<id>&runB=<id> — diff two measured runs.
 //   What-if mode: ?mode=whatif&a=<constraints>&b=<constraints> — diff two
 //   decision requests (#71), returning only the deltas.
+/**
+ * Map a thrown error onto an HTTP status: client-input errors carry a 4xx
+ * statusCode (e.g. malformed JSON body → 400 from readJsonBody) and are
+ * honored as-is; anything else is a genuine unexpected throw → 502 (#747).
+ */
+export function statusFromError(err) {
+  const code = Number(err?.statusCode);
+  return Number.isInteger(code) && code >= 400 && code < 500 ? code : 502;
+}
+
 export default async function handler(req, res) {
   try {
     const body = await readJsonBody(req);
@@ -101,7 +111,9 @@ export default async function handler(req, res) {
       diff: computeRunDiff(runA, runB)
     });
   } catch (err) {
-    return json(res, { error: String(err.message || err) }, 502);
+    // Honor client-input error statuses so agents don't retry non-retryable
+    // input as if it were an upstream failure (#747).
+    return json(res, { error: String(err.message || err) }, statusFromError(err));
   }
 }
 

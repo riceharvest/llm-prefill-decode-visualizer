@@ -241,8 +241,12 @@ Hardware sizing recommendation for a workload spec (VRAM fit + expected
 TTFT/TPOT from community medians).
 
 ```bash
-curl -s "$BASE/api/sizing?model=qwen&quant=q4_k_m&users=10&budgetUsd=1500"
+curl -s "$BASE/api/sizing?model=qwen&quant=q4_k_m&concurrency=10"
 ```
+
+Note: `/api/sizing` has no cost/budget parameter (`budgetUsd` is not a
+recognized input and is silently ignored); concurrency is set with
+`concurrency=` (alias `batchSize=`).
 
 ```json
 {

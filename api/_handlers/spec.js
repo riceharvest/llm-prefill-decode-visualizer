@@ -655,7 +655,20 @@ export default function handler(req, res) {
       // CHANGELOG-API.md § "Two version numbers (release version vs wire
       // schema version)" for the mapping and bump rules.
       'x-schema-version': SCHEMA_VERSION,
-      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. URL versioning: every endpoint is also served under the /v1/ prefix (e.g. /v1/compute) — external consumers should harden onto /v1/; the unversioned /api/ paths keep working and remain the canonical docs location (/api/spec). Breaking changes will ship under a new version prefix with the previous one kept for at least 90 days (see CHANGELOG-API.md). Every response body carries a schema_version field ("1") and every response sets an X-Schema-Version header; info.version (2.6.0) is the API *release* version while schema_version is the independent wire *contract* version — they are decoupled by design, see CHANGELOG-API.md § "Two version numbers" for the mapping and for the versioning + deprecation policy. Human docs at /llms.txt. Rate limited to 120 requests/min per client (best-effort, per serverless instance); every response carries X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset, and exhaustion returns 429 with Retry-After. Benchmark endpoints (/api/localmaxxing, /api/benchmarks, /api/best) carry a machine-readable top-level `caveats` array (objects with code/severity/summary/detail) describing dataset limitations, and each aggregate carries a confidence block plus crossCheck. Errors follow RFC 9457 problem+json with a stable machine-readable code — see x-error-codes.'
+      description: 'LLM inference performance math and community-measured hardware benchmarks. All endpoints return JSON, support CORS, require no auth. Content negotiation: send Accept: text/markdown (or application/markdown) on any JSON endpoint to receive the same payload as a markdown rendering — responses then carry Vary: Accept, Accept-Encoding so caches never serve the wrong variant. Every response echoes a client-supplied X-Request-Id header back verbatim (bounded to 200 chars) and exposes it to browser fetch() via Access-Control-Expose-Headers — use it for client-side correlation. URL versioning: every endpoint is also served under the /v1/ prefix (e.g. /v1/compute) — external consumers should harden onto /v1/; the unversioned /api/ paths keep working and remain the canonical docs location (/api/spec). Breaking changes will ship under a new version prefix with the previous one kept for at least 90 days (see CHANGELOG-API.md). Every response body carries a schema_version field ("1") and every response sets an X-Schema-Version header; info.version (2.6.0) is the API *release* version while schema_version is the independent wire *contract* version — they are decoupled by design, see CHANGELOG-API.md § "Two version numbers" for the mapping and for the versioning + deprecation policy. Human docs at /llms.txt. Rate limited to 120 requests/min per client (best-effort, per serverless instance); every response carries X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset, and exhaustion returns 429 with Retry-After. Benchmark endpoints (/api/localmaxxing, /api/benchmarks, /api/best) carry a machine-readable top-level `caveats` array (objects with code/severity/summary/detail) describing dataset limitations, and each aggregate carries a confidence block plus crossCheck. Errors follow RFC 9457 problem+json with a stable machine-readable code — see x-error-codes.'
+    },
+    // Cross-cutting HTTP behaviors, machine-readable (#754): these apply to
+    // every JSON endpoint served through the shared sendJson()/dispatcher
+    // layer and are therefore documented once here instead of per-path.
+    'x-content-negotiation': {
+      description: 'Send Accept: text/markdown or application/markdown on any JSON endpoint to get the same payload rendered as markdown (tables/lists). Responses carry Vary: Accept, Accept-Encoding. Omitting Accept (or asking for application/json) returns JSON as documented.',
+      mediaTypes: { json: 'application/json', markdown: 'text/markdown' }
+    },
+    'x-request-id': {
+      description: 'Echoes a client-supplied X-Request-Id request header back on every response (truncated to 200 chars; absent when the client did not send one) and lists it in Access-Control-Expose-Headers.',
+      header: 'X-Request-Id',
+      echo: true,
+      maxLength: 200
     },
     servers: [
       { url: BASE, description: 'Canonical unversioned host — /api/* paths' },
@@ -1048,8 +1061,14 @@ export default function handler(req, res) {
           description: 'Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median decode speed. by=cost ranks by cost-efficiency instead. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel). Responses carry a deterministic `id` (hash of the resolved filters) replayable via /api/calc/{id}?endpoint=best&<same filters>.',
           parameters: [
             { name: 'by', in: 'query', schema: { type: 'string', enum: ['decode', 'prefill', 'efficiency', 'walltime', 'confidence', 'cost'] }, default: 'decode' },
-            { name: 'price', in: 'query', schema: { type: 'number' }, description: 'cost mode: rig purchase price in USD (default 0)' },
-            { name: 'electricityRate', in: 'query', schema: { type: 'number' }, description: 'cost mode: $/kWh (default 0.15)' },
+            { name: 'sort_by', in: 'query', schema: { type: 'string', enum: ['decode', 'prefill', 'efficiency', 'walltime', 'confidence', 'cost'] }, description: 'Exact alias for `by` (checked first when both are present)' },
+            { name: 'engine', in: 'query', schema: { type: 'string' }, description: 'Restrict to runs whose engine name/version tag contains this substring (e.g. llama.cpp, b4523)' },
+            { name: 'max_age', in: 'query', schema: { type: 'number' }, description: 'Exclude runs measured more than N days ago (alias: maxAge)' },
+            { name: 'scenario', in: 'query', schema: { type: 'string', enum: ['chat', 'rag', 'longdoc', 'codegen', 'reasoning'] }, description: 'Workload shape for by=walltime projections and cost mode; explicit promptTokens/outputTokens win over the preset' },
+            { name: 'price', in: 'query', schema: { type: 'number' }, description: 'cost mode: rig purchase price in USD (default 0). Alias for the canonical hardwarePriceUsd spelling used by /api/compute — both work here and there' },
+            { name: 'electricityRate', in: 'query', schema: { type: 'number' }, description: 'cost mode: $/kWh (default 0.15). Alias for the canonical electricityRatePerKwh spelling used by /api/compute — both work here and there' },
+            { name: 'hardwarePriceUsd', in: 'query', schema: { type: 'number' }, description: 'cost mode: canonical spelling of `price` (default 0)' },
+            { name: 'electricityRatePerKwh', in: 'query', schema: { type: 'number' }, description: 'cost mode: canonical spelling of `electricityRate` (default 0.15)' },
             { name: 'powerWatts', in: 'query', schema: { type: 'number' }, description: 'cost mode: whole-rig watts; defaults to an estimate per hwClass' },
             { name: 'amortizationMonths', in: 'query', schema: { type: 'number' }, description: 'cost mode: spread price over this many months (default 36)' },
             { name: 'promptTokens', in: 'query', schema: { type: 'number' }, description: 'cost mode: scenario shape (default 2048)' },
@@ -1064,7 +1083,7 @@ export default function handler(req, res) {
             { name: 'contextLength', in: 'query', schema: { type: 'integer', default: 32768 }, description: 'context for fitCheck; providing it implies fitCheck=true' },
             { name: 'precisionBytes', in: 'query', schema: { type: 'number', default: 2 }, description: 'KV cache dtype bytes for fitCheck (2 = fp16)' },
             { name: 'batchSize', in: 'query', schema: { type: 'integer', default: 1 }, description: 'batch size for fitCheck KV cache math' },
-            { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
+            { name: 'limit', in: 'query', schema: { type: 'integer', default: 10, maximum: 50 }, description: 'Max groups returned; values above 50 are clamped to the hard cap of 50' },
             SNAPSHOT_PARAM
           ],
           responses: {
