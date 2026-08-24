@@ -8,7 +8,7 @@ import {
   ChevronRight,
   RotateCcw
 } from 'lucide-react';
-import { LESSONS, loadProgress, saveProgress, isComplete } from '../utils/curriculum';
+import { LESSONS, loadProgress, saveProgress, isComplete, checkAnswer, markAttempted, attemptCount } from '../utils/curriculum';
 import { demoUrl } from '../utils/urlState';
 
 // Curriculum mode (issue #89): a lesson rail of ordered lessons. Each lesson
@@ -26,6 +26,9 @@ export default function CurriculumMode() {
   const lesson = LESSONS[lessonIdx];
   const isLast = lessonIdx === LESSONS.length - 1;
   const completedCount = LESSONS.filter(l => isComplete(progress, l.id)).length;
+  // Wrong answers count as engagement too (#1022) — surfaced when it differs
+  // from completed so "0 of 6 completed" can't hide six failed attempts.
+  const attemptedTotal = LESSONS.reduce((n, l) => n + attemptCount(progress, l.id), 0);
   const isCorrect = checked && choice === lesson.correctIndex;
 
   const selectLesson = (idx) => {
@@ -37,12 +40,13 @@ export default function CurriculumMode() {
   const handleCheck = () => {
     if (choice === null || checked) return;
     setChecked(true);
-    if (choice === lesson.correctIndex) {
-      setProgress(saveProgress({
-        ...progress,
-        completed: { ...progress.completed, [lesson.id]: Date.now() }
-      }));
+    // Canonical correctness check (#1022: checkAnswer() had zero UI consumers)
+    // + every attempt recorded, wrong answers included.
+    let next = markAttempted(progress, lesson.id);
+    if (checkAnswer(lesson.id, choice)) {
+      next = { ...next, completed: { ...next.completed, [lesson.id]: Date.now() } };
     }
+    setProgress(saveProgress(next));
   };
 
   const optionStyle = (idx) => ({
@@ -77,7 +81,8 @@ export default function CurriculumMode() {
         </h2>
         <p className="hint-text" style={{ marginBottom: '14px' }}>
           Six ordered lessons. Each one presets the simulator, asks you to predict the outcome,
-          then lets you run it and check yourself. {completedCount} of {LESSONS.length} completed.
+          then lets you run it and check yourself. {completedCount} of {LESSONS.length} completed
+          {attemptedTotal > completedCount ? ` · ${attemptedTotal} checked` : ''}.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 240px) 1fr', gap: '14px', alignItems: 'start' }}>
