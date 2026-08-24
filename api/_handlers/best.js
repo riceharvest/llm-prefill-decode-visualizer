@@ -133,6 +133,20 @@ function num(v, fallback) {
 // Whole-rig figures (idle-ish load while serving), not TDP sums.
 const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
 
+// Case-insensitive lookup into DEFAULT_POWER_WATTS (#1111): the wire's
+// hwClass casing has drifted from these lower-case enum keys, which made the
+// per-class fallbacks dead code (every rig fell through to the flat 150).
+function defaultPowerFor(hwClass) {
+  return DEFAULT_POWER_WATTS[String(hwClass ?? '').toLowerCase()];
+}
+
+/** Resolve effective wall watts for one group (#1111): accepts both the
+ * /api/best spelling (?powerWatts) and /api/compute's documented
+ * ?powerDrawWatts; falls back per hwClass (case-insensitive), then flat 150. */
+export function resolveCostPowerWatts(q = {}, hwClass) {
+  return num(q.powerDrawWatts ?? q.powerWatts, defaultPowerFor(hwClass) ?? 150);
+}
+
 /**
  * GET /api/best — ranked answers to natural benchmark questions.
  *
@@ -161,6 +175,8 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  * ?price=<usd>                    hardware purchase price (per rig; default 0)
  * ?electricityRate=$/kWh          default 0.15
  * ?powerWatts=W                   default estimate by hwClass (see DEFAULT_POWER_WATTS)
+ *                                 (?powerDrawWatts=W also accepted, matching
+ *                                 /api/compute's spelling)
  * ?amortizationMonths=M           spread hardware price over this many months (default 36)
  * ?promptTokens=&outputTokens=    scenario shape (defaults 2048/512)
  *
@@ -260,7 +276,9 @@ export async function bestBody(query = {}) {
           const sample = g.bestRun;
           const c = cost({
             ...costInputs,
-            powerDrawWatts: num(q.powerWatts, DEFAULT_POWER_WATTS[sample.hwClass] ?? 150),
+            // Honor /api/compute's documented powerDrawWatts spelling too
+            // (previously only ?powerWatts was read — #1111).
+            powerDrawWatts: resolveCostPowerWatts(q, sample.hwClass),
             prefillSpeed: g.prefill.median,
             decodeSpeed: g.decode.median
           });

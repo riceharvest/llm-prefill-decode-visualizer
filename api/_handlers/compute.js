@@ -174,6 +174,8 @@ function computeOne(params, dryRun = false) {
     }
 
     case 'cost': {
+      const priceGiven = params.hardwarePriceUsd != null || params.price != null;
+      const wattsGiven = params.powerDrawWatts != null;
       const costInputs = {
         hardwarePriceUsd: num(params.hardwarePriceUsd ?? params.price, 0),
         electricityRatePerKwh: num(params.electricityRatePerKwh ?? params.electricityRate, 0.15),
@@ -184,8 +186,18 @@ function computeOne(params, dryRun = false) {
         prefillSpeed: num(params.prefillSpeed, 3800),
         decodeSpeed: num(params.decodeSpeed, 105)
       };
-      if (dryRun) return { status: 200, body: dryRunBody('cost', costInputs) };
-      return { status: 200, body: cost(costInputs) };
+      // Money-bearing inputs silently default to 0 → every $ figure reads
+      // $0.00 like a real (free) rig. Flag it (#736), matching the
+      // non-blocking implausibility-warnings contract of the other models.
+      const defaulted = [
+        ...(priceGiven ? [] : ['hardwarePriceUsd=0 (no amortized hardware cost)']),
+        ...(wattsGiven ? [] : ['powerDrawWatts=0 (no electricity cost)'])
+      ];
+      const warnings = defaulted.length
+        ? [{ code: 'cost_inputs_default_to_zero', message: `${defaulted.join(' and ')} defaulted because the input was not provided — the cost figures below reflect free hardware/electricity unless you pass these inputs explicitly.` }]
+        : [];
+      if (dryRun) return { status: 200, body: { ...dryRunBody('cost', costInputs), warnings } };
+      return { status: 200, body: { ...cost(costInputs), warnings } };
     }
 
     case '':
