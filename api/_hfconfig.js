@@ -148,20 +148,24 @@ async function resolveUncached(hfId, quant) {
   // ---- Path 1: config.json ----
   if (cfg != null) {
     const t = textConfig(cfg);
-    const numLayers = t.num_hidden_layers;
-    const hiddenSize = t.hidden_size;
-    const numHeads = t.num_attention_heads ?? t.num_heads;
+    // Legacy GPT-2-style configs use n_layer / n_embd / n_head / n_positions
+    // instead of the modern names (issue #853) — accept both spellings.
+    const numLayers = t.num_hidden_layers ?? t.n_layer;
+    const hiddenSize = t.hidden_size ?? t.n_embd;
+    const numHeads = t.num_attention_heads ?? t.num_heads ?? t.n_head;
     if (![numLayers, hiddenSize, numHeads].every(Number.isFinite)) {
-      notes.push('config.json lacks num_hidden_layers / hidden_size / num_attention_heads');
+      notes.push('config.json lacks num_hidden_layers (n_layer) / hidden_size (n_embd) / num_attention_heads (n_head)');
     } else {
       return assemble({ hfId, notes, info,
         arch: {
           numLayers,
           hiddenSize,
           numHeads,
-          kvHeads: Number.isFinite(t.num_key_value_heads) ? t.num_key_value_heads : numHeads,
+          kvHeads: Number.isFinite(t.num_key_value_heads ?? t.n_head_kv) ? (t.num_key_value_heads ?? t.n_head_kv) : numHeads,
           headDim: Number.isFinite(t.head_dim) ? t.head_dim : hiddenSize / numHeads,
-          maxContextLength: Number.isFinite(t.max_position_embeddings) ? t.max_position_embeddings : null
+          maxContextLength: Number.isFinite(t.max_position_embeddings ?? t.n_positions)
+            ? (t.max_position_embeddings ?? t.n_positions)
+            : null
         },
         paramsTotal: Number.isFinite(info?.safetensors?.total) && info.safetensors.total > 0
           ? info.safetensors.total
@@ -179,8 +183,9 @@ async function resolveUncached(hfId, quant) {
   // ---- Path 2: GGUF file header ----
   const gguf = biggestGguf(info, quant);
   if (!gguf) {
-    throw httpError(403,
-      `"${hfId}" is gated/private or has no config.json and no .gguf files — architecture cannot be resolved automatically. Try an ungated mirror of the same model.`);
+    throw httpError(403, cfg != null
+      ? `"${hfId}" is public but its config.json has no readable architecture fields and there are no .gguf files — architecture cannot be resolved automatically. Try a mirror of the same model in safetensors or GGUF format.`
+      : `"${hfId}" is gated/private or has no config.json and no .gguf files — architecture cannot be resolved automatically. Try an ungated mirror of the same model.`);
   }
 
   const url = `https://huggingface.co/${hfId}/resolve/main/${gguf.name.split('/').map(encodeURIComponent).join('/')}`;

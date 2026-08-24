@@ -132,14 +132,21 @@ async function estimate(params) {
   if (vramGb != null && totalGb != null) {
     const budgetBytes = vramGb * GB;
     const bytesPerCtxToken = bytesPerToken * batchSize;
+    const rawMaxContext = bytesPerCtxToken > 0
+      ? Math.max(0, Math.floor((budgetBytes - weightsGb * GB) / bytesPerCtxToken))
+      : null;
+    // The model can never exceed its own max_position_embeddings — clamp the
+    // VRAM-budget-derived bound to the architecture's context window
+    // (issue #854).
+    const cappedByWindow = rawMaxContext != null && maxCtx != null && rawMaxContext > maxCtx;
     fits = {
       vramGb,
       fits: totalGb <= vramGb,
       headroomGb: round((budgetBytes - weightsGb * GB - kvBytesTotal) / GB),
-      maxContextTokens: bytesPerCtxToken > 0
-        ? Math.max(0, Math.floor((budgetBytes - weightsGb * GB) / bytesPerCtxToken))
-        : null,
+      maxContextTokens: cappedByWindow ? maxCtx : rawMaxContext,
+      contextWindowCapped: cappedByWindow || undefined,
       note: 'maxContextTokens ignores activation/overhead — treat as an upper bound'
+        + (cappedByWindow ? '; clamped to the model max_position_embeddings' : '')
     };
   }
 
