@@ -8,6 +8,7 @@ import {
   estimateImageTokens
 } from '../utils/multimodal';
 import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
+import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
@@ -1065,7 +1066,12 @@ export default function SingleTurnVisualizer({
       ))}
 
       {/* Main Visualizer Stage */}
-      <section className="panel" aria-label={t('singleTurn.simStageAria')}>
+      <section
+        className="panel"
+        aria-label={t('singleTurn.simStageAria')}
+        data-state={phaseToRunState(phase)}
+        aria-busy={runStateToBusy(phaseToRunState(phase))}
+      >
 
         {/* Status Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>

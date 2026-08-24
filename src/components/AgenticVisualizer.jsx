@@ -3,6 +3,7 @@ import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, File
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, readParamBool, readParam, writeParams } from '../utils/urlState';
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
+import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { exportNodeAsPng } from '../utils/exportPng';
 import EmbedDialog from './EmbedDialog';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
@@ -624,7 +625,12 @@ export default function AgenticVisualizer({
       ))}
 
       {/* Main Agent Loop Simulation Stage */}
-      <section className="panel" aria-label={t('agentic.simStageAria')}>
+      <section
+        className="panel"
+        aria-label={t('agentic.simStageAria')}
+        data-state={phaseToRunState(currentPhase)}
+        aria-busy={runStateToBusy(phaseToRunState(currentPhase))}
+      >
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
