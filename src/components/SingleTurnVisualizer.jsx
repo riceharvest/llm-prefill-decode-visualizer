@@ -28,6 +28,7 @@ import {
   buildDoneAnnouncement
 } from '../utils/liveAnnouncer';
 import KVCacheMatrix, { KVCacheSectionHeader } from './KVCacheMatrix';
+import { needsStackedBarLegend } from '../utils/chartAccessibility';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
@@ -1503,6 +1504,18 @@ export default function SingleTurnVisualizer({
               {decodePct > 8 && `${t('singleTurn.distributionDecode').toUpperCase()} ${decodePct.toFixed(0)}%`}
             </div>
           </div>
+
+          {/* Always-visible fallback legend (#923): when a phase's in-bar label
+              is suppressed below the width threshold, its tooltip is
+              hover-only and unreachable for touch/keyboard users — surface
+              both phases' percentage and absolute time instead. */}
+          {needsStackedBarLegend(prefillPct, decodePct) && (
+            <div className="hint-text" style={{ marginTop: '6px', fontSize: '0.72rem', fontVariantNumeric: 'tabular-nums' }}>
+              {t('singleTurn.distributionPrefill')}: {prefillPct.toFixed(1)}% · {formatTime(expectedTTFT)}
+              {' — '}
+              {t('singleTurn.distributionDecode')}: {decodePct.toFixed(1)}% · {formatTime(expectedDecodeTime)}
+            </div>
+          )}
 
           {/* Chart-to-table alternative (#75): the stacked bar's exact phase
               timings, visually hidden until keyboard focus (prefill/decode

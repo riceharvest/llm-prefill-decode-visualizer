@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatTokens } from '../utils/presets';
 import { t } from '../i18n/strings';
+import { buildKvMatrixSummary } from '../utils/chartAccessibility';
 
 // Visual rows in each matrix. Real prompts are thousands of tokens, so the
 // matrix is a proportional abstraction: a "row" lights up once its share of
@@ -62,7 +63,18 @@ export default function KVCacheMatrix({
         </span>
       </div>
 
-      <div className="kv-grid" role="img" aria-label={`${title}: ${Math.round(fillFrac * 100)}% of ${KV_ROWS} cache rows written`}>
+      {/* Full a11y text contract (#922): role="img" prunes children, so the
+          label must carry the row count (matching the discrete append
+          rendering), the appending newest-row marker, and the prefix-cache
+          share — all previously visual-only. */}
+      <div className="kv-grid" role="img" aria-label={buildKvMatrixSummary({
+        title,
+        variant,
+        fillFrac,
+        appendedRows,
+        totalRows: KV_ROWS,
+        cachedFracOfFill
+      })}>
         {Array.from({ length: KV_ROWS }, (_, i) => {
           if (variant === 'parallel') {
             // All rows share one fill level — written simultaneously.
