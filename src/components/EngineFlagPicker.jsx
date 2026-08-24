@@ -2,6 +2,7 @@ import React from 'react';
 import { SlidersHorizontal, Check, Info } from 'lucide-react';
 import { ENGINE_FLAGS, applyEngineFlags } from '../utils/engineFlags';
 import { formatTime } from '../utils/presets';
+import { formatNum } from '../utils/numerals';
 
 // Engine flag picker: toggles llama.cpp / vLLM launch flags and shows the
 // exact documented delta each one applies to the simulated numbers, with a
@@ -111,7 +112,7 @@ export default function EngineFlagPicker({
           </table>
 
           <p className="hint-text" style={{ marginTop: '8px' }}>
-            Composed effect on this workload ({promptTokens.toLocaleString()} → {outputTokens.toLocaleString()} tok):{' '}
+            Composed effect on this workload ({formatNum(promptTokens)} → {formatNum(outputTokens)} tok):{' '}
             <strong>{formatTime(adjTotal)}</strong> vs <strong>{formatTime(baseTotal)}</strong> unflagged
             (saves {formatTime(Math.max(0, savedSeconds))}).
           </p>

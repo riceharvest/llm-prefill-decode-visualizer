@@ -39,6 +39,7 @@ import { evaluateSlo } from '../utils/slo.js';
 import { buildSingleTurnMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { buildSingleTurnJson, downloadJson } from '../utils/exportJson';
 import { t } from '../i18n/strings';
+import { formatNum } from '../utils/numerals';
 
 export default function SingleTurnVisualizer({
   prefillSpeed,
@@ -401,13 +402,13 @@ export default function SingleTurnVisualizer({
   const displayDecodeSpeed = Math.round(avgDecodeSpeed || 0);
 
   // Live substitutions for the why-explainer popovers (issue #87)
-  const ttftSub = `${safePromptTokens.toLocaleString()} tok ÷ ${prefillSpeed.toLocaleString()} tok/s = ${formatTime(expectedTTFT)}`;
-  const decodeTimeSub = `${safeOutputTokens.toLocaleString()} tok ÷ ${displayDecodeSpeed.toLocaleString()} tok/s = ${formatTime(expectedDecodeTime)}`;
+  const ttftSub = `${formatNum(safePromptTokens)} tok ÷ ${formatNum(prefillSpeed)} tok/s = ${formatTime(expectedTTFT)}`;
+  const decodeTimeSub = `${formatNum(safeOutputTokens)} tok ÷ ${formatNum(displayDecodeSpeed)} tok/s = ${formatTime(expectedDecodeTime)}`;
   const tpotSub = Number.isFinite(tpotMs)
-    ? `1000 ms ÷ ${displayDecodeSpeed.toLocaleString()} tok/s = ${tpotMs.toFixed(1)} ms`
+    ? `1000 ms ÷ ${formatNum(displayDecodeSpeed)} tok/s = ${tpotMs.toFixed(1)} ms`
     : `decode speed is 0 tok/s → ∞ ms`;
   const walltimeSub = `${formatTime(expectedTTFT)} + ${formatTime(expectedDecodeTime)} = ${formatTime(expectedTotalTime)}`;
-  const throughputSub = `(${(safePromptTokens + safeOutputTokens).toLocaleString()} tok) ÷ ${formatTime(expectedTotalTime)}`;
+  const throughputSub = `(${formatNum((safePromptTokens + safeOutputTokens))} tok) ÷ ${formatTime(expectedTotalTime)}`;
   const prefillPctSub = `${formatTime(expectedTTFT)} ÷ ${formatTime(expectedTotalTime)} × 100 = ${prefillPct.toFixed(1)}%`;
   const decodePctSub = `${formatTime(expectedDecodeTime)} ÷ ${formatTime(expectedTotalTime)} × 100 = ${decodePct.toFixed(1)}%`;
   // Human-reading-speed anchors (issue #86): calibrated comparisons that turn
@@ -489,7 +490,7 @@ export default function SingleTurnVisualizer({
       ? `Prefilling: about ${srPrefillBucket * 25} percent of ${formatTokens(totalPrefillTokens)} prompt tokens ingested.`
       : phase === 'decoding'
         ? `Prefill finished in ${formatTime(expectedTTFT)}. Decoding at ${displayDecodeSpeed} tokens per second: about ${srDecodeBucket * 10} percent of ${formatTokens(safeOutputTokens)} output tokens generated.`
-        : `Run complete in ${formatTime(expectedTotalTime)}: ${formatTokens(totalPrefillTokens)} prompt tokens prefilled, ${safeOutputTokens.toLocaleString()} tokens decoded.`;
+        : `Run complete in ${formatTime(expectedTotalTime)}: ${formatTokens(totalPrefillTokens)} prompt tokens prefilled, ${formatNum(safeOutputTokens)} tokens decoded.`;
 
   // --- Misconception callouts: fire once per session at the teachable moment ---
   const [activeCallouts, setActiveCallouts] = useState([]);
@@ -569,7 +570,7 @@ export default function SingleTurnVisualizer({
               onClick={() => applyScenario(s)}
               className={activeScenario?.id === s.id ? 'active' : ''}
               aria-pressed={activeScenario?.id === s.id}
-              title={`${s.promptTokens.toLocaleString()} prompt → ${s.outputTokens.toLocaleString()} output tokens`}
+              title={`${formatNum(s.promptTokens)} prompt → ${formatNum(s.outputTokens)} output tokens`}
             >
               {s.icon} {s.label}
             </button>
@@ -597,7 +598,7 @@ export default function SingleTurnVisualizer({
             {specEnabled && (
               <span className="tag tag-decode">
                 {t('singleTurn.effectiveTag', {
-                  speed: Math.round(effectiveDecodeSpeed).toLocaleString(),
+                  speed: formatNum(Math.round(effectiveDecodeSpeed)),
                   multiplier: (effectiveDecodeSpeed / decodeSpeed).toFixed(2)
                 })}
               </span>
@@ -774,7 +775,7 @@ export default function SingleTurnVisualizer({
             </button>
             {ctxScaleEnabled && (
               <span className="tag tag-decode">
-                {t('singleTurn.ctxEffectiveTag', { speed: displayDecodeSpeed.toLocaleString() })}
+                {t('singleTurn.ctxEffectiveTag', { speed: formatNum(displayDecodeSpeed) })}
               </span>
             )}
           </div>
@@ -807,14 +808,14 @@ export default function SingleTurnVisualizer({
                   <div className="field-head">
                     <span className="field-label">{t('singleTurn.ctxChartLabel')}</span>
                     <span className="field-value" style={{ color: 'var(--decode)', fontFamily: 'var(--font-mono)' }}>
-                      {Math.round(curveStartSpeed).toLocaleString()} → {Math.round(curveEndSpeed).toLocaleString()} tok/s
+                      {formatNum(Math.round(curveStartSpeed))} → {formatNum(Math.round(curveEndSpeed))} tok/s
                     </span>
                   </div>
                   <p className="hint-text" style={{ margin: 0 }}>
                     {t('singleTurn.ctxProbeReadout', {
-                      generated: probeGen.toLocaleString(),
-                      cache: (totalPrefillTokens + probeGen).toLocaleString(),
-                      speed: Math.round(probeSpeed).toLocaleString(),
+                      generated: formatNum(probeGen),
+                      cache: formatNum((totalPrefillTokens + probeGen)),
+                      speed: formatNum(Math.round(probeSpeed)),
                       pct: probePctOfBase.toFixed(0)
                     })}
                   </p>
@@ -848,7 +849,7 @@ export default function SingleTurnVisualizer({
                 {/* base-speed reference at the left edge */}
                 <line x1={PAD_L} y1={yAt(effectiveDecodeSpeed)} x2={CHART_W - PAD_R} y2={yAt(effectiveDecodeSpeed)} stroke="var(--text-subtle)" strokeDasharray="4 4" strokeWidth="1" />
                 <text x={PAD_L} y={yAt(effectiveDecodeSpeed) - 5} fontSize="10" fill="var(--text-muted)" fontFamily="var(--font-mono)">
-                  base {Math.round(effectiveDecodeSpeed).toLocaleString()} tok/s
+                  base {formatNum(Math.round(effectiveDecodeSpeed))} tok/s
                 </text>
                 {/* live position while decoding */}
                 {phase === 'decoding' && (
@@ -866,7 +867,7 @@ export default function SingleTurnVisualizer({
                     x={Math.min(xAt(probeGen) + 8, CHART_W - PAD_R - 90)} y={PAD_T + 12}
                     fontSize="11" fill="var(--text-main)" fontFamily="var(--font-mono)" fontWeight="700"
                   >
-                    {Math.round(probeSpeed).toLocaleString()} tok/s @ +{probeGen.toLocaleString()}
+                    {formatNum(Math.round(probeSpeed))} tok/s @ +{formatNum(probeGen)}
                   </text>
                 </g>
               </svg>
@@ -877,7 +878,7 @@ export default function SingleTurnVisualizer({
                 step="1"
                 value={probeGen}
                 aria-label={t('singleTurn.ctxProbeAria')}
-                aria-valuetext={`generated token ${probeGen.toLocaleString()}`}
+                aria-valuetext={`generated token ${formatNum(probeGen)}`}
                 onChange={(e) => setProbeTokens(Number(e.target.value))}
                 style={{ width: '100%' }}
               />
@@ -909,8 +910,8 @@ export default function SingleTurnVisualizer({
             </button>
             {imagesEnabled && (
               <span className="tag tag-prefill">
-                +{totalImageTokens.toLocaleString()} vision tok
-                {' '}({imageTilesPerImage} tile{imageTilesPerImage > 1 ? 's' : ''} ≈ {imageTokensPerImage.toLocaleString()} tok each)
+                +{formatNum(totalImageTokens)} vision tok
+                {' '}({imageTilesPerImage} tile{imageTilesPerImage > 1 ? 's' : ''} ≈ {formatNum(imageTokensPerImage)} tok each)
               </span>
             )}
           </div>
@@ -953,7 +954,7 @@ export default function SingleTurnVisualizer({
                         }}
                         className={imageResId === p.id ? 'active' : ''}
                         aria-pressed={imageResId === p.id}
-                        title={`${p.width}×${p.height} → ~${estimateImageTokens(p).toLocaleString()} vision tokens`}
+                        title={`${p.width}×${p.height} → ~${formatNum(estimateImageTokens(p))} vision tokens`}
                       >
                         {p.id}
                       </button>
@@ -962,7 +963,7 @@ export default function SingleTurnVisualizer({
                 </div>
               </div>
               <p className="hint-text" style={{ marginTop: '8px' }}>
-                Vision-encoder estimate: images are tiled into ~1MP chunks at ~{TOKENS_PER_TILE.toLocaleString()} tokens per tile
+                Vision-encoder estimate: images are tiled into ~1MP chunks at ~{formatNum(TOKENS_PER_TILE)} tokens per tile
                 (min 1 tile, capped at 6 tiles/image — matching how hosted VLMs downscale oversized inputs).
                 Image tokens join the text prompt in prefill and directly inflate TTFT.
               </p>
@@ -987,7 +988,7 @@ export default function SingleTurnVisualizer({
                 step="128"
                 value={promptTokens}
                 aria-label={t('singleTurn.promptLengthAria')}
-                aria-valuetext={`${promptTokens.toLocaleString()} tokens`}
+                aria-valuetext={`${formatNum(promptTokens)} tokens`}
                 onChange={(e) => {
                   setPromptTokens(Number(e.target.value));
                   handleReset();
@@ -1028,7 +1029,7 @@ export default function SingleTurnVisualizer({
                 step="32"
                 value={outputTokens}
                 aria-label={t('singleTurn.outputLengthAria')}
-                aria-valuetext={`${outputTokens.toLocaleString()} tokens`}
+                aria-valuetext={`${formatNum(outputTokens)} tokens`}
                 onChange={(e) => {
                   setOutputTokens(Number(e.target.value));
                   handleReset();
@@ -1145,7 +1146,7 @@ export default function SingleTurnVisualizer({
                 {t('singleTurn.prefillPhaseTitle')}
                 <Analogy term="prefill" />
               </span>
-              <span className="tag tag-prefill">{prefillSpeed.toLocaleString()} tok/s</span>
+              <span className="tag tag-prefill">{formatNum(prefillSpeed)} tok/s</span>
             </div>
 
             {/* Progress indicator (rAF-driven width — no transition) */}
@@ -1160,7 +1161,7 @@ export default function SingleTurnVisualizer({
             </div>
 
             <div className="field-head" style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-              <span>Ingested <strong style={{ color: 'var(--text-main)' }}>{currentPrefillProgress.toLocaleString()}</strong> / {totalPrefillTokens.toLocaleString()} tok</span>
+              <span>Ingested <strong style={{ color: 'var(--text-main)' }}>{formatNum(currentPrefillProgress)}</strong> / {formatNum(totalPrefillTokens)} tok</span>
               <span>
                 TTFT{' '}
                 <Metric term="ttft" substitution={ttftSub}>
@@ -1170,13 +1171,13 @@ export default function SingleTurnVisualizer({
             </div>
             {totalImageTokens > 0 && (
               <div className="field-head" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                <span>{safePromptTokens.toLocaleString()} text + {totalImageTokens.toLocaleString()} vision ({imageCountSafe} img)</span>
+                <span>{formatNum(safePromptTokens)} text + {formatNum(totalImageTokens)} vision ({imageCountSafe} img)</span>
                 <span>+{formatTime(totalImageTokens / prefillSpeed)} from images</span>
               </div>
             )}
 
             <p className="hint-text" style={{ marginTop: '8px' }}>
-              Compute-bound parallel matrix multiplication. Builds the KV cache for all {totalPrefillTokens.toLocaleString()} prompt tokens{totalImageTokens > 0 ? ` (incl. ${totalImageTokens.toLocaleString()} image tokens)` : ''}.            </p>
+              Compute-bound parallel matrix multiplication. Builds the KV cache for all {formatNum(totalPrefillTokens)} prompt tokens{totalImageTokens > 0 ? ` (incl. ${formatNum(totalImageTokens)} image tokens)` : ''}.            </p>
           </div>
 
           {/* Decode Block Visualizer */}
@@ -1195,7 +1196,7 @@ export default function SingleTurnVisualizer({
                 <Analogy term="decode" />
               </span>
               <span className="tag tag-decode">
-                {displayDecodeSpeed.toLocaleString()} tok/s · {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms/tok` : '∞ ms/tok'}
+                {formatNum(displayDecodeSpeed)} tok/s · {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms/tok` : '∞ ms/tok'}
               </span>
             </div>
 
@@ -1211,7 +1212,7 @@ export default function SingleTurnVisualizer({
             </div>
 
             <div className="field-head" style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-              <span>Generated <strong style={{ color: 'var(--text-main)' }}>{currentDecodeTokens.toLocaleString()}</strong> / {outputTokens.toLocaleString()} tok</span>
+              <span>Generated <strong style={{ color: 'var(--text-main)' }}>{formatNum(currentDecodeTokens)}</strong> / {formatNum(outputTokens)} tok</span>
               <span>
                 Decode{' '}
                 <Metric term="decodeTime" substitution={decodeTimeSub} align="left">
@@ -1340,7 +1341,7 @@ export default function SingleTurnVisualizer({
                       {itlHistogram.bins.map((b, i) => (
                         <div
                           key={i}
-                          data-tooltip={`${b.count.toLocaleString()} tok · ${b.from.toFixed(1)}–${b.to.toFixed(1)} ms`}
+                          data-tooltip={`${formatNum(b.count)} tok · ${b.from.toFixed(1)}–${b.to.toFixed(1)} ms`}
                           style={{
                             flex: 1,
                             height: `${Math.max(b.count > 0 ? 3 : 0, (b.count / maxBinCount) * 100)}%`,
@@ -1397,7 +1398,7 @@ export default function SingleTurnVisualizer({
             </div>
             <div className="metric-sub">
               {totalImageTokens > 0
-                ? `Prefill ${totalPrefillTokens.toLocaleString()} tok (incl. images)`
+                ? `Prefill ${formatNum(totalPrefillTokens)} tok (incl. images)`
                 : 'Prompt prefill latency'}
             </div>
             {ttftAnchorText && <div className="metric-anchor">⏱ {ttftAnchorText}</div>}
@@ -1413,7 +1414,7 @@ export default function SingleTurnVisualizer({
                 {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms'}
               </Metric>
             </div>
-            <div className="metric-sub">{t('singleTurn.tokensPerSecSub', { speed: displayDecodeSpeed.toLocaleString() })}</div>
+            <div className="metric-sub">{t('singleTurn.tokensPerSecSub', { speed: formatNum(displayDecodeSpeed) })}</div>
             {tpotAnchorText && <div className="metric-anchor">📖 {tpotAnchorText}</div>}
           </div>
 

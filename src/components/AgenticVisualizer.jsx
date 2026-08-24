@@ -22,6 +22,7 @@ import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { buildAgenticJson, downloadJson } from '../utils/exportJson';
 import { t } from '../i18n/strings';
+import { formatNum } from '../utils/numerals';
 
 export default function AgenticVisualizer({
   prefillSpeed,
@@ -460,7 +461,7 @@ export default function AgenticVisualizer({
     : currentPhase === 'prefilling'
       ? `Turn ${activeTurn} of ${numTurns}: prefilling ${formatTokens(basePromptTokens)} prompt tokens${enablePrefixCaching && activeTurn > 1 ? ' (served from the prefix cache)' : ''}. About ${srElapsedBucket * 25} percent of the loop elapsed.`
       : currentPhase === 'decoding'
-        ? `Turn ${activeTurn} of ${numTurns}: decoding at about ${decodeSpeed.toLocaleString()} tokens per second. About ${srElapsedBucket * 25} percent of the loop elapsed.`
+        ? `Turn ${activeTurn} of ${numTurns}: decoding at about ${formatNum(decodeSpeed)} tokens per second. About ${srElapsedBucket * 25} percent of the loop elapsed.`
         : `Agent loop complete in ${formatTime(totalAgentWalltime)} across ${numTurns} turns.`;
 
   return (
@@ -541,7 +542,7 @@ export default function AgenticVisualizer({
                 step="250"
                 value={basePromptTokens}
                 aria-label={t('agentic.systemPromptAria')}
-                aria-valuetext={`${basePromptTokens.toLocaleString()} tokens`}
+                aria-valuetext={`${formatNum(basePromptTokens)} tokens`}
                 onChange={(e) => { setBasePromptTokens(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
@@ -569,7 +570,7 @@ export default function AgenticVisualizer({
                 step="100"
                 value={toolOutputTokensPerTurn}
                 aria-label={t('agentic.toolOutputAria')}
-                aria-valuetext={`${toolOutputTokensPerTurn.toLocaleString()} tokens`}
+                aria-valuetext={`${formatNum(toolOutputTokensPerTurn)} tokens`}
                 onChange={(e) => { setToolOutputTokensPerTurn(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
@@ -597,7 +598,7 @@ export default function AgenticVisualizer({
                 step="50"
                 value={decodeTokensPerTurn}
                 aria-label={t('agentic.thoughtAria')}
-                aria-valuetext={`${decodeTokensPerTurn.toLocaleString()} tokens`}
+                aria-valuetext={`${formatNum(decodeTokensPerTurn)} tokens`}
                 onChange={(e) => { setDecodeTokensPerTurn(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }}
               />
@@ -907,7 +908,7 @@ export default function AgenticVisualizer({
               </div>
 
               <div className="field-head" style={{ marginTop: '8px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                <span>{t('agentic.ingested')} <strong style={{ color: 'var(--text-main)' }}>{prefillProgress.toLocaleString()}</strong> / {activeTurnItem ? activeTurnItem.newTokensPrefilled.toLocaleString() : '0'}</span>
+                <span>{t('agentic.ingested')} <strong style={{ color: 'var(--text-main)' }}>{formatNum(prefillProgress)}</strong> / {activeTurnItem ? formatNum(activeTurnItem.newTokensPrefilled) : '0'}</span>
                 <span>{t('agentic.tokPerWord', { n: TOKENS_PER_WORD })}</span>
               </div>
             </div>
@@ -980,7 +981,7 @@ export default function AgenticVisualizer({
               </div>
 
               <div className="field-head" style={{ marginTop: '8px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                <span>{t('agentic.generated')} <strong style={{ color: 'var(--text-main)' }}>{decodeProgress.toLocaleString()}</strong> / {activeTurnItem ? activeTurnItem.decodeTokens.toLocaleString() : '0'}</span>
+                <span>{t('agentic.generated')} <strong style={{ color: 'var(--text-main)' }}>{formatNum(decodeProgress)}</strong> / {activeTurnItem ? formatNum(activeTurnItem.decodeTokens) : '0'}</span>
                 <span>{t('agentic.tokPerWord', { n: TOKENS_PER_WORD })}</span>
               </div>
             </div>
@@ -1024,7 +1025,7 @@ export default function AgenticVisualizer({
                 {t('agentic.contextGrowth')}
               </span>
               <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--agent)', fontVariantNumeric: 'tabular-nums' }}>
-                {currentContextTokens.toLocaleString()} / {finalContextTokens.toLocaleString()} tok
+                {formatNum(currentContextTokens)} / {formatNum(finalContextTokens)} tok
                 {' '}· {t('agentic.accumulatedSuffix', { thousands: (currentContextTokens / 1000).toFixed(1) })}
               </span>
             </div>

@@ -106,7 +106,10 @@ export default function handler(req, res) {
 
   return json(res, {
     endpoint: ENDPOINT,
-    description: `Workload scenario '${scenario.label}' (${scenario.id}): ${scenario.promptTokens.toLocaleString('en-US')} prompt tokens in, ${scenario.outputTokens.toLocaleString('en-US')} output tokens out.`,
+    // Locale-invariant prose (#652): token counts are already structured
+    // fields on `scenario`; the description carries them ungrouped so a
+    // /\d+/ extraction can't truncate magnitudes.
+    description: `Workload scenario '${scenario.label}' (${scenario.id}): ${scenario.promptTokens} prompt tokens in, ${scenario.outputTokens} output tokens out.`,
     requestedId,
     scenario: toAgentScenario(scenario),
     nextSteps: [

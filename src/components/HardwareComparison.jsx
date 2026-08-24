@@ -16,6 +16,7 @@ import { buildCompareBatchBody, buildSnippet } from '../utils/copyAsCode';
 import { evaluateSlo } from '../utils/slo.js';
 import { estimatePower } from '../utils/powerThermal';
 import { t } from '../i18n/strings';
+import { formatNum } from '../utils/numerals';
 
 
 // Fallback whole-rig wattage under inference load for profiles without
@@ -140,8 +141,8 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
         <div style={{ ...rowStyle, ...rowDivider }}>
           <span>Street price</span>
           <span style={numStyle}>
-            ${pricing.estimateUsd.toLocaleString()}
-            <span style={{ color: 'var(--text-subtle)', fontWeight: 400 }}> (${pricing.lowUsd.toLocaleString()}–${pricing.highUsd.toLocaleString()})</span>
+            ${formatNum(pricing.estimateUsd)}
+            <span style={{ color: 'var(--text-subtle)', fontWeight: 400 }}> (${formatNum(pricing.lowUsd)}–${formatNum(pricing.highUsd)})</span>
           </span>
         </div>
         {/* rowDivider styling lives on the price row; links sit directly under it */}
@@ -278,8 +279,8 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
       id: 'prefillSpeed',
       label: t('compare.prefillSpeed'),
       cells: {
-        a: `${presetA.prefillSpeed.toLocaleString()} tok/s`,
-        b: `${presetB.prefillSpeed.toLocaleString()} tok/s`,
+        a: `${formatNum(presetA.prefillSpeed)} tok/s`,
+        b: `${formatNum(presetB.prefillSpeed)} tok/s`,
         advantage: advantageCell(presetA.prefillSpeed, presetB.prefillSpeed, false)
       }
     },
@@ -287,8 +288,8 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
       id: 'decodeSpeed',
       label: `${t('compare.decodeSpeed')} (${t('compare.perUserSuffix')})`,
       cells: {
-        a: `${Math.round(batchedPerUserDecodeA).toLocaleString()} tok/s`,
-        b: `${Math.round(batchedPerUserDecodeB).toLocaleString()} tok/s`,
+        a: `${formatNum(Math.round(batchedPerUserDecodeA))} tok/s`,
+        b: `${formatNum(Math.round(batchedPerUserDecodeB))} tok/s`,
         advantage: advantageCell(batchedPerUserDecodeA, batchedPerUserDecodeB, false)
       }
     },
@@ -543,7 +544,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 step="512"
                 value={testPromptTokens}
                 aria-label={t('compare.testPromptAria')}
-                aria-valuetext={`${testPromptTokens.toLocaleString()} tokens`}
+                aria-valuetext={`${formatNum(testPromptTokens)} tokens`}
                 onChange={(e) => setTestPromptTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
@@ -570,7 +571,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 step="64"
                 value={testOutputTokens}
                 aria-label={t('compare.testOutputAria')}
-                aria-valuetext={`${testOutputTokens.toLocaleString()} tokens`}
+                aria-valuetext={`${formatNum(testOutputTokens)} tokens`}
                 onChange={(e) => setTestOutputTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
@@ -643,7 +644,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
             <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', color: 'var(--text-muted)' }}>
               <div style={rowStyle}>
                 <span>{t('compare.prefillSpeed')}</span>
-                <span style={{ ...numStyle, color: 'var(--prefill)' }}>{presetA.prefillSpeed.toLocaleString()} tok/s</span>
+                <span style={{ ...numStyle, color: 'var(--prefill)' }}>{formatNum(presetA.prefillSpeed)} tok/s</span>
               </div>
               {measuredLabel(presetA) && (
                 <div style={rowStyle}>
@@ -658,18 +659,18 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               {renderPower(presetA)}
               <div style={rowStyle}>
                 <span>{t('compare.decodeSpeed')} <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>({t('compare.perUserSuffix')})</em></span>
-                <span style={{ ...numStyle, color: 'var(--decode)' }}>{Math.round(batchedPerUserDecodeA).toLocaleString()} tok/s</span>
+                <span style={{ ...numStyle, color: 'var(--decode)' }}>{formatNum(Math.round(batchedPerUserDecodeA))} tok/s</span>
               </div>
               {batchSize > 1 && (
                 <div style={rowStyle}>
                   <span>{t('compare.aggregateDecodeThroughput')}</span>
-                  <span style={{ ...numStyle, color: 'var(--agent)' }}>{Math.round(aggregateTokPerSecA).toLocaleString()} tok/s</span>
+                  <span style={{ ...numStyle, color: 'var(--agent)' }}>{formatNum(Math.round(aggregateTokPerSecA))} tok/s</span>
                 </div>
               )}
               <div style={{ ...rowStyle, ...rowDivider }}>
                 <span>TTFT (prompt)</span>
                 <span style={{ ...numStyle, color: 'var(--prefill)' }}>
-                  <Metric term="ttft" substitution={`${presetA.name}: ${safeCp.toLocaleString()} tok ÷ ${presetA.prefillSpeed.toLocaleString()} tok/s = ${formatTime(ttftA)}`} align="left">
+                  <Metric term="ttft" substitution={`${presetA.name}: ${formatNum(safeCp)} tok ÷ ${formatNum(presetA.prefillSpeed)} tok/s = ${formatTime(ttftA)}`} align="left">
                     {formatTime(ttftA)}
                   </Metric>
                   {' '}<SloBadge result={sloResultsA.ttft} label={t('slo.shortTtft')} />
@@ -741,7 +742,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
             <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', color: 'var(--text-muted)' }}>
               <div style={rowStyle}>
                 <span>{t('compare.prefillSpeed')}</span>
-                <span style={{ ...numStyle, color: 'var(--prefill)' }}>{presetB.prefillSpeed.toLocaleString()} tok/s</span>
+                <span style={{ ...numStyle, color: 'var(--prefill)' }}>{formatNum(presetB.prefillSpeed)} tok/s</span>
               </div>
               {measuredLabel(presetB) && (
                 <div style={rowStyle}>
@@ -756,18 +757,18 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               {renderPower(presetB)}
               <div style={rowStyle}>
                 <span>{t('compare.decodeSpeed')} <em style={{ color: 'var(--text-subtle)', fontStyle: 'normal', fontSize: '0.72rem' }}>({t('compare.perUserSuffix')})</em></span>
-                <span style={{ ...numStyle, color: 'var(--decode)' }}>{Math.round(batchedPerUserDecodeB).toLocaleString()} tok/s</span>
+                <span style={{ ...numStyle, color: 'var(--decode)' }}>{formatNum(Math.round(batchedPerUserDecodeB))} tok/s</span>
               </div>
               {batchSize > 1 && (
                 <div style={rowStyle}>
                   <span>{t('compare.aggregateDecodeThroughput')}</span>
-                  <span style={{ ...numStyle, color: 'var(--agent)' }}>{Math.round(aggregateTokPerSecB).toLocaleString()} tok/s</span>
+                  <span style={{ ...numStyle, color: 'var(--agent)' }}>{formatNum(Math.round(aggregateTokPerSecB))} tok/s</span>
                 </div>
               )}
               <div style={{ ...rowStyle, ...rowDivider }}>
                 <span>TTFT (prompt)</span>
                 <span style={{ ...numStyle, color: 'var(--prefill)' }}>
-                  <Metric term="ttft" substitution={`${presetB.name}: ${safeCp.toLocaleString()} tok ÷ ${presetB.prefillSpeed.toLocaleString()} tok/s = ${formatTime(ttftB)}`} align="left">
+                  <Metric term="ttft" substitution={`${presetB.name}: ${formatNum(safeCp)} tok ÷ ${formatNum(presetB.prefillSpeed)} tok/s = ${formatTime(ttftB)}`} align="left">
                     {formatTime(ttftB)}
                   </Metric>
                   {' '}<SloBadge result={sloResultsB.ttft} label={t('slo.shortTtft')} />
@@ -1036,7 +1037,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
             <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', color: 'var(--text-muted)', maxWidth: '480px' }}>
               <div style={rowStyle}>
                 <span>Aggregate decode throughput</span>
-                <span style={{ ...numStyle, color: 'var(--decode)' }}>{Math.round(tcoThroughput).toLocaleString()} tok/s</span>
+                <span style={{ ...numStyle, color: 'var(--decode)' }}>{formatNum(Math.round(tcoThroughput))} tok/s</span>
               </div>
               <div style={rowStyle}>
                 <span>Local marginal cost (electricity only)</span>

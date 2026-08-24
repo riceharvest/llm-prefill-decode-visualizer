@@ -50,8 +50,11 @@ export function derivedTimes(run) {
   };
 }
 
+// Locale-invariant prose (#652): no thousands grouping inside JSON strings.
 function fmt(x, digits = 1) {
-  return Number.isFinite(x) ? Number(x).toLocaleString('en-US', { maximumFractionDigits: digits }) : '?';
+  if (!Number.isFinite(x)) return '?';
+  const n = Number(x);
+  return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(digits)));
 }
 
 /**

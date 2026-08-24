@@ -8,6 +8,7 @@ import {
 } from '../utils/presets';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
+import { formatNum } from '../utils/numerals';
 
 // Map an /api/presets hardware entry onto the internal preset shape so the
 // fetched agent data can seed/extend the lane selectors exactly like the
@@ -265,18 +266,18 @@ export default function ABReplay({
 
       <div style={rowStyle}>
         <span>Prefill</span>
-        <span style={{ ...numStyle, color: 'var(--prefill)' }}>{preset.prefillSpeed.toLocaleString()} tok/s</span>
+        <span style={{ ...numStyle, color: 'var(--prefill)' }}>{formatNum(preset.prefillSpeed)} tok/s</span>
       </div>
       <div style={{ ...rowStyle, marginBottom: '10px' }}>
         <span>Decode</span>
-        <span style={{ ...numStyle, color: 'var(--decode)' }}>{preset.decodeSpeed.toLocaleString()} tok/s</span>
+        <span style={{ ...numStyle, color: 'var(--decode)' }}>{formatNum(preset.decodeSpeed)} tok/s</span>
       </div>
 
       {/* Prefill progress (rAF-driven width via sim clock — no CSS transition) */}
       <div className="field-head" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
         <span>
           <Zap size={12} style={{ verticalAlign: '-2px', marginInlineEnd: '3px', color: 'var(--prefill)' }} />
-          Prefill {view.prefillProgress.toLocaleString()} / {safePromptTokens.toLocaleString()} tok
+          Prefill {formatNum(view.prefillProgress)} / {formatNum(safePromptTokens)} tok
         </span>
         <span className={`tag ${phaseTagClass(view)}`} style={{ fontSize: '0.62rem', padding: '2px 6px' }}>
           {phaseLabel(view)}
@@ -296,7 +297,7 @@ export default function ABReplay({
       <div className="field-head" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
         <span>
           <Gauge size={12} style={{ verticalAlign: '-2px', marginInlineEnd: '3px', color: 'var(--decode)' }} />
-          Decode {view.decodeTokens.toLocaleString()} / {safeOutputTokens.toLocaleString()} tok
+          Decode {formatNum(view.decodeTokens)} / {formatNum(safeOutputTokens)} tok
         </span>
         <span style={{ ...numStyle, fontSize: '0.72rem' }}>{view.decodeTokens > 0 && preset.decodeSpeed > 0 ? `${Math.round(view.decodeTokens / ((simTime - ttft) || 1e-9))} tok/s live` : ''}</span>
       </div>
@@ -352,7 +353,7 @@ export default function ABReplay({
               onClick={() => { setPromptTokens(s.promptTokens); setOutputTokens(s.outputTokens); }}
               className={activeScenario?.id === s.id ? 'active' : ''}
               aria-pressed={activeScenario?.id === s.id}
-              title={`${s.promptTokens.toLocaleString()} prompt → ${s.outputTokens.toLocaleString()} output tokens`}
+              title={`${formatNum(s.promptTokens)} prompt → ${formatNum(s.outputTokens)} output tokens`}
             >
               {s.icon} {s.label}
             </button>
@@ -373,7 +374,7 @@ export default function ABReplay({
                 step="128"
                 value={promptTokens}
                 aria-label="Shared input prompt length in tokens"
-                aria-valuetext={`${promptTokens.toLocaleString()} tokens`}
+                aria-valuetext={`${formatNum(promptTokens)} tokens`}
                 onChange={(e) => setPromptTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
@@ -400,7 +401,7 @@ export default function ABReplay({
                 step="32"
                 value={outputTokens}
                 aria-label="Shared target output length in tokens"
-                aria-valuetext={`${outputTokens.toLocaleString()} tokens`}
+                aria-valuetext={`${formatNum(outputTokens)} tokens`}
                 onChange={(e) => setOutputTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />

@@ -4,6 +4,7 @@ import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
 import Analogy from './Analogy';
 import { t } from '../i18n/strings';
+import { formatNum } from '../utils/numerals';
 
 // Time-scale options (#76): rendered as an ARIA radiogroup with roving
 // tabindex — one option is tabbable, arrow keys move and select.
@@ -65,7 +66,7 @@ export default function SpeedControls({
               step="50"
               value={prefillSpeed}
               aria-label={t('speedControls.prefillAria')}
-              aria-valuetext={`${Number(prefillSpeed).toLocaleString()} tokens per second`}
+              aria-valuetext={`${formatNum(Number(prefillSpeed))} tokens per second`}
               onChange={(e) => setPrefillSpeed(Number(e.target.value))}
               style={{ flex: 1 }}
             />
@@ -98,7 +99,7 @@ export default function SpeedControls({
               step="1"
               value={decodeSpeed}
               aria-label={t('speedControls.decodeAria')}
-              aria-valuetext={`${Number(decodeSpeed).toLocaleString()} tokens per second`}
+              aria-valuetext={`${formatNum(Number(decodeSpeed))} tokens per second`}
               onChange={(e) => setDecodeSpeed(Number(e.target.value))}
               style={{ flex: 1 }}
             />

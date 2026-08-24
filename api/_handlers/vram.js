@@ -100,7 +100,10 @@ async function estimate(params) {
   const weights = resolved.paramsTotal != null
     ? {
         gb: round((resolved.paramsTotal * quant.bytesPerParam) / GB),
-        source: `${resolved.paramsTotal.toLocaleString('en-US')} params × ${quant.bpw} bpw`,
+        // Locale-invariant prose (#652): no en-US comma grouping inside JSON
+        // string fields — a naive /\d+/ extraction must not truncate '70B' to
+        // '70'. The raw count also lives in model.paramsTotal above.
+        source: `${resolved.paramsTotal} params × ${quant.bpw} bpw`,
         sourceKind: 'params×quant'
       }
     : {
@@ -200,7 +203,19 @@ async function estimate(params) {
         kbPerToken: round(bytesPerToken / 1024),
         mbPerToken: round(bytesPerToken / (1024 ** 2)),
         gbAtContext: kvGb,
-        formula: `2 × ${arch.numLayers} layers × ${arch.kvHeads} KV heads × ${arch.headDim} dim × ${kvPrecisionBytes}B × ${context.toLocaleString('en-US')} ctx × ${batchSize} batch`
+        // Locale-invariant prose + structured twin (#652): every factor of
+        // the formula is available as a raw number in formulaParts, so agents
+        // never parse the string for magnitudes.
+        formulaParts: {
+          kPlusV: 2,
+          layers: arch.numLayers,
+          kvHeads: arch.kvHeads,
+          headDim: arch.headDim,
+          kvPrecisionBytes,
+          context,
+          batch: batchSize
+        },
+        formula: `2 × ${arch.numLayers} layers × ${arch.kvHeads} KV heads × ${arch.headDim} dim × ${kvPrecisionBytes}B × ${context} ctx × ${batchSize} batch`
       },
       total: {
         gb: totalGb,

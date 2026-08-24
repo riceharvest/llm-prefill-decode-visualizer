@@ -109,7 +109,7 @@ const DATA_ERRORS = {
 // ---------------------------------------------------------------------------
 const CI95 = {
   type: 'object',
-  description: '95% percentile bootstrap confidence interval (2,000 resamples). Overlapping intervals across groups mean they are statistically tied.',
+  description: '95% percentile bootstrap confidence interval (2000 resamples). Overlapping intervals across groups mean they are statistically tied.',
   required: ['lo', 'hi'],
   properties: {
     lo: { type: 'number', description: '2.5th percentile' },
@@ -978,7 +978,7 @@ export default function handler(req, res) {
         get: {
           operationId: 'getBenchmarkAggregates',
           summary: 'Aggregated speeds: median + IQR + 95% bootstrap CI per group',
-          description: 'Outlier-resistant stats per hardware×model-family group (default). Each median carries a 95% percentile bootstrap confidence interval (2,000 resamples) in ci95 {lo, hi}, plus a "median [lo–hi]" label string. Regroup with ?groupBy=hardware|model|quant. Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak). Each group carries confidence {runs, iqrSpreadPct, outliers, newestRunAgeDays, grade} and cross_check {relatedRigComparisons, contradictions[]} comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.',
+          description: 'Outlier-resistant stats per hardware×model-family group (default). Each median carries a 95% percentile bootstrap confidence interval (2000 resamples) in ci95 {lo, hi}, plus a "median [lo–hi]" label string. Regroup with ?groupBy=hardware|model|quant. Cursor-paginated: { total, items[], has_more, next_cursor } sorted by median decode desc (group key tiebreak). Each group carries confidence {runs, iqrSpreadPct, outliers, newestRunAgeDays, grade} and cross_check {relatedRigComparisons, contradictions[]} comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.',
           parameters: [
             { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['hardwareModel', 'hardware', 'model', 'quant'] } },
             { name: 'hardware', in: 'query', schema: { type: 'string' } },
@@ -1271,8 +1271,8 @@ export default function handler(req, res) {
         response: {
           inputs: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', context: 65536, quant: 'q4_k_m', resolvedQuant: 'q4_k_m', quantAssumed: false, batchSize: 1, kvPrecisionBytes: 2, vramGb: 24 },
           model: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', family: 'llama', resolutionSource: 'builtin-table', architecture: { numLayers: 32, kvHeads: 8, headDim: 128 }, paramsTotal: 8030261312, paramsB: 8.03, notes: [] },
-          weights: { gb: 4.49, source: '8,030,261,312 params × 0.56 bpw', sourceKind: 'params×quant', quant: 'q4_k_m', bytesPerParam: 0.56 },
-          kvCache: { bytesPerToken: 131072, kbPerToken: 128, mbPerToken: 0.125, gbAtContext: 8, formula: '2 × 32 layers × 8 KV heads × 128 dim × 2B × 65,536 ctx × 1 batch' },
+          weights: { gb: 4.49, source: '8030261312 params × 0.56 bpw', sourceKind: 'params×quant', quant: 'q4_k_m', bytesPerParam: 0.56 },
+          kvCache: { bytesPerToken: 131072, kbPerToken: 128, mbPerToken: 0.125, gbAtContext: 8, formulaParts: { kPlusV: 2, layers: 32, kvHeads: 8, headDim: 128, kvPrecisionBytes: 2, context: 65536, batch: 1 }, formula: '2 × 32 layers × 8 KV heads × 128 dim × 2B × 65536 ctx × 1 batch' },
           total: { gb: 12.49, breakdown: { weightsGb: 4.49, kvCacheGb: 8 } },
           contextWindow: 131072,
           fits: { vramGb: 24, fits: true, maxContextTokens: 155648 },

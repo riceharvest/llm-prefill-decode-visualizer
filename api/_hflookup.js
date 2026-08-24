@@ -182,7 +182,9 @@ export function lookupHfArch(hfIdRaw) {
       family: entry.family,
       architecture: { ...entry.arch },
       paramsTotal: entry.paramsTotal,
-      weightsSource: `built-in ${entry.family} architecture table (${entry.paramsTotal.toLocaleString('en-US')} params)`,
+      // Locale-invariant prose (#652): no comma grouping inside JSON strings;
+      // the raw count is carried alongside as paramsTotal.
+      weightsSource: `built-in ${entry.family} architecture table (${entry.paramsTotal} params)`,
       weightsSourceKind: 'params×quant',
       notes: [`architecture resolved from the built-in lookup table entry '${entry.family}' (offline, no huggingface.co call)`]
     };

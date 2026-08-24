@@ -1,3 +1,4 @@
+import { formatNum } from './numerals.js';
 export const HARDWARE_PRESETS = [
   {
     id: 'rtx4090_exl2',
@@ -152,5 +153,5 @@ export function formatTokens(num) {
   if (num >= 10000) return `${(num / 1000).toFixed(1)}k`;
   // Below 10k show the exact number with thousands separators — "4,096" is
   // clearer than "4.1k" for benchmark values people recognize.
-  return num.toLocaleString();
+  return formatNum(num);
 }

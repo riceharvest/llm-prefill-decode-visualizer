@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ListFilter, ExternalLink, RotateCcw } from 'lucide-react';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import { formatNum } from '../utils/numerals';
 
 // Constraint-driven hardware shortlist ("find me hardware").
 //
@@ -137,7 +138,7 @@ export default function HardwareShortlist() {
             <div className="field-head">
               <span className="field-label">Min decode speed</span>
               <span className="field-value" style={{ color: 'var(--decode)' }}>
-                {minDecode === '' ? 'any' : `≥ ${Number(minDecode).toLocaleString()} tok/s`}
+                {minDecode === '' ? 'any' : `≥ ${formatNum(Number(minDecode))} tok/s`}
               </span>
             </div>
             <input
@@ -238,7 +239,7 @@ export default function HardwareShortlist() {
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <span style={{ ...numStyle, color: 'var(--decode)', fontSize: '1.15rem' }}>
-                        {Math.round(row.medianDecodeTokPerSec).toLocaleString()}
+                        {formatNum(Math.round(row.medianDecodeTokPerSec))}
                       </span>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}> tok/s median decode</span>
                     </div>
@@ -247,13 +248,13 @@ export default function HardwareShortlist() {
                   <div style={{ ...rowStyle, marginTop: '9px', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>
                     <span>Prefill (median)</span>
                     <span style={{ ...numStyle, color: 'var(--prefill)' }}>
-                      {Math.round(row.medianPrefillTokPerSec || 0).toLocaleString()} tok/s
+                      {formatNum(Math.round(row.medianPrefillTokPerSec || 0))} tok/s
                     </span>
                   </div>
                   <div style={rowStyle}>
                     <span>Best measured decode</span>
                     <span style={{ ...numStyle, color: 'var(--agent)' }}>
-                      {Math.round(row.bestDecodeTokPerSec || 0).toLocaleString()} tok/s
+                      {formatNum(Math.round(row.bestDecodeTokPerSec || 0))} tok/s
                     </span>
                   </div>
                   <div style={rowStyle}>

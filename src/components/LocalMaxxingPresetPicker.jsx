@@ -16,6 +16,7 @@ import {
   setFetchProgressListener
 } from '../utils/hardwareFirst';
 import { t } from '../i18n/strings';
+import { formatNum } from '../utils/numerals';
 
 const selectStyle = {
   width: '100%'
@@ -290,7 +291,7 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
               <option value="">
                 {loadingAll
                   ? fetchProgress
-                    ? t('localMaxxing.loadingCommunityRunsWithProgress', { rows: fetchProgress.rows.toLocaleString(), pages: fetchProgress.pages })
+                    ? t('localMaxxing.loadingCommunityRunsWithProgress', { rows: formatNum(fetchProgress.rows), pages: fetchProgress.pages })
                     : t('localMaxxing.loadingCommunityRuns')
                   : t('localMaxxing.selectHardware')}
               </option>

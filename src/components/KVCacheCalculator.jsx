@@ -10,6 +10,7 @@ import { memoryLedger, SAFETY_HEADROOM_FRACTION } from '../../api/_math.js';
 import MultiGpuPlanner from './MultiGpuPlanner';
 import ChartDataTable from './ChartDataTable';
 import { t } from '../i18n/strings';
+import { formatNum } from '../utils/numerals';
 
 // KV-cache geometry pulled from each model's actual config.json on HuggingFace
 // and its architecture paper. Four KV modes:
@@ -381,7 +382,7 @@ export default function KVCacheCalculator() {
                 step="1024"
                 value={Math.min(contextLength, preset.maxContext)}
                 aria-label={t('kvCache.contextAria')}
-                aria-valuetext={`${Math.min(contextLength, preset.maxContext).toLocaleString()} tokens context`}
+                aria-valuetext={`${formatNum(Math.min(contextLength, preset.maxContext))} tokens context`}
                 onChange={(e) => setContextLength(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
@@ -469,7 +470,7 @@ export default function KVCacheCalculator() {
             <div className="metric-value" style={{ color: 'var(--prefill)', fontSize: '1.55rem' }}>
               <Metric
                 term="kvTotal"
-                substitution={`${(bytesPerTokenSingleSeq / 1024).toFixed(1)} KB × ${safeContext.toLocaleString()} tok × ${safeBatch} batch = ${totalKVCacheGB >= 1 ? `${totalKVCacheGB.toFixed(2)} GB` : `${totalKVCacheMB.toFixed(0)} MB`}`}
+                substitution={`${(bytesPerTokenSingleSeq / 1024).toFixed(1)} KB × ${formatNum(safeContext)} tok × ${safeBatch} batch = ${totalKVCacheGB >= 1 ? `${totalKVCacheGB.toFixed(2)} GB` : `${totalKVCacheMB.toFixed(0)} MB`}`}
                 align="left"
               >
                 {totalKVCacheGB >= 1 ? `${totalKVCacheGB.toFixed(2)} GB` : `${totalKVCacheMB.toFixed(0)} MB`}

@@ -107,8 +107,12 @@ export function computeWhatIfDiff(rowsA = [], rowsB = []) {
   };
 }
 
+// Locale-invariant (#652): no thousands grouping inside JSON prose — a
+// regex-extracted magnitude from "12,000 GB" would read as 12.
 function fmtGb(x) {
-  return `${Math.abs(Number(x)).toLocaleString('en-US', { maximumFractionDigits: 1 })} GB`;
+  const n = Math.abs(Number(x));
+  const s = Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
+  return `${s} GB`;
 }
 
 function nameOf(entry) {

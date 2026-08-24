@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { parseComparePath, prettifySlug, slugify } from '../utils/compareSlug.js'
+import { formatNum } from '../utils/numerals';
 
 // SEO comparison page for /compare/:a-vs-:b (rewritten to compare.html by
 // vercel.json). Numbers come live from /api/benchmarks?groupBy=hardware so
@@ -8,7 +9,7 @@ import { parseComparePath, prettifySlug, slugify } from '../utils/compareSlug.js
 const BENCHMARKS_URL = '/api/benchmarks?groupBy=hardware&limit=200'
 
 function fmt(n) {
-  return Number.isFinite(n) ? n.toLocaleString('en-US') : '—'
+  return Number.isFinite(n) ? formatNum(n) : '—'
 }
 
 function labelOf(group) {

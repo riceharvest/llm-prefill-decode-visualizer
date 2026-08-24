@@ -7,6 +7,7 @@ import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } 
 import Metric from './Metric';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { t } from '../i18n/strings';
+import { formatNum } from '../utils/numerals';
 
 // Chunk-size slider stops. 0 = chunked prefill OFF (whole prompt per step).
 const CHUNK_STOPS = [0, 128, 256, 512, 1024, 2048, 4096, 8192];
@@ -330,7 +331,7 @@ export default function BatchingVisualizer({
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input type="range" min="128" max="32768" step="128" value={meanPromptTokens}
                 aria-label={t('batching.meanPromptAria')}
-                aria-valuetext={`${meanPromptTokens.toLocaleString()} tokens`}
+                aria-valuetext={`${formatNum(meanPromptTokens)} tokens`}
                 onChange={(e) => { setMeanPromptTokens(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
               <input type="number" value={meanPromptTokens}
@@ -349,7 +350,7 @@ export default function BatchingVisualizer({
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input type="range" min="32" max="4096" step="32" value={meanOutputTokens}
                 aria-label={t('batching.meanOutputAria')}
-                aria-valuetext={`${meanOutputTokens.toLocaleString()} tokens`}
+                aria-valuetext={`${formatNum(meanOutputTokens)} tokens`}
                 onChange={(e) => { setMeanOutputTokens(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
               <input type="number" value={meanOutputTokens}

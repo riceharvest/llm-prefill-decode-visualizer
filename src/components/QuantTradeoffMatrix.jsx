@@ -8,6 +8,7 @@ import {
 } from '../utils/quantMatrix';
 import { normalizeModelId } from '../../api/_normalize.js';
 import { t } from '../i18n/strings';
+import { formatNum } from '../utils/numerals';
 
 // Quantization tradeoff matrix (issue #47).
 //
@@ -259,13 +260,13 @@ export default function QuantTradeoffMatrix({ localMaxxingContext, onApplySpeeds
                       </td>
                       <td className="num">{row.rigs} × {row.runs}</td>
                       <td className="num" style={{ color: 'var(--decode)', fontWeight: 600 }}>
-                        {row.medianDecode.toLocaleString()} tok/s
+                        {formatNum(row.medianDecode)} tok/s
                         <div style={{ fontSize: '0.68rem', color: 'var(--text-subtle)', fontWeight: 400 }}>
                           {row.ciLabel || ''}
                         </div>
                       </td>
                       <td className="num">
-                        {Math.round(run?.decodeTokPerSec || 0).toLocaleString()} tok/s
+                        {formatNum(Math.round(run?.decodeTokPerSec || 0))} tok/s
                         <div style={{ fontSize: '0.68rem', color: 'var(--text-subtle)', fontWeight: 400 }}>
                           {run ? `${run.hardware}${run.engine ? ` · ${run.engine}${run.engineVersion ? ` ${run.engineVersion}` : ''}` : ''}` : ''}
                           {freshness && freshness !== 'unknown' && ageDaysFrom(run?.createdAt) !== null && (

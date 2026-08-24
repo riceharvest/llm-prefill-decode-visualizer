@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GitCompare } from 'lucide-react';
 import { readParam, writeParams } from '../utils/urlState';
+import { formatNum } from '../utils/numerals';
 
 // Minimal run-diff panel: two LocalMaxxing run ids in, per-metric deltas,
 // ratios and the API's plain-language summary out. Data comes from
@@ -93,7 +94,7 @@ export default function RunDiff() {
                 <span>{label}</span>
                 <span style={{ display: 'flex', gap: '12px', alignItems: 'baseline' }}>
                   <span style={{ ...numStyle, color: winColor(m.winner) }}>
-                    {m.a?.toLocaleString?.() ?? '—'} → {m.b?.toLocaleString?.() ?? '—'}
+                    {m.a != null ? formatNum(m.a) : '—'} → {m.b != null ? formatNum(m.b) : '—'}
                   </span>
                   {m.deltaPct !== null && (
                     <span style={{ ...numStyle, fontSize: '0.72rem', color: winColor(m.winner) }}>
