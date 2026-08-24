@@ -1,11 +1,21 @@
 import { enforceRateLimit, RATE_LIMIT, RATE_WINDOW_MS } from '../_ratelimit.js';
 import { ERROR_CODES, problemType } from '../_errors.js';
+import { encodeCursor } from '../_pagination.js';
 
 export const config = { runtime: 'nodejs' };
 
 import { sendJson, SCHEMA_VERSION } from '../_schema.js';
 
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
+
+// Example cursors are minted with the real encodeCursor() keyset encoder
+// ({k:[num,str]} base64url) so spec examples round-trip against the live API
+// instead of teaching a dead offset|key grammar (#966). Keys mirror the actual
+// sort keys: [decodeTokPerSec, runId] for run pages (#965: runId is a CUID
+// string), [medianDecode, groupKey] for group pages.
+const EXAMPLE_CUID = 'cmsxu9zyi0ck7ms01v41wipnd';
+const CURSOR_EXAMPLE_RUN = encodeCursor([108, EXAMPLE_CUID]);
+const CURSOR_EXAMPLE_GROUP = encodeCursor([105, 'rtx4090|qwen3.6-27b']);
 
 // Shared rate-limit documentation (issue #14). Budget: RATE_LIMIT per
 // RATE_WINDOW_MS — see api/_ratelimit.js; keep in sync with /llms.txt.
@@ -202,7 +212,7 @@ const BEST_RUN_SUMMARY = {
   description: 'The single fastest measured run inside a group.',
   required: ['runId', 'decodeTokPerSec'],
   properties: {
-    runId: { type: 'integer' },
+    runId: { type: 'string', description: 'Upstream run id — a 25-char CUID string (also used as pagination tiebreak)' },
     modelName: { type: ['string', 'null'] },
     hardware: { type: ['string', 'null'] },
     engine: { type: ['string', 'null'] },
@@ -221,7 +231,7 @@ const RUN = {
   description: 'Raw comparable community run, flattened and model-normalized (modelFamily collapses repo/quant variants of the same base model). Single-stream runs only.',
   required: ['runId', 'modelFamily', 'prefillTokPerSec', 'decodeTokPerSec'],
   properties: {
-    runId: { type: 'integer', description: 'Stable upstream run id (also used as pagination tiebreak)' },
+    runId: { type: 'string', description: 'Stable upstream run id — a 25-char CUID string (also used as pagination tiebreak)' },
     createdAt: { type: ['string', 'null'], format: 'date-time' },
     modelFamily: { type: 'string', description: 'Normalized base-model family, e.g. qwen3.6-27b' },
     modelId: { type: ['string', 'null'], description: 'Hugging Face repo id when known' },
@@ -313,7 +323,7 @@ const BENCHMARK_GROUP = {
         runsAudited: { type: 'integer' },
         flaggedRuns: { type: 'integer' },
         flagCounts: { type: 'object', additionalProperties: { type: 'integer' } },
-        flagged: { type: 'array', items: { type: 'object', properties: { runId: { type: 'integer' }, codes: { type: 'array', items: { type: 'string' } } } } }
+        flagged: { type: 'array', items: { type: 'object', properties: { runId: { type: 'string' }, codes: { type: 'array', items: { type: 'string' } } } } }
       },
       additionalProperties: true
     },
@@ -384,7 +394,7 @@ const BEST_RESULT = {
         runsAudited: { type: 'integer' },
         flaggedRuns: { type: 'integer' },
         flagCounts: { type: 'object', additionalProperties: { type: 'integer' } },
-        flagged: { type: 'array', items: { type: 'object', properties: { runId: { type: 'integer' }, codes: { type: 'array', items: { type: 'string' } } } } }
+        flagged: { type: 'array', items: { type: 'object', properties: { runId: { type: 'string' }, codes: { type: 'array', items: { type: 'string' } } } } }
       },
       additionalProperties: true
     },
@@ -815,7 +825,7 @@ export default function handler(req, res) {
                     ],
                     items: [
                       {
-                        runId: 58213,
+                        runId: 'cmsxu9zyi0ck7ms01v41wipnd',
                         createdAt: '2026-07-30T18:22:41.000Z',
                         modelFamily: 'qwen3.6-27b',
                         modelName: 'unsloth/Qwen3.6-27B-MTP-GGUF',
@@ -833,11 +843,11 @@ export default function handler(req, res) {
                         contextBand: '8k-32k',
                         ageDays: 23,
                         staleness: 'fresh',
-                        source: 'https://localmaxxing.com/en/runs/58213'
+                        source: 'https://localmaxxing.com/en/runs/cmsxu9zyi0ck7ms01v41wipnd'
                       }
                     ],
                     has_more: true,
-                    next_cursor: 'MTA4fCI1ODIxMyI'
+                    next_cursor: CURSOR_EXAMPLE_RUN
                   }
                 }
               }
@@ -871,7 +881,7 @@ export default function handler(req, res) {
                     dataDictionary: [{ column: 'runId', type: 'string', description: 'Upstream run identifier' }],
                     runs: [
                       {
-                        runId: 58213,
+                        runId: 'cmsxu9zyi0ck7ms01v41wipnd',
                         createdAt: '2026-07-30T18:22:41.000Z',
                         comparable: true,
                         modelFamily: 'qwen3.6-27b',
@@ -883,7 +893,7 @@ export default function handler(req, res) {
                         decodeTokPerSec: 108,
                         contextLength: 8192,
                         contextBand: '8k-32k',
-                        source: 'https://localmaxxing.com/en/runs/58213'
+                        source: 'https://localmaxxing.com/en/runs/cmsxu9zyi0ck7ms01v41wipnd'
                       }
                     ]
                   }
@@ -1018,7 +1028,7 @@ export default function handler(req, res) {
                         confidence: { runs: 14, iqrSpreadPct: 12.38, outliers: 0, newestRunAgeDays: 3, grade: 'high' },
                         crossCheck: { relatedRigComparisons: [], contradictions: [] },
                         bestRun: {
-                          runId: 58213,
+                          runId: 'cmsxu9zyi0ck7ms01v41wipnd',
                           modelName: 'unsloth/Qwen3.6-27B-MTP-GGUF',
                           hardware: 'RTX 4090 24GB',
                           engine: 'llama.cpp',
@@ -1027,12 +1037,12 @@ export default function handler(req, res) {
                           prefillTokPerSec: 3820,
                           decodeTokPerSec: 108,
                           createdAt: '2026-07-30T18:22:41.000Z',
-                          source: 'https://localmaxxing.com/en/runs/58213'
+                          source: 'https://localmaxxing.com/en/runs/cmsxu9zyi0ck7ms01v41wipnd'
                         }
                       }
                     ],
                     has_more: true,
-                    next_cursor: 'MTA1fCJydDQwOTB8cXdlbjMuNi0yN2Ii'
+                    next_cursor: CURSOR_EXAMPLE_GROUP
                   }
                 }
               }
@@ -1334,7 +1344,7 @@ export default function handler(req, res) {
     '/api/watch/rss.xml': {
       get: {
         request: 'curl -s "$BASE/api/watch/rss.xml?model=Qwen3+32B&hardware=RTX+4090&quant=q4_k_m"',
-        response: '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>Community benchmark runs — Qwen3 32B on RTX 4090</title><item><title>108 tok/s decode · q4_k_m · llama.cpp b6123</title><link>https://localmaxxing.com/en/runs/58213</link><pubDate>Wed, 30 Jul 2026 18:22:41 GMT</pubDate></item></channel></rss>'
+        response: '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>Community benchmark runs — Qwen3 32B on RTX 4090</title><item><title>108 tok/s decode · q4_k_m · llama.cpp b6123</title><link>https://localmaxxing.com/en/runs/cmsxu9zyi0ck7ms01v41wipnd</link><pubDate>Wed, 30 Jul 2026 18:22:41 GMT</pubDate></item></channel></rss>'
       }
     },
     '/api/watch/dispatch': {
@@ -1375,7 +1385,7 @@ export default function handler(req, res) {
             confidence: { runsInGroup: 14, level: 'high' },
             meetsSlo: { ttft: true, tpot: true, vram: false, all: false },
             explain: 'Estimated fit: ~16GB weights + ~28GB KV at 32768 ctx × 4 concurrent exceeds 24GB — consider a smaller context or fewer concurrent streams; measured 105 tok/s single-stream decode across 14 runs.',
-            source: 'https://localmaxxing.com/en/runs/58213'
+            source: 'https://localmaxxing.com/en/runs/cmsxu9zyi0ck7ms01v41wipnd'
           }]
         }
       }

@@ -80,7 +80,7 @@ export default async function handler(req, res) {
       return json(res, {
         error: 'missing parameters',
         detail: 'Provide two run ids: /api/diff?runA=<id>&runB=<id> (aliases a/b accepted), or two constraint sets for what-if mode: /api/diff?mode=whatif&a=<constraints>&b=<constraints>.',
-        example: '/api/diff?runA=1234&runB=5678'
+        example: '/api/diff?runA=cmsxu9zyi0ck7ms01v41wipnd&runB=cmrpa80mz05aolg011rjzkfvk'
       }, 400);
     }
     if (String(idA) === String(idB)) {
