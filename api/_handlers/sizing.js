@@ -17,6 +17,13 @@ function num(v, fallback) {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+// SLO caps accept any finite value ≥ 0 — 0 is a valid (maximally strict) cap,
+// not "unset" (#731).
+function numSloCap(v) {
+  const n = Number(v);
+  return v != null && Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 /**
  * Estimate bits-per-weight from a quantization label (q4_k_m → ~4.25,
  * q8_0 → 8.25-ish is wrong so plain digits win: 8 + 0.25 only for _k quants).
@@ -93,8 +100,10 @@ export default async function handler(req, res) {
       outputTokens: Math.round(num(params.outputTokens, 512))
     };
     const slo = {
-      maxTtftSeconds: params.maxTtftSeconds != null ? num(params.maxTtftSeconds, null) : null,
-      maxTpotMs: params.maxTpotMs != null ? num(params.maxTpotMs, null) : null
+      // #731: explicit 0 caps are honored (every rig fails the SLO) instead of
+      // silently dropping the constraint.
+      maxTtftSeconds: params.maxTtftSeconds != null ? numSloCap(params.maxTtftSeconds) : null,
+      maxTpotMs: params.maxTpotMs != null ? numSloCap(params.maxTpotMs) : null
     };
 
     // Explicit arch overrides, else estimated per group below.

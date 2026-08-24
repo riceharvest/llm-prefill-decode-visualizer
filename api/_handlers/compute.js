@@ -185,7 +185,23 @@ function computeOne(params, dryRun = false) {
         decodeSpeed: num(params.decodeSpeed, 105)
       };
       if (dryRun) return { status: 200, body: dryRunBody('cost', costInputs) };
-      return { status: 200, body: cost(costInputs) };
+      // #736: bare model=cost calls default price AND power to 0, which makes
+      // every operating-cost figure come out $0.00 — flag the unset inputs so
+      // the result can't be mistaken for a real quote.
+      const warnings = [];
+      if (costInputs.hardwarePriceUsd === 0) {
+        warnings.push({
+          code: 'cost_hardware_price_unset',
+          message: 'hardwarePriceUsd=0 (default) — hardware amortization contributes nothing; pass ?hardwarePriceUsd= for a total-cost-of-ownership figure.'
+        });
+      }
+      if (costInputs.powerDrawWatts === 0) {
+        warnings.push({
+          code: 'cost_power_draw_unset',
+          message: 'powerDrawWatts=0 (default) — electricity contributes nothing; pass ?powerDrawWatts= for a realistic $/1M tokens.'
+        });
+      }
+      return { status: 200, body: { ...cost(costInputs), warnings } };
     }
 
     case '':
