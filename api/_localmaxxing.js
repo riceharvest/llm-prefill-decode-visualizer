@@ -9,12 +9,16 @@ import { contextBandOf, contextBandMix } from './_contextbands.js';
 
 const UPSTREAM = 'https://www.localmaxxing.com/api';
 const PAGE = 200;
+// #1090: hard cap on the upstream crawl. A full final page at this offset means
+// the upstream likely holds more runs than we will ever read — surfaced as
+// `truncated` instead of failing silently.
+const MAX_OFFSET = 20000;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 /** Runs further than this many IQRs from their group median are flagged as outliers. */
 export const DEFAULT_OUTLIER_IQRS = 2.5;
 
-let cache = { rows: null, fetchedAt: 0, promise: null };
+let cache = { rows: null, fetchedAt: 0, promise: null, truncated: false };
 // Full index (comparable + non-comparable runs), populated by the same
 // upstream fetch that fills `cache` — used only by the /api/runs dump.
 let rawCache = { rows: null, fetchedAt: 0 };
@@ -52,15 +56,16 @@ export async function getAllRunsRaw() {
 /** Fetch all comparable runs plus the fetch timestamp of the cached set. */
 export async function getDataset() {
   if (cache.rows && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
-    return { rows: cache.rows, fetchedAt: cache.fetchedAt };
+    return { rows: cache.rows, fetchedAt: cache.fetchedAt, truncated: cache.truncated };
   }
   if (cache.promise) {
-    return cache.promise.then(rows => ({ rows, fetchedAt: cache.fetchedAt }));
+    return cache.promise.then(rows => ({ rows, fetchedAt: cache.fetchedAt, truncated: cache.truncated }));
   }
 
   cache.promise = (async () => {
     const rows = [];
-    for (let offset = 0; offset <= 20000; offset += PAGE) {
+    let truncated = false;
+    for (let offset = 0; offset <= MAX_OFFSET; offset += PAGE) {
       const res = await fetch(`${UPSTREAM}/leaderboard?limit=${PAGE}&offset=${offset}`, {
         headers: { accept: 'application/json' }
       });
@@ -69,10 +74,13 @@ export async function getDataset() {
       const batch = data.rows || [];
       rows.push(...batch);
       if (batch.length < PAGE) break;
+      // Full page at the last allowed offset → upstream may hold more (#1090).
+      if (offset === MAX_OFFSET) truncated = true;
     }
     const comparableRows = rows.filter(comparable).map(slim);
     cache.rows = comparableRows;
     cache.fetchedAt = Date.now();
+    cache.truncated = truncated;
     // Full index for /api/runs: every run, tagged. Same upstream pages —
     // zero additional requests.
     rawCache.rows = rows.map(r => {
@@ -86,10 +94,15 @@ export async function getDataset() {
   })();
 
   try {
-    return { rows: await cache.promise, fetchedAt: cache.fetchedAt };
+    const rows = await cache.promise;
+    // #1076: clear the settled promise so calls made after CACHE_TTL_MS fall
+    // through to a real refetch instead of replaying this resolved result
+    // forever (the TTL branch was previously unreachable after first load).
+    cache.promise = null;
+    return { rows, fetchedAt: cache.fetchedAt, truncated: cache.truncated };
   } catch (err) {
     cache.promise = null; // allow retry; serve stale if we have it
-    if (cache.rows) return { rows: cache.rows, fetchedAt: cache.fetchedAt };
+    if (cache.rows) return { rows: cache.rows, fetchedAt: cache.fetchedAt, truncated: cache.truncated };
     throw err;
   }
 }
@@ -145,6 +158,9 @@ export function getCacheInfo() {
     fetchedAt: cache.rows ? new Date(cache.fetchedAt).toISOString() : null,
     ageMs: cache.rows ? now - cache.fetchedAt : null,
     rowCount: cache.rows ? cache.rows.length : 0,
+    // #1090: true when the upstream crawl hit its offset hard cap on a full
+    // page — the served dataset may be missing newer runs beyond MAX_OFFSET.
+    truncated: cache.truncated === true,
     ttlMs: CACHE_TTL_MS,
     upstream: UPSTREAM
   };
