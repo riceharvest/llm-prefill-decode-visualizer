@@ -201,4 +201,30 @@ test('memoryLedger: no GPU selected → null verdict, math still returned', () =
   assert.ok(r.totalGb > 0);
 });
 
+// ---- acceptanceRate scale contract (#753) ---------------------------------
+
+test('percent-scale acceptanceRate (>1) warns instead of silently clamping', () => {
+  const r = speculative({ baseDecodeSpeed: 105, draftTokens: 4, acceptanceRate: 85 });
+  const w = r.warnings.find(x => x.code === 'acceptance_rate_above_one');
+  assert.ok(w, 'expected an acceptance_rate_above_one warning');
+  assert.match(w.message, /percentage/);
+  // math unchanged: still clamped into [0,1], inputs echo the clamped value
+  assert.equal(r.inputs.acceptanceRate, 1);
+  assert.equal(r.effectiveDecodeTokPerSec, speculative({ acceptanceRate: 1 }).effectiveDecodeTokPerSec);
+});
+
+test('negative acceptanceRate warns and clamps to 0', () => {
+  const r = speculative({ baseDecodeSpeed: 105, draftTokens: 4, acceptanceRate: -5 });
+  const w = r.warnings.find(x => x.code === 'acceptance_rate_negative');
+  assert.ok(w, 'expected an acceptance_rate_negative warning');
+  assert.equal(r.inputs.acceptanceRate, 0);
+});
+
+test('in-range acceptanceRate stays warning-free (no new noise on plausible inputs)', () => {
+  for (const a of [0, 0.3, 0.7, 0.95, 1]) {
+    assert.deepEqual(speculative({ baseDecodeSpeed: 105, acceptanceRate: a }).warnings, []);
+  }
+});
+
+
 

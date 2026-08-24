@@ -71,9 +71,25 @@ export function speculative({ baseDecodeSpeed = 105, draftTokens = 4, acceptance
   const tokensPerStep = 1 + k * alpha;
   const stepsPerSecond = baseDecodeSpeed / (1 + k * draftCostFraction);
   const effective = stepsPerSecond * tokensPerStep;
+  const warnings = sanityWarnings({ decodeSpeed: baseDecodeSpeed });
+  // Acceptance rate is a fraction in [0,1]. A value above 1 is almost always a
+  // percent-scale input ("85" meaning 85%) that would silently clamp to a
+  // physically impossible α=1 — surface it instead of returning confident
+  // metrics computed at an unreachable operating point (#753).
+  if (acceptanceRate > 1) {
+    warnings.push({
+      code: 'acceptance_rate_above_one',
+      message: `acceptanceRate=${acceptanceRate} looks like a percentage — acceptanceRate is a fraction in [0,1] (pass 0.85 for 85%). The value was clamped to 1, which is physically impossible (no draft model is accepted with certainty).`
+    });
+  } else if (acceptanceRate < 0) {
+    warnings.push({
+      code: 'acceptance_rate_negative',
+      message: `acceptanceRate=${acceptanceRate} is negative — acceptanceRate is a fraction in [0,1]. The value was clamped to 0.`
+    });
+  }
   return {
     inputs: { baseDecodeSpeed, draftTokens: k, acceptanceRate: alpha, draftCostFraction },
-    warnings: sanityWarnings({ decodeSpeed: baseDecodeSpeed }),
+    warnings,
     effectiveDecodeTokPerSec: round(effective),
     speedupVsVanilla: round(effective / baseDecodeSpeed),
     tokensPerVerifyStep: round(tokensPerStep),

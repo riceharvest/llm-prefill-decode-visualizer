@@ -634,7 +634,7 @@ export default function SingleTurnVisualizer({
                   step="0.05"
                   value={acceptance}
                   aria-label={t('singleTurn.acceptanceAria')}
-                  aria-valuetext={`${Math.round(acceptance * 100)}% token acceptance`}
+                  aria-valuetext={`${acceptance.toFixed(2)} token acceptance (${Math.round(acceptance * 100)}%)`}
                   onChange={(e) => setAcceptance(Number(e.target.value))}
                 />
                 <div className="field-scale">
