@@ -44,6 +44,7 @@ function operationIdMap(spec) {
 // commit as a changelog note in CHANGELOG-API.md).
 const LOCKED_OPERATION_IDS = {
   'GET /api/compute': 'computeInference',
+  'POST /api/compute': 'computeInferenceBatch',
   'GET /api/vram': 'estimateVram',
   'GET /api/calc/{id}': 'replayCalculation',
   'GET /api/presets': 'listPresets',

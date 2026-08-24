@@ -463,6 +463,40 @@ const COMPUTE_RESPONSE = {
   }
 };
 
+/**
+ * Batch compute envelope (POST /api/compute {"batch":[…]} or GET ?batch=[…]).
+ * Per-item results carry {index, ok} plus either `result` (a full ComputeResult)
+ * or `code`+`error` for that item — one bad item never fails the batch.
+ */
+const BATCH_COMPUTE_RESPONSE = {
+  type: 'object',
+  description: 'Batch envelope: one entry per submitted parameter set, keyed by its position. Per-item failures are reported inline (ok:false + code/error) and do not fail the batch.',
+  required: ['batch', 'count', 'okCount', 'errorCount', 'results'],
+  properties: {
+    id: { type: 'string', pattern: '^calc_[0-9a-f]{12}$', description: 'Deterministic content hash of the raw batch request' },
+    batch: { type: 'boolean', const: true },
+    count: { type: 'integer', description: 'Total submitted parameter sets' },
+    okCount: { type: 'integer' },
+    errorCount: { type: 'integer' },
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['index', 'ok'],
+        properties: {
+          index: { type: 'integer', description: 'Position of the parameter set in the submitted batch array' },
+          ok: { type: 'boolean' },
+          result: { $ref: '#/components/schemas/ComputeResult' },
+          code: { type: 'string', description: 'Error code when ok:false' },
+          error: { type: 'string', description: 'Human-readable per-item error when ok:false' }
+        }
+      }
+    },
+    rate_limit: { $ref: '#/components/schemas/RateLimit' },
+    schema_version: { type: 'string', const: '1' }
+  }
+};
+
 // Cursor-paginated list envelopes (shared pagination contract: total, items[],
 // has_more, next_cursor — see _pagination.js).
 
@@ -577,7 +611,7 @@ const BEST_LIST_ENVELOPE = {
   properties: {
     id: { type: 'string', pattern: '^calc_[0-9a-f]{12}$' },
     description: { type: 'string' },
-    rankedBy: { type: 'string', enum: ['decode', 'prefill', 'cost', 'walltime'] },
+    rankedBy: { type: 'string', enum: ['decode', 'prefill', 'efficiency', 'walltime', 'cost', 'confidence'], description: 'Mirrors the ?by=/sort_by= rank modes — includes every value the by-parameter enum accepts' },
     snapshot: { $ref: '#/components/schemas/SnapshotRef' },
     snapshotAt: { type: ['string', 'null'], format: 'date-time' },
     matchedRuns: { type: 'integer', description: 'Comparable runs that survived filtering' },
@@ -635,6 +669,7 @@ const SCHEMAS = {
   ComputeResult: COMPUTE_RESULT,
   // Envelope shapes
   ComputeResponse: COMPUTE_RESPONSE,
+  BatchComputeResponse: BATCH_COMPUTE_RESPONSE,
   RunListEnvelope: RUN_LIST_ENVELOPE,
   HardwareSummaryEnvelope: HARDWARE_SUMMARY_ENVELOPE,
   BenchmarkGroupListEnvelope: BENCHMARK_GROUP_LIST_ENVELOPE,
@@ -713,6 +748,33 @@ export default function handler(req, res) {
             '400': { description: 'Invalid parameters (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } }, '500': { description: 'Internal server error (code INTERNAL)', content: { 'application/problem+json': { schema: PROBLEM } } }
           },
           '429': { $ref: '#/components/responses/RateLimited' }
+        },
+        post: {
+          operationId: 'computeInferenceBatch',
+          summary: 'Run inference math for a batch of parameter sets',
+          description: 'POST {"batch":[…]} (alias "variants") with up to 50 parameter sets — each item is a normal parameter set including its own "model" field. Returns a per-index envelope: one bad item is reported inline (ok:false) and never fails the batch. Also available as GET ?batch=[...] (URL-encoded JSON array). A single-object body (no "batch" key) computes exactly like the GET form.',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    batch: { type: 'array', maxItems: 50, items: { type: 'object', additionalProperties: true }, description: 'Parameter sets; each must include "model"' }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            '200': {
+              description: 'Per-index results envelope (BatchComputeResponse)',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/BatchComputeResponse' } } }
+            },
+            '400': { description: 'Malformed batch (code INVALID_PARAMS)', content: { 'application/problem+json': { schema: PROBLEM } } },
+            '429': { $ref: '#/components/responses/RateLimited' },
+            '500': { description: 'Internal server error (code INTERNAL)', content: { 'application/problem+json': { schema: PROBLEM } } }
+          }
         }
       },
       '/api/vram': {
@@ -730,7 +792,30 @@ export default function handler(req, res) {
             { name: 'numTurns', in: 'query', schema: { type: 'integer' }, description: 'with tokensPerTurn: project KV growth over N agentic turns' },
             { name: 'tokensPerTurn', in: 'query', schema: { type: 'number' }, description: 'tokens added to context per turn' }
           ],
-          responses: { '200': { description: 'Resolved model + weights/kv/total VRAM breakdown' }, '400': { description: 'Missing hfId' }, '404': { description: 'Unknown hfId on huggingface.co' }, '422': { description: 'config.json lacks required architecture fields' } }
+          responses: {
+            '200': {
+              description: 'Resolved model + weights/kv/total VRAM breakdown',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    description: 'VRAM breakdown. Optional blocks (fits, projection) are null unless ?vramGb= / ?numTurns+?tokensPerTurn were passed.',
+                    required: ['inputs', 'model', 'weights', 'kvCache', 'total', 'contextWindow', 'fits', 'projection'],
+                    properties: {
+                      inputs: { type: 'object', additionalProperties: true },
+                      model: { type: 'object', additionalProperties: true },
+                      weights: { type: 'object', properties: { gb: { type: ['number', 'null'] }, quant: { type: 'string' }, source: { type: ['string', 'null'] }, sourceKind: { type: 'string' } }, additionalProperties: true },
+                      kvCache: { type: 'object', properties: { bytesPerToken: { type: 'integer' }, gbAtContext: { type: 'number' }, formula: { type: 'string' } }, additionalProperties: true },
+                      total: { type: 'object', properties: { gb: { type: ['number', 'null'] }, breakdown: { type: 'object', additionalProperties: true } }, additionalProperties: true },
+                      contextWindow: { type: 'object', properties: { maxPositionEmbeddings: { type: ['integer', 'null'] }, requested: { type: 'integer' }, withinLimit: { type: ['boolean', 'null'] }, overflowTokens: { type: ['integer', 'null'] } }, additionalProperties: true },
+                      fits: { type: ['object', 'null'], nullable: true, properties: { vramGb: { type: 'number' }, fits: { type: 'boolean' }, headroomGb: { type: 'number' }, maxContextTokens: { type: 'integer' }, note: { type: 'string' } }, additionalProperties: true },
+                      projection: { type: ['object', 'null'], nullable: true, additionalProperties: true }
+                    }
+                  }
+                }
+              }
+            },
+            '400': { description: 'Missing hfId' }, '404': { description: 'Unknown hfId on huggingface.co' }, '422': { description: 'config.json lacks required architecture fields' } }
         }
       },
       '/api/calc/{id}': {
@@ -744,7 +829,23 @@ export default function handler(req, res) {
             { name: '<original request parameters>', in: 'query', description: 'The same model + params (or best filters) that minted the id. Defaults may be omitted — they resolve identically before hashing.' }
           ],
           responses: {
-            '200': { description: 'Recomputed result, stamped verified:true and carrying the id' },
+            '200': {
+              description: 'Recomputed result, stamped verified:true and carrying the id',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    description: 'The replayed compute or best response with `verified: true` added (parameter set matches the id). Shape mirrors the original endpoint\'s 200 body.',
+                    required: ['verified'],
+                    properties: {
+                      verified: { type: 'boolean', const: true },
+                      id: { type: 'string', pattern: '^calc_[0-9a-f]{12}$' }
+                    },
+                    additionalProperties: true
+                  }
+                }
+              }
+            },
             '400': { description: 'Malformed id, missing replay parameters, or id/parameter mismatch (body.expected carries the correct id)' }
           }
         }
@@ -909,11 +1010,42 @@ export default function handler(req, res) {
           responses: {
             '200': {
               description: 'Feature description + registered watches (watchId, label, hasWebhook, createdAt)',
-              content: { 'application/json': { example: {
-                description: 'Watch feeds (#109): subscribe to a hardware+model combination…',
-                maxWatches: 500, totalWatches: 1,
-                watches: [{ watchId: 'watch_abc123_x9', label: 'RTX 4090 + Qwen3 32B', model: 'Qwen3 32B', hardware: 'RTX 4090', quant: null, hasWebhook: false, createdAt: '2026-08-22T10:00:00.000Z' }]
-              } } }
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['description', 'maxWatches', 'totalWatches', 'watches'],
+                    properties: {
+                      description: { type: 'string' },
+                      maxWatches: { type: 'integer' },
+                      totalWatches: { type: 'integer' },
+                      watches: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          required: ['watchId', 'label', 'hasWebhook', 'createdAt'],
+                          properties: {
+                            watchId: { type: 'string' },
+                            label: { type: 'string' },
+                            model: { type: ['string', 'null'], nullable: true },
+                            hardware: { type: ['string', 'null'], nullable: true },
+                            quant: { type: ['string', 'null'], nullable: true },
+                            hasWebhook: { type: 'boolean' },
+                            createdAt: { type: 'string', format: 'date-time' }
+                          }
+                        }
+                      },
+                      rate_limit: { $ref: '#/components/schemas/RateLimit' },
+                      schema_version: { type: 'string', const: '1' }
+                    }
+                  },
+                  example: {
+                    description: 'Watch feeds (#109): subscribe to a hardware+model combination…',
+                    maxWatches: 500, totalWatches: 1,
+                    watches: [{ watchId: 'watch_abc123_x9', label: 'RTX 4090 + Qwen3 32B', model: 'Qwen3 32B', hardware: 'RTX 4090', quant: null, hasWebhook: false, createdAt: '2026-08-22T10:00:00.000Z' }]
+                  }
+                }
+              }
             },
             '429': { $ref: '#/components/responses/RateLimited' }
           }
@@ -924,7 +1056,26 @@ export default function handler(req, res) {
           description: 'Body: { model?, hardware?, quant?, webhookUrl? } — at least one of model/hardware required; webhookUrl must be https. Returns 201 with watchId + secret (shown exactly once; required to DELETE, sent to your webhook as X-Watch-Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET /api/watch/rss.xml?model=&hardware=&quant=.',
           requestBody: { required: true, content: { 'application/json': { example: { model: 'Qwen3 32B', hardware: 'RTX 4090', quant: 'q4_k_m', webhookUrl: 'https://example.com/hooks/llm-watch' } } } },
           responses: {
-            '201': { description: 'Watch created (watchId, secret, rssUrl, matchingExistingRuns preview)' },
+            '201': {
+              description: 'Watch created (watchId, secret, rssUrl, matchingExistingRuns preview)',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['description', 'watchId', 'secret', 'rssUrl', 'matchingExistingRuns'],
+                    properties: {
+                      description: { type: 'string' },
+                      watchId: { type: 'string' },
+                      secret: { type: 'string', description: 'Shown exactly once — required to DELETE and sent to your webhook as X-Watch-Secret' },
+                      rssUrl: { type: 'string' },
+                      matchingExistingRuns: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                      rate_limit: { $ref: '#/components/schemas/RateLimit' },
+                      schema_version: { type: 'string', const: '1' }
+                    }
+                  }
+                }
+              }
+            },
             '400': { description: 'Invalid body (code validation_failed with per-field errors)' },
             '429': { $ref: '#/components/responses/RateLimited' },
             '503': { description: 'Watch store unavailable (code watch_store_unavailable)' }
@@ -956,7 +1107,10 @@ export default function handler(req, res) {
             { name: 'days', in: 'query', schema: { type: 'integer', default: 30, maximum: 365 }, description: 'only runs measured in the last N days (undated runs always included)' }
           ],
           responses: {
-            '200': { description: 'RSS 2.0 XML (application/rss+xml); X-Matched-Runs header reports the pre-cap match count' },
+            '200': {
+              description: 'RSS 2.0 XML (application/rss+xml); X-Matched-Runs header reports the pre-cap match count',
+              content: { 'application/rss+xml': { schema: { type: 'string' } } }
+            },
             '429': { $ref: '#/components/responses/RateLimited' }
           }
         }
@@ -967,7 +1121,25 @@ export default function handler(req, res) {
           summary: 'Deliver unseen matching runs to registered webhooks (#109)',
           description: 'Cron-friendly (Vercel Cron sends GET). For each watch with a webhookUrl: POST a watch.new_runs payload (X-Watch-Secret header) with runs created after the watch that are not yet in its bounded seen-set, then persist the set. Set WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret. Delivery failures are reported per watch, never thrown.',
           responses: {
-            '200': { description: '{ dispatched, totalNewRuns, results[], previewPayload }' },
+            '200': {
+              description: '{ dispatched, totalNewRuns, results[], previewPayload }',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['dispatched', 'totalNewRuns', 'results'],
+                    properties: {
+                      dispatched: { type: 'integer' },
+                      totalNewRuns: { type: 'integer' },
+                      results: { type: 'array', items: { type: 'object', properties: { watchId: { type: 'string' }, newRuns: { type: 'integer' }, delivered: { type: 'boolean' } }, additionalProperties: true } },
+                      previewPayload: { type: 'object', additionalProperties: true, description: 'Example of the watch.new_runs webhook payload shape' },
+                      rate_limit: { $ref: '#/components/schemas/RateLimit' },
+                      schema_version: { type: 'string', const: '1' }
+                    }
+                  }
+                }
+              }
+            },
             '401': { description: 'WATCH_DISPATCH_SECRET set and not provided (code unauthorized)' },
             '429': { $ref: '#/components/responses/RateLimited' },
             '503': { description: 'Watch store unavailable (code watch_store_unavailable)' }
@@ -1137,7 +1309,35 @@ export default function handler(req, res) {
           summary: 'Service health and upstream data freshness',
           description: 'Liveness probe. Returns ok plus upstreamFreshness (fresh/stale/empty, last sync time, cached row count) and cacheAge in seconds. Human status page at /status.html.',
           responses: {
-            '200': { description: '{ok, service, time, upstreamFreshness, cacheAge}' },
+            '200': {
+              description: '{ok, service, time, upstreamFreshness, cacheAge}',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['ok', 'service', 'time', 'upstreamFreshness', 'cacheAge'],
+                    properties: {
+                      ok: { type: 'boolean' },
+                      service: { type: 'string' },
+                      time: { type: 'string', format: 'date-time' },
+                      upstreamFreshness: {
+                        type: 'object',
+                        required: ['status', 'fetchedAt', 'ageSeconds', 'ttlSeconds', 'rowCount', 'source'],
+                        properties: {
+                          status: { type: 'string', enum: ['fresh', 'stale', 'empty'] },
+                          fetchedAt: { type: ['string', 'null'], format: 'date-time', nullable: true },
+                          ageSeconds: { type: ['integer', 'null'], nullable: true },
+                          ttlSeconds: { type: 'integer' },
+                          rowCount: { type: 'integer' },
+                          source: { type: 'string' }
+                        }
+                      },
+                      cacheAge: { type: 'integer' }
+                    }
+                  }
+                }
+              }
+            },
             '500': { description: 'Health handler itself failed' }
           }
         }
@@ -1163,8 +1363,51 @@ export default function handler(req, res) {
             { name: 'hwClass', in: 'query', schema: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] } },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 5, maximum: 25 } }
           ],
-          responses: { '200': { description: 'workload echo, assumptions, and ranked recommendations with vramFit, expected, confidence, meetsSlo, and a one-sentence human-readable `explain` string combining fit math with the measured source (#73)' } }
-
+          responses: {
+            '200': {
+              description: 'workload echo, assumptions, and ranked recommendations with vramFit, expected, confidence, meetsSlo, and a one-sentence human-readable `explain` string combining fit math with the measured source (#73)',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['description', 'workload', 'slo', 'matchedRuns', 'assumptions', 'recommendations'],
+                    properties: {
+                      description: { type: 'string' },
+                      workload: { type: 'object', additionalProperties: true },
+                      slo: { type: 'object', additionalProperties: true },
+                      matchedRuns: { type: 'integer' },
+                      assumptions: { type: 'object', additionalProperties: true },
+                      recommendations: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          description: 'Ranked rig: identity fields + vramFit{}, expected{ttftIqr,tpotIqrMs,perUserDecodeTokPerSec,…}, confidence{}, meetsSlo{} and an `explain` sentence.',
+                          required: ['hardware', 'hwClass', 'modelFamily', 'vramFit', 'expected', 'confidence', 'meetsSlo', 'explain'],
+                          properties: {
+                            hardware: { type: 'string' },
+                            hardwareKey: { type: 'string' },
+                            hwClass: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] },
+                            gpu: { type: ['string', 'null'], nullable: true },
+                            gpuCount: { type: 'integer' },
+                            modelFamily: { type: 'string' },
+                            exampleModel: { type: ['string', 'null'], nullable: true },
+                            quantization: { type: ['string', 'null'], nullable: true },
+                            engine: { type: ['string', 'null'], nullable: true },
+                            vramFit: { type: 'object', additionalProperties: true },
+                            expected: { type: 'object', additionalProperties: true },
+                            confidence: { type: 'object', additionalProperties: true },
+                            meetsSlo: { type: 'object', additionalProperties: true },
+                            explain: { type: 'string' },
+                            source: { type: ['string', 'null'], nullable: true }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       },
       '/api/parse-constraints': {
@@ -1226,7 +1469,35 @@ export default function handler(req, res) {
           operationId: 'listDatasetSnapshots',
           summary: 'Versioned dataset snapshot IDs',
           description: 'Lists content-addressed dataset snapshots (e.g. snapshot-2026-08-21-a1b2c3d4). Pass any listed ID as ?snapshot= on /api/localmaxxing, /api/benchmarks or /api/best to get reproducible numbers. Snapshot IDs are stable for identical run sets within a fetch-time bucket; instances keep a bounded in-memory ring, so old IDs may expire.',
-          responses: { '200': { description: '{current, snapshots[]}' } }
+          responses: {
+            '200': {
+              description: '{current, snapshots[]}',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['current', 'snapshots'],
+                    properties: {
+                      description: { type: 'string' },
+                      current: { type: 'string' },
+                      snapshots: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          required: ['id', 'createdAt', 'runCount'],
+                          properties: {
+                            id: { type: 'string', description: 'Snapshot id — pass as ?snapshot= on data endpoints', pattern: '^snapshot-' },
+                            createdAt: { type: 'string', format: 'date-time' },
+                            runCount: { type: 'integer' }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
