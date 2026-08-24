@@ -25,7 +25,12 @@ const RATE_LIMITED_RESPONSE = {
       schema: {
         type: 'object',
         properties: {
-          error: { type: 'string' },
+          type: { type: 'string', description: 'Resolvable problem-type URI for RATE_LIMITED.' },
+          title: { type: 'string', const: 'Rate limited' },
+          status: { type: 'integer', const: 429 },
+          code: { type: 'string', const: 'RATE_LIMITED', description: 'Machine-readable error code (see x-error-codes).' },
+          detail: { type: 'string' },
+          error: { type: 'string', description: 'Legacy alias of detail; kept for existing clients.' },
           limit: { type: 'integer' },
           remaining: { type: 'integer' },
           reset: { type: 'integer', description: 'Unix epoch seconds' },
