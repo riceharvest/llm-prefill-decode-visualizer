@@ -97,3 +97,62 @@ test('sizing query maps only mappable non-null constraints', () => {
   assert.equal(qs.get('maxVramGb'), null, 'budgetUsdMax has no sizing param');
   assert.equal(qs.get('contextLength'), null);
 });
+
+// --- #1061: locale-grouped numbers must not corrupt magnitudes ---------------
+
+test('NBSP / narrow-NBSP digit grouping parses at full magnitude (#1061)', () => {
+  for (const sep of ['\u00A0', '\u202F']) {
+    const { constraints } = parseConstraints(`budget of $70${sep}000 dollars`);
+    assert.equal(constraints.budgetUsdMax, 70000, `separator U+${sep.codePointAt(0).toString(16)}`);
+  }
+});
+
+test('ASCII-space grouping is left alone (word boundaries preserved) (#1061)', () => {
+  // "qwen3.6 27b" must keep parsing paramsB=27, not merge into 3.627.
+  const { constraints } = parseConstraints('qwen3.6 27b');
+  assert.equal(constraints.paramsB, 27);
+});
+
+test('decimal-comma budgets apply the true value and raise an ambiguity (#1061)', () => {
+  const { constraints, ambiguities } = parseConstraints('under $1,5k');
+  assert.equal(constraints.budgetUsdMax, 1500);
+  assert.ok(ambiguities.some(a => a.field === 'budgetUsdMax'),
+    'decimal-comma interpretation must be flagged, never silent');
+});
+
+test('thousands-grouped commas still parse without an ambiguity flag (#1061)', () => {
+  const { constraints, ambiguities } = parseConstraints('budget of $70,000 dollars');
+  assert.equal(constraints.budgetUsdMax, 70000);
+  assert.ok(!ambiguities.some(a => a.field === 'budgetUsdMax'));
+});
+
+// --- #1068: operator/notation gaps ------------------------------------------
+
+test('>= and ≥ work as min-decode operators (#1068)', () => {
+  assert.equal(parseConstraints('>= 30 tok/s').constraints.minDecodeTokPerSec, 30);
+  assert.equal(parseConstraints('x >=30 tok/s').constraints.minDecodeTokPerSec, 30);
+  assert.equal(parseConstraints('≥ 30 tok/s').constraints.minDecodeTokPerSec, 30);
+  assert.equal(parseConstraints('> 30 tok/s').constraints.minDecodeTokPerSec, 30);
+});
+
+test('min-decode word operators unchanged and not matched mid-word (#1068)', () => {
+  assert.equal(parseConstraints('at least 30 tok/s').constraints.minDecodeTokPerSec, 30);
+  assert.equal(parseConstraints('over 30 tok/s').constraints.minDecodeTokPerSec, 30);
+  assert.equal(parseConstraints('recovery 40 tok/s').constraints.minDecodeTokPerSec,
+    null, '"over" inside "recovery" must not trigger');
+});
+
+test('trillion param counts map to paramsB (#1068)', () => {
+  const { constraints } = parseConstraints('a model with 1t parameters');
+  assert.equal(constraints.paramsB, 1000);
+  assert.equal(parseConstraints('70b parameters').constraints.paramsB, 70);
+});
+
+test('unappliable comparison speed constraints surface an ambiguity (#1068)', () => {
+  const { constraints, ambiguities } = parseConstraints('≤ 5 tok/s decode');
+  assert.equal(constraints.minDecodeTokPerSec, null,
+    'a maximum-speed constraint must not be applied as a minimum');
+  assert.ok(ambiguities.some(a => a.field === 'minDecodeTokPerSec'),
+    'the failed comparison must be reported, never silent');
+});
+

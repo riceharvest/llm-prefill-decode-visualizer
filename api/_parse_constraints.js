@@ -66,6 +66,37 @@ function parseNumber(s) {
   return Number.isFinite(n) ? n : null;
 }
 
+// Locale grouping artifacts: NBSP, narrow NBSP and friends plus "_" — but NOT
+// the plain ASCII space, which carries real word boundaries ("qwen3.6 27b").
+const GROUP_SEPARATORS = '(?:[\\u00A0\\u1680\\u2000-\\u200A\\u202F\\u205F\\u3000_]+)';
+
+/**
+ * Join locale digit-grouping separators so "70\u00A0000" parses as 70000
+ * instead of silently truncating at the separator (#1061).
+ */
+export function normalizeDigitGroups(text) {
+  return String(text).replace(new RegExp(`(\\d)${GROUP_SEPARATORS}(?=\\d)`, 'gu'), '$1');
+}
+
+/** "1,5" / "1.234,56" → true (decimal comma); "70,000" → false (grouping). */
+export function looksLikeDecimalComma(s) {
+  return /^\d{1,3}(?:\.\d{3})*,\d{1,2}$/.test(String(s).trim());
+}
+
+/**
+ * Locale-aware numeric parse: returns { value, decimalComma } so callers can
+ * flag decimal-comma interpretations ("$1,5k" = $1.5k, not $15k) instead of
+ * corrupting magnitudes silently (#1061).
+ */
+function parseLocaleNumber(s) {
+  const raw = String(s).trim();
+  if (looksLikeDecimalComma(raw)) {
+    const n = Number(normalizeDigitGroups(raw).replace(/\./g, '').replace(',', '.'));
+    return { value: Number.isFinite(n) ? n : null, decimalComma: true };
+  }
+  return { value: parseNumber(raw), decimalComma: false };
+}
+
 /** "$1.5k" → 1500, "$1500" → 1500, "2,500 dollars" → 2500. */
 function parseMoney(s, suffix) {
   const n = parseNumber(s);
@@ -91,7 +122,10 @@ function parseContextLength(text) {
  */
 export function parseConstraints(rawText) {
   const input = String(rawText ?? '').trim();
-  const text = input.toLowerCase();
+  // Join locale digit-grouping separators (NBSP/narrow-NBSP/…) before any
+  // regex runs so grouped numbers survive capture (#1061). Plain ASCII
+  // spaces are deliberately left alone — they separate words.
+  const text = normalizeDigitGroups(input.toLowerCase());
   const constraints = {
     deployment: null,
     modelFamily: null,
@@ -133,8 +167,11 @@ export function parseConstraints(rawText) {
   // --- parameter count ------------------------------------------------------
   // Strip budget amounts first so "$1500" can't collide with a "1500B" match.
   const withoutMoney = text.replace(/\$?\s*[\d,.]+\s*(?:k|m)?\s*(?:usd|dollars|bucks)\b/g, ' ');
-  const pm = withoutMoney.match(/\b(\d+(?:\.\d+)?)\s*x?\s*-?\s*b\b/);
-  if (pm) constraints.paramsB = parseNumber(pm[1]);
+  const pm = withoutMoney.match(/\b(\d+(?:\.\d+)?)\s*x?\s*-?\s*(t|b)\b/);
+  if (pm) {
+    const mult = pm[2] === 't' ? 1000 : 1;
+    constraints.paramsB = parseNumber(pm[1]) * mult;
+  }
 
   // --- quantization ---------------------------------------------------------
   const quant = parseQuantization(text);
@@ -174,11 +211,40 @@ export function parseConstraints(rawText) {
     : moneyWords
       ? parseMoney(moneyWords[1], moneyWords[2])
       : null;
-  if (budget != null) constraints.budgetUsdMax = budget;
+  if (money || moneyWords) {
+    const mm = money || moneyWords;
+    const loc = parseLocaleNumber(mm[1]);
+    if (loc.decimalComma && loc.value != null) {
+      // European decimal comma ("$1,5k" = $1.5k = 1500): apply it but flag the
+      // interpretation instead of silently corrupting the magnitude (#1061).
+      const mult = /k/i.test(mm[2] || '') ? 1000 : /m/i.test(mm[2] || '') ? 1e6 : 1;
+      constraints.budgetUsdMax = loc.value * mult;
+      ambiguities.push({
+        field: 'budgetUsdMax',
+        message: `"${mm[1]}" read as a decimal comma — budget applied as ${constraints.budgetUsdMax} USD. If you meant thousands grouping, rewrite without the comma (e.g. "$${Math.round(loc.value)}${mm[2] || ''}").`
+      });
+    } else if (budget != null) {
+      constraints.budgetUsdMax = budget;
+    }
+  }
 
   // --- minimum decode speed ------------------------------------------------------
-  const sm = text.match(/\b(?:at least|min(?:imum)?(?: of)?|>=?|no less than|over)\s*([\d,]+)\s*(?:tok(?:en)?s?)(?:\/s| per second|s\/sec|s\/s)\b/);
+  // Operators (>=, >, ≥) must NOT carry a leading \b — a word boundary can
+  // never hold before '>' (#1068). Word alternatives keep their own \b…\b so
+  // "over" isn't matched mid-word ("recovery 40 tok/s").
+  const sm = text.match(/(?:>=?|≥|\b(?:at least|min(?:imum)?(?: of)?|no less than|over)\b)\s*([\d,]+)\s*(?:tok(?:en)?s?)(?:\/s| per second|s\/sec|s\/s)\b/);
   if (sm) constraints.minDecodeTokPerSec = parseNumber(sm[1]);
+  else {
+    // A comparison-style speed constraint we couldn't apply (e.g. a maximum:
+    // "≤ 5 tok/s") must not vanish silently — flag it for the caller (#1068).
+    const cm = text.match(/(?:<=?|>=?|≤|≥)\s*[\d,.]+\s*tok(?:en)?s?(?:\/s| per second|s\/sec|s\/s)\b/);
+    if (cm) {
+      ambiguities.push({
+        field: 'minDecodeTokPerSec',
+        message: `Found speed comparison "${cm[0].trim()}" but could not apply it — only minimum-speed phrasings ("at least N tok/s", ">= N tok/s") are supported.`
+      });
+    }
+  }
 
   // --- VRAM cap --------------------------------------------------------------------
   let vm = text.match(/\b(\d{1,3})\s*gb?\s*(?:of\s*)?vram\b/) || text.match(/\bvram\s*(?:of|under|max|<=?|≤|budget)?\s*(\d{1,3})\s*gb?\b/);
