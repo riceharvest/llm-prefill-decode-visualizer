@@ -37,6 +37,22 @@ test('continuous batching never exceeds max batch size', () => {
   }
 });
 
+test('zero/negative maxBatchSize clamps to 1 instead of hanging (#1078)', () => {
+  const reqs = workload();
+  for (const bmax of [0, -3, NaN]) {
+    // Before the guard this loop never admitted a request and never advanced
+    // time — an infinite spin the MAX_STEPS cap could not break (no steps
+    // were ever pushed). It must terminate and complete every request.
+    const sim = simulateBatching({ requests: reqs, maxBatchSize: bmax, chunkSize: 512, ...PARAMS });
+    assert.ok(sim.makespan > 0, `bmax=${bmax} produced no schedule`);
+    for (const r of sim.requests) assert.ok(r.finishTime !== null, `bmax=${bmax}: request ${r.id} never finished`);
+    // static baseline shares the same hazard via slice(start, start + 0)
+    const stat = simulateStaticBatching({ requests: reqs, maxBatchSize: bmax, ...PARAMS });
+    assert.ok(stat.makespan > 0, `static bmax=${bmax} produced no schedule`);
+    for (const r of stat.requests) assert.ok(r.finishTime !== null);
+  }
+});
+
 test('every request decodes exactly its output tokens and finishes', () => {
   const reqs = workload();
   const sim = simulateBatching({ requests: reqs, maxBatchSize: 8, chunkSize: 512, ...PARAMS });

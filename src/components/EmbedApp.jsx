@@ -10,7 +10,7 @@ import KVCacheCalculator from './KVCacheCalculator';
 import TheoryGuide from './TheoryGuide';
 import CurriculumMode from './CurriculumMode';
 import { HARDWARE_PRESETS } from '../utils/presets';
-import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
+import { readParam, readParamNum, readParamPosNum, readParamBool, writeParams } from '../utils/urlState';
 import { setLocale, getLocale, getDirection, t } from '../i18n/strings';
 
 // Embeddable widget view (issue #108): served at /embed?tab=…&preset=… it
@@ -45,7 +45,10 @@ export default function EmbedApp() {
   const [decodeSpeed] = useState(() => readParamNum('decode', initialPresetObj.decodeSpeed));
   const [simSpeedMultiplier] = useState(() => {
     const v = readParam('sim');
-    return v === 'instant' ? 'instant' : (readParamNum('sim', 1));
+    // readParamPosNum rejects 0/negative: ?sim=0 used to freeze /embed at
+    // PHASE 1 forever (App upgraded it to 1x — divergent entry points,
+    // #1040). Both now fall back to 1x.
+    return v === 'instant' ? 'instant' : readParamPosNum('sim', 1);
   });
   // autoplay=1 starts the simulation on load (same convention as demoUrl).
   const [isPlaying, setIsPlaying] = useState(() => readParamBool('autoplay', false));

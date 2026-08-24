@@ -74,11 +74,16 @@ export function generateRequests({
  */
 export function simulateBatching({
   requests,
-  maxBatchSize,
+  maxBatchSize: rawMaxBatchSize,
   chunkSize,
   prefillSpeed,
   decodeSpeed
 }) {
+  // Guard against ?bmax=0 / negative share links (#1078): with zero slots the
+  // admission loop never admits anyone, the empty-batch branch never advances
+  // time, and the while-loop below spins forever (MAX_STEPS can't help because
+  // no steps are ever pushed). Clamp to a sane floor instead of hanging.
+  const maxBatchSize = Math.max(1, Math.floor(Number(rawMaxBatchSize) || 1));
   const decodeStepTime = decodeSpeed > 0 ? 1 / decodeSpeed : Infinity; // seconds
   const chunkingOn = Number.isFinite(chunkSize) && chunkSize > 0;
 
@@ -203,7 +208,10 @@ export function simulateBatching({
  * finishers hold their slot — the padding waste static batching is known
  * for). Used only for the comparison banner; shares the timing model above.
  */
-export function simulateStaticBatching({ requests, maxBatchSize, prefillSpeed, decodeSpeed }) {
+export function simulateStaticBatching({ requests, maxBatchSize: rawMaxBatchSize, prefillSpeed, decodeSpeed }) {
+  // Same <1 guard as simulateBatching (#1078): slice(start, start + 0) would
+  // loop forever over an empty cohort window.
+  const maxBatchSize = Math.max(1, Math.floor(Number(rawMaxBatchSize) || 1));
   const decodeStepTime = decodeSpeed > 0 ? 1 / decodeSpeed : Infinity; // seconds
   const steps = [];
   const enriched = [];

@@ -21,3 +21,11 @@ test('parseComparePath rejects malformed paths', () => {
   // no separator at all
   assert.equal(parseComparePath('/compare/justaslug'), null);
 });
+
+test('parseComparePath survives malformed percent-escapes (#910)', () => {
+  // decodeURIComponent('%zz') throws URIError — used to crash the page.
+  assert.deepEqual(parseComparePath('/compare/%zz-vs-rtx-4090'), { a: '%zz', b: 'rtx-4090' });
+  assert.deepEqual(parseComparePath('/compare/rtx-3090-vs-%E0%A4%A'), { a: 'rtx-3090', b: '%E0%A4%A' });
+  // valid escapes still decode
+  assert.deepEqual(parseComparePath('/compare/m3-max-vs-rtx-3090%20ti'), { a: 'm3-max', b: 'rtx-3090 ti' });
+});

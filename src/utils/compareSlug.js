@@ -15,11 +15,22 @@ export function slugify(text) {
 /**
  * Parse "/compare/:a-vs-:b" into { a, b } slugs.
  * Returns null for anything that isn't a well-formed /compare/ path.
+ * Percent-decoding is guarded: a malformed escape ("/compare/%zz-vs-x")
+ * throws URIError, which used to crash the whole page pre-paint (#910) —
+ * fall back to the raw segment so the view still renders.
  */
 export function parseComparePath(pathname) {
   const m = /^\/compare\/([^/]+?)-vs-([^/]+?)\/?$/.exec(String(pathname || ''));
   if (!m || !m[1] || !m[2]) return null;
-  return { a: decodeURIComponent(m[1]), b: decodeURIComponent(m[2]) };
+  return { a: safeDecode(m[1]), b: safeDecode(m[2]) };
+}
+
+function safeDecode(segment) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
 }
 
 /**
