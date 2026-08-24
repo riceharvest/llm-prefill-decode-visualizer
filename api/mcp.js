@@ -10,6 +10,9 @@
  * implementation of every formula.
  */
 
+import { SCHEMA_VERSION, applySchemaHeaders } from './_schema.js';
+import { RELEASE_VERSION } from './_version.js';
+
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
 const TOOLS = [
@@ -173,6 +176,11 @@ function json(res, body, status = 200) {
 }
 
 export default async function handler(req, res) {
+  // Stamp the wire contract version on EVERY /api/mcp response (GET
+  // discovery, POST JSON-RPC, OPTIONS preflight, errors) so an MCP-only
+  // client can run the compatibility check before invoking a tool (#880).
+  applySchemaHeaders(res);
+
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -209,11 +217,14 @@ export default async function handler(req, res) {
     case 'initialize':
       return reply({
         protocolVersion: '2025-06-18',
+        // Wire contract version, same value as the schema_version field on
+        // every REST response and the X-Schema-Version header (#880).
+        schemaVersion: SCHEMA_VERSION,
         capabilities: { tools: {} },
         serverInfo: {
           name: 'llm-prefill-decode-visualizer',
           title: 'LLM Prefill & Decode Speed Visualizer',
-          version: '1.0.0'
+          version: RELEASE_VERSION // same release version as /api/spec info.version
         },
         instructions:
           'Deterministic LLM-inference math API. Use compute_single_turn for TTFT/TPOT questions, ' +

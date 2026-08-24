@@ -4,6 +4,7 @@ import { ERROR_CODES, problemType } from '../_errors.js';
 export const config = { runtime: 'nodejs' };
 
 import { sendJson, SCHEMA_VERSION } from '../_schema.js';
+import { RELEASE_VERSION } from '../_version.js';
 
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
@@ -647,7 +648,7 @@ export default function handler(req, res) {
     openapi: '3.1.0',
     info: {
       title: 'LLM Prefill & Decode Speed Visualizer API',
-      version: '2.6.0',
+      version: RELEASE_VERSION, // single source: api/_version.js (#880)
       // Two independent version numbers — `version` is the API *release*
       // version (surface: endpoints/params/docs); `x-schema-version` mirrors
       // the wire contract version (schema_version field + X-Schema-Version
