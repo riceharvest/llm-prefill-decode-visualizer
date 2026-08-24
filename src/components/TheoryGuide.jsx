@@ -1,6 +1,7 @@
 import React from 'react';
 import { HelpCircle, Gauge, Zap, Play, Bot } from 'lucide-react';
 import { demoUrl } from '../utils/urlState';
+import { demoButtonLabel } from '../utils/accessibleLabels';
 import { t, tArray, tPlain } from '../i18n/strings';
 import Analogy from './Analogy';
 import TemplateGallery from './TemplateGallery';
@@ -179,6 +180,7 @@ export default function TheoryGuide() {
                   <button
                     onClick={() => { window.location.href = demoUrl(FAQ_DEMOS[i]); }}
                     className="btn"
+                    aria-label={demoButtonLabel(item.q, t('theory.tryIt'))}
                     style={{ marginTop: '10px', minHeight: '30px', padding: '5px 12px', fontSize: '0.76rem' }}
                   >
                     <Play size={12} />

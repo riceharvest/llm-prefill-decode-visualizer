@@ -44,5 +44,6 @@
   "copyPython": "Python",
   "copyTypeScript": "TypeScript",
   "copySnippetTooltip": "Copy a runnable /api/compute request for this exact comparison — add \"dry_run\": true to preview without executing",
-  "copiedFeedback": "Copied!"
+  "copiedFeedback": "Copied!",
+  "resultsUpdated": "Compare results updated: {a} vs {b}"
 }

@@ -353,7 +353,10 @@ export default function App() {
         onShare={handleShare}
       />
 
-      <main className="app-frame stack" ref={mainRef}>
+      {/* Skip-link target (#462): #root contains the banner, so the skip link
+          pointed at a wrapper that skips nothing. #main starts below the
+          header controls; tabindex=-1 lets it take focus on activation. */}
+      <main className="app-frame stack" ref={mainRef} id="main" tabIndex={-1}>
         <CollapsibleSection id="localmaxxing" title={t('common.localMaxxingTitle') || 'LocalMaxxing measured presets'} badge="LIVE">
           <LocalMaxxingPresetPicker
             selectedPreset={selectedPreset}
