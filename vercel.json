@@ -43,6 +43,10 @@
     {
       "source": "/.well-known/mcp",
       "destination": "/.well-known/mcp.json"
+    },
+    {
+      "source": "/.well-known/ai-plugin",
+      "destination": "/.well-known/ai-plugin.json"
     }
   ],
   "crons": [
