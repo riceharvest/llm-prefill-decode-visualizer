@@ -129,8 +129,10 @@ function num(v, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-// Rough wall-power estimates when the caller doesn't pass ?powerWatts.
-// Whole-rig figures (idle-ish load while serving), not TDP sums.
+// Rough wall-power estimates when the caller doesn't pass ?powerWatts=/
+// ?powerDrawWatts=. Keys are lowercase because wire hwClass casing varies
+// (live rows ship UPPERCASE 'DISCRETE_GPU'; older fixtures/docs lowercase) —
+// lookups normalize before matching so per-class estimates are never skipped.
 const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
 
 /**
@@ -161,6 +163,8 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  * ?price=<usd>                    hardware purchase price (per rig; default 0)
  * ?electricityRate=$/kWh          default 0.15
  * ?powerWatts=W                   default estimate by hwClass (see DEFAULT_POWER_WATTS)
+ *                                 (alias: ?powerDrawWatts=, the spelling
+ *                                 /api/compute model=cost documents)
  * ?amortizationMonths=M           spread hardware price over this many months (default 36)
  * ?promptTokens=&outputTokens=    scenario shape (defaults 2048/512)
  *
@@ -260,7 +264,7 @@ export async function bestBody(query = {}) {
           const sample = g.bestRun;
           const c = cost({
             ...costInputs,
-            powerDrawWatts: num(q.powerWatts, DEFAULT_POWER_WATTS[sample.hwClass] ?? 150),
+            powerDrawWatts: num(q.powerDrawWatts ?? q.powerWatts, DEFAULT_POWER_WATTS[String(sample.hwClass || '').toLowerCase()] ?? 150),
             prefillSpeed: g.prefill.median,
             decodeSpeed: g.decode.median
           });
