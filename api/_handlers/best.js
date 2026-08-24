@@ -155,7 +155,8 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  * ?minDecode=N                    only groups with median decode ≥ N tok/s
  * ?maxVramGb=N                    only rigs with effective VRAM ≤ N GB
  *                                 (vramGb, falling back to unifiedMemoryGb)
- * ?limit=N                        default 10
+ * ?limit=N                        default 10, max 50 (clamped + warned; invalid
+ *                                 values fall back to the default with a warning)
  *
  * Cost ranking (?by=cost) inputs:
  * ?price=<usd>                    hardware purchase price (per rig; default 0)
@@ -177,7 +178,24 @@ const RANK_BY = ['decode', 'prefill', 'efficiency', 'confidence'];
 export async function bestBody(query = {}) {
   const q = query;
   try {
-    const limit = Math.min(50, Math.max(1, Number(q.limit) || 10));
+    // #522: parse ?limit loudly. Non-numeric / non-positive values used to
+    // fall into Math.max(1, …) and silently yield a single row; oversized
+    // values were clamped to 50 without any signal. Invalid input now falls
+    // back to the default with a visible warning, clamping stays.
+    const rawLimit = q.limit;
+    let limitWarning = null;
+    let limit = 10;
+    if (rawLimit != null && String(rawLimit).trim() !== '') {
+      const n = Number(rawLimit);
+      if (!Number.isFinite(n) || n <= 0) {
+        limitWarning = `?limit=${rawLimit} ignored — must be a positive number; using the default of 10`;
+      } else if (n > 50) {
+        limit = 50;
+        limitWarning = `?limit=${Math.round(n)} clamped to the 50-row maximum`;
+      } else {
+        limit = Math.max(1, Math.round(n));
+      }
+    }
     const by = [...BY_MODES, 'cost'].includes(q.sort_by) ? q.sort_by : [...BY_MODES, 'cost'].includes(q.by) ? q.by : 'decode';
     const workload = resolveWorkload(q);
     const costInputs = {
@@ -367,6 +385,9 @@ export async function bestBody(query = {}) {
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
     warnings.push(...groups.filter(g => g.mixedContextBands)
       .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
+    // #522: surface ?limit= substitution/clamping instead of silently
+    // returning a truncated or defaulted list.
+    if (limitWarning) warnings.push(limitWarning);
 
     const filters = { by, limit };
     if (q.model) filters.model = String(q.model).toLowerCase();
@@ -434,6 +455,12 @@ export async function bestBody(query = {}) {
       maxAgeDays: maxAgeDays || null,
       contextBand: contextBand || null,
       matchedRuns: runs.length,
+      // #522: truncation signal — agents can tell a capped top-N from a
+      // complete ranking without consulting docs.
+      total: groups.length,
+      returned: ranked.length,
+      limit,
+      has_more: groups.length > ranked.length,
       caveats: buildCaveats(runs, groups),
       warnings,
       ...(by === 'walltime' ? {

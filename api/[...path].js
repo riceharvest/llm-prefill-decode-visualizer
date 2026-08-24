@@ -30,8 +30,47 @@ import { default as agentCompute } from './_handlers/agent_compute.js';
 import { default as agentFreshness } from './_handlers/agent_freshness.js';
 
 import { withMarkdownNegotiation } from './_markdown.js';
+import { sendProblem } from './_errors.js';
 
 export const config = { runtime: 'nodejs' };
+
+// Read-only routes (#517): /api/spec declares GET-only operations for these
+// paths, yet any HTTP method used to fall through to the GET handler and
+// return 200 + full payload. Mutating verbs now get 405 + Allow: GET so a
+// misbuilt agent request is diagnosable instead of silently "succeeding".
+// Deliberately NOT listed: endpoints with documented mutating verbs
+// (/api/compute POST batch, /api/watch POST/DELETE, /api/localmaxxing POST,
+// /api/diff POST, /api/mcp POST) and handlers that already branch on method
+// (/api/vram, /api/sizing).
+const READ_ONLY_ROUTES = new Set([
+  '/presets', '/benchmarks', '/best', '/runs', '/health', '/version',
+  '/spec', '/snapshots', '/export', '/watch/rss.xml',
+  '/agent/capabilities.json', '/agent/compute.json', '/agent/benchmarks.json',
+  '/agent/scenario.json', '/agent/freshness.json', '/agent/confidence.json'
+]);
+const CALC_ID_RE = /^\/calc\/([^/]+)$/;
+
+/** 405/OPTIONS handling for the read-only routes (#517). True = handled. */
+function handleReadOnlyMethod(req, res, clean) {
+  const readOnly = READ_ONLY_ROUTES.has(clean) || CALC_ID_RE.test(clean);
+  if (!readOnly) return false;
+  const method = String(req.method || 'GET').toUpperCase();
+  if (method === 'GET' || method === 'HEAD') return false;
+  if (method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.statusCode = 204;
+    res.end();
+    return true;
+  }
+  res.setHeader('Allow', 'GET');
+  sendProblem(res, req, {
+    status: 405,
+    code: 'METHOD_NOT_ALLOWED',
+    detail: `${method} is not supported on this endpoint — it is read-only. Use GET as declared in /api/spec.`
+  });
+  return true;
+}
 
 function json(res, body, status = 200) {
   res.statusCode = status;
@@ -92,6 +131,8 @@ export default async function handler(req, res) {
   try {
     // Strip /v1/ prefix if present (versioning rewrite)
     const clean = pathname.replace(/^\/v1\//, '/');
+
+    if (handleReadOnlyMethod(req, res, clean)) return;
 
     switch (clean) {
       case '/compute': return compute(req, res);

@@ -18,6 +18,36 @@ function num(v, fallback) {
 }
 
 /**
+ * #525: sizing silently rewrites unusable inputs to defaults. Detect every
+ * workload field that was supplied but substituted/clamped, so the response
+ * can carry a machine-readable warnings[] like /api/compute does.
+ */
+function inputWarnings(params, workload) {
+  const raws = {
+    contextLength: params.contextLength,
+    concurrency: params.concurrency ?? params.batchSize,
+    promptTokens: params.promptTokens,
+    outputTokens: params.outputTokens
+  };
+  const out = [];
+  for (const [field, raw] of Object.entries(raws)) {
+    if (raw == null || String(raw).trim() === '') continue;
+    const used = workload[field];
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0 || Math.round(n) !== used) {
+      out.push({
+        code: 'input_substituted',
+        field,
+        requested: raw,
+        used,
+        message: `?${field}=${raw} is not usable as a positive integer — computed with ${used} instead`
+      });
+    }
+  }
+  return out.sort((a, b) => a.field.localeCompare(b.field));
+}
+
+/**
  * Estimate bits-per-weight from a quantization label (q4_k_m → ~4.25,
  * q8_0 → 8.25-ish is wrong so plain digits win: 8 + 0.25 only for _k quants).
  * Unknown labels fall back to 4.25 — the typical community GGUF.
@@ -156,6 +186,14 @@ export default async function handler(req, res) {
       const meetsTpot = slo.maxTpotMs != null && tpotMs != null ? tpotMs <= slo.maxTpotMs : null;
       const fitsVram = headroomGb != null ? headroomGb >= 0 : null;
 
+      // #523: `all` historically reads true when nothing explicitly failed —
+      // including criteria that were never evaluated. Keep `all` (sort order
+      // and existing consumers depend on it) but expose which verdicts are
+      // real so `meetsSlo.all === true` can be qualified with allEvaluated.
+      const criteria = { ttft: meetsTtft, tpot: meetsTpot, vram: fitsVram };
+      const evaluated = Object.keys(criteria).filter(k => criteria[k] !== null);
+      const unevaluated = Object.keys(criteria).filter(k => criteria[k] === null);
+
       return {
         hardware: s.hardware,
         hardwareKey: s.hardwareKey,
@@ -194,7 +232,16 @@ export default async function handler(req, res) {
           level: confidenceLevel(g.runs),
           note: g.runs < 3 ? 'fewer than 3 runs — medians may not generalize' : undefined
         },
-        meetsSlo: { ttft: meetsTtft, tpot: meetsTpot, vram: fitsVram, all: [meetsTtft, meetsTpot, fitsVram].every(v => v !== false) },
+        meetsSlo: {
+          ttft: meetsTtft,
+          tpot: meetsTpot,
+          vram: fitsVram,
+          all: [meetsTtft, meetsTpot, fitsVram].every(v => v !== false),
+          // #523: distinguish "passed" from "never checked".
+          evaluated,
+          unevaluated,
+          allEvaluated: unevaluated.length === 0
+        },
         // One-sentence human-readable explanation (#73): fit math + measured
         // source, pass-through ready for agent chat pipelines.
         explain: explainRecommendation({
@@ -223,6 +270,9 @@ export default async function handler(req, res) {
       description: 'Ranked hardware sizing for a workload spec. VRAM fit = weights + KV cache at target context × concurrency + overhead. Expected TTFT/TPOT come from aggregated benchmark medians (single-stream); confidence reflects sample count.',
       workload,
       slo,
+      // #525: machine-readable signal whenever an unusable input was
+      // substituted with a default (empty when every supplied value was used).
+      warnings: inputWarnings(params, workload),
       matchedRuns: runs.length,
       assumptions: {
         kvArchitecture: explicitArch || 'estimated from parameter count (exposed per recommendation in vramFit)',
