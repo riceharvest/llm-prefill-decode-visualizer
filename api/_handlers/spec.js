@@ -4,6 +4,7 @@ import { ERROR_CODES, problemType } from '../_errors.js';
 export const config = { runtime: 'nodejs' };
 
 import { sendJson, SCHEMA_VERSION } from '../_schema.js';
+import { QUANT_ENUM } from '../_quant.js';
 
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
@@ -723,7 +724,7 @@ export default function handler(req, res) {
           parameters: [
             { name: 'hfId', in: 'query', required: true, schema: { type: 'string' }, description: 'Hugging Face repo id or URL, e.g. meta-llama/Llama-3.1-8B-Instruct' },
             { name: 'context', in: 'query', schema: { type: 'integer', default: 32768 }, description: 'context length in tokens' },
-            { name: 'quant', in: 'query', schema: { type: 'string', default: 'q4_k_m' }, description: 'quant tag (fp16, q8_0, q6_k, q5_k_m, q4_k_m, q4_0, q3_k_m, q2_k, fp8, …); unknown tags assume ~4.85 bpw and are flagged' },
+            { name: 'quant', in: 'query', schema: { type: 'string', default: 'q4_k_m', enum: QUANT_ENUM }, description: `quant tag; known tags resolve exactly (${QUANT_ENUM.join(', ')}), unknown tags assume ~4.85 bpw and are flagged via quantAssumed` },
             { name: 'batchSize', in: 'query', schema: { type: 'integer', default: 1 } },
             { name: 'kvPrecisionBytes', in: 'query', schema: { type: 'number', default: 2 }, description: 'KV cache precision: 2=FP16, 1=FP8, 0.5=INT4' },
             { name: 'vramGb', in: 'query', schema: { type: 'number' }, description: 'optional VRAM budget → fits flag + maxContextTokens (upper bound)' },
@@ -1270,12 +1271,12 @@ export default function handler(req, res) {
         request: 'curl -s "$BASE/api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m&vramGb=24"',
         response: {
           inputs: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', context: 65536, quant: 'q4_k_m', resolvedQuant: 'q4_k_m', quantAssumed: false, batchSize: 1, kvPrecisionBytes: 2, vramGb: 24 },
-          model: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', family: 'llama', resolutionSource: 'builtin-table', architecture: { numLayers: 32, kvHeads: 8, headDim: 128 }, paramsTotal: 8030261312, paramsB: 8.03, notes: [] },
-          weights: { gb: 4.49, source: '8,030,261,312 params × 0.56 bpw', sourceKind: 'params×quant', quant: 'q4_k_m', bytesPerParam: 0.56 },
+          model: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', family: 'llama3.1-8b', resolutionSource: 'builtin-table', architecture: { numLayers: 32, hiddenSize: 4096, numHeads: 32, kvHeads: 8, headDim: 128, maxContextLength: 131072 }, paramsTotal: 8030269440, paramsB: 8.030269, notes: ["architecture resolved from the built-in lookup table entry 'llama3.1-8b' (offline, no huggingface.co call)"] },
+          weights: { gb: 4.534005, source: '8,030,269,440 params × 4.85 bpw', sourceKind: 'params×quant', quant: 'q4_k_m', bytesPerParam: 0.60625 },
           kvCache: { bytesPerToken: 131072, kbPerToken: 128, mbPerToken: 0.125, gbAtContext: 8, formula: '2 × 32 layers × 8 KV heads × 128 dim × 2B × 65,536 ctx × 1 batch' },
-          total: { gb: 12.49, breakdown: { weightsGb: 4.49, kvCacheGb: 8 } },
-          contextWindow: 131072,
-          fits: { vramGb: 24, fits: true, maxContextTokens: 155648 },
+          total: { gb: 12.534005, breakdown: { weightsGb: 4.534005, kvCacheGb: 8 } },
+          contextWindow: { maxPositionEmbeddings: 131072, requested: 65536, withinLimit: true, overflowTokens: 0 },
+          fits: { vramGb: 24, fits: true, headroomGb: 11.465995, maxContextTokens: 159465, note: 'maxContextTokens ignores activation/overhead — treat as an upper bound' },
           projection: null
         }
       }
