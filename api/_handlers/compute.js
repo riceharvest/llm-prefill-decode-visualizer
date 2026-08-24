@@ -15,8 +15,21 @@ import { computeCalcId } from '../_calc_id.js';
 import { normalizeParams } from '../_calc_id.js';
 import { annotate, THEORETICAL } from '../_basis.js';
 import { empiricalDecayExponentCaveat, heuristicFlagDeltasCaveat } from '../_caveats.js';
+import { ROUTES } from '../_route_table.js';
 
 export const config = { runtime: 'nodejs' };
+
+// otherEndpoints for the bare /api/compute capability index (#712): derived
+// from the central route table (the same source of truth behind agents.json)
+// so the self-describing front door always advertises the FULL surface —
+// including /api/spec itself — instead of a hand-picked subset. /compute is
+// excluded (this response IS that endpoint); non-route doc surfaces that
+// agents need at bootstrap (/llms.txt) are appended explicitly.
+const OTHER_ENDPOINTS = [
+  ...ROUTES.filter(r => r.path !== '/compute').map(r => `/api${r.path}`),
+  '/llms.txt'
+];
+
 
 // Max parameter sets accepted in one batch call (documented in the
 // capability list and /llms.txt). Keeps responses bounded.
@@ -231,7 +244,7 @@ function capabilityList() {
       response: '{ dry_run: true, model, inputs, id?, note }',
       example: '/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true&dry_run=true'
     },
-    otherEndpoints: ['/api/vram', '/api/presets', '/api/localmaxxing', '/llms.txt']
+    otherEndpoints: OTHER_ENDPOINTS
   };
 }
 
