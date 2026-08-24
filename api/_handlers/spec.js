@@ -172,6 +172,8 @@ const CONTRADICTION = {
     multiTokPerSec: { type: 'number' },
     deltaPct: { type: 'number' },
     perGpuScalingPct: { type: 'number' },
+    baselineRunIds: { type: 'array', items: { type: 'string' }, description: 'Run ids of the single-GPU baseline subset behind singleTokPerSec (#967)' },
+    multiGpuRunIds: { type: 'array', items: { type: 'string' }, description: 'Run ids of the multi-GPU subset behind multiTokPerSec (#967)' },
     note: { type: 'string' }
   }
 };
@@ -182,6 +184,24 @@ const CROSS_CHECK = {
   required: ['relatedRigComparisons', 'contradictions'],
   properties: {
     relatedRigComparisons: { type: 'integer', description: 'Number of multi-GPU comparisons performed' },
+    comparisons: {
+      type: 'array',
+      description: 'Every comparison performed, including passing ones — lets agents distinguish checked-and-consistent from never-checked (#967).',
+      items: {
+        type: 'object',
+        required: ['vs', 'gpuCount', 'baselineRunIds', 'multiGpuRunIds', 'flagged'],
+        properties: {
+          vs: { type: 'string' },
+          gpuCount: { type: 'integer' },
+          baselineRunIds: { type: 'array', items: { type: 'string' } },
+          multiGpuRunIds: { type: 'array', items: { type: 'string' } },
+          singleDecodeTokPerSec: { type: 'number' },
+          multiDecodeTokPerSec: { type: 'number' },
+          perGpuScalingPct: { type: ['number', 'null'] },
+          flagged: { type: 'boolean', description: 'true when this comparison emitted at least one contradiction' }
+        }
+      }
+    },
     contradictions: { type: 'array', items: { $ref: '#/components/schemas/Contradiction' } }
   }
 };

@@ -54,10 +54,15 @@ export default async function handler(req, res) {
 
     const crossEngine = ['1', 'true', 'yes'].includes(String(q.crossEngine).toLowerCase());
 
-    const groupBy = q.groupBy === 'model' ? 'model'
-      : q.groupBy === 'hardware' ? 'hardware'
-      : q.groupBy === 'quant' ? 'quant'
-      : 'hardwareModel'; // default: hardware × model family
+    // groupBy values are matched case-insensitively (#974, same value-case
+    // contract as scenario= ids): ?groupBy=MODEL now regroups instead of
+    // silently falling back to hardwareModel. Unknown values still default to
+    // hardwareModel exactly as before; a warnings[] entry flags the coercion.
+    const GROUP_BY_KEYS = { model: 'model', hardware: 'hardware', quant: 'quant', hardwaremodel: 'hardwareModel' };
+    const groupByRaw = q.groupBy != null && q.groupBy !== '' ? String(q.groupBy) : null;
+    const groupByNorm = groupByRaw != null ? GROUP_BY_KEYS[groupByRaw.toLowerCase()] : null;
+    const groupBy = groupByNorm || 'hardwareModel'; // default: hardware × model family
+    const groupByCaseNormalized = groupByNorm != null && groupByRaw !== groupByNorm;
 
     // Outlier policy: runs further than N IQRs from their group median are
     // flagged and excluded from the stats by default; pass
@@ -129,6 +134,9 @@ export default async function handler(req, res) {
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
     warnings.push(...groups.filter(g => g.mixedContextBands)
       .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
+    if (groupByCaseNormalized) {
+      warnings.push(`?groupBy=${groupByRaw} matched case-insensitively as '${groupBy}'`);
+    }
 
     return json(res, {
       description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=&context_band=lt1k|1k-8k|8k-32k|32k+; regroup with ?groupBy=hardware|model|quant|hardwareModel; exclude old measurements with ?max_age=<days>. Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false. Each group carries a confidence block (run count, IQR spread %, outlier count, recency, grade) and a cross_check comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.',

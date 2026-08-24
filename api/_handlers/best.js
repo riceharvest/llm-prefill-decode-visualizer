@@ -178,7 +178,16 @@ export async function bestBody(query = {}) {
   const q = query;
   try {
     const limit = Math.min(50, Math.max(1, Number(q.limit) || 10));
-    const by = [...BY_MODES, 'cost'].includes(q.sort_by) ? q.sort_by : [...BY_MODES, 'cost'].includes(q.by) ? q.by : 'decode';
+    // Rank-metric enum values are matched case-insensitively (same value-case
+    // contract as scenario= ids, #974): ?by=CONFIDENCE now ranks by confidence
+    // instead of silently falling back to decode. Unknown values still
+    // default to decode exactly as before; a warnings[] entry flags the
+    // case-normalization so the coercion is observable.
+    const byRaw = q.sort_by != null && q.sort_by !== '' ? String(q.sort_by)
+      : q.by != null && q.by !== '' ? String(q.by) : null;
+    const byNorm = byRaw != null ? byRaw.toLowerCase() : null;
+    const by = [...BY_MODES, 'cost'].includes(byNorm) ? byNorm : 'decode';
+    const byCaseNormalized = byNorm != null && by === byNorm && byRaw !== byNorm;
     const workload = resolveWorkload(q);
     const costInputs = {
       hardwarePriceUsd: num(q.hardwarePriceUsd ?? q.price, 0),
@@ -367,6 +376,9 @@ export async function bestBody(query = {}) {
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
     warnings.push(...groups.filter(g => g.mixedContextBands)
       .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
+    if (byCaseNormalized) {
+      warnings.push(`?by=${byRaw} matched case-insensitively as '${by}'`);
+    }
 
     const filters = { by, limit };
     if (q.model) filters.model = String(q.model).toLowerCase();

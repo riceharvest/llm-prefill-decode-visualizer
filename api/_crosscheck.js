@@ -28,6 +28,15 @@ function round(x) {
 }
 
 /**
+ * Run ids behind one comparison subset (#967): lets agents resolve the exact
+ * runs against /api/runs instead of guessing membership by re-filtering.
+ * Tolerates both raw dataset rows (id) and derived records (runId).
+ */
+function runIds(rs) {
+  return rs.map(r => r.runId ?? r.id).filter(id => id != null);
+}
+
+/**
  * Data-quality confidence block for one group of runs (issue #32).
  *
  * grade is 'high' for 10+ runs with a tight decode IQR (<=40% of median),
@@ -89,7 +98,7 @@ export function crossCheck(runs) {
   }
 
   const contradictions = [];
-  let comparisons = 0;
+  const comparisons = [];
 
   for (const bucket of buckets.values()) {
     const singles = bucket.filter(r => (r.gpuCount ?? 1) === 1);
@@ -108,12 +117,25 @@ export function crossCheck(runs) {
     if (!(baseDecode > 0)) continue;
 
     for (const [n, rs] of [...multis].sort((a, b) => a[0] - b[0])) {
-      comparisons++;
       const multiDecode = median(rs.map(r => r.decodeTokPerSec).sort((a, b) => a - b));
       const multiPrefill = median(rs.map(r => r.prefillTokPerSec).sort((a, b) => a - b));
       const perGpuScalingPct = round(((multiDecode / n) / baseDecode) * 100);
       const sample = rs[0];
       const rigLabel = `${n}x ${sample.gpu || sample.hardware}`;
+      const baselineRunIds = runIds(singles);
+      const multiGpuRunIds = runIds(rs);
+      const flaggedBefore = contradictions.length;
+
+      const comparison = {
+        vs: rigLabel,
+        gpuCount: n,
+        baselineRunIds,
+        multiGpuRunIds,
+        singleDecodeTokPerSec: round(baseDecode),
+        multiDecodeTokPerSec: round(multiDecode),
+        perGpuScalingPct,
+        flagged: false
+      };
 
       if (multiDecode < baseDecode) {
         contradictions.push({
@@ -125,6 +147,8 @@ export function crossCheck(runs) {
           multiTokPerSec: round(multiDecode),
           deltaPct: round(((multiDecode - baseDecode) / baseDecode) * 100),
           perGpuScalingPct,
+          baselineRunIds,
+          multiGpuRunIds,
           note: `${n}-GPU rig reports less total decode than a single card on the same model/quant — likely misconfigured run`
         });
       } else if (perGpuScalingPct < 50) {
@@ -137,6 +161,8 @@ export function crossCheck(runs) {
           multiTokPerSec: round(multiDecode),
           deltaPct: round(((multiDecode - baseDecode) / baseDecode) * 100),
           perGpuScalingPct,
+          baselineRunIds,
+          multiGpuRunIds,
           note: `per-GPU decode is only ${perGpuScalingPct}% of the single-card baseline — check for CPU/Ring bottlenecks or a bad submission`
         });
       }
@@ -150,14 +176,19 @@ export function crossCheck(runs) {
           multiTokPerSec: round(multiPrefill),
           deltaPct: round(((multiPrefill - basePrefill) / basePrefill) * 100),
           perGpuScalingPct: round(((multiPrefill / n) / basePrefill) * 100),
+          baselineRunIds,
+          multiGpuRunIds,
           note: `${n}-GPU rig reports less total prefill than a single card on the same model/quant — likely misconfigured run`
         });
       }
+      comparison.flagged = contradictions.length > flaggedBefore;
+      comparisons.push(comparison);
     }
   }
 
   return {
-    relatedRigComparisons: comparisons,
+    relatedRigComparisons: comparisons.length,
+    comparisons,
     contradictions
   };
 }
