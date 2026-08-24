@@ -51,6 +51,32 @@ test('confidence is clamped to [0, 100] even for extreme spreads', () => {
   assert.ok(c.score >= 0 && c.score <= 100);
 });
 
+test('single-run groups report no fabricated spread or outlier artifacts (#852 #864)', () => {
+  const c = confidenceFor([run('a', 'm', 778)]);
+  assert.equal(c.sampleSize, 1);
+  // No spread information: relativeIqr must be null, not a fake 0.
+  assert.equal(c.relativeIqr, null);
+  // A lone run cannot be an outlier of itself.
+  assert.equal(c.outlierDensity, 0);
+  // score = 100*(0.4*clamp01(1/10) + 0.4*1 + 0.2*1) = 64 (was 44 from null coercion).
+  assert.equal(c.score, 64);
+});
+
+test('empty group keeps the no-data outlierDensity sentinel without crashing', () => {
+  const c = confidenceFor([]);
+  assert.equal(c.sampleSize, 0);
+  assert.equal(c.relativeIqr, null);
+  assert.equal(c.outlierDensity, 1);
+  assert.equal(c.score, 0);
+});
+
+test('two-run groups still compute real spread (#852 #864 regression guard)', () => {
+  const c = confidenceFor([run('a', 'm', 100), run('a', 'm', 200)]);
+  assert.equal(c.sampleSize, 2);
+  assert.ok(typeof c.relativeIqr === 'number' && c.relativeIqr > 0);
+  assert.equal(c.outlierDensity, 0);
+});
+
 test('rankGroups sorts by confidence when asked', () => {
   const runs = [
     // fast but thin/noisy group

@@ -255,15 +255,23 @@ function round3(x) {
 export function confidenceFor(group) {
   const decodes = group.map(r => r.decodeTokPerSec).sort((a, b) => a - b);
   const dq = quartiles(decodes);
-  const iqr = dq.q3 - dq.q1;
-  const relIqr = dq.median > 0 ? iqr / dq.median : Infinity;
-  const lo = dq.q1 - 1.5 * iqr;
-  const hi = dq.q3 + 1.5 * iqr;
+  // A group with fewer than two runs has no spread information: quartiles()
+  // leaves q1/q3 null, and raw arithmetic coerces those nulls into a fake
+  // relativeIqr of 0 ("perfectly tight") while collapsing the 1.5×IQR fences
+  // onto [0, 0] so the lone run reads as a 100% outlier (#852 #864). Report
+  // no spread signal instead of artifacts: relativeIqr = null and the run
+  // cannot be an outlier of itself. Unknown spread earns full spread credit
+  // — scarcity is already priced by the sample-size factor.
+  const hasIqr = dq.q1 != null && dq.q3 != null;
+  const iqr = hasIqr ? dq.q3 - dq.q1 : null;
+  const relIqr = dq.median > 0 ? (hasIqr ? iqr / dq.median : null) : Infinity;
+  const lo = hasIqr ? dq.q1 - 1.5 * iqr : -Infinity;
+  const hi = hasIqr ? dq.q3 + 1.5 * iqr : Infinity;
   const outliers = decodes.filter(v => v < lo || v > hi).length;
   const outlierDensity = decodes.length ? outliers / decodes.length : 1;
 
   const sampleFactor = clamp01(decodes.length / SAMPLE_SATURATION);
-  const spreadFactor = clamp01(1 - relIqr);
+  const spreadFactor = relIqr === Infinity ? 0 : relIqr == null ? 1 : clamp01(1 - relIqr);
   const outlierFactor = clamp01(1 - outlierDensity);
 
   const score = Math.round(
