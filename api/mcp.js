@@ -29,7 +29,7 @@ const TOOLS = [
   },
   {
     name: 'compute_agentic_loop',
-    description: 'Turn-by-turn walltime for a multi-turn tool-calling loop, with and without prefix caching.',
+    description: 'Turn-by-turn walltime for a multi-turn tool-calling loop, with and without prefix caching. Optional budgets: contextWindowTokens adds firstContextOverflowTurn; sloTtftSec/sloTpotMs/sloTurnWalltimeSec/sloWalltimeSec add pass/marginPct SLO verdicts.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -39,7 +39,12 @@ const TOOLS = [
         decodeTokensPerTurn: { type: 'number' },
         prefillSpeed: { type: 'number' },
         decodeSpeed: { type: 'number' },
-        enablePrefixCaching: { type: 'boolean' }
+        enablePrefixCaching: { type: 'boolean' },
+        contextWindowTokens: { type: 'number', description: 'Context-window budget in tokens; response gains firstContextOverflowTurn (+context_window_overflow warning when exceeded)' },
+        sloTtftSec: { type: 'number', description: 'Per-turn TTFT budget (seconds); adds slo verdict block' },
+        sloTpotMs: { type: 'number', description: 'Per-token decode budget (ms); adds slo verdict block' },
+        sloTurnWalltimeSec: { type: 'number', description: 'Per-turn walltime budget (seconds); adds slo verdict block' },
+        sloWalltimeSec: { type: 'number', description: 'Whole-loop walltime budget (seconds); adds slo.loop verdict' }
       },
       required: ['numTurns', 'basePromptTokens', 'toolOutputTokensPerTurn', 'decodeTokensPerTurn', 'prefillSpeed', 'decodeSpeed']
     }

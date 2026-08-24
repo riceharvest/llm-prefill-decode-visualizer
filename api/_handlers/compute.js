@@ -67,6 +67,12 @@ function num(v, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+// Positive finite number or null — gates the optional agentic extras (#492 #493).
+function posNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 // Run one parameter set. Returns { status, body } — never throws for
 // expected input problems; unexpected math errors bubble up to the caller.
 // With dryRun, each branch validates + echoes its parsed inputs instead of
@@ -117,6 +123,12 @@ function computeOne(params, dryRun = false) {
         decodeSpeed: num(params.decodeSpeed, 105),
         enablePrefixCaching: params.enablePrefixCaching !== 'false' && params.enablePrefixCaching !== false
       };
+      // Optional extras (#492 #493): only added to inputs when provided, so
+      // requests without them keep their existing deterministic calc id.
+      for (const key of ['contextWindowTokens', 'sloTtftSec', 'sloTpotMs', 'sloTurnWalltimeSec', 'sloWalltimeSec']) {
+        const v = posNum(params[key]);
+        if (v !== null) inputs[key] = v;
+      }
       return withId('agentic', inputs, agentic(inputs), dryRun);
     }
 
@@ -206,7 +218,13 @@ function capabilityList() {
       singleTurn: { params: ['promptTokens', 'outputTokens', 'prefillSpeed', 'decodeSpeed'], example: '/api/compute?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105' },
       speculative: { params: ['baseDecodeSpeed', 'draftTokens', 'acceptanceRate', 'draftCostFraction'], example: '/api/compute?model=speculative&baseDecodeSpeed=105&draftTokens=4&acceptanceRate=0.7' },
       batched: { params: ['prefillSpeed', 'decodeSpeed', 'batchSize', 'promptTokens', 'outputTokens', 'decodeDecayExponent'], example: '/api/compute?model=batched&batchSize=16&decodeSpeed=105' },
-      agentic: { params: ['numTurns', 'basePromptTokens', 'toolOutputTokensPerTurn', 'decodeTokensPerTurn', 'prefillSpeed', 'decodeSpeed', 'enablePrefixCaching'], example: '/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true' },
+      agentic: {
+        params: ['numTurns', 'basePromptTokens', 'toolOutputTokensPerTurn', 'decodeTokensPerTurn', 'prefillSpeed', 'decodeSpeed', 'enablePrefixCaching'],
+        optionalParams: ['contextWindowTokens', 'sloTtftSec', 'sloTpotMs', 'sloTurnWalltimeSec', 'sloWalltimeSec'],
+        response: '{ turns: [{ turn, totalPromptTokens, newTokensPrefilled, isCached, prefillSeconds, decodeSeconds, turnWalltimeSeconds, cumulativeWalltimeSeconds }], finalContextTokens, totalWalltimeSeconds, walltimeWithoutCachingSeconds, cachingSavesSeconds, cachingSavesPct, contextWindowTokens?, firstContextOverflowTurn?, slo? }',
+        description: 'Turn-by-turn walltime for a tool-calling loop, with/without prefix caching. Optional: &contextWindowTokens=<tokens> adds firstContextOverflowTurn (first turn whose prompt+output exceeds the window; null when it fits) plus a context_window_overflow warning. Optional SLO budgets: &sloTtftSec / &sloTpotMs / &sloTurnWalltimeSec / &sloWalltimeSec add a slo block — per-turn {ttft,tpot,walltime} verdicts with pass/marginPct (same margin convention as the UI badges), failingTurns, worstTurn and a whole-loop verdict.',
+        example: '/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true'
+      },
       kvCache: { params: ['architecture|numLayers+kvHeads+headDim', 'contextLength', 'precisionBytes', 'batchSize'], architectures: Object.keys(MODEL_PRESETS), example: '/api/compute?model=kvCache&architecture=llama70b&contextLength=65536' },
       flagged: {
         params: ['prefillSpeed', 'decodeSpeed', 'promptTokens', 'outputTokens', 'flags'],
@@ -222,8 +240,8 @@ function capabilityList() {
       example: { batch: [{ model: 'singleTurn', promptTokens: 4096 }, { model: 'kvCache', architecture: 'llama70b', contextLength: 131072 }] }
     },
     sanity: {
-      description: 'Non-blocking implausibility warnings. Every successful result carries a "warnings" array (empty when inputs are plausible) flagging outputs that violate known physical bounds: decode above the memory-bandwidth roofline, prefill above the compute roofline, or TTFT below the kernel-launch floor. Warnings never change the math or the HTTP status.',
-      codes: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor'],
+      description: 'Non-blocking implausibility warnings. Every successful result carries a "warnings" array (empty when inputs are plausible) flagging outputs that violate known physical bounds: decode above the memory-bandwidth roofline, prefill above the compute roofline, or TTFT below the kernel-launch floor. model=agentic additionally emits context_window_overflow when ?contextWindowTokens= is set and the loop exceeds it. Warnings never change the math or the HTTP status.',
+      codes: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor', 'context_window_overflow'],
       example: '/api/compute?model=singleTurn&promptTokens=64&prefillSpeed=900000&decodeSpeed=5000'
     },
     dryRun: {
