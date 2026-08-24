@@ -674,7 +674,7 @@ export default function handler(req, res) {
             { name: 'prefillSpeed', in: 'query', schema: { type: 'number' }, description: 'tok/s' },
             { name: 'decodeSpeed', in: 'query', schema: { type: 'number' }, description: 'tok/s' },
             { name: 'numTurns', in: 'query', schema: { type: 'integer' }, description: 'agentic' },
-            { name: 'enablePrefixCaching', in: 'query', schema: { type: 'boolean' }, description: 'agentic' },
+            { name: 'enablePrefixCaching', in: 'query', schema: { type: 'boolean' }, description: 'agentic prefix caching on/off (default true). Accepts 1/true/yes/on or 0/false/no/off, case-insensitive; unrecognized values fall back to the default (true) with a warnings[] entry.' },
             { name: 'batchSize', in: 'query', schema: { type: 'integer' }, description: 'batched/kvCache' },
             { name: 'draftTokens', in: 'query', schema: { type: 'integer' }, description: 'speculative: draft tokens per step' },
             { name: 'acceptanceRate', in: 'query', schema: { type: 'number' }, description: 'speculative: 0..1. Response includes breakevenAcceptanceRate — below it speculation is slower than vanilla decode.' },

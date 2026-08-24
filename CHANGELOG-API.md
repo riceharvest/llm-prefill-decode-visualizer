@@ -79,6 +79,15 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- `/api/compute?model=agentic` now parses `enablePrefixCaching` with a shared
+  boolean table instead of disabling only on the exact string `'false'`:
+  `1/true/yes/on` → true and `0/false/no/off` → false, case-insensitively —
+  matching the UI share-link convention (`cache=0` disables). Real booleans in
+  POST bodies pass through, and unrecognized values fall back to the default
+  (`true`) with a `warnings[]` entry (`unrecognized_boolean`) instead of
+  silently coercing. Accepted values are documented next to the parameter in
+  `/llms.txt`, the OpenAPI spec and `public/schemas/compute.schema.json`.
+- Affected endpoints: `/api/compute` (agentic model).
 - `/api/spec` now annotates every operation with a machine-readable
   `x-rate-limit` extension: `{ enforced, limit, windowSeconds, keying, scope }`
   plus, for metered endpoints, the `X-RateLimit-*` header names and the 429

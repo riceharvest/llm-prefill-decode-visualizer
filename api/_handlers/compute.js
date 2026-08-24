@@ -67,6 +67,43 @@ function num(v, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+// Shared boolean coercion for query-string params (#765). The API and the UI
+// share-link must honor the SAME table so an agent can port a URL convention
+// between them without inverting polarity: 1/true/yes/on → true and
+// 0/false/no/off → false, case-insensitively. Real booleans (POST JSON
+// bodies) pass through. Anything unrecognized falls back to `fallback` and
+// yields a `warnings[]` entry instead of silently coercing.
+const TRUTHY_BOOLEANS = new Set(['1', 'true', 'yes', 'on']);
+const FALSY_BOOLEANS = new Set(['0', 'false', 'no', 'off']);
+const BOOLEAN_DOCS = 'Accepted values (case-insensitive): 1/true/yes/on or 0/false/no/off';
+
+export function parseBoolParam(value, fallback = true) {
+  if (value === undefined || value === null || value === '') {
+    return { value: fallback, warning: null };
+  }
+  if (typeof value === 'boolean') return { value, warning: null };
+  const v = String(value).toLowerCase();
+  if (TRUTHY_BOOLEANS.has(v)) return { value: true, warning: null };
+  if (FALSY_BOOLEANS.has(v)) return { value: false, warning: null };
+  return {
+    value: fallback,
+    warning: {
+      code: 'unrecognized_boolean',
+      message: `Could not parse '${value}' as a boolean; using the default (${fallback}). ${BOOLEAN_DOCS}.`
+    }
+  };
+}
+
+// Append non-blocking parse warnings to a response body without disturbing
+// the math or status (same contract as sanityWarnings in _math.js).
+function withParseWarnings(out, ...warnings) {
+  const extra = warnings.filter(Boolean);
+  if (extra.length && out.body) {
+    out.body.warnings = [...(out.body.warnings || []), ...extra];
+  }
+  return out;
+}
+
 // Run one parameter set. Returns { status, body } — never throws for
 // expected input problems; unexpected math errors bubble up to the caller.
 // With dryRun, each branch validates + echoes its parsed inputs instead of
@@ -108,6 +145,10 @@ function computeOne(params, dryRun = false) {
     }
 
     case 'agentic': {
+      // enablePrefixCaching honors the shared boolean table (see
+      // parseBoolParam) so ?enablePrefixCaching=0/no/off/False reliably
+      // DISABLES caching instead of silently keeping it on (#765).
+      const caching = parseBoolParam(params.enablePrefixCaching, true);
       const inputs = {
         numTurns: Math.min(50, Math.max(1, num(params.numTurns, 4))),
         basePromptTokens: num(params.basePromptTokens, 1500),
@@ -115,9 +156,9 @@ function computeOne(params, dryRun = false) {
         decodeTokensPerTurn: num(params.decodeTokensPerTurn, 250),
         prefillSpeed: num(params.prefillSpeed, 3800),
         decodeSpeed: num(params.decodeSpeed, 105),
-        enablePrefixCaching: params.enablePrefixCaching !== 'false' && params.enablePrefixCaching !== false
+        enablePrefixCaching: caching.value
       };
-      return withId('agentic', inputs, agentic(inputs), dryRun);
+      return withParseWarnings(withId('agentic', inputs, agentic(inputs), dryRun), caching.warning);
     }
 
     case 'kvCache': {

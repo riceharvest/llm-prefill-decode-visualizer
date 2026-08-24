@@ -112,7 +112,7 @@
         "basePromptTokens": { "type": "integer", "minimum": 0, "description": "agentic: first-turn prompt tokens (default 1500)." },
         "toolOutputTokensPerTurn": { "type": "integer", "minimum": 0, "description": "agentic: tool output tokens per turn (default 800)." },
         "decodeTokensPerTurn": { "type": "integer", "minimum": 0, "description": "agentic: generated tokens per turn (default 250)." },
-        "enablePrefixCaching": { "type": ["boolean", "string"], "description": "agentic: prefix caching on/off (default true; 'false' also accepted)." },
+        "enablePrefixCaching": { "type": ["boolean", "string"], "description": "agentic: prefix caching on/off (default true). Accepts 1/true/yes/on or 0/false/no/off, case-insensitive; unrecognized values fall back to the default (true) with a warnings[] entry." },
         "architecture": {
           "type": "string",
           "enum": ["generic", "llama70b", "llama8b", "qwen72b", "mistral7b"],

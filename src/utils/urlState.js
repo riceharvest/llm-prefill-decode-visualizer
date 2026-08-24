@@ -14,10 +14,19 @@ export function readParamNum(name, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+// Shared boolean table — must stay identical to parseBoolParam in
+// api/_handlers/compute.js (#765) so a share-link value and the equivalent
+// API query param always resolve to the same polarity.
+const TRUTHY_BOOLEANS = new Set(['1', 'true', 'yes', 'on']);
+const FALSY_BOOLEANS = new Set(['0', 'false', 'no', 'off']);
+
 export function readParamBool(name, fallback) {
   const v = readParam(name);
   if (v === null || v === '') return fallback;
-  return v === '1' || v === 'true';
+  const s = v.toLowerCase();
+  if (TRUTHY_BOOLEANS.has(s)) return true;
+  if (FALSY_BOOLEANS.has(s)) return false;
+  return fallback;
 }
 
 export function writeParams(updates) {
