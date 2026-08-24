@@ -396,7 +396,16 @@ export function aggregate(runs, keyFn, { outlierIqrs = DEFAULT_OUTLIER_IQRS, inc
     out[out.length - 1].prefill.label = ciLabel(out[out.length - 1].prefill);
     out[out.length - 1].decode.label = ciLabel(out[out.length - 1].decode);
   }
-  return out.sort((a, b) => b.decode.median - a.decode.median);
+  // Primary sort is decode median; ties break on the group key
+  // (hardwareKey|modelFamily) so ordering can't reshuffle when the upstream
+  // cache window refills and Map insertion order changes (#793).
+  return out.sort((a, b) =>
+    b.decode.median - a.decode.median || cmpStr(String(a.key), String(b.key)));
+}
+
+/** Deterministic lexicographic compare used for sort tiebreaks (#793). */
+export function cmpStr(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function round6(x) {

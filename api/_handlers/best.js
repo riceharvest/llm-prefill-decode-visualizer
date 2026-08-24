@@ -1,4 +1,4 @@
-import { aggregate } from '../_localmaxxing.js';
+import { aggregate, cmpStr } from '../_localmaxxing.js';
 import { resolveRuns } from '../_snapshots.js';
 import { sendJson } from '../_schema.js';
 import { singleTurn, cost } from '../_math.js';
@@ -103,11 +103,14 @@ export function rankGroups(groups, by, workload, limit) {
       };
     })
     .sort((a, b) =>
-      by === 'walltime' ? a._rawWalltime - b._rawWalltime
+      // Tied metric values fall back to a stable hardware|model key so the
+      // ranking can't reshuffle across upstream cache windows (#793).
+      (by === 'walltime' ? a._rawWalltime - b._rawWalltime
       : by === 'confidence' ? (b.confidence?.score ?? 0) - (a.confidence?.score ?? 0)
       : by === 'prefill' ? b.medianPrefillTokPerSec - a.medianPrefillTokPerSec
       : by === 'efficiency' ? (b.medianDecodeTokPerSec / Math.max(1, b.exampleModel ? 1 : 1)) - (a.medianDecodeTokPerSec / Math.max(1, a.exampleModel ? 1 : 1))
-      : b.medianDecodeTokPerSec - a.medianDecodeTokPerSec
+      : b.medianDecodeTokPerSec - a.medianDecodeTokPerSec)
+      || cmpStr(`${a.hardwareKey}|${a.modelFamily}`, `${b.hardwareKey}|${b.modelFamily}`)
     )
     .slice(0, limit)
     .map(({ _rawWalltime, ...entry }) => entry);
@@ -297,7 +300,9 @@ export async function bestBody(query = {}) {
             costUsdPerThousandRequests: c.costUsdPerThousandRequests
           };
         })
-        .sort((a, b) => (a.costUsdPerMillionTokens ?? Infinity) - (b.costUsdPerMillionTokens ?? Infinity))
+        .sort((a, b) =>
+          (a.costUsdPerMillionTokens ?? Infinity) - (b.costUsdPerMillionTokens ?? Infinity)
+          || cmpStr(`${a.hardwareKey}|${a.modelFamily}`, `${b.hardwareKey}|${b.modelFamily}`))
         .slice(0, limit);
     } else {
       ranked = rankGroups(groups, by, workload, limit);
@@ -305,7 +310,9 @@ export async function bestBody(query = {}) {
         // rankGroups doesn't know the confidence metric — sort here (#36).
         const confByKey = new Map(groups.map(g => [g.key, g.confidence ?? 0]));
         ranked = ranked.slice().sort((x, y) =>
-          (confByKey.get(`${y.hardwareKey}|${y.modelFamily}`)?.score ?? 0) - (confByKey.get(`${x.hardwareKey}|${x.modelFamily}`)?.score ?? 0));
+          (confByKey.get(`${y.hardwareKey}|${y.modelFamily}`)?.score ?? 0) - (confByKey.get(`${x.hardwareKey}|${x.modelFamily}`)?.score ?? 0)
+          // Integer confidence scores tie constantly — pin order deterministically (#793).
+          || cmpStr(`${x.hardwareKey}|${x.modelFamily}`, `${y.hardwareKey}|${y.modelFamily}`));
       }    }
     if (fitCheck) {
       // Attach the estimated fit verdict for each ranked group's best run.

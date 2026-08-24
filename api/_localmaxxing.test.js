@@ -125,3 +125,13 @@ test('groups sort by decode median after outlier exclusion', () => {
   assert.equal(second.key, 'rig-2');
   assert.equal(top.outliers[0].runId, 'r1-bad');
 });
+
+test('tied medians break deterministically on group key regardless of insertion order (#793)', () => {
+  const mk = (hw, decode) => [decode - 1, decode, decode + 1]
+    .map((d, i) => run(`${hw}-${i}`, 4000, d, { hardwareKey: hw }));
+  // Same three tied-median groups, inserted in opposite orders.
+  const asc = aggregate([...mk('aaa-rig', 100), ...mk('mmm-rig', 100), ...mk('zzz-rig', 100)], KEY);
+  const desc = aggregate([...mk('zzz-rig', 100), ...mk('mmm-rig', 100), ...mk('aaa-rig', 100)], KEY);
+  assert.deepEqual(asc.map(g => g.key), ['aaa-rig|llama-3-8b', 'mmm-rig|llama-3-8b', 'zzz-rig|llama-3-8b']);
+  assert.deepEqual(desc.map(g => g.key), ['aaa-rig|llama-3-8b', 'mmm-rig|llama-3-8b', 'zzz-rig|llama-3-8b']);
+});
