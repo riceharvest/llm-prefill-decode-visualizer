@@ -77,7 +77,7 @@ export const TABS = [
     id: 'diff',
     label: 'Diff',
     purpose: 'Diff two community benchmark runs (or two constraint sets via what-if mode) and read per-metric deltas plus a plain-language summary.',
-    surfaces: ['run A/B selectors', 'delta table', 'what-if constraint diffing'],
+    surfaces: ['run A/B free-text id inputs', 'per-metric delta rows with ratios', 'plain-language summary', 'deep links (?tab=diff&runA&runB) auto-execute on load'],
     endpoints: ['GET /api/diff?runA=<id>&runB=<id>', 'GET /api/diff?mode=whatif'],
   },
   {
