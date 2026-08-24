@@ -13,13 +13,14 @@ import { calculateAgenticTimeline } from './agenticMath.js';
 // ---------------------------------------------------------------------------
 
 // Build a URL that reproduces the exact config when opened: keeps every
-// current query param (preset, speeds, per-tab settings) and pins the tab,
-// while dropping transient state like autoplay.
+// current query param (preset, speeds, per-tab settings, autoplay) and pins
+// the tab. autoplay=1 is preserved rather than stripped so a received deep
+// link round-trips through every export — dropping it silently changed the
+// linked page's playback semantics (the sim no longer starts on load).
 export function buildDeepLink(tab) {
   if (typeof window === 'undefined') return '';
   const p = new URLSearchParams(window.location.search);
   if (tab) p.set('tab', tab);
-  p.delete('autoplay');
   const qs = p.toString();
   return `${window.location.origin}${window.location.pathname}${qs ? `?${qs}` : ''}`;
 }

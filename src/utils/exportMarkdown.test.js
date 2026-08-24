@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
   buildSingleTurnMarkdown,
-  buildAgenticMarkdown
+  buildAgenticMarkdown,
+  buildDeepLink
 } from './exportMarkdown.js';
 
 test('single-turn export substitutes formula values deterministically', () => {
@@ -98,4 +99,41 @@ test('agentic export without caching reports no caching savings', () => {
   assert.match(md, /Prefix caching \| OFF \(full re-prefill\)/);
   assert.match(md, /Caching savings \| — \(caching off\)/);
   assert.ok(!md.includes('cached ⚡'));
+});
+
+test('buildDeepLink preserves autoplay so received deep links round-trip (#535)', () => {
+  globalThis.window = {
+    location: {
+      origin: 'https://example.com',
+      pathname: '/',
+      search: '?tab=single&autoplay=1&preset=rtx4090_exl2&prompt=2048'
+    }
+  };
+  try {
+    // autoplay=1 must survive the export deep link — stripping it silently
+    // changed the linked page's playback semantics (sim no longer starts).
+    assert.equal(
+      buildDeepLink('agentic'),
+      'https://example.com/?tab=agentic&autoplay=1&preset=rtx4090_exl2&prompt=2048'
+    );
+  } finally {
+    delete globalThis.window;
+  }
+});
+
+test('buildDeepLink pins the tab and never invents autoplay', () => {
+  globalThis.window = {
+    location: {
+      origin: 'https://example.com',
+      pathname: '/',
+      search: '?preset=rtx3090_llamacpp'
+    }
+  };
+  try {
+    const href = buildDeepLink('compare');
+    assert.equal(href, 'https://example.com/?preset=rtx3090_llamacpp&tab=compare');
+    assert.ok(!href.includes('autoplay'));
+  } finally {
+    delete globalThis.window;
+  }
 });

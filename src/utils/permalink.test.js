@@ -71,11 +71,14 @@ test('slugifyTitle produces readable slugs', () => {
   assert.ok(slugifyTitle('x'.repeat(200)).length <= 80);
 });
 
-test('permalinkHref appends the title param and slug hash', () => {
+test('permalinkHref appends the title param with no dead hash fragment', () => {
   const loc = { origin: 'https://example.com', pathname: '/', search: '?tab=agentic&preset=rtx4090_exl2&prefill=3800&decode=105' };
   const href = permalinkHref(loc, 'Qwen3 32B on RTX 4090 24GB, 8K agentic loop');
   assert.ok(href.startsWith('https://example.com/?tab=agentic&preset=rtx4090_exl2&prefill=3800&decode=105&title='));
-  assert.ok(href.endsWith('#s/qwen3-32b-on-rtx-4090-24gb-8k-agentic-loop'));
+  // Issue #534: the app never resolves an element id under #s/, so share
+  // links must not carry a #s/<slug> fragment — same computation must yield
+  // byte-identical URLs for caching/dedup.
+  assert.ok(!href.includes('#'));
   // The existing state params survive untouched.
   assert.ok(href.includes('decode=105'));
 });
