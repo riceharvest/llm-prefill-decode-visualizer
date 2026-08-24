@@ -1,6 +1,6 @@
 import { aggregate, DEFAULT_OUTLIER_IQRS } from '../_localmaxxing.js';
 import { resolveRuns } from '../_snapshots.js';
-import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from '../_pagination.js';
+import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError, paginationScope } from '../_pagination.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { buildCaveats, rowCaveats } from '../_caveats.js';
 import { sendJson } from '../_schema.js';
@@ -89,13 +89,28 @@ export default async function handler(req, res) {
       members.get(k).push(run);
     }
 
-    const { limit, cursor } = parsePagination(q, { defaultLimit: 25, maxLimit: 200 });
+    // Cursor fingerprinting (#740 #755): bind cursors to the endpoint, every
+    // row-shaping filter (incl. groupBy + outlier policy) and the resolved
+    // snapshot id, so cross-endpoint / cross-filter / cross-refresh reuse is a
+    // 400 instead of silently wrong pages.
+    const scope = paginationScope('benchmarks', {
+      hardware, model, quant, hwClass,
+      engine: engineQ ?? '',
+      maxAgeDays: maxAgeDays ?? '',
+      contextBand: contextBand ?? '',
+      groupBy,
+      crossEngine: String(crossEngine),
+      outlierIqrs,
+      includeOutliers,
+      snapshot: snapshot?.id ?? ''
+    });
+    const { limit, cursor } = parsePagination(q, { defaultLimit: 25, maxLimit: 200, scope });
 
     // aggregate() sorts by median decode desc; enforce the full stable order
     const allGroups = aggregate(runs, keyFns[groupBy], { outlierIqrs, includeOutliers })
       .sort((a, b) => descNumAscStrCmp(GROUP_KEY(a), GROUP_KEY(b)));
 
-    const page = paginate({ items: allGroups, limit, cursor, keyOf: GROUP_KEY, cmp: descNumAscStrCmp });
+    const page = paginate({ items: allGroups, limit, cursor, keyOf: GROUP_KEY, cmp: descNumAscStrCmp, scope });
 
     const groups = page.items.map(g => ({
       ...g,
