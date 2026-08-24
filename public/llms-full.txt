@@ -340,7 +340,16 @@ Every result includes a `pricing` object: USD street-price estimate (`estimateUs
 5. Compare variants with one call: `POST /api/compute` with `{"batch": [{...}, {...}]}` (up to 50 parameter sets, per-item ok/error status).
 6. Citing an answer? Quote the `snapshot.id` from the data response (and re-pin with `?snapshot=<id>`) so the numbers are reproducible later.
 
-All endpoints return JSON, support CORS, need no auth, and set cache headers (10 min on data endpoints).
+All endpoints return JSON, support CORS, and need no auth. Cache policy varies per endpoint — see **Caching and revalidation** below.
+
+### Caching and revalidation
+
+- `/api/compute` (and `/v1/compute`): `Cache-Control: public, max-age=0, must-revalidate` — deterministic per params, but never edge-cached.
+- Data endpoints (`/api/localmaxxing`, `/api/benchmarks`, `/api/best`, `/api/runs`, `/api/agent/benchmarks.json`, `/api/agent/freshness.json`): `public, max-age=600`.
+- `/api/spec`, `/api/presets`: `public, max-age=3600`. Both emit a strong `ETag` (content hash of the document) plus `Last-Modified`, and answer `If-None-Match` / `If-Modified-Since` with `304` — send your cached validator back to revalidate cheaply instead of re-downloading (~150 KB for the spec).
+- `/api/health`: `no-store`.
+- Other dynamic endpoints currently ship no validators; don't rely on conditional requests there yet. Static files (`/llms.txt`, `/agents.json`) carry static-file validators honored by the CDN.
+- Content pinning is independent of HTTP caching: pass `?snapshot=<id>` from /api/snapshots to freeze the dataset any data endpoint serves.
 
 ### Rate limits
 

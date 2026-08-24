@@ -3,7 +3,7 @@ import { ERROR_CODES, problemType } from '../_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
-import { sendJson, SCHEMA_VERSION } from '../_schema.js';
+import { sendJson, conditionalGet, SCHEMA_VERSION } from '../_schema.js';
 
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
@@ -1441,5 +1441,9 @@ export default function handler(req, res) {
 
   // Every JSON response carries schema_version + X-Schema-Version
   // (see _schema.js / CHANGELOG-API.md). The spec itself is no exception.
+  // Validators (#615): the spec is ~150 KB cached for an hour — answer
+  // If-None-Match / If-Modified-Since with 304 so hourly schema-drift checks
+  // don't re-download the full document after every TTL expiry.
+  if (conditionalGet(req, res, spec, { cacheTtl: 3600 })) return;
   return sendJson(res, spec, { cacheTtl: 3600 });
 }
