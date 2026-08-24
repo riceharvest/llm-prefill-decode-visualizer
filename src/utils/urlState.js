@@ -7,6 +7,27 @@ export function readParam(name) {
   return p.get(name);
 }
 
+/** All occurrences of a param, in query order (#950). */
+export function paramValues(searchParams, name) {
+  return new URLSearchParams(searchParams).getAll(name);
+}
+
+/**
+ * Duplicate-key precedence for validated params (#950): the FIRST VALID
+ * occurrence wins. Validation runs BEFORE dedup, so a leading junk value no
+ * longer discards a valid duplicate — ?tab=bogus&tab=diff lands on 'diff'
+ * instead of silently falling back to the default. When every occurrence is
+ * invalid (or the param is absent) this returns null; callers apply their
+ * fallback. Note URLSearchParams.get() alone returns only the first
+ * occurrence, which is why the naive first-wins read broke here.
+ */
+export function firstValidParam(searchParams, name, isValid) {
+  for (const v of paramValues(searchParams, name)) {
+    if (isValid(v)) return v;
+  }
+  return null;
+}
+
 export function readParamNum(name, fallback) {
   const v = readParam(name);
   if (v === null || v === '') return fallback;

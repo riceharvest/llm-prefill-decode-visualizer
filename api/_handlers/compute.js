@@ -331,13 +331,36 @@ export default function handler(req, res) {
   }
   if (!enforceRateLimit(req, res)) return;
 
-  // Accept both GET (?model=singleTurn&promptTokens=...) and POST (JSON body)
-  const params = req.method === 'POST' ? (req.body || {}) : req.query;
-
+  // Accept both GET (?model=singleTurn&promptTokens=...) and POST (JSON body).
+  // POST bodies are only parsed into req.body when a known Content-Type is
+  // set (#948): JSON without the header used to degrade SILENTLY to the 200
+  // capability index because params resolved to {}. Fail loudly instead so
+  // agents get an actionable signal rather than a wrong-but-valid response.
   try {
+    if (req.method === 'POST' && hasUnparsedBody(req)) {
+      throw new ApiError(
+        'UNSUPPORTED_MEDIA_TYPE',
+        "POST body present but not parsed — set 'Content-Type: application/json' (form-urlencoded also accepted); without it no parameters reach the compute math."
+      );
+    }
+    const params = req.method === 'POST' ? (req.body || {}) : req.query;
     const { status, body } = computeBody(params);
     return json(res, body, status);
   } catch (err) {
     return sendProblemFromError(res, req, err);
   }
+}
+
+/**
+ * True when a POST carried a payload that was NOT parsed into req.body
+ * (#948): a non-empty body (Content-Length > 0 or chunked) whose parsed form
+ * never arrived. Form-urlencoded and application/json both arrive parsed;
+ * header-less JSON and multipart do not.
+ */
+export function hasUnparsedBody(req) {
+  const headers = req.headers || {};
+  const len = Number(headers['content-length'] || 0);
+  const chunked = String(headers['transfer-encoding'] || '').toLowerCase().includes('chunked');
+  if (!(len > 0) && !chunked) return false;
+  return req.body === undefined || req.body === null || typeof req.body !== 'object';
 }

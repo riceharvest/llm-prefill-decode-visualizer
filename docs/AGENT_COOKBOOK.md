@@ -359,13 +359,18 @@ Validation failure (400, plain JSON — legacy shape, not problem+json):
 
 ## `DELETE /api/watch`
 
-Remove a watch. Requires the one-time `secret` from creation.
+Remove a watch. Requires the one-time `secret` from creation. **Send the
+secret in the `X-Watch-Secret` header, not the query string** — URL-borne
+secrets leak into proxy/access logs and shareable history:
 
 ```bash
-curl -s -X DELETE "$BASE/api/watch?id=<watchId>&secret=<secret>"
+curl -s -X DELETE "$BASE/api/watch?id=<watchId>" -H "X-Watch-Secret: <secret>"
 ```
 
-Unknown id/secret pair → `404`.
+(The legacy `?id=<watchId>&secret=<secret>` query form still works, but the
+header is the documented form.)
+
+Unknown id/secret pair → `404`. Wrong secret → `403`.
 
 ## `GET /api/watch/rss.xml`
 
@@ -574,6 +579,7 @@ truth: `api/_errors.js`, mirrored into `/api/spec` under `x-error-codes`):
 | --- | --- | --- |
 | `INVALID_PARAMS` | 400 | Well-formed request with invalid/missing parameters. Fix the input; retry without backoff. |
 | `METHOD_NOT_ALLOWED` | 405 | HTTP method not supported on this path (e.g. POST to `/api/runs`). Check the `Allow` header; switch to GET. |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | POST body could not be parsed (missing/unsupported `Content-Type`) — e.g. JSON sent without the header to `/api/compute`. Re-send with `Content-Type: application/json`. |
 | `NOT_FOUND` | 404 | Referenced resource does not exist (e.g. unknown watch id). Do not retry unchanged. |
 | `RATE_LIMITED` | 429 | Too many requests. Honor `Retry-After` (seconds), then retry with backoff. |
 | `UPSTREAM_UNAVAILABLE` | 502 | Transient failure fetching community benchmark data. Safe to retry with backoff. |

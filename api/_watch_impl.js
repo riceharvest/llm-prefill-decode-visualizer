@@ -109,7 +109,7 @@ export default async function handler(req, res) {
       return res.status(204).end();
     }
 
-    return sendJson(res, { error: `Method ${req.method} not allowed. Use GET to list watches, POST to create one, DELETE ?id=&secret= to remove one.` }, { status: 405 });
+    return sendJson(res, { error: `Method ${req.method} not allowed. Use GET to list watches, POST to create one, DELETE ?id= with the X-Watch-Secret header (or ?secret=) to remove one.` }, { status: 405 });
   } catch (err) {
     return sendProblemFromError(res, req, err);
   }

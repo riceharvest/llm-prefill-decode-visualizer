@@ -30,6 +30,11 @@ export const ERROR_CODES = {
     title: 'Method not allowed',
     description: 'The HTTP method is not supported by this endpoint. Use GET as documented; do not retry with the same method.'
   },
+  UNSUPPORTED_MEDIA_TYPE: {
+    status: 415,
+    title: 'Unsupported media type',
+    description: 'The request carried a body that could not be parsed (missing or unsupported Content-Type). Re-send with Content-Type: application/json.'
+  },
   RATE_LIMITED: {
     status: 429,
     title: 'Rate limited',

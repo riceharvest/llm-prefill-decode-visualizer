@@ -52,7 +52,15 @@ export function parseOgParams(searchParams) {
     SCENARIO_PRESETS.find(s => s.id === 'chat');
   const promptTokens = clampSpeed(sp.get('prompt'), 10_000_000) ?? scenario.promptTokens;
 
-  return { preset, prefill, decode, scenarioLabel: scenario.label, promptTokens };
+  // Optional pixel-pinning tag (#947): URLs are served with immutable cache
+  // headers, yet a code-side layout bump re-renders every existing URL's
+  // pixels under the same address. Embedders who need stable art can append
+  // ?v=<tag> — it participates in the cache key so a pinned URL keeps
+  // serving its exact rendering even after such a bump. Absent ?v= leaves
+  // behavior and cache keys byte-identical to before.
+  const v = sp.get('v') || undefined;
+
+  return { preset, prefill, decode, scenarioLabel: scenario.label, promptTokens, v };
 }
 
 /** Stable cache key: sha256 over the normalized config (not raw params). */
@@ -63,7 +71,9 @@ export function cacheKeyFor(configObj) {
     dc: configObj.decode,
     sc: configObj.scenarioLabel,
     pt: configObj.promptTokens,
-    v: 1 // bump to invalidate every cached image after a layout change
+    // Explicit ?v= pins a specific rendering (#947); the implicit constant
+    // keeps keys identical to pre-#947 so existing cached entries stay valid.
+    v: configObj.v === undefined ? 1 : `pin:${configObj.v}`
   });
   return createHash('sha256').update(canonical).digest('hex');
 }
