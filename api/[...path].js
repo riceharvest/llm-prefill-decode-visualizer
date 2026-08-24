@@ -30,14 +30,14 @@ import { default as agentCompute } from './_handlers/agent_compute.js';
 import { default as agentFreshness } from './_handlers/agent_freshness.js';
 
 import { withMarkdownNegotiation } from './_markdown.js';
+import { sendJson } from './_schema.js';
 
 export const config = { runtime: 'nodejs' };
 
 function json(res, body, status = 200) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.end(JSON.stringify(body, null, 2));
+  // Shared sender so the router-level 404s/500s also carry X-Schema-Version
+  // + schema_version like every stamped endpoint (#963).
+  sendJson(res, body, { status });
 }
 
 /**

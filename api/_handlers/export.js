@@ -1,5 +1,6 @@
 import { getAllRuns } from '../_localmaxxing.js';
 import { csvEscape, toCsv, csvPreamble, buildJsonPayload, COLUMNS, DATASET_VERSION } from '../_export.js';
+import { SCHEMA_VERSION, applySchemaHeaders } from '../_schema.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -22,10 +23,15 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'public, max-age=600');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    applySchemaHeaders(res); // X-Schema-Version on both formats (#963)
 
     if (format === 'json') {
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(JSON.stringify(buildJsonPayload(runs, generatedAt), null, 2));
+      // schema_version = the API wire contract version stamped on every
+      // response body; legacy schemaVersion (= DATASET_VERSION) kept for
+      // existing export consumers. See #963.
+      const payload = { ...buildJsonPayload(runs, generatedAt), schema_version: SCHEMA_VERSION };
+      res.end(JSON.stringify(payload, null, 2));
       return;
     }
 
@@ -37,6 +43,7 @@ export default async function handler(req, res) {
     res.statusCode = 502;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Access-Control-Allow-Origin', '*');
+    applySchemaHeaders(res); // errors stay inside the version contract (#963)
     res.end(JSON.stringify({ error: String(err.message || err) }));
   }
 }

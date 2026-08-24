@@ -9,19 +9,20 @@
 import { isValidCalcId } from '../_calc_id.js';
 import { computeBody as computeResponse } from './compute.js';
 import { bestBody as bestResponse } from './best.js';
+import { sendJson, applySchemaHeaders } from '../_schema.js';
 
 export const config = { runtime: 'nodejs' };
 
 function json(res, body, status = 200) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, max-age=3600');
-  res.end(JSON.stringify(body, null, 2));
+  // Shared sender so replays and errors carry the same X-Schema-Version
+  // header + schema_version body field as every other endpoint (#963).
+  // Cache-Control parity preserved (public, max-age=3600 on all statuses).
+  sendJson(res, body, { status, cacheTtl: 3600 });
 }
 
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
+    applySchemaHeaders(res);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     return res.status(204).end();
