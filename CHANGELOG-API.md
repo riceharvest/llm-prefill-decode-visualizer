@@ -79,6 +79,20 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- `/api/spec` response-contract completeness: the previously undocumented
+  `POST /api/compute` batch operation is now spec'd (`operationId:
+  computeInferenceBatch`, request body + 200 response typed as a new
+  `BatchComputeResponse` schema — `{batch, count, okCount, errorCount,
+  results[{index, ok, result|code, error}]}`), `BestListEnvelope.rankedBy`
+  now enumerates every wire-supported rank mode (adds `efficiency` and
+  `confidence`), and the eight paths that return documented JSON/XML bodies
+  without declaring response content (`/api/vram`, `/api/sizing`,
+  `/api/health`, `/api/snapshots`, `/api/calc/{id}`, `/api/watch` GET/POST,
+  `/api/watch/rss.xml`, `/api/watch/dispatch`) now carry inline response
+  schemas so generated clients stop typing those bodies as `never`.
+  Documentation-only; no wire behavior changed.
+- Affected endpoints: `/api/spec`.
+
 - `/api/spec` now annotates every operation with a machine-readable
   `x-rate-limit` extension: `{ enforced, limit, windowSeconds, keying, scope }`
   plus, for metered endpoints, the `X-RateLimit-*` header names and the 429
