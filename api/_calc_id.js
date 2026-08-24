@@ -40,6 +40,23 @@ export function computeCalcId(endpoint, params) {
   return 'calc_' + createHash('sha256').update(canonical).digest('hex').slice(0, 12);
 }
 
+/**
+ * Batch envelope id (#942). Hash over every item's NORMALIZED params instead
+ * of the raw transport body: the previous raw-body hash String()-coerced the
+ * items array to "[object Object]" per entry, so any two equal-length batches
+ * collided on one calc_ id, and the GET-string vs POST-array spellings of the
+ * same batch minted different ids. Per-item ids (computeCalcId) are unchanged.
+ */
+export function computeBatchId(items) {
+  const normalized = items.map(item =>
+    item && typeof item === 'object' && !Array.isArray(item)
+      ? normalizeParams(item)
+      : { invalid: String(item) }
+  );
+  const canonical = JSON.stringify({ endpoint: 'compute', batch: true, params: normalized });
+  return 'calc_' + createHash('sha256').update(canonical).digest('hex').slice(0, 12);
+}
+
 export function isValidCalcId(id) {
   return typeof id === 'string' && /^calc_[0-9a-f]{12}$/.test(id);
 }

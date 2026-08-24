@@ -2,6 +2,7 @@ import { getAllRuns } from '../_localmaxxing.js';
 import { computeRunDiff, REF_PROMPT_TOKENS, REF_OUTPUT_TOKENS } from '../_diff.js';
 import { bestBody } from './best.js';
 import { computeWhatIfDiff } from '../_whatif.js';
+import { cacheControlFor } from '../_http_cache.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -9,7 +10,7 @@ function json(res, body, status = 200, cacheTtl = 300) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', `public, max-age=${cacheTtl}`);
+  res.setHeader('Cache-Control', cacheControlFor(status, cacheTtl));
   res.end(JSON.stringify(body, null, 2));
 }
 

@@ -4,6 +4,7 @@
 // Pure logic — no Vercel/req/res dependencies — so it can be unit-tested.
 
 import { normalizeModelId } from './_normalize.js';
+import { createHmac } from 'node:crypto';
 
 const STRING_LIMITS = { model: 160, hardware: 160, quant: 60 };
 export const MAX_WATCHES = 500;
@@ -368,6 +369,13 @@ export function _resetWatchStore() {
 export async function deliverWebhook(watch, runs, { fetchImpl = fetch, timeoutMs = WEBHOOK_TIMEOUT_MS } = {}) {
   if (!watch.webhookUrl) return { ok: false, skipped: true, error: 'no webhookUrl registered' };
   const body = JSON.stringify(webhookPayload(watch, runs));
+  // Signed delivery (#935): the static bearer in x-watch-secret proves nothing
+  // about body integrity or freshness (any receiver can replay it forever).
+  // The HMAC is computed over "<unix-seconds>.<body>" with the same secret, so
+  // receivers can verify both integrity and freshness without trusting the
+  // bearer. The legacy header stays for existing receivers.
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signature = createHmac('sha256', watch.secret).update(`${timestamp}.${body}`).digest('hex');
   try {
     const res = await fetchImpl(watch.webhookUrl, {
       method: 'POST',
@@ -376,6 +384,7 @@ export async function deliverWebhook(watch, runs, { fetchImpl = fetch, timeoutMs
         // HMAC-lite: lets receivers confirm the ping came from this deploy
         // (share the secret out-of-band; it was returned exactly once at signup).
         'x-watch-secret': watch.secret,
+        'x-watch-signature': `t=${timestamp},v1=${signature}`,
         'user-agent': 'llm-prefill-decode-visualizer-watch/1.0'
       },
       body,
