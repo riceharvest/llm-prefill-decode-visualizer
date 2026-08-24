@@ -310,7 +310,14 @@ export function computeBody(params = {}) {
   try {
     const out = computeOne(params, dryRun);
     if (out.status === 200 && out.body) {
-      out.body = { id: computeCalcId('compute', { model: params.model || params.m || '', ...params }), ...out.body };
+      // #1091: strip dry-run control flags before minting the fallback id.
+      // dry_run=true validates the exact request an agent will resend, so the
+      // echoed id must equal the real call's id; and dry_run=false is
+      // semantically identical to omitting the flag. Resolved-input models
+      // override this raw-params stamp via withId() (body spread wins);
+      // model=cost / model=flagged rely on it.
+      const { dry_run: _dryRunSnake, dryRun: _dryRunCamel, ...hashableParams } = params;
+      out.body = { id: computeCalcId('compute', { model: params.model || params.m || '', ...hashableParams }), ...out.body };
     }
     return out;
   } catch (err) {

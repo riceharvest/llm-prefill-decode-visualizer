@@ -62,9 +62,24 @@ export function parsePagination(q, { defaultLimit, maxLimit }) {
   let cursor = null;
   if (raw != null && raw !== '') {
     cursor = decodeCursor(String(raw));
-    if (cursor == null) throw new InvalidCursorError();
+    // #1094: envelope-valid cursors with a type-confused sort key (string,
+    // number, empty array, swapped types, object) decode "successfully" but
+    // can never match a row — the comparator degrades to NaN and the walk
+    // reports a silent empty has_more:false page instead of this documented
+    // 400. Every paginated endpoint sorts on the shared [number, string]
+    // total order (metric desc + unique id asc), so enforce exactly that.
+    if (cursor == null || !isValidSortKey(cursor)) throw new InvalidCursorError();
   }
   return { limit, cursor };
+}
+
+// The one key shape every paginated endpoint mints via its RUN_KEY/GROUP_KEY:
+// [finite metric number, unique id string].
+export function isValidSortKey(k) {
+  return Array.isArray(k)
+    && k.length === 2
+    && typeof k[0] === 'number' && Number.isFinite(k[0])
+    && typeof k[1] === 'string';
 }
 
 /**
