@@ -277,6 +277,22 @@ const CONTEXT_BANDS = {
 };
 
 /** Per-group freshness block (shared by BenchmarkGroup and BestResult). */
+/** One major-engine-release boundary warning (benchmarks/best freshness). */
+const MAJOR_RELEASE_WARNING = {
+  type: 'object',
+  description: "Fires when the newest measured run for an engine predates that engine's major-release boundary — the group's speeds may not reflect the current engine generation.",
+  required: ['engine', 'releaseVersion', 'releaseDate', 'newestRunAt', 'message'],
+  properties: {
+    engine: { type: 'string', description: 'Engine name (e.g. vLLM)' },
+    releaseVersion: { type: 'string', description: 'Version tag of the major release' },
+    releaseDate: { type: 'string', format: 'date', description: 'Release boundary date (runs older than this are flagged)' },
+    releaseNote: { type: ['string', 'null'], description: 'Short release note, when known' },
+    newestRunAt: { type: 'string', format: 'date-time', description: 'Timestamp of the newest run seen for this engine' },
+    message: { type: 'string', description: 'Human-readable explanation' }
+  },
+  additionalProperties: false
+};
+
 const GROUP_FRESHNESS = {
   type: 'object',
   description: 'Recency of the runs backing this group.',
@@ -286,7 +302,7 @@ const GROUP_FRESHNESS = {
     newestAgeDays: { type: ['integer', 'null'] },
     staleness: { type: ['string', 'null'], enum: ['fresh', 'aging', 'stale', 'unknown', null] },
     engineVersions: { type: 'array', items: { type: 'string' } },
-    majorReleaseWarnings: { type: 'array', items: { type: 'string' } }
+    majorReleaseWarnings: { type: 'array', items: { $ref: '#/components/schemas/MajorReleaseWarning' } }
   },
   additionalProperties: true
 };
@@ -370,7 +386,7 @@ const BEST_RESULT = {
     newestAgeDays: { type: ['integer', 'null'] },
     staleness: { type: ['string', 'null'], enum: ['fresh', 'aging', 'stale', 'unknown', null] },
     engineVersions: { type: 'array', items: { type: 'string' }, description: 'Engine builds seen in the group (mixed builds → treat deltas with caution)' },
-    majorReleaseWarnings: { type: 'array', items: { type: 'string' } },
+    majorReleaseWarnings: { type: 'array', items: { $ref: '#/components/schemas/MajorReleaseWarning' }, description: 'Major-release boundary warnings per engine (see MajorReleaseWarning)' },
     engines: { type: 'array', items: { type: 'string' }, description: '"engine version" tags seen in the group' },
     engineVersion: { type: ['string', 'null'], description: 'Engine build when the group is single-build; null/absent when mixed' },
     mixedEngines: { type: 'boolean', description: 'True when the group spans multiple engine builds' },
@@ -430,14 +446,20 @@ const COMPUTE_RESULT = {
     inputs: { type: 'object', description: 'Resolved input parameters (defaults filled in)', additionalProperties: true },
     warnings: {
       type: 'array',
-      description: 'Implausibility warnings (empty when inputs are plausible); never affect the math or HTTP status.',
+      description: "Implausibility warnings (empty when inputs are plausible); never affect the math or HTTP status. Physical-bounds warnings are {code, message} objects; engine-flag warnings on model=flagged are plain strings (e.g. \"Unknown flag id 'bogus' ignored\").",
       items: {
-        type: 'object',
-        properties: {
-          code: { type: 'string', enum: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor'] },
-          message: { type: 'string' }
-        },
-        additionalProperties: true
+        oneOf: [
+          {
+            type: 'object',
+            description: 'Physical-bounds warning with a machine-parseable code.',
+            properties: {
+              code: { type: 'string', enum: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor'] },
+              message: { type: 'string' }
+            },
+            additionalProperties: true
+          },
+          { type: 'string', description: 'Engine-flag handling note (model=flagged only), e.g. an unknown flag id being ignored.' }
+        ]
       }
     },
     ttftSeconds: { type: 'number', description: 'Time to first token (singleTurn/batched/agentic/kvCache/cost modes)' },
@@ -628,6 +650,7 @@ const SCHEMAS = {
     }
   },
   BestRunSummary: BEST_RUN_SUMMARY,
+  MajorReleaseWarning: MAJOR_RELEASE_WARNING,
   // Core resource schemas
   Run: RUN,
   BenchmarkGroup: BENCHMARK_GROUP,
