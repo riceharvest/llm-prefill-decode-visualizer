@@ -129,3 +129,39 @@ test('/api/calc rejects malformed ids and unknown endpoints', async () => {
   assert.equal(badEp.status, 400);
   assert.match(badEp.body.error, /Unknown endpoint/);
 });
+
+// #1056: any Number()-acceptable numeric spelling must collapse onto its
+// decimal value — the handlers execute it identically, so the calc id (and
+// /api/calc/<id> replay + dedup-by-id) must not distinguish spellings.
+test('#1056 Number()-spellings of the same value hash to one calc id', () => {
+  assert.deepEqual(
+    normalizeParams({ promptTokens: '+2048' }),
+    { promptTokens: 2048 }
+  );
+  assert.deepEqual(
+    normalizeParams({ promptTokens: '0x800' }),
+    { promptTokens: 2048 }
+  );
+  const decimal = computeCalcId('compute', { model: 'singleTurn', promptTokens: 2048 });
+  assert.equal(computeCalcId('compute', { model: 'singleTurn', promptTokens: '0x800' }), decimal);
+  assert.equal(computeCalcId('compute', { model: 'singleTurn', promptTokens: '+2048' }), decimal);
+});
+
+test('#1056 non-numeric and empty strings are not Number()-collapsed', () => {
+  // Empty / whitespace-only strings mean "default" and must stay strings
+  // (Number('') === 0 would wrongly mint the zero).
+  assert.deepEqual(normalizeParams({ model: '' }), {});
+  assert.deepEqual(normalizeParams({ q: '   ' }), { q: '   ' });
+  assert.deepEqual(normalizeParams({ model: 'qwen3.6-27b' }), { model: 'qwen3.6-27b' });
+  assert.deepEqual(normalizeParams({ engine: 'TRUE' }), { engine: 'TRUE' });
+  // Non-finite coercions stay verbatim.
+  assert.deepEqual(normalizeParams({ v: 'Infinity' }), { v: 'Infinity' });
+  assert.deepEqual(normalizeParams({ v: '12abc' }), { v: '12abc' });
+});
+
+test('#1056 batch items with different numeric spellings mint the same per-item id', () => {
+  const plain = computeResponse({ batch: [{ model: 'singleTurn', promptTokens: 2048 }] }).body.results[0];
+  const hex = computeResponse({ batch: [{ model: 'singleTurn', promptTokens: '0x800' }] }).body.results[0];
+  assert.equal(hex.ok, true);
+  assert.equal(hex.result.id, plain.result.id);
+});

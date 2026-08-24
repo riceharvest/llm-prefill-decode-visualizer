@@ -922,7 +922,24 @@ export default function handler(req, res) {
           operationId: 'createWatch',
           summary: 'Create a watch for a hardware+model combo (#109)',
           description: 'Body: { model?, hardware?, quant?, webhookUrl? } — at least one of model/hardware required; webhookUrl must be https. Returns 201 with watchId + secret (shown exactly once; required to DELETE, sent to your webhook as X-Watch-Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET /api/watch/rss.xml?model=&hardware=&quant=.',
-          requestBody: { required: true, content: { 'application/json': { example: { model: 'Qwen3 32B', hardware: 'RTX 4090', quant: 'q4_k_m', webhookUrl: 'https://example.com/hooks/llm-watch' } } } },
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    model: { type: 'string', maxLength: 160, description: 'Model name filter (e.g. "Qwen3 32B")' },
+                    hardware: { type: 'string', maxLength: 160, description: 'Hardware name filter (e.g. "RTX 4090")' },
+                    quant: { type: 'string', maxLength: 60, description: 'Quantization filter (e.g. "q4_k_m")' },
+                    webhookUrl: { type: 'string', format: 'uri', description: 'https URL to POST when new matching runs land' }
+                  },
+                  anyOf: [{ required: ['model'] }, { required: ['hardware'] }]
+                },
+                example: { model: 'Qwen3 32B', hardware: 'RTX 4090', quant: 'q4_k_m', webhookUrl: 'https://example.com/hooks/llm-watch' }
+              }
+            }
+          },
           responses: {
             '201': { description: 'Watch created (watchId, secret, rssUrl, matchingExistingRuns preview)' },
             '400': { description: 'Invalid body (code validation_failed with per-field errors)' },

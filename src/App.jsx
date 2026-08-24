@@ -17,7 +17,8 @@ import SloBudgetsPanel, { useSloBudgets } from './components/SloBudgetsPanel';
 import { HARDWARE_PRESETS } from './utils/presets';
 import { toLocalPreset, hardwareName } from './utils/localMaxxing';
 import {
-  describeConfig, permalinkHref, readPermalinkTitle, documentTitleFor
+  describeConfig, permalinkHref, readPermalinkTitle, documentTitleFor,
+  workloadTokensForTab
 } from './utils/permalink';
 import { readParam, writeParams } from './utils/urlState';
 import {
@@ -105,7 +106,7 @@ export default function App() {
       : undefined,
     modelId: selectedLmxRun?.model?.hfId || localMaxxingContext.modelId,
     quantization: selectedLmxRun?.engine?.quantization || localMaxxingContext.quantization,
-    promptTokens: Number(readParam('prompt')) || undefined,
+    promptTokens: workloadTokensForTab(activeTab, (name) => readParam(name)),
     activeTab
   }), [selectedPreset, selectedLmxRun, localMaxxingContext.modelId, localMaxxingContext.quantization, activeTab]);
 
