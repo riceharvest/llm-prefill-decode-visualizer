@@ -415,6 +415,24 @@ const BEST_RESULT = {
   additionalProperties: true
 };
 
+/** One element of the agentic mode's turns[] array (#486). */
+const AGENTIC_TURN = {
+  type: 'object',
+  description: 'One simulated turn of an agentic loop (model=agentic). totalPromptTokens is the full context this turn must ingest; newTokensPrefilled is what actually gets prefilled (only the delta when prefix caching is on).',
+  required: ['turn', 'totalPromptTokens', 'newTokensPrefilled', 'isCached', 'prefillSeconds', 'decodeSeconds', 'turnWalltimeSeconds', 'cumulativeWalltimeSeconds'],
+  properties: {
+    turn: { type: 'integer', description: '1-based turn number' },
+    totalPromptTokens: { type: 'integer', description: 'Full prompt size this turn (grows by decodeTokensPerTurn + toolOutputTokensPerTurn each turn)' },
+    newTokensPrefilled: { type: 'integer', description: 'Tokens actually prefilled this turn (toolOutputTokensPerTurn with prefix caching, totalPromptTokens without)' },
+    isCached: { type: 'boolean', description: 'True when prefix caching skipped re-prefilling history (turn > 1 with enablePrefixCaching)' },
+    prefillSeconds: { type: 'number' },
+    decodeSeconds: { type: 'number' },
+    turnWalltimeSeconds: { type: 'number' },
+    cumulativeWalltimeSeconds: { type: 'number' }
+  },
+  additionalProperties: true
+};
+
 /**
  * Inference-math result (GET /api/compute). Common core fields are typed;
  * each ?model= mode adds mode-specific extras (e.g. speedupVsVanilla for
@@ -434,7 +452,7 @@ const COMPUTE_RESULT = {
       items: {
         type: 'object',
         properties: {
-          code: { type: 'string', enum: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor'] },
+          code: { type: 'string', enum: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor', 'context_window_overflow'] },
           message: { type: 'string' }
         },
         additionalProperties: true
@@ -446,9 +464,68 @@ const COMPUTE_RESULT = {
     totalWalltimeSeconds: { type: 'number' },
     effectiveThroughputTokPerSec: { type: 'number' },
     prefillSharePct: { type: 'number' },
-    decodeSharePct: { type: 'number' }
+    decodeSharePct: { type: 'number' },
+    // ---- model=agentic mode extras (#486) --------------------------------
+    turns: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/AgenticTurn' },
+      description: 'model=agentic only: per-turn breakdown of the simulated loop.'
+    },
+    finalContextTokens: { type: 'integer', description: 'model=agentic only: context size (tokens) after the last turn\'s output.' },
+    walltimeWithoutCachingSeconds: { type: 'number', description: 'model=agentic only: total walltime the same loop would take without prefix caching.' },
+    cachingSavesSeconds: { type: 'number', description: 'model=agentic only: walltimeWithoutCachingSeconds − totalWalltimeSeconds.' },
+    cachingSavesPct: { type: 'number', description: 'model=agentic only: caching savings as a percentage of the no-caching walltime.' },
+    contextWindowTokens: { type: 'integer', description: 'model=agentic only, present when ?contextWindowTokens= was passed: echoed context-window budget.' },
+    firstContextOverflowTurn: { type: ['integer', 'null'], description: 'model=agentic only, present when ?contextWindowTokens= was passed: 1-based number of the first turn whose prompt+output exceeds the window (null when every turn fits). A context_window_overflow warning accompanies non-null values. Naming mirrors /api/vram.' },
+    slo: {
+      type: 'object',
+      description: 'model=agentic only, present when any ?slo*= budget was passed: SLO verdicts using the same evaluateMetric margin convention as the UI badges (marginPct = (budget − actual) ÷ budget × 100).',
+      additionalProperties: true,
+      properties: {
+        budgets: {
+          type: 'object',
+          description: 'Echoed budgets; null = that check was not requested.',
+          additionalProperties: true,
+          properties: {
+            ttftMs: { type: ['number', 'null'] },
+            tpotMs: { type: ['number', 'null'] },
+            walltimeSec: { type: ['number', 'null'], description: 'Per-turn walltime budget (?sloTurnWalltimeSec)' },
+            walltimeLoopSec: { type: ['number', 'null'], description: 'Whole-loop walltime budget (?sloWalltimeSec)' }
+          }
+        },
+        turns: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: true,
+            properties: {
+              turn: { type: 'integer' },
+              ttft: { $ref: '#/components/schemas/SloVerdict' },
+              tpot: { $ref: '#/components/schemas/SloVerdict' },
+              walltime: { $ref: '#/components/schemas/SloVerdict' }
+            }
+          }
+        },
+        failingTurns: { type: 'array', items: { type: 'integer' }, description: 'Turn numbers failing any enabled check.' },
+        worstTurn: { type: ['integer', 'null'], description: 'Turn with the most negative margin across its checks.' },
+        loop: { $ref: '#/components/schemas/SloVerdict' }
+      }
+    }
   },
   additionalProperties: true
+};
+
+/** One pass/marginPct SLO evaluation (#492); null members mean check disabled. */
+const SLO_VERDICT = {
+  type: ['object', 'null'],
+  description: 'One metric evaluated against its budget (null when that check is disabled). marginPct positive = headroom left under the budget.',
+  properties: {
+    value: { type: 'number' },
+    budget: { type: 'number' },
+    pass: { type: 'boolean' },
+    marginPct: { type: 'number' }
+  },
+  additionalProperties: false
 };
 
 /** GET /api/compute body: a ComputeResult plus the standard envelope stamp. */
@@ -633,6 +710,8 @@ const SCHEMAS = {
   BenchmarkGroup: BENCHMARK_GROUP,
   BestResult: BEST_RESULT,
   ComputeResult: COMPUTE_RESULT,
+  AgenticTurn: AGENTIC_TURN,
+  SloVerdict: SLO_VERDICT,
   // Envelope shapes
   ComputeResponse: COMPUTE_RESPONSE,
   RunListEnvelope: RUN_LIST_ENVELOPE,
@@ -675,6 +754,11 @@ export default function handler(req, res) {
             { name: 'decodeSpeed', in: 'query', schema: { type: 'number' }, description: 'tok/s' },
             { name: 'numTurns', in: 'query', schema: { type: 'integer' }, description: 'agentic' },
             { name: 'enablePrefixCaching', in: 'query', schema: { type: 'boolean' }, description: 'agentic' },
+            { name: 'contextWindowTokens', in: 'query', schema: { type: 'integer' }, description: 'agentic: context-window budget; response gains firstContextOverflowTurn (+context_window_overflow warning when exceeded)' },
+            { name: 'sloTtftSec', in: 'query', schema: { type: 'number' }, description: 'agentic: per-turn TTFT budget (seconds); adds slo verdict block' },
+            { name: 'sloTpotMs', in: 'query', schema: { type: 'number' }, description: 'agentic: per-token decode budget (ms); adds slo verdict block' },
+            { name: 'sloTurnWalltimeSec', in: 'query', schema: { type: 'number' }, description: 'agentic: per-turn walltime budget (seconds); adds slo verdict block' },
+            { name: 'sloWalltimeSec', in: 'query', schema: { type: 'number' }, description: 'agentic: whole-loop walltime budget (seconds); adds slo.loop verdict' },
             { name: 'batchSize', in: 'query', schema: { type: 'integer' }, description: 'batched/kvCache' },
             { name: 'draftTokens', in: 'query', schema: { type: 'integer' }, description: 'speculative: draft tokens per step' },
             { name: 'acceptanceRate', in: 'query', schema: { type: 'number' }, description: 'speculative: 0..1. Response includes breakevenAcceptanceRate — below it speculation is slower than vanilla decode.' },

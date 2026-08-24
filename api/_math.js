@@ -2,6 +2,10 @@
 // Mirrors the formulas the visualizer UI uses — single source of truth so
 // agents get exactly the numbers the page shows.
 
+// SLO evaluation reuses the exact helpers the UI badges use, so the API's
+// pass/marginPct verdicts are identical to what the page renders (#492).
+import { sanitizeBudgets, evaluateMetric, evaluateAgenticSlo } from '../src/utils/slo.js';
+
 // ---- Sanity bounds (issue #44: implausible-output warnings) ---------------
 // Decode is memory-bandwidth bound: one token per step means streaming every
 // model weight from VRAM each forward pass. Even a ~1 TB/s GPU running a
@@ -104,7 +108,10 @@ export function agentic(options = {}) {
   const {
     numTurns = 4, basePromptTokens = 1500, toolOutputTokensPerTurn = 800,
     decodeTokensPerTurn = 250, prefillSpeed = 3800, decodeSpeed = 105,
-    enablePrefixCaching = true
+    enablePrefixCaching = true,
+    // Optional extras (#492 #493) — absent/invalid values disable them.
+    contextWindowTokens = null, sloTtftSec = null, sloTpotMs = null,
+    sloTurnWalltimeSec = null, sloWalltimeSec = null
   } = options;
   const turns = [];
   let cumulativePromptTokens = basePromptTokens;
@@ -141,16 +148,76 @@ export function agentic(options = {}) {
     p += decodeTokensPerTurn + toolOutputTokensPerTurn;
   }
 
+  const warnings = sanityWarnings({ promptTokens: basePromptTokens, prefillSpeed, decodeSpeed });
+
+  // ---- Context-window overflow projection (#493) ---------------------------
+  // A turn "overflows" once the context it would have to ingest (its prompt
+  // plus the tokens it decodes this turn) exceeds the model's window — past
+  // that point the real request errors or truncates rather than just running
+  // slow. Naming mirrors /api/vram's firstContextOverflowTurn.
+  const ctxWindow = positiveFinite(contextWindowTokens);
+  let firstContextOverflowTurn = null;
+  if (ctxWindow !== null) {
+    for (const t of turns) {
+      if (t.totalPromptTokens + decodeTokensPerTurn > ctxWindow) {
+        firstContextOverflowTurn = t.turn;
+        break;
+      }
+    }
+    if (firstContextOverflowTurn !== null) {
+      warnings.push({
+        code: 'context_window_overflow',
+        message: `Loop exceeds the ${ctxWindow}-token context window at turn ${firstContextOverflowTurn} (finalContextTokens ${round(turns[turns.length - 1].totalPromptTokens + decodeTokensPerTurn)}). Past that turn the request errors or truncates instead of merely running slow — shorten the loop or the history.`
+      });
+    }
+  }
+
+  // ---- SLO verdicts (#492) --------------------------------------------------
+  // Same evaluateMetric margin convention as the on-page badges:
+  // marginPct = (budget − actual) ÷ budget × 100. Budget params are seconds
+  // except sloTpotMs; missing/non-positive values disable that check.
+  const budgets = sanitizeBudgets({
+    ttftMs: sloTtftSec !== null ? Number(sloTtftSec) * 1000 : null,
+    tpotMs: sloTpotMs,
+    walltimeSec: sloTurnWalltimeSec
+  });
+  const loopBudgetSec = positiveFinite(sloWalltimeSec);
+  let slo = null;
+  if (budgets.ttftMs || budgets.tpotMs || budgets.walltimeSec || loopBudgetSec) {
+    const evald = evaluateAgenticSlo(turns.map(t => ({
+      turn: t.turn,
+      prefillTime: t.prefillSeconds,
+      decodeTime: t.decodeSeconds,
+      decodeTokens: decodeTokensPerTurn,
+      turnWalltime: t.turnWalltimeSeconds
+    })), budgets);
+    slo = {
+      budgets: { ttftMs: budgets.ttftMs, tpotMs: budgets.tpotMs, walltimeSec: budgets.walltimeSec, walltimeLoopSec: loopBudgetSec },
+      turns: evald.turns,
+      failingTurns: evald.failingTurns,
+      worstTurn: evald.worstTurn
+    };
+    if (loopBudgetSec !== null) slo.loop = evaluateMetric(cumulativeWalltime, loopBudgetSec);
+  }
+
   return {
     inputs: options,
-    warnings: sanityWarnings({ promptTokens: basePromptTokens, prefillSpeed, decodeSpeed }),
+    warnings,
     turns,
     finalContextTokens: turns.length ? turns[turns.length - 1].totalPromptTokens + decodeTokensPerTurn : 0,
     totalWalltimeSeconds: round(cumulativeWalltime),
     walltimeWithoutCachingSeconds: round(noCacheTotal),
     cachingSavesSeconds: round(noCacheTotal - cumulativeWalltime),
-    cachingSavesPct: round(noCacheTotal > 0 ? ((noCacheTotal - cumulativeWalltime) / noCacheTotal) * 100 : 0)
+    cachingSavesPct: round(noCacheTotal > 0 ? ((noCacheTotal - cumulativeWalltime) / noCacheTotal) * 100 : 0),
+    ...(ctxWindow !== null ? { contextWindowTokens: ctxWindow, firstContextOverflowTurn } : {}),
+    ...(slo ? { slo } : {})
   };
+}
+
+/** Positive finite number or null — used to gate the optional #492/#493 inputs. */
+function positiveFinite(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 export function cost({
