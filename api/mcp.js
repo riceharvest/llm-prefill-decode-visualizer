@@ -151,7 +151,11 @@ function toolToRequest(name, args = {}) {
 async function callTool(name, args) {
   const route = toolToRequest(name, args);
   if (!route) {
-    return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
+    // Unknown tool names are a protocol-level invalid-params error, not a
+    // CallToolResult — matches how unknown RPC methods get -32601 (#1112).
+    const err = new Error(`Unknown tool: ${name}`);
+    err.jsonRpcCode = -32602;
+    throw err;
   }
   // In-process dispatch would import handlers directly; fetch keeps one code
   // path and works identically on dev and prod. Vercel functions can fetch
@@ -159,10 +163,30 @@ async function callTool(name, args) {
   const url = `${BASE}${route.path}?${route.query.toString()}`;
   const upstream = await fetch(url, { headers: { accept: 'application/json' } });
   const body = await upstream.text();
-  return {
+  const result = {
     content: [{ type: 'text', text: body }],
     isError: !upstream.ok
   };
+  if (!upstream.ok) {
+    // Preserve the REST error contract across the internal proxy (#1112):
+    // problem+json members and retry timing travel as structured result
+    // fields instead of being buried in the flattened text blob. The text
+    // content is unchanged so existing clients keep working.
+    let problem = null;
+    try { problem = JSON.parse(body); } catch { /* prose error body */ }
+    if (problem && typeof problem === 'object' && !Array.isArray(problem)) {
+      if (typeof problem.code === 'string') result.code = problem.code;
+      if (typeof problem.title === 'string') result.title = problem.title;
+      if (typeof problem.detail === 'string') result.detail = problem.detail;
+    }
+    result.status = upstream.status;
+    const retryAfterRaw = upstream.headers?.get?.('retry-after');
+    if (retryAfterRaw != null && retryAfterRaw !== '') {
+      const retryAfter = Number(retryAfterRaw);
+      if (Number.isFinite(retryAfter) && retryAfter >= 0) result.retryAfterSeconds = retryAfter;
+    }
+  }
+  return result;
 }
 
 function json(res, body, status = 200) {
@@ -192,7 +216,13 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== 'POST') {
-    return json(res, { error: 'Method not allowed' }, 405);
+    // Wrap the 405 in the JSON-RPC envelope so pure JSON-RPC clients can
+    // correlate it (#1112). -32600 Invalid Request is the closest standard code.
+    return json(res, {
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32600, message: `Method not allowed: ${req.method}. Use POST for JSON-RPC.` }
+    }, 405);
   }
 
   let rpc;
@@ -234,6 +264,9 @@ export default async function handler(req, res) {
         const result = await callTool(name, args);
         return reply(result);
       } catch (err) {
+        if (err && err.jsonRpcCode) {
+          return json(res, { jsonrpc: '2.0', id: id ?? null, error: { code: err.jsonRpcCode, message: err.message } }, 400);
+        }
         return reply({ content: [{ type: 'text', text: `Tool error: ${err.message}` }], isError: true });
       }
     }

@@ -93,7 +93,7 @@ test('tools/call marks upstream failures with isError:true but same envelope', a
   assert.equal(result.isError, true);
 });
 
-test('unknown tool still gets a valid error envelope', async () => {
+test('unknown tool is a JSON-RPC -32602 invalid-params error (#1112)', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = mockUpstreamFetch(true); // must never be reached
   try {
@@ -101,13 +101,72 @@ test('unknown tool still gets a valid error envelope', async () => {
       jsonrpc: '2.0', id: 3, method: 'tools/call',
       params: { name: 'definitely_not_a_tool', arguments: {} }
     });
-    assert.equal(status, 200);
-    const result = assertToolEnvelope(body, 3);
-    assert.equal(result.isError, true);
-    assert.match(result.content[0].text, /Unknown tool/);
+    // Same dialect as unknown RPC methods (-32601), instead of a third
+    // convention: JSON-RPC error object with the echoed id.
+    assert.equal(status, 400);
+    assert.equal(body.jsonrpc, '2.0');
+    assert.equal(body.id, 3);
+    assert.equal(body.error.code, -32602);
+    assert.match(body.error.message, /Unknown tool/);
+    assert.equal(body.result, undefined);
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('upstream failures carry structured problem members + retry timing (#1112)', async t => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const PROBLEM = {
+    type: 'https://llm-prefill-decode-visualizer.vercel.app/problems/rate_limited',
+    title: 'Rate limited', status: 429, detail: 'Budget exhausted',
+    code: 'RATE_LIMITED'
+  };
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 429,
+    headers: { get: k => String(k).toLowerCase() === 'retry-after' ? '30' : null },
+    text: async () => JSON.stringify(PROBLEM)
+  });
+
+  const { status, body } = await rpc({
+    jsonrpc: '2.0', id: 'rate-1', method: 'tools/call',
+    params: { name: 'benchmarks', arguments: {} }
+  });
+
+  assert.equal(status, 200, 'tool-level failures stay HTTP 200 under JSON-RPC');
+  const result = assertToolEnvelope(body, 'rate-1');
+  assert.equal(result.isError, true);
+  // Structured members survive the internal proxy instead of being flattened
+  // into content[0].text only — agents can branch on `code` and honor the
+  // Retry-After signal that REST exposes as a header.
+  assert.equal(result.code, 'RATE_LIMITED');
+  assert.equal(result.title, 'Rate limited');
+  assert.equal(result.detail, 'Budget exhausted');
+  assert.equal(result.status, 429);
+  assert.equal(result.retryAfterSeconds, 30);
+});
+
+test('non-JSON upstream failure bodies still get status but no bogus members (#1112)', async t => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 502,
+    headers: { get: () => null },
+    text: async () => 'upstream exploded'
+  });
+
+  const { body } = await rpc({
+    jsonrpc: '2.0', id: 21, method: 'tools/call',
+    params: { name: 'hardware_presets', arguments: {} }
+  });
+  const result = assertToolEnvelope(body, 21);
+  assert.equal(result.isError, true);
+  assert.equal(result.status, 502);
+  assert.equal(result.code, undefined);
+  assert.equal(result.retryAfterSeconds, undefined);
+  assert.equal(result.content[0].text, 'upstream exploded');
 });
 
 test('tools/list result carries a well-formed tool array', async () => {
@@ -142,4 +201,20 @@ test('JSON-RPC errors keep the envelope: code + message, echoed id', async () =>
   assert.equal(body.id, 13);
   assert.equal(typeof body.error.code, 'number');
   assert.equal(typeof body.error.message, 'string');
+});
+
+test('405 wrong-method responses speak the JSON-RPC envelope too (#1112)', async () => {
+  let captured;
+  const res = {
+    statusCode: 0,
+    headers: {},
+    setHeader(k, v) { this.headers[k] = v; },
+    end(body) { captured = { status: this.statusCode, body }; }
+  };
+  await mcp({ method: 'PUT', url: '/api/mcp', headers: {} }, res);
+  assert.equal(captured.status, 405);
+  const body = JSON.parse(captured.body);
+  assert.equal(body.jsonrpc, '2.0');
+  assert.equal(body.error.code, -32600);
+  assert.match(body.error.message, /Method not allowed/);
 });

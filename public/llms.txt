@@ -206,6 +206,8 @@ Every `/api/*` response carries rate-limit headers so agents can self-throttle:
 
 Budget: 120 requests/min per client IP. Note this is enforced best-effort **per serverless instance**: Vercel functions share no memory across invocations, so concurrent warm instances each allow 120/min and cold starts reset counters — treat the limit as a floor on good behavior, not a hard global cap.
 
+Concurrency vs budget (HTTP/2): the transport layer advertises up to **160 concurrent streams** per connection (`MAX_CONCURRENT_STREAMS` in the server's h2 SETTINGS frame), but that is wire capacity only — the application budget above still binds first. A full-width parallel burst exhausts its 120 req/min window mid-flight and eats RATE_LIMITED responses. Size fan-out from `X-RateLimit-Remaining`, not from stream count; whichever limit is smaller for your remaining window is the one that binds.
+
 Every JSON response body also carries the same numbers as a machine-readable `rate_limit` object (`limit`, `remaining`, `reset`, `window_seconds`, `policy`) for clients that only parse bodies. See CHANGELOG-API.md and api/_ratelimit.js for the full contract.
 
 ### Schema versioning
