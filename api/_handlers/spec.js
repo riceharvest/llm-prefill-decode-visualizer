@@ -668,25 +668,34 @@ export default function handler(req, res) {
           summary: 'Run inference math (TTFT, TPOT, walltime, VRAM)',
           description: 'Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts POST with a JSON body, or a batch of up to 50 parameter sets via POST {"batch": [...]} / GET ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via /api/calc/{id}.',
           parameters: [
-            { name: 'model', in: 'query', schema: { type: 'string', enum: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost'] } },
-            { name: 'promptTokens', in: 'query', schema: { type: 'number' }, description: 'singleTurn/batched/agentic/cost' },
-            { name: 'outputTokens', in: 'query', schema: { type: 'number' }, description: 'singleTurn/batched/agentic/cost' },
+            { name: 'model', in: 'query', schema: { type: 'string', enum: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost'] }, description: "alias: m" },
+            { name: 'promptTokens', in: 'query', schema: { type: 'number' }, description: 'singleTurn/batched/flagged/cost' },
+            { name: 'outputTokens', in: 'query', schema: { type: 'number' }, description: 'singleTurn/batched/flagged/cost' },
             { name: 'prefillSpeed', in: 'query', schema: { type: 'number' }, description: 'tok/s' },
             { name: 'decodeSpeed', in: 'query', schema: { type: 'number' }, description: 'tok/s' },
-            { name: 'numTurns', in: 'query', schema: { type: 'integer' }, description: 'agentic' },
+            { name: 'numTurns', in: 'query', schema: { type: 'integer' }, description: 'agentic (clamped 1..50)' },
             { name: 'enablePrefixCaching', in: 'query', schema: { type: 'boolean' }, description: 'agentic' },
+            { name: 'basePromptTokens', in: 'query', schema: { type: 'number' }, description: 'agentic: starting prompt tokens (default 1500) — the agentic model does NOT read promptTokens/outputTokens' },
+            { name: 'toolOutputTokensPerTurn', in: 'query', schema: { type: 'number' }, description: 'agentic: tool output appended to context each turn (default 800)' },
+            { name: 'decodeTokensPerTurn', in: 'query', schema: { type: 'number' }, description: 'agentic: tokens decoded per turn (default 250)' },
+            { name: 'draftCostFraction', in: 'query', schema: { type: 'number' }, description: 'speculative: fraction of decode bandwidth spent verifying drafts, 0..1 (default 0.2); sets breakevenAcceptanceRate' },
             { name: 'batchSize', in: 'query', schema: { type: 'integer' }, description: 'batched/kvCache' },
             { name: 'draftTokens', in: 'query', schema: { type: 'integer' }, description: 'speculative: draft tokens per step' },
             { name: 'acceptanceRate', in: 'query', schema: { type: 'number' }, description: 'speculative: 0..1. Response includes breakevenAcceptanceRate — below it speculation is slower than vanilla decode.' },
+            { name: 'baseDecodeSpeed', in: 'query', schema: { type: 'number' }, description: 'speculative: vanilla decode speed the draft loop builds on (alias of decodeSpeed)' },
+            { name: 'decodeDecayExponent', in: 'query', schema: { type: 'number' }, description: 'batched: per-user decode decay, decode × batchSize^-x (default 0.25)' },
             { name: 'hardwarePriceUsd', in: 'query', schema: { type: 'number' }, description: 'cost: purchase price, amortized over amortizationMonths (default 36)' },
             { name: 'electricityRatePerKwh', in: 'query', schema: { type: 'number' }, description: 'cost: $/kWh, default 0.15' },
             { name: 'powerDrawWatts', in: 'query', schema: { type: 'number' }, description: 'cost: whole-rig wall power under load' },
             { name: 'amortizationMonths', in: 'query', schema: { type: 'number' }, description: 'cost: months to spread hardware price over, default 36' },
             { name: 'architecture', in: 'query', schema: { type: 'string', enum: ['llama70b', 'llama8b', 'qwen72b', 'mistral7b'] }, description: 'kvCache preset arch' },
+            { name: 'numLayers', in: 'query', schema: { type: 'number' }, description: 'kvCache explicit geometry override (fallback chain: explicit → architecture preset → 80)' },
+            { name: 'kvHeads', in: 'query', schema: { type: 'number' }, description: 'kvCache explicit geometry override (default via preset, else 8)' },
+            { name: 'headDim', in: 'query', schema: { type: 'number' }, description: 'kvCache explicit geometry override (default via preset, else 128)' },
             { name: 'contextLength', in: 'query', schema: { type: 'integer' }, description: 'kvCache' },
             { name: 'precisionBytes', in: 'query', schema: { type: 'number', enum: [2, 1, 0.5] }, description: 'kvCache: FP16/FP8/INT4' },
             { name: 'flags', in: 'query', schema: { type: 'string' }, description: 'flagged: comma-separated engine flag ids (flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3). Documented heuristic deltas; response carries a per-flag audit trail.' },
-            { name: 'dry_run', in: 'query', schema: { type: 'boolean' }, description: 'Validate + echo parsed params (defaults filled in) without executing any math. Returns { dry_run: true, model, inputs, id?, note }; the id matches the real call. Also applies per-item inside a batch via "dry_run": true in the POST body.' }
+            { name: 'dry_run', in: 'query', schema: { type: 'boolean' }, description: 'Validate + echo parsed params (defaults filled in) without executing any math (alias: dryRun). Returns { dry_run: true, model, inputs, id?, note }; the id matches the real call. Also applies per-item inside a batch via "dry_run": true in the POST body.' }
           ],
           responses: {
             '200': {
@@ -731,6 +740,16 @@ export default function handler(req, res) {
             { name: 'tokensPerTurn', in: 'query', schema: { type: 'number' }, description: 'tokens added to context per turn' }
           ],
           responses: { '200': { description: 'Resolved model + weights/kv/total VRAM breakdown' }, '400': { description: 'Missing hfId' }, '404': { description: 'Unknown hfId on huggingface.co' }, '422': { description: 'config.json lacks required architecture fields' } }
+        },
+        post: {
+          operationId: 'estimateVramFromBody',
+          summary: 'Combined model + KV-cache + context VRAM estimate (JSON body)',
+          description: 'Identical estimate to GET /api/vram — same parameters, same response — with every query parameter accepted as a JSON request body instead (nicer for long hfIds and programmatic clients).',
+          requestBody: {
+            required: true,
+            content: { 'application/json': { example: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', context: 65536, quant: 'q4_k_m', vramGb: 24 } } }
+          },
+          responses: { '200': { description: 'Resolved model + weights/kv/total VRAM breakdown' }, '400': { description: 'Missing hfId' }, '404': { description: 'Unknown hfId on huggingface.co' }, '422': { description: 'config.json lacks required architecture fields' } }
         }
       },
       '/api/calc/{id}': {
@@ -743,6 +762,19 @@ export default function handler(req, res) {
             { name: 'endpoint', in: 'query', schema: { type: 'string', enum: ['compute', 'best'], default: 'compute' } },
             { name: '<original request parameters>', in: 'query', description: 'The same model + params (or best filters) that minted the id. Defaults may be omitted — they resolve identically before hashing.' }
           ],
+          responses: {
+            '200': { description: 'Recomputed result, stamped verified:true and carrying the id' },
+            '400': { description: 'Malformed id, missing replay parameters, or id/parameter mismatch (body.expected carries the correct id)' }
+          }
+        },
+        post: {
+          operationId: 'replayCalculationFromBody',
+          summary: 'Replay a computation or recommendation (JSON body)',
+          description: 'Identical replay to GET /api/calc/{id} — same id verification and response — with the original request parameters accepted as a JSON request body merged over any query parameters (avoids very long query strings).',
+          requestBody: {
+            required: false,
+            content: { 'application/json': { example: { model: 'singleTurn', promptTokens: 4096, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 } } }
+          },
           responses: {
             '200': { description: 'Recomputed result, stamped verified:true and carrying the id' },
             '400': { description: 'Malformed id, missing replay parameters, or id/parameter mismatch (body.expected carries the correct id)' }
@@ -843,6 +875,21 @@ export default function handler(req, res) {
               }
             },
             '429': { $ref: '#/components/responses/RateLimited' }
+          }
+        },
+        post: {
+          operationId: 'submitBenchmarkRun',
+          summary: 'Submit a community benchmark run for review',
+          description: 'Validates required fields (model, quant, hardware, hwClass, prefillTokPerSec, decodeTokPerSec; optional engine, engineVersion, contextLength, token counts, provenance, submitter), applies per-hardware-class sanity bounds and near-duplicate detection against the existing dataset. Accepted runs are QUEUED for manual review — they appear in GET /api/localmaxxing only after approval. Advisory unitAudit/warnings are returned when speeds look unit-inconsistent.',
+          requestBody: {
+            required: true,
+            content: { 'application/json': { example: { model: 'unsloth/Qwen3.6-27B-MTP-GGUF', quant: 'q4_k_m', hardware: 'RTX 4090 24GB', hwClass: 'discrete_gpu', prefillTokPerSec: 3820, decodeTokPerSec: 108, engine: 'llama.cpp', engineVersion: 'b6123', contextLength: 8192 } } }
+          },
+          responses: {
+            '202': { description: 'Run accepted and queued ({status:"queued", reviewStatus, submissionId}; optional unitAudit + warnings)', content: { 'application/json': { example: { status: 'queued', reviewStatus: 'pending', submissionId: 'sub_9f3ce2a17b84' } } } },
+            '400': { description: 'Validation failed (error validation_failed with per-field errors[{field,code,message}])' },
+            '409': { description: 'Near-identical run already exists (error duplicate_run; body.existingRun carries the matching run)' },
+            '503': { description: 'Submission queue unavailable (error queue_unavailable)' }
           }
         }
       },
@@ -1278,11 +1325,34 @@ export default function handler(req, res) {
           fits: { vramGb: 24, fits: true, maxContextTokens: 155648 },
           projection: null
         }
+      },
+      post: {
+        request: `curl -s -X POST "$BASE/api/vram" -H 'Content-Type: application/json' -d '{"hfId":"meta-llama/Llama-3.1-8B-Instruct","context":65536,"quant":"q4_k_m","vramGb":24}'`,
+        requestBody: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', context: 65536, quant: 'q4_k_m', vramGb: 24 },
+        response: {
+          inputs: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', context: 65536, quant: 'q4_k_m', resolvedQuant: 'q4_k_m', quantAssumed: false, batchSize: 1, kvPrecisionBytes: 2, vramGb: 24 },
+          model: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', family: 'llama', resolutionSource: 'builtin-table', architecture: { numLayers: 32, kvHeads: 8, headDim: 128 }, paramsTotal: 8030261312, paramsB: 8.03, notes: [] },
+          weights: { gb: 4.49, source: '8,030,261,312 params × 0.56 bpw', sourceKind: 'params×quant', quant: 'q4_k_m', bytesPerParam: 0.56 },
+          kvCache: { bytesPerToken: 131072, kbPerToken: 128, mbPerToken: 0.125, gbAtContext: 8, formula: '2 × 32 layers × 8 KV heads × 128 dim × 2B × 65,536 ctx × 1 batch' },
+          total: { gb: 12.49, breakdown: { weightsGb: 4.49, kvCacheGb: 8 } },
+          contextWindow: 131072,
+          fits: { vramGb: 24, fits: true, maxContextTokens: 155648 },
+          projection: null
+        }
       }
     },
     '/api/calc/{id}': {
       get: {
         request: 'curl -s "$BASE/api/calc/calc_9536a8f7358a?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105"',
+        response: {
+          id: 'calc_9536a8f7358a', verified: true,
+          inputs: { promptTokens: 4096, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 },
+          warnings: [], ttftSeconds: 1.077895, tpotMs: 9.52381, decodeSeconds: 4.87619, totalWalltimeSeconds: 5.954085, effectiveThroughputTokPerSec: 773.922414, prefillSharePct: 18.103448, decodeSharePct: 81.896552, schema_version: '1'
+        }
+      },
+      post: {
+        request: `curl -s -X POST "$BASE/api/calc/calc_9536a8f7358a" -H 'Content-Type: application/json' -d '{"model":"singleTurn","promptTokens":4096,"outputTokens":512,"prefillSpeed":3800,"decodeSpeed":105}'`,
+        requestBody: { model: 'singleTurn', promptTokens: 4096, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 },
         response: {
           id: 'calc_9536a8f7358a', verified: true,
           inputs: { promptTokens: 4096, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 },

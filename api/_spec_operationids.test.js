@@ -45,9 +45,12 @@ function operationIdMap(spec) {
 const LOCKED_OPERATION_IDS = {
   'GET /api/compute': 'computeInference',
   'GET /api/vram': 'estimateVram',
+  'POST /api/vram': 'estimateVramFromBody',
   'GET /api/calc/{id}': 'replayCalculation',
+  'POST /api/calc/{id}': 'replayCalculationFromBody',
   'GET /api/presets': 'listPresets',
   'GET /api/localmaxxing': 'listBenchmarkRuns',
+  'POST /api/localmaxxing': 'submitBenchmarkRun',
   'GET /api/runs': 'dumpRunIndex',
   'GET /api/watch': 'listWatches',
   'POST /api/watch': 'createWatch',

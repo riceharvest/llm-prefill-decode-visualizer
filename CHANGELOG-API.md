@@ -79,6 +79,20 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- `/api/spec` completeness fixes (#744 #745): the GET /api/compute parameter
+  inventory now documents every input the handler actually reads —
+  `baseDecodeSpeed` + `draftCostFraction` (speculative), `decodeDecayExponent`
+  (batched), `basePromptTokens`/`toolOutputTokensPerTurn`/`decodeTokensPerTurn`
+  (agentic; `promptTokens`/`outputTokens` are no longer mislabeled as agentic
+  inputs) and the kvCache geometry overrides `numLayers`/`kvHeads`/`headDim`
+  (plus `?m=` and `dryRun` alias notes). Three POST operations that were
+  implemented server-side but absent from the spec are now declared:
+  `POST /api/localmaxxing` (run submission, 202/400/409/503 contract),
+  `POST /api/vram` (JSON-body estimate, operationId `estimateVramFromBody`)
+  and `POST /api/calc/{id}` (JSON-body replay, operationId
+  `replayCalculationFromBody`). Spec/docs only — zero wire changes.
+- Affected endpoints: `/api/spec` (documented surface of `/api/compute`,
+  `/api/localmaxxing`, `/api/vram`, `/api/calc/{id}`).
 - `/api/spec` now annotates every operation with a machine-readable
   `x-rate-limit` extension: `{ enforced, limit, windowSeconds, keying, scope }`
   plus, for metered endpoints, the `X-RateLimit-*` header names and the 429
