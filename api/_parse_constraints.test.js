@@ -97,3 +97,64 @@ test('sizing query maps only mappable non-null constraints', () => {
   assert.equal(qs.get('maxVramGb'), null, 'budgetUsdMax has no sizing param');
   assert.equal(qs.get('contextLength'), null);
 });
+
+// --- #1061: locale-grouped numbers -----------------------------------------
+
+test('unicode digit-grouping separators parse correctly (#1061)', () => {
+  const nbsp = String.fromCharCode(0xA0);
+  const narrow = String.fromCharCode(0x202F);
+  const a = parseConstraints(`budget of $70${nbsp}000 dollars`);
+  assert.equal(a.constraints.budgetUsdMax, 70000, `NBSP grouping got ${a.constraints.budgetUsdMax}`);
+  const b = parseConstraints(`budget of $70${narrow}000 dollars`);
+  assert.equal(b.constraints.budgetUsdMax, 70000, `narrow-NBSP grouping got ${b.constraints.budgetUsdMax}`);
+  const c = parseConstraints('under $1 500 for llama 8b');
+  assert.equal(c.constraints.budgetUsdMax, 1500);
+});
+
+test('decimal-comma budgets convert and raise an ambiguity (#1061)', () => {
+  const { constraints, ambiguities } = parseConstraints('under $1,5k');
+  assert.equal(constraints.budgetUsdMax, 1500, '1,5k must read as 1.5k, not 15k');
+  assert.ok(ambiguities.some(a => a.field === 'budgetUsdMax'), 'decimal-comma reading must be flagged');
+});
+
+test('3-digit comma groups still parse as thousands separators', () => {
+  const { constraints, ambiguities } = parseConstraints('under $2,500 dollars');
+  assert.equal(constraints.budgetUsdMax, 2500);
+  assert.ok(!ambiguities.some(a => a.field === 'budgetUsdMax'));
+});
+
+test('version-style spacing in model names is preserved (#1061)', () => {
+  const { constraints } = parseConstraints('self-hosted qwen 3.6 27b');
+  assert.equal(constraints.paramsB, 27);
+  assert.equal(constraints.modelFamily, 'qwen');
+});
+
+// --- #1068: operator/notation gaps ------------------------------------------
+
+test('">=" prefix parses minimum decode speed (#1068)', () => {
+  assert.equal(parseConstraints('>= 30 tok/s').constraints.minDecodeTokPerSec, 30);
+  assert.equal(parseConstraints('llama 8b with >=30 tok/s').constraints.minDecodeTokPerSec, 30);
+});
+
+test('"≥" parses minimum decode speed like "≤" does for VRAM (#1068)', () => {
+  const { constraints } = parseConstraints('qwen 27b ≥ 40 tok/s decode');
+  assert.equal(constraints.minDecodeTokPerSec, 40);
+});
+
+test('trillion parameter tags convert to billions instead of dropping (#1068)', () => {
+  const { constraints } = parseConstraints('a self-hosted model with 1t parameters');
+  assert.equal(constraints.paramsB, 1000);
+  assert.equal(parseConstraints('phi-3 mini under $500').constraints.paramsB, null,
+    'budget stripping must still win over the t-suffix match');
+});
+
+test('"8-bit" quants are not mistaken for trillion params (#1068)', () => {
+  const { constraints } = parseConstraints('gemma 12b at 8-bit under $2.5k');
+  assert.equal(constraints.paramsB, 12);
+});
+
+test('unmatched numeric comparison raises an ambiguity signal (#1068)', () => {
+  const { ambiguities } = parseConstraints('self-hosted qwen 27b > 100 req');
+  const hit = ambiguities.find(a => a.field === 'input' && /comparison/i.test(a.message));
+  assert.ok(hit, 'a comparator that mapped nowhere must be reported');
+});
