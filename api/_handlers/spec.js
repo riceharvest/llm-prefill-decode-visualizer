@@ -539,6 +539,12 @@ const BENCHMARK_GROUP_LIST_ENVELOPE = {
     distinctModelFamilies: { type: 'integer', description: 'Distinct model families across all matching runs' },
     distinctEngines: { type: 'array', items: { type: 'string' }, description: 'Distinct "engine version" tags across matching runs' },
     engineCohortedByDefault: { type: 'boolean', description: 'True when groups are keyed per engine build so mixed-engine stats never blend' },
+    units: {
+      type: 'object',
+      description: 'Machine-readable units for every aggregate speed in items[] — all prefill/decode numbers (median, q1, q3, min, max, ci95) are tokens per second.',
+      properties: { speed: { type: 'string', const: 'tok/s' } },
+      additionalProperties: false
+    },
     freshnessTiers: { type: 'string', description: 'Human-readable definition of the fresh/aging/stale tiers' },
     outlierPolicy: {
       type: 'object',
@@ -985,6 +991,11 @@ export default function handler(req, res) {
             { name: 'model', in: 'query', schema: { type: 'string' } },
             { name: 'quant', in: 'query', schema: { type: 'string' } },
             { name: 'hwClass', in: 'query', schema: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] } },
+            { name: 'engine', in: 'query', schema: { type: 'string' }, description: 'engine-tag substring filter (e.g. vllm) matching "name version" tags; matched engines are echoed in distinctEngines' },
+            { name: 'crossEngine', in: 'query', schema: { type: 'boolean' }, description: 'true merges the default same-engine cohorts into hardware×model groups that may mix engine builds (default false — see engineCohortedByDefault in the response)' },
+            { name: 'include_outliers', in: 'query', schema: { type: 'boolean' }, description: 'include outlier runs in the stats instead of excluding them (alias: includeOutliers); see outlierPolicy in the response' },
+            { name: 'outlierIqrs', in: 'query', schema: { type: 'number', minimum: 1, maximum: 10, default: 2.5 }, description: 'outlier fence width in IQRs — runs further than this from their group median carry an outlier flag and are excluded from stats unless include_outliers=true' },
+            { name: 'max_age', in: 'query', schema: { type: 'number' }, description: 'only runs measured within this many days (alias: maxAge); echoed as maxAgeDays' },
             { name: 'context_band', in: 'query', schema: { type: 'string', enum: ['lt1k', '1k-8k', '8k-32k', '32k+'] }, description: 'only runs measured at this context length; groups mixing bands carry mixedContextBands + a warning' },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 25, maximum: 200 }, description: 'page size' },
             { name: 'cursor', in: 'query', schema: { type: 'string' }, description: 'opaque next_cursor from the previous page (keyset resumption; stable across upstream inserts)' },
@@ -998,6 +1009,7 @@ export default function handler(req, res) {
                   schema: { $ref: '#/components/schemas/BenchmarkGroupListEnvelope' },
                   example: {
                     description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group).',
+                    units: { speed: 'tok/s' },
                     snapshot: { id: 'snapshot-2026-08-21-a1b2c3d4', createdAt: '2026-08-21T09:14:03.000Z', runCount: 3642 },
                     snapshotAt: '2026-08-21T09:14:03.512Z',
                     schema_version: '1',

@@ -142,6 +142,10 @@ export default async function handler(req, res) {
       distinctModelFamilies: [...new Set(runs.map(r => r.modelFamily))].length,
       distinctEngines: [...new Set(runs.map(r => engineTag(r)))],
       engineCohortedByDefault: !crossEngine && groupBy === 'hardwareModel',
+      // Machine-readable unit declaration for every aggregate speed in items[]
+      // (#776): decode/prefill medians etc. are tokens per second — declared
+      // in-band instead of only inside description/note prose.
+      units: { speed: 'tok/s' },
       warnings,
       outlierPolicy: {
         thresholdIqrs: outlierIqrs,
