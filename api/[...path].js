@@ -9,7 +9,7 @@ import { default as benchmarks } from './_handlers/benchmarks.js';
 import { default as best } from './_handlers/best.js';
 import { default as diff } from './_handlers/diff.js';
 import { default as exportHandler } from './_handlers/export.js';
-import { default as runsDump } from './_handlers/runs.js';
+import { default as runsDump, runLookup } from './_handlers/runs.js';
 import { default as health } from './_handlers/health.js';
 import { default as version } from './_handlers/version.js';
 import { default as og } from './_handlers/og.js';
@@ -126,6 +126,12 @@ export default async function handler(req, res) {
         if (calcMatch) {
           req.query = { ...req.query, id: calcMatch[1] };
           return calcId(req, res);
+        }
+        // /api/runs/<id> — single-run lookup (#766)
+        const runsMatch = clean.match(/^\/runs\/([^/]+)$/);
+        if (runsMatch) {
+          req.query = { ...req.query, id: decodeURIComponent(runsMatch[1]) };
+          return runLookup(req, res);
         }
         return json(res, { error: 'Not found', path: pathname }, 404);
     }

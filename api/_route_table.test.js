@@ -35,11 +35,13 @@ test('every dispatcher case has a route-table entry (and vice versa)', () => {
 
   // Static `case '/x':` dispatch targets.
   const casePaths = [...source.matchAll(/case '(\/[^']*)':/g)].map((m) => m[1]);
-  // The dynamic /calc/<id> fallback (regex route, no case label).
+  // The dynamic /calc/<id> and /runs/<id> fallbacks (regex routes, no case label).
   const hasCalcFallback = /clean\.match\(\/\^\\\/calc\\\//.test(source);
+  const hasRunsFallback = /clean\.match\(\/\^\\\/runs\\\//.test(source);
 
-  const tableStatic = ROUTES.filter((r) => r.path !== '/calc/:id').map((r) => r.path);
+  const tableStatic = ROUTES.filter((r) => r.path !== '/calc/:id' && r.path !== '/runs/:id').map((r) => r.path);
   const tableHasCalc = ROUTES.some((r) => r.path === '/calc/:id');
+  const tableHasRuns = ROUTES.some((r) => r.path === '/runs/:id');
 
   const missingFromTable = casePaths.filter((p) => !tableStatic.includes(p));
   assert.deepEqual(
@@ -57,6 +59,8 @@ test('every dispatcher case has a route-table entry (and vice versa)', () => {
 
   assert.ok(hasCalcFallback, 'expected the /calc/<id> regex fallback in the dispatcher');
   assert.ok(tableHasCalc, 'route table must describe the /calc/:id dynamic route');
+  assert.ok(hasRunsFallback, 'expected the /runs/<id> regex fallback in the dispatcher');
+  assert.ok(tableHasRuns, 'route table must describe the /runs/:id dynamic route');
 });
 
 test('every endpoint carries a well-formed sinceVersion annotation', () => {

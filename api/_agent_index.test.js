@@ -19,7 +19,7 @@ const index = JSON.parse(readFileSync(path.join(here, '..', 'public', 'api', 'ag
 const routerSource = readFileSync(path.join(here, '[...path].js'), 'utf8');
 
 // Routes discovered from the router source: `case '/x':` literals plus the
-// dynamic /calc/:id regex fallback.
+// dynamic /calc/:id and /runs/:id regex fallbacks.
 function discoverRoutes() {
   const routes = new Set();
   for (const m of routerSource.matchAll(/case '(\/[^']+)':/g)) {
@@ -27,6 +27,9 @@ function discoverRoutes() {
   }
   if (routerSource.includes("clean.match(/^\\/calc\\/")) {
     routes.add('/calc/:id');
+  }
+  if (routerSource.includes("clean.match(/^\\/runs\\/")) {
+    routes.add('/runs/:id');
   }
   return routes;
 }

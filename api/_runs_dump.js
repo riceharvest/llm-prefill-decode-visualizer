@@ -83,16 +83,36 @@ function filterTextFallback(mode) {
 }
 
 /** JSON dump envelope with the same dictionary in structured form. */
-export function buildRunsJsonPayload(rows, generatedAt, { totalRunCount, comparableCount, comparableFilter = 'all' } = {}) {
+export function buildRunsJsonPayload(rows, generatedAt, { totalRunCount, comparableCount, comparableFilter = 'all', runIdFilter } = {}) {
   return {
     description: 'Full machine-readable dump of the community-measured LLM benchmark run index, including batched/non-comparable runs. Filter client-side with the `comparable` flag to reproduce the single-stream dataset the aggregate endpoints use.',
     schemaVersion: RUNS_DATASET_VERSION,
     generatedAt,
     comparableFilter,
+    ...(runIdFilter != null ? { runIdFilter } : {}),
     totalRunCount,
     comparableCount,
     rowCount: rows.length,
     dataDictionary: RUNS_COLUMNS.map(c => ({ column: c.key, type: c.type, description: c.description })),
     runs: rows
+  };
+}
+
+/**
+ * Subset rows to ONE run by its runId (#767). Comparison is string-based so
+ * numeric upstream ids and their string spellings both match.
+ */
+export function filterRunsByRunId(rows, runId) {
+  const wanted = String(runId);
+  return rows.filter(r => String(r.runId) === wanted);
+}
+
+/** Single-run lookup payload for GET /api/runs/{runId} (#766). */
+export function buildRunLookupPayload(run, generatedAt) {
+  return {
+    description: 'Single community-measured benchmark run looked up by its runId. Use /api/runs for the full index.',
+    schemaVersion: RUNS_DATASET_VERSION,
+    generatedAt,
+    run
   };
 }

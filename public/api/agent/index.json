@@ -150,6 +150,12 @@
     },
     {
       "method": "GET",
+      "path": "/api/runs/{id}",
+      "description": "Look up ONE community-measured run by its runId without downloading the full /api/runs dump. Unknown ids return a problem+json 404 (code NOT_FOUND).",
+      "responseSchema": "{ description, schemaVersion, generatedAt, run }"
+    },
+    {
+      "method": "GET",
       "path": "/api/version",
       "description": "Machine-readable version report: service name, app version (package.json), schemaVersion (wire schema_version), generatedAt and links to /api/spec, CHANGELOG-API.md and CHANGELOG.json.",
       "responseSchema": "{ service, version, schemaVersion, generatedAt, links{} }"

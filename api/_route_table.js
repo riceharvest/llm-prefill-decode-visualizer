@@ -172,6 +172,13 @@ export const ROUTES = [
     sinceVersion: '2.6.0',
   },
   {
+    path: '/runs/:id',
+    methods: ['GET'],
+    description: 'Look up ONE community-measured run by its runId without downloading the full /api/runs dump. Unknown ids return a problem+json 404 (code NOT_FOUND).',
+    returns: '{ description, schemaVersion, generatedAt, run }',
+    sinceVersion: '2.6.0',
+  },
+  {
     path: '/version',
     methods: ['GET'],
     description: 'Machine-readable version report: service name, app version (package.json), wire schemaVersion, generatedAt timestamp and links to /api/spec, CHANGELOG-API.md and CHANGELOG.json.',
