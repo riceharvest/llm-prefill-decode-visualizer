@@ -44,6 +44,7 @@ const RATE_LIMITED_RESPONSE = {
 // api/_spec_rate_limit.test.js.
 const ENFORCED_PATHS = new Set([
   '/api/compute',
+  '/api/calc/{id}',
   '/api/presets',
   '/api/localmaxxing',
   '/api/runs',
