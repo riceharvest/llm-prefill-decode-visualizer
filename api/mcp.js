@@ -526,6 +526,10 @@ function json(res, body, status = 200) {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
   exposeAgentHeaders(res);
+  // Every other API route carries Vary (via _markdown negotiation). Without it,
+  // shared caches can key this route on the URL alone and replay a compressed
+  // variant to clients that cannot decompress it. Keep parity with _markdown.js.
+  res.setHeader('Vary', 'Accept, Accept-Encoding');
   res.end(JSON.stringify(body));
 }
 
@@ -591,6 +595,7 @@ export default async function handler(req, res) {
   // response a pipelining client could mis-attribute to another request.
   if (rpc !== null && typeof rpc === 'object' && !Array.isArray(rpc) && rpc.id === undefined) {
     res.statusCode = 202;
+    res.setHeader('Vary', 'Accept, Accept-Encoding');
     return res.end();
   }
 
@@ -628,6 +633,11 @@ export default async function handler(req, res) {
           'compute_agentic_loop for multi-turn walltime, kv_cache_vram or vram_from_hf_id for VRAM fit, ' +
           'cost_per_1m for budgeting. Speeds are tok/s; prefill is compute-bound, decode is bandwidth-bound.'
       });
+
+    case 'notifications/initialized':
+      res.statusCode = 202;
+      res.setHeader('Vary', 'Accept, Accept-Encoding');
+      return res.end();
 
     case 'tools/list':
       return reply({ tools: TOOLS });
