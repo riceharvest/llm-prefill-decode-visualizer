@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   shortModelName, shortQuant, formatTokenCountShort,
-  describeConfig, slugifyTitle, permalinkHref,
+  describeConfig, buildShareLink, TRANSIENT_SHARE_PARAMS,
   readPermalinkTitle, documentTitleFor
 } from './permalink.js';
 import { verifyShareLink } from './shareIntegrity.js';
@@ -62,14 +62,55 @@ test('describeConfig trims engine suffixes and handles unknown tabs', () => {
   );
 });
 
-test('slugifyTitle produces readable slugs', () => {
+// The canonical share-link builder (#875): every emitter routes through it,
+// so its output shape is pinned here.
+test('buildShareLink pins tab, strips transient params and sorts keys', () => {
+  const href = buildShareLink({
+    origin: 'https://example.com',
+    pathname: '/',
+    search: '?tab=agentic&preset=rtx4090_exl2&prefill=3800&decode=105&autoplay=1&title=RTX%203090'
+  });
+  // Transient session keys never survive an emit…
+  assert.ok(!href.includes('autoplay='));
+  assert.ok(!href.includes('title='));
+  // …tab is always present…
+  assert.ok(href.startsWith('https://example.com/?'));
+  const p = new URLSearchParams(href.slice(href.indexOf('?')));
+  assert.equal(p.get('tab'), 'agentic');
+  assert.equal(p.get('preset'), 'rtx4090_exl2');
+  // …and keys are sorted so equal configs serialize identically.
+  const qs = href.slice(href.indexOf('?') + 1);
+  assert.deepEqual(qs.split('&').map(kv => kv.split('=')[0]), [...qs.split('&').map(kv => kv.split('=')[0])].sort());
+});
+
+test('buildShareLink overrides the input tab with the pinned one', () => {
+  const href = buildShareLink({
+    origin: 'https://example.com',
+    pathname: '/',
+    search: '?tab=single&preset=h100',
+    tab: 'compare'
+  });
+  assert.equal(new URLSearchParams(href.slice(href.indexOf('?'))).get('tab'), 'compare');
+});
+
+test('buildShareLink can re-add autoplay for demo-style links', () => {
+  const href = buildShareLink({
+    origin: 'https://example.com',
+    pathname: '/x',
+    params: { tab: 'single', preset: 'h100', prompt: 8192, autoplay: '0' },
+    autoplay: true
+  });
+  assert.ok(!href.includes('autoplay=0'));
+  const p = new URLSearchParams(href.slice(href.indexOf('?')));
+  assert.equal(p.get('autoplay'), '1');
+  assert.equal(p.get('prompt'), '8192');
+});
+
+test('buildShareLink omits empty/blank params and the ? when nothing remains', () => {
   assert.equal(
-    slugifyTitle('Qwen3 32B Q4 on RTX 4090, 8K agentic loop'),
-    'qwen3-32b-q4-on-rtx-4090-8k-agentic-loop'
+    buildShareLink({ origin: 'https://example.com', pathname: '/', params: { prompt: '', preset: null, title: 'x' } }),
+    'https://example.com/'
   );
-  assert.equal(slugifyTitle('Groq LPU & H100 compare'), 'groq-lpu-and-h100-compare');
-  assert.equal(slugifyTitle('---'), '');
-  assert.ok(slugifyTitle('x'.repeat(200)).length <= 80);
 });
 
 test('permalinkHref appends the title param, slug hash and integrity signature', async () => {
@@ -106,6 +147,27 @@ test('permalink round-trips through readPermalinkTitle', async () => {
   const loc = { origin: 'https://example.com', pathname: '/x', search: '' };
   const href = await permalinkHref(loc, 'RTX 3090, 2K single turn');
   const search = href.slice(href.indexOf('?')).split('#')[0];
+test('buildShareLink is byte-identical for equal configs across emitters', () => {
+  // Same state arriving as a query string (share/export) vs an explicit
+  // object (demo links) must produce the same URL.
+  const fromSearch = buildShareLink({
+    origin: 'https://example.com', pathname: '/', search: '?preset=h100&tab=single&prefill=3900'
+  });
+  const fromParams = buildShareLink({
+    origin: 'https://example.com', pathname: '/', params: { preset: 'h100', prefill: 3900, tab: 'single' }
+  });
+  assert.equal(fromSearch, fromParams);
+  assert.equal(fromSearch, 'https://example.com/?prefill=3900&preset=h100&tab=single');
+});
+
+test('transient share params are exactly autoplay and title', () => {
+  assert.deepEqual(TRANSIENT_SHARE_PARAMS, ['autoplay', 'title']);
+});
+
+test('readPermalinkTitle still decodes legacy title= links', () => {
+  // Links minted before #875 carried a free-text `title` param; the reader
+  // keeps those old URLs rendering their own document title.
+  const search = '?preset=h100&title=' + encodeURIComponent('RTX 3090, 2K single turn');
   assert.equal(readPermalinkTitle(search), 'RTX 3090, 2K single turn');
   assert.equal(readPermalinkTitle(''), null);
 });

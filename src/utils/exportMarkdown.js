@@ -8,21 +8,24 @@
 import { formatTime, formatTokens } from './presets.js';
 import { calculateAgenticTimeline } from './agenticMath.js';
 import { computeSingleTurnEngineRun } from './exportEngineMath.js';
+import { buildShareLink } from './permalink.js';
 
 // ---------------------------------------------------------------------------
 // Deep links
 // ---------------------------------------------------------------------------
 
-// Build a URL that reproduces the exact config when opened: keeps every
-// current query param (preset, speeds, per-tab settings) and pins the tab,
-// while dropping transient state like autoplay.
+// Build a URL that reproduces the exact config when opened. Routes through
+// the canonical share-link builder (#875): keeps every current query param
+// (preset, speeds, per-tab settings), pins `tab` to the exporting view, and
+// strips transient state like autoplay.
 export function buildDeepLink(tab) {
   if (typeof window === 'undefined') return '';
-  const p = new URLSearchParams(window.location.search);
-  if (tab) p.set('tab', tab);
-  p.delete('autoplay');
-  const qs = p.toString();
-  return `${window.location.origin}${window.location.pathname}${qs ? `?${qs}` : ''}`;
+  return buildShareLink({
+    origin: window.location.origin,
+    pathname: window.location.pathname,
+    search: window.location.search,
+    tab
+  });
 }
 
 // ---------------------------------------------------------------------------

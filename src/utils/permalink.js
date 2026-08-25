@@ -1,10 +1,10 @@
-// Titled permalinks (issue #106). A share link is the current query-string
-// state plus a human-readable `title` param built from the live config, so a
-// pasted link reads like content ("Qwen3 32B Q4 on RTX 4090, 8K agentic loop")
-// instead of a query string. Everything stays client-side: no backend storage,
-// the URL itself is the storage. A cosmetic slug rides along in the hash
-// (#s/qwen3-32b-rtx4090-8k-agentic-loop) so permalinks have a readable
-// identity even though the app routes purely through query params.
+// Titled permalinks + the canonical share-link builder (issues #106, #875).
+// The builder (buildShareLink below) is the single emitter for shareable
+// URLs. Human-readable config titles ("Qwen3 32B Q4 on RTX 4090, 8K agentic
+// loop") remain a display concern only — they drive document.title and OG
+// previews, never the link itself: free-text titles and slug hashes used to
+// make byte-identical configs produce different URLs (#534/#875). Everything
+// stays client-side: no backend storage, the URL itself is the storage.
 
 import { HARDWARE_PRESETS } from './presets.js';
 import { SHARE_SIG_PARAM, signShareParams } from './shareIntegrity.js';
@@ -90,21 +90,27 @@ export function describeConfig({
   return workload ? `${subject}, ${workload}` : subject;
 }
 
-// Title → URL slug: "Qwen3 32B Q4 on RTX 4090, 8K agentic loop"
-//   → "qwen3-32b-q4-on-rtx4090-8k-agentic-loop"
-export function slugifyTitle(title) {
-  const slug = String(title || '')
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  // Cap length on a word boundary so slugs stay copy-paste friendly.
-  if (slug.length <= 80) return slug;
-  const cut = slug.slice(0, 81);
-  const lastDash = cut.lastIndexOf('-');
-  if (lastDash > 40) return cut.slice(0, lastDash);
-  return cut.slice(0, 80).replace(/-+$/, '');
-}
+// Canonical share-link builder (issue #875). One builder mints every
+// shareable URL in the app — header Share, snapshot copy-link, export
+// deepLink and template/curriculum/changelog demo links all route through
+// here, so the same effective configuration always produces a byte-identical
+// link no matter which surface emitted it.
+//
+// Canonical shape:
+//
+//   <origin><pathname>?<state params, alphabetically sorted>
+//
+// Rules (also pinned agent-facing in public/llms.txt → "Canonical share links"):
+//   - `tab` is always present: pass `tab` to pin it (overriding any tab in
+//     the input state); links without it can land on the wrong view.
+//   - Transient session keys (`autoplay`, `title`) are stripped on every
+//     emit; demo-style links re-add `autoplay=1` explicitly via the
+//     `autoplay` option after stripping.
+//   - No `title=` prose param and no `#s/<slug>` hash: free-text titles made
+//     byte-identical configs produce different strings (#534/#875). Titles
+//     remain a display concern (document.title), never link identity.
+//   - Params are sorted, so URL diffing/dedup/caching work across surfaces.
+export const TRANSIENT_SHARE_PARAMS = ['autoplay', 'title'];
 
 // Full permalink URL: current query state + `title` param + #s/<slug>.
 // Since #917 the link also carries an integrity signature `h=<hex>` (HMAC over
@@ -122,7 +128,37 @@ export async function permalinkHref(loc, title) {
   return `${base}?${qs}#s/${slugifyTitle(title)}`;
 }
 
-// The title encoded into a shared link, if any (readParam-style decoding).
+export function buildShareLink({
+  origin = '',
+  pathname = '/',
+  search = '',
+  params = null,
+  tab = '',
+  autoplay = false
+} = {}) {
+  // Param source: either an explicit object (demo links define their own full
+  // state) or an existing query string (share/copy/export carry live state).
+  let p;
+  if (params) {
+    p = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null && v !== '') p.set(k, String(v));
+    }
+  } else {
+    p = new URLSearchParams(search || '');
+  }
+  for (const k of TRANSIENT_SHARE_PARAMS) p.delete(k);
+  if (tab) p.set('tab', tab);
+  if (autoplay) p.set('autoplay', '1');
+  // Deterministic ordering: equal configs must serialize identically.
+  const sorted = [...p.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const qs = new URLSearchParams(sorted).toString();
+  return `${origin}${pathname}${qs ? `?${qs}` : ''}`;
+}
+
+// The title encoded into legacy shared links, if any. Links minted before
+// #875 carried a free-text `title` param; reading it keeps those old URLs
+// rendering their own document title, though new links never contain one.
 export function readPermalinkTitle(search) {
   const v = new URLSearchParams(search || '').get('title');
   return v && v.trim() ? v.trim() : null;
