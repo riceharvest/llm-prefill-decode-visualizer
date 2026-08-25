@@ -61,7 +61,12 @@ const HANDLER_FILE = {
   '/api/health': '_handlers/health.js',
   '/api/sizing': '_handlers/sizing.js',
   '/api/parse-constraints': '_handlers/parse-constraints.js',
-  '/api/snapshots': '_handlers/snapshots.js'
+  '/api/snapshots': '_handlers/snapshots.js',
+  '/api/diff': '_handlers/diff.js',
+  '/api/export': '_handlers/export.js',
+  '/api/version': '_handlers/version.js',
+  '/api/mcp': 'mcp.js',
+  '/api/og': '_handlers/og.js'
 };
 
 test('every OpenAPI operation carries an x-rate-limit object', () => {

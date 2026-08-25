@@ -123,6 +123,12 @@ export const WHY_TERMS = {
     meaning: 'Average fraction of the max batch slots that hold a running sequence. Low occupancy means the engine is paying for capacity it is not using.',
     formula: 'occupancy = avg running sequences ÷ max batch size',
     anchor: 'theory-agentic'
+  },
+  batchQueueWait: {
+    label: 'Queue wait',
+    meaning: 'Time a request spends waiting between arrival and its first prefill chunk. It grows when arrivals outpace batch slots or long prefills stall the step loop.',
+    formula: 'queue wait = first prefill chunk start − arrival time',
+    anchor: 'theory-agentic'
   }
 };
 

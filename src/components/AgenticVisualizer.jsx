@@ -1206,6 +1206,11 @@ export default function AgenticVisualizer({
                           time: formatTime(turnItem.prefillTime),
                           tokens: turnItem.newTokensPrefilled
                         })}
+                        title={t('agentic.segmentPrefillTooltip', {
+                          turn: turnItem.turn,
+                          time: formatTime(turnItem.prefillTime),
+                          tokens: turnItem.newTokensPrefilled
+                        })}
                       >
                         {labels.prefillInline && formatTime(turnItem.prefillTime)}
                       </div>
@@ -1225,6 +1230,11 @@ export default function AgenticVisualizer({
                           fontFamily: 'var(--font-mono)'
                         }}
                         data-tooltip={t('agentic.segmentDecodeTooltip', {
+                          turn: turnItem.turn,
+                          time: formatTime(turnItem.decodeTime),
+                          tokens: turnItem.decodeTokens
+                        })}
+                        title={t('agentic.segmentDecodeTooltip', {
                           turn: turnItem.turn,
                           time: formatTime(turnItem.decodeTime),
                           tokens: turnItem.decodeTokens

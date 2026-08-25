@@ -57,6 +57,9 @@
   "chunkOffPrefix": "Chunked prefill disabled:",
   "chunkOffBody": "each full prompt prefill monopolizes an engine step — every decoding sequence stalls behind it. Watch the ITL chart spike on prefill steps.",
   "rowTooltipQueue": "R{id} queued {time} waiting for a batch slot",
+  "truncatedBannerTitle": "Simulation truncated:",
+  "truncatedBannerBody": "the engine-step safety cap ({steps} steps) was hit with {finished} of {total} requests unfinished — makespan and throughput below cover only the finished subset and are NOT final numbers.",
+  "metricQueueWaitSub": "avg wait for a batch slot · worst {worst}",
   "rowTooltipPrefill": "R{id} prefill chunk · {tokens} tok",
   "rowTooltipDecode": "R{id} decoding · 1 tok / step",
   "selectRequestHint": "click a row to inspect its inter-token latency"

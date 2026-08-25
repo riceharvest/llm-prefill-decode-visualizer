@@ -64,7 +64,14 @@ const LOCKED_OPERATION_IDS = {
   'GET /api/sizing': 'getSizingRecommendation',
   'POST /api/sizing': 'createSizingRecommendation',
   'GET /api/parse-constraints': 'parseConstraints',
-  'GET /api/snapshots': 'listDatasetSnapshots'
+  'GET /api/snapshots': 'listDatasetSnapshots',
+  'GET /api/diff': 'diffRuns',
+  'POST /api/diff': 'diffWhatifConstraintSets',
+  'GET /api/export': 'exportRunIndex',
+  'GET /api/version': 'getServiceVersion',
+  'GET /api/mcp': 'getMcpEndpointInfo',
+  'POST /api/mcp': 'postMcpJsonRpc',
+  'GET /api/og': 'renderOgImage'
 };
 
 test('every operation in the spec carries an operationId', () => {
