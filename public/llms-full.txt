@@ -443,7 +443,7 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Tab-ID: diff
 - URL: /?tab=diff
 - Purpose: Diff two community benchmark runs (or two constraint sets via what-if mode) and read per-metric deltas plus a plain-language summary.
-- Surfaces: run A/B selectors; delta table; what-if constraint diffing
+- Surfaces: run A/B free-text id inputs; per-metric delta rows with ratios; plain-language summary; deep links (?tab=diff&runA&runB) auto-execute on load
 - Endpoints: GET /api/diff?runA=<id>&runB=<id>; GET /api/diff?mode=whatif
 
 ### Tab: shortlist — Find HW
