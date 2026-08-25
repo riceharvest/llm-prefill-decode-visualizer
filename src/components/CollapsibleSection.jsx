@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { sectionAttributes, toggleAriaAttributes } from '../utils/collapsible.js';
 
 /**
  * Collapsible panel used to tuck advanced/secondary controls behind a
@@ -30,13 +31,12 @@ export default function CollapsibleSection({
   };
 
   return (
-    <section className="panel" data-collapsible={id}>
+    <section className="panel" {...sectionAttributes(id)}>
       <button
         type="button"
         className="collapse-head"
         onClick={toggle}
-        aria-expanded={open}
-        aria-controls={`${id}-body`}
+        {...toggleAriaAttributes(id, open)}
       >
         <span className="panel-title">{title}</span>
         {badge && <span className="tag">{badge}</span>}

@@ -16,6 +16,32 @@ import { applySchemaHeaders, SCHEMA_VERSION } from './_schema.js';
 
 const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 
+// MCP resources advertised by /.well-known/mcp.json (#794). The manifest has
+// always listed these two documents; resources/list + resources/read below
+// make the server actually serve them so capability-driven clients don't hit
+// a method-not-found wall after trusting the manifest.
+const RESOURCES = [
+  {
+    uri: `${BASE}/llms.txt`,
+    name: 'Agent guidance',
+    description: 'When-to-use guidance, endpoint list, versioning policy',
+    mimeType: 'text/plain',
+  },
+  {
+    uri: `${BASE}/api/spec`,
+    name: 'OpenAPI spec',
+    description: 'Full machine-readable API schema',
+    mimeType: 'application/json',
+  }
+];
+
+/** Resolve a resources/read uri against RESOURCES. Accepts the absolute
+ *  manifest URIs and their bare-path spellings ('/llms.txt', '/api/spec'). */
+export function resolveResource(uri) {
+  const raw = String(uri || '');
+  return RESOURCES.find(r => r.uri === raw || r.uri.endsWith(raw));
+}
+
 const TOOLS = [
   {
     name: 'compute_single_turn',
@@ -616,7 +642,7 @@ export default async function handler(req, res) {
     case 'initialize':
       return reply({
         protocolVersion: '2025-06-18',
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, resources: {} },
         serverInfo: {
           name: 'llm-prefill-decode-visualizer',
           title: 'LLM Prefill & Decode Speed Visualizer',
@@ -631,7 +657,8 @@ export default async function handler(req, res) {
         instructions:
           'Deterministic LLM-inference math API. Use compute_single_turn for TTFT/TPOT questions, ' +
           'compute_agentic_loop for multi-turn walltime, kv_cache_vram or vram_from_hf_id for VRAM fit, ' +
-          'cost_per_1m for budgeting. Speeds are tok/s; prefill is compute-bound, decode is bandwidth-bound.'
+          'cost_per_1m for budgeting. Speeds are tok/s; prefill is compute-bound, decode is bandwidth-bound. ' +
+          'Agent guidance and the full schema are also available as MCP resources (resources/list).'
       });
 
     case 'notifications/initialized':
@@ -641,6 +668,35 @@ export default async function handler(req, res) {
 
     case 'tools/list':
       return reply({ tools: TOOLS });
+
+    // Resources advertised by /.well-known/mcp.json — served here so the
+    // manifest's promise is real (#794).
+    case 'resources/list':
+      return reply({
+        resources: RESOURCES.map(({ uri, name, description, mimeType }) => ({ uri, name, description, mimeType }))
+      });
+
+    case 'resources/read': {
+      const resource = resolveResource(params?.uri);
+      if (!resource) {
+        return json(res, {
+          jsonrpc: '2.0', id: id ?? null,
+          error: { code: -32602, message: `Unknown resource uri: ${params?.uri}` }
+        });
+      }
+      try {
+        const upstream = await fetch(resource.uri, { headers: { accept: resource.mimeType } });
+        const text = await upstream.text();
+        return reply({
+          contents: [{ uri: resource.uri, mimeType: resource.mimeType, text }]
+        });
+      } catch (err) {
+        return json(res, {
+          jsonrpc: '2.0', id: id ?? null,
+          error: { code: -32603, message: `Failed to read resource: ${err.message}` }
+        });
+      }
+    }
 
     case 'tools/call': {
       const { name, arguments: args } = params || {};
