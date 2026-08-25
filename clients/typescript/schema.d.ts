@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * Run inference math (TTFT, TPOT, walltime, VRAM)
-         * @description Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts POST with a JSON body, or a batch of up to 50 parameter sets via POST {"batch": [...]} / GET ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via /api/calc/{id}.
+         * @description Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts POST with a JSON body, or a batch of up to 50 parameter sets via POST {"batch": [...]} / GET ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via /api/calc/{id}. Caveat for model=batched: aggregate throughput = decodeSpeed × batchSize^(1 − decodeDecayExponent) grows monotonically with batch size by construction (defaults: ×B^0.75) — the heuristic has NO saturation point or optimal batch size, so it must not be used alone for sizing decisions. To read a scaling curve, sweep batchSize via the batch endpoint (homogeneous items, one param varied).
          */
         get: operations["computeInference"];
         put?: never;
@@ -946,6 +946,8 @@ export interface operations {
                 enablePrefixCaching?: boolean;
                 /** @description batched/kvCache */
                 batchSize?: number;
+                /** @description batched only: heuristic contention exponent controlling the shape of the batch-scaling curve. Per-user decode decays as decodeSpeed × batchSize^(−decodeDecayExponent); 0 = perfect linear scaling (aggregate = decodeSpeed × batchSize), 1 = batching gains nothing. Heuristic approximation, not a measured serving curve. */
+                decodeDecayExponent?: number;
                 /** @description speculative: draft tokens per step */
                 draftTokens?: number;
                 /** @description speculative: 0..1. Response includes breakevenAcceptanceRate — below it speculation is slower than vanilla decode. */
