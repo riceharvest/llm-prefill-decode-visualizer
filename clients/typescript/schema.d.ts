@@ -329,7 +329,7 @@ export interface components {
              * @description Stable machine-readable error code — branch on this, not on title/detail prose
              * @enum {string}
              */
-            code: "INVALID_PARAMS" | "INVALID_CURSOR" | "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "RATE_LIMITED" | "UPSTREAM_UNAVAILABLE" | "INTERNAL";
+            code: "INVALID_PARAMS" | "INVALID_CURSOR" | "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "RATE_LIMITED" | "UPSTREAM_UNAVAILABLE" | "BATCH_ALL_FAILED" | "INTERNAL";
         };
         /** @description 95% percentile bootstrap confidence interval (2,000 resamples). Overlapping intervals across groups mean they are statistically tied. */
         Ci95Interval: {
