@@ -72,8 +72,8 @@ export default function TemplateGallery() {
                 type="button"
                 onClick={() => { window.location.href = demoUrl(tpl.demo); }}
                 aria-label={t('templates.loadAria', { question })}
-                className="btn"
-                style={{ justifyContent: 'center', minHeight: '30px', padding: '5px 12px', fontSize: '0.76rem' }}
+                className="btn btn-sm"
+                style={{ justifyContent: 'center', padding: '5px 12px', fontSize: '0.76rem' }}
               >
                 <Play size={12} />
                 {t('templates.loadSimulation')}

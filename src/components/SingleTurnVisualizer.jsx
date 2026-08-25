@@ -222,7 +222,11 @@ export default function SingleTurnVisualizer({
   // Vision-encoder tokens from attached images are ingested during prefill
   // too — they extend the KV cache before the first text token can emerge.
   const totalPrefillTokens = safePromptTokens + totalImageTokens;
-  const expectedTTFT = totalPrefillTokens / prefillSpeed; // seconds
+  // Zero-prompt guard (#846): mirror of api/_math.js singleTurn — a 0/0
+  // prompt/prefill combination means "no prefill phase" (TTFT 0), not NaN.
+  const expectedTTFT = totalPrefillTokens > 0
+    ? (prefillSpeed > 0 ? totalPrefillTokens / prefillSpeed : Infinity) // seconds
+    : 0;
   // Context scaling: token i of the output is produced with the KV cache at
   // depth totalPrefillTokens + i, so per-token time grows linearly and the
   // decode phase no longer runs at a single constant speed. Walltime uses the
@@ -1499,6 +1503,7 @@ export default function SingleTurnVisualizer({
                     <div
                       role="img"
                       aria-label={t('singleTurn.itlHistogramAria')}
+                      data-max-bin-count={maxBinCount}
                       style={{
                         position: 'relative',
                         height: '4rem',
@@ -1515,6 +1520,10 @@ export default function SingleTurnVisualizer({
                         <div
                           key={i}
                           data-tooltip={`${b.count.toLocaleString()} tok · ${b.from.toFixed(1)}–${b.to.toFixed(1)} ms`}
+                          data-bin={i}
+                          data-count={b.count}
+                          data-from-ms={b.from}
+                          data-to-ms={b.to}
                           style={{
                             flex: 1,
                             height: `${Math.max(b.count > 0 ? 3 : 0, (b.count / maxBinCount) * 100)}%`,
@@ -1545,6 +1554,20 @@ export default function SingleTurnVisualizer({
                       <span>mean {itlSummary.mean.toFixed(1)} ms · avg = TPOT, tail = jitter</span>
                       <span>{itlHistogram.max.toFixed(1)} ms</span>
                     </div>
+                    {/* Chart-to-table alternative (#820): every bin's exact
+                        count + ms range, sr-only until keyboard focus — the
+                        bars' data-tooltip attrs never reach the AX tree. */}
+                    <ChartDataTable
+                      caption={t('chartTable.itlHistogramCaption')}
+                      rowHeaderLabel={t('chartTable.itlBin')}
+                      columns={[{ key: 'count', label: t('chartTable.tokenCount'), numeric: true }]}
+                      mode="sr-only"
+                      rows={itlHistogram.bins.map((b, i) => ({
+                        id: `bin-${i}`,
+                        label: `${b.from.toFixed(1)}–${b.to.toFixed(1)}`,
+                        cells: { count: b.count.toLocaleString() }
+                      }))}
+                    />
                     <p className="hint-text" style={{ marginTop: '6px' }}>
                       {t('singleTurn.itlStreamHint')}
                     </p>

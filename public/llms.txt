@@ -258,6 +258,15 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - **Unknown-id behavior:** an unknown `preset=`, `gpu=` or `wp=` value is never silently swapped for a default and never erased from the URL. The app keeps the original value in the link, shows a visible warning banner, sets `data-invalid-param="<name>=<value>"` on the content root, logs a `console.warn`, and displays default speeds/hardware until you pick a valid id.
 Playback speed is deep-linkable on every animated tab: `sim=instant` completes the animation immediately (<1 s; alias `inst` accepted — both spellings work), and numeric multipliers map to the speed buttons as `sim=1|2|5|20`. Combine with `autoplay=1` to start the run on load, e.g. `/?tab=single&autoplay=1&sim=instant` lands on finished output without waiting through real-time animation.
 
+### Instant results on animated tabs (escape hatches)
+
+The single-turn, agentic, batching and A/B tabs animate their simulation (seconds to minutes at 1x). Two supported ways to get the final completed DOM immediately:
+
+- `?sim=instant` — URL-addressable; every animated view jumps straight to the completed state (<1 s). Works on `/` and `/embed` and composes with `autoplay=1` (e.g. `/?tab=agentic&sim=instant&autoplay=1`).
+- `prefers-reduced-motion: reduce` — the OS-level media query is honored by all four animated views and also forces instant completion. In headless browsers: Playwright context option `reducedMotion: 'reduce'` or CDP `Emulation.setEmulatedMedia({features:[{name:'prefers-reduced-motion', value:'reduce'}]})`. This is environment-based (not shareable via URL), so prefer `?sim=instant` when you control the link.
+
+Both hatches produce the identical final DOM state as a full-speed run; completion is detectable via the view's status text ("Run complete" / phase labels).
+
 <!-- tabs-section:start -->
 ### Tab: single — Single-turn
 

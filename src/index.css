@@ -374,6 +374,15 @@ a { color: var(--accent); }
 
 .btn:hover { background: var(--bg-hover); border-color: #3E4F61; }
 
+/* Compact button variant (#841): keeps the small padding/type of the old
+   inline styles but deliberately sets NO min-height, so the coarse-pointer
+   44px touch-target rule below still applies on phones. */
+.btn-sm {
+  min-height: 0;
+  padding: 5px 12px;
+  font-size: 0.76rem;
+}
+
 .btn-accent {
   background: var(--accent);
   border-color: var(--accent);

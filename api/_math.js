@@ -49,12 +49,26 @@ export function sanityWarnings({ promptTokens = 0, prefillSpeed = 0, decodeSpeed
 }
 
 export function singleTurn({ promptTokens = 2048, outputTokens = 512, prefillSpeed = 3800, decodeSpeed = 105 } = {}) {
-  const ttft = promptTokens / prefillSpeed;
+  // Zero-prompt guard (#846): promptTokens=0 with prefillSpeed=0 is 0/0=NaN,
+  // which poisoned totalWalltimeSeconds even though the decode phase was fully
+  // computable. A zero/empty-prompt turn has NO prefill phase → ttft = 0 and
+  // total = decodeSeconds; only tokens>0 with speed≤0 stays genuinely
+  // impossible (Infinity).
+  const ttft = promptTokens > 0
+    ? (prefillSpeed > 0 ? promptTokens / prefillSpeed : Infinity)
+    : 0;
+  const warnings = sanityWarnings({ promptTokens, prefillSpeed, decodeSpeed });
+  if (promptTokens <= 0 && prefillSpeed <= 0) {
+    warnings.push({
+      code: 'degenerate_zero_prompt_ttft',
+      message: 'promptTokens=0 with prefillSpeed=0 is a 0/0 degenerate case — TTFT substituted as 0 (no prefill phase); total walltime equals decode time.'
+    });
+  }
   const decodeTime = outputTokens / decodeSpeed;
   const total = ttft + decodeTime;
   return {
     inputs: { promptTokens, outputTokens, prefillSpeed, decodeSpeed },
-    warnings: sanityWarnings({ promptTokens, prefillSpeed, decodeSpeed }),
+    warnings,
     ttftSeconds: round(ttft),
     tpotMs: round(decodeSpeed > 0 ? 1000 / decodeSpeed : Infinity),
     decodeSeconds: round(decodeTime),
