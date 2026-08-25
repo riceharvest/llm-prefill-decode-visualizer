@@ -88,6 +88,28 @@ function send429(res, info) {
   }, null, 2));
 }
 
+/** Stamp the X-RateLimit-Limit/-Remaining/-Reset trio for `info` on `res`. */
+export function applyRateLimitHeaders(res, info) {
+  res.setHeader('X-RateLimit-Limit', String(info.limit));
+  res.setHeader('X-RateLimit-Remaining', String(info.remaining));
+  res.setHeader('X-RateLimit-Reset', String(info.resetEpochSec));
+}
+
+/**
+ * Rate-limit snapshot for responses whose request path never ran
+ * enforceRateLimit (helpers that predate it, router-level 404/500, ...).
+ * Reports the documented budget WITHOUT consuming from any bucket, so the
+ * public/llms.txt contract — "Every /api/* response carries rate-limit
+ * headers" — holds even where per-client accounting does not apply.
+ */
+export function defaultRateLimitInfo(now = Date.now()) {
+  return {
+    limit: RATE_LIMIT,
+    remaining: RATE_LIMIT,
+    resetEpochSec: Math.ceil((now + RATE_WINDOW_MS) / 1000)
+  };
+}
+
 /**
  * Check the caller's budget and stamp X-RateLimit-Limit/-Remaining/-Reset on
  * the response. On exhaustion writes a full 429 body (+ Retry-After) and
@@ -100,9 +122,7 @@ export function enforceRateLimit(req, res, { key } = {}) {
   // machine-readable `rate_limit` object in agent-facing JSON bodies (see
   // _schema.js). Plain property so node --test mock responses work too.
   res.rateLimitInfo = info;
-  res.setHeader('X-RateLimit-Limit', String(info.limit));
-  res.setHeader('X-RateLimit-Remaining', String(info.remaining));
-  res.setHeader('X-RateLimit-Reset', String(info.resetEpochSec));
+  applyRateLimitHeaders(res, info);
   if (!info.allowed) {
     send429(res, info);
     return false;

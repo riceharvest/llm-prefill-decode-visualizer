@@ -33,6 +33,7 @@ import { default as versions } from './_handlers/versions.js';
 import { ROUTES } from './_route_table.js';
 import { withMarkdownNegotiation } from './_markdown.js';
 import { applyVersionTrustHeaders } from './_versions.js';
+import { sendJson } from './_schema.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -58,10 +59,7 @@ export function canonicalApiPath(pathname) {
 }
 
 function json(res, body, status = 200) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.end(JSON.stringify(body, null, 2));
+  return sendJson(res, body, { status });
 }
 
 /**
