@@ -56,6 +56,9 @@ class Run:
             engine (None | str | Unset):  Example: llama.cpp.
             engine_version (None | str | Unset):
             quantization (None | str | Unset):  Example: q4_k_m.
+            batch_size (int | None | Unset): Batch size reported by the runner (1 = single-stream)
+            concurrency (int | None | Unset): Concurrent requests reported by the runner
+            num_parallel (int | None | Unset): Parallel sequences reported by the runner
             prompt_tokens (int | None | Unset):
             output_tokens (int | None | Unset):
             context_length (int | None | Unset):
@@ -87,6 +90,9 @@ class Run:
     engine: None | str | Unset = UNSET
     engine_version: None | str | Unset = UNSET
     quantization: None | str | Unset = UNSET
+    batch_size: int | None | Unset = UNSET
+    concurrency: int | None | Unset = UNSET
+    num_parallel: int | None | Unset = UNSET
     prompt_tokens: int | None | Unset = UNSET
     output_tokens: int | None | Unset = UNSET
     context_length: int | None | Unset = UNSET
@@ -213,6 +219,24 @@ class Run:
         else:
             quantization = self.quantization
 
+        batch_size: int | None | Unset
+        if isinstance(self.batch_size, Unset):
+            batch_size = UNSET
+        else:
+            batch_size = self.batch_size
+
+        concurrency: int | None | Unset
+        if isinstance(self.concurrency, Unset):
+            concurrency = UNSET
+        else:
+            concurrency = self.concurrency
+
+        num_parallel: int | None | Unset
+        if isinstance(self.num_parallel, Unset):
+            num_parallel = UNSET
+        else:
+            num_parallel = self.num_parallel
+
         prompt_tokens: int | None | Unset
         if isinstance(self.prompt_tokens, Unset):
             prompt_tokens = UNSET
@@ -308,6 +332,12 @@ class Run:
             field_dict["engineVersion"] = engine_version
         if quantization is not UNSET:
             field_dict["quantization"] = quantization
+        if batch_size is not UNSET:
+            field_dict["batchSize"] = batch_size
+        if concurrency is not UNSET:
+            field_dict["concurrency"] = concurrency
+        if num_parallel is not UNSET:
+            field_dict["numParallel"] = num_parallel
         if prompt_tokens is not UNSET:
             field_dict["promptTokens"] = prompt_tokens
         if output_tokens is not UNSET:
@@ -538,6 +568,36 @@ class Run:
         quantization = _parse_quantization(d.pop("quantization", UNSET))
 
 
+        def _parse_batch_size(data: object) -> int | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(int | None | Unset, data)
+
+        batch_size = _parse_batch_size(d.pop("batchSize", UNSET))
+
+
+        def _parse_concurrency(data: object) -> int | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(int | None | Unset, data)
+
+        concurrency = _parse_concurrency(d.pop("concurrency", UNSET))
+
+
+        def _parse_num_parallel(data: object) -> int | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(int | None | Unset, data)
+
+        num_parallel = _parse_num_parallel(d.pop("numParallel", UNSET))
+
+
         def _parse_prompt_tokens(data: object) -> int | None | Unset:
             if data is None:
                 return data
@@ -689,6 +749,9 @@ class Run:
             engine=engine,
             engine_version=engine_version,
             quantization=quantization,
+            batch_size=batch_size,
+            concurrency=concurrency,
+            num_parallel=num_parallel,
             prompt_tokens=prompt_tokens,
             output_tokens=output_tokens,
             context_length=context_length,

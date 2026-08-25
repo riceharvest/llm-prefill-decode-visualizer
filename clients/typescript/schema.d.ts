@@ -487,6 +487,12 @@ export interface components {
             prefillTokPerSec: number;
             /** @description Measured single-stream decode speed (tok/s) */
             decodeTokPerSec: number;
+            /** @description Batch size reported by the runner (1 = single-stream) */
+            batchSize?: number | null;
+            /** @description Concurrent requests reported by the runner */
+            concurrency?: number | null;
+            /** @description Parallel sequences reported by the runner */
+            numParallel?: number | null;
             promptTokens?: number | null;
             outputTokens?: number | null;
             contextLength?: number | null;
