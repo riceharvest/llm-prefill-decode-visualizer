@@ -487,6 +487,10 @@ export interface components {
             prefillTokPerSec: number;
             /** @description Measured single-stream decode speed (tok/s) */
             decodeTokPerSec: number;
+            /** @description Unrounded measured prompt-processing speed (tok/s); null when the source row predates exact capture */
+            prefillTokPerSecExact?: number | null;
+            /** @description Unrounded measured decode speed (tok/s); null when the source row predates exact capture */
+            decodeTokPerSecExact?: number | null;
             /** @description Batch size reported by the runner (1 = single-stream) */
             batchSize?: number | null;
             /** @description Concurrent requests reported by the runner */

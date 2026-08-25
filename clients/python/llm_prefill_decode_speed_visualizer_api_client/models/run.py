@@ -56,6 +56,10 @@ class Run:
             engine (None | str | Unset):  Example: llama.cpp.
             engine_version (None | str | Unset):
             quantization (None | str | Unset):  Example: q4_k_m.
+            prefill_tok_per_sec_exact (float | None | Unset): Unrounded measured prompt-processing speed (tok/s); null when
+                the source row predates exact capture
+            decode_tok_per_sec_exact (float | None | Unset): Unrounded measured decode speed (tok/s); null when the source
+                row predates exact capture
             batch_size (int | None | Unset): Batch size reported by the runner (1 = single-stream)
             concurrency (int | None | Unset): Concurrent requests reported by the runner
             num_parallel (int | None | Unset): Parallel sequences reported by the runner
@@ -90,6 +94,8 @@ class Run:
     engine: None | str | Unset = UNSET
     engine_version: None | str | Unset = UNSET
     quantization: None | str | Unset = UNSET
+    prefill_tok_per_sec_exact: float | None | Unset = UNSET
+    decode_tok_per_sec_exact: float | None | Unset = UNSET
     batch_size: int | None | Unset = UNSET
     concurrency: int | None | Unset = UNSET
     num_parallel: int | None | Unset = UNSET
@@ -219,6 +225,18 @@ class Run:
         else:
             quantization = self.quantization
 
+        prefill_tok_per_sec_exact: float | None | Unset
+        if isinstance(self.prefill_tok_per_sec_exact, Unset):
+            prefill_tok_per_sec_exact = UNSET
+        else:
+            prefill_tok_per_sec_exact = self.prefill_tok_per_sec_exact
+
+        decode_tok_per_sec_exact: float | None | Unset
+        if isinstance(self.decode_tok_per_sec_exact, Unset):
+            decode_tok_per_sec_exact = UNSET
+        else:
+            decode_tok_per_sec_exact = self.decode_tok_per_sec_exact
+
         batch_size: int | None | Unset
         if isinstance(self.batch_size, Unset):
             batch_size = UNSET
@@ -332,6 +350,10 @@ class Run:
             field_dict["engineVersion"] = engine_version
         if quantization is not UNSET:
             field_dict["quantization"] = quantization
+        if prefill_tok_per_sec_exact is not UNSET:
+            field_dict["prefillTokPerSecExact"] = prefill_tok_per_sec_exact
+        if decode_tok_per_sec_exact is not UNSET:
+            field_dict["decodeTokPerSecExact"] = decode_tok_per_sec_exact
         if batch_size is not UNSET:
             field_dict["batchSize"] = batch_size
         if concurrency is not UNSET:
@@ -568,6 +590,26 @@ class Run:
         quantization = _parse_quantization(d.pop("quantization", UNSET))
 
 
+        def _parse_prefill_tok_per_sec_exact(data: object) -> float | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(float | None | Unset, data)
+
+        prefill_tok_per_sec_exact = _parse_prefill_tok_per_sec_exact(d.pop("prefillTokPerSecExact", UNSET))
+
+
+        def _parse_decode_tok_per_sec_exact(data: object) -> float | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(float | None | Unset, data)
+
+        decode_tok_per_sec_exact = _parse_decode_tok_per_sec_exact(d.pop("decodeTokPerSecExact", UNSET))
+
+
         def _parse_batch_size(data: object) -> int | None | Unset:
             if data is None:
                 return data
@@ -749,6 +791,8 @@ class Run:
             engine=engine,
             engine_version=engine_version,
             quantization=quantization,
+            prefill_tok_per_sec_exact=prefill_tok_per_sec_exact,
+            decode_tok_per_sec_exact=decode_tok_per_sec_exact,
             batch_size=batch_size,
             concurrency=concurrency,
             num_parallel=num_parallel,
