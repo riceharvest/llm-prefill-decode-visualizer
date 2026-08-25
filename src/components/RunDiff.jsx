@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GitCompare } from 'lucide-react';
 import { readParam, writeParams } from '../utils/urlState';
+import { fetchJsonWithTimeout, FetchJsonError } from '../utils/fetchJson';
 
 // Minimal run-diff panel: two LocalMaxxing run ids in, per-metric deltas,
 // ratios and the API's plain-language summary out. Data comes from
@@ -21,14 +22,23 @@ export default function RunDiff() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/diff?runA=${encodeURIComponent(runA.trim())}&runB=${encodeURIComponent(runB.trim())}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || `API returned ${res.status}`);
+      // Shared helper (#723): bounded by a timeout (the button can no longer
+      // stick on "Diffing…" forever) and guarded against non-JSON responses
+      // (WAF challenge HTML no longer surfaces as a SyntaxError).
+      const json = await fetchJsonWithTimeout(
+        `/api/diff?runA=${encodeURIComponent(runA.trim())}&runB=${encodeURIComponent(runB.trim())}`
+      );
       setResult(json);
       writeParams({ tab: 'diff', runA: runA.trim(), runB: runB.trim() });
     } catch (e) {
       setResult(null);
-      setError(String(e.message || e));
+      setError(
+        e instanceof FetchJsonError
+          ? e.kind === 'http'
+            ? `${e.message} (HTTP ${e.status})`
+            : e.message
+          : String(e.message || e)
+      );
     } finally {
       setLoading(false);
     }

@@ -18,6 +18,7 @@ function mockRes() {
     ended: false,
     setHeader(k, v) { this.headers[k] = v; },
     getHeader(k) { return this.headers[k]; },
+    hasHeader(k) { const l = String(k).toLowerCase(); return Object.keys(this.headers).some(h => h.toLowerCase() === l); },
     end(b) { this.ended = true; this.body = b ? JSON.parse(b) : null; }
   };
 }

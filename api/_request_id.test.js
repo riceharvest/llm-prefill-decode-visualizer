@@ -12,7 +12,13 @@ async function callHandler(url, headers = {}) {
     statusCode: 0,
     headers: {},
     setHeader(k, v) { this.headers[k] = v; },
-    getHeader(k) { return this.headers[String(k).toLowerCase()]; },
+    // Case-insensitive like the real ServerResponse (setHeader stores raw keys).
+    getHeader(k) {
+      const l = String(k).toLowerCase();
+      const hit = Object.keys(this.headers).find(h => h.toLowerCase() === l);
+      return hit === undefined ? undefined : this.headers[hit];
+    },
+    hasHeader(k) { const l = String(k).toLowerCase(); return Object.keys(this.headers).some(h => h.toLowerCase() === l); },
     end(body) {
       captured.status = this.statusCode;
       captured.body = body;
