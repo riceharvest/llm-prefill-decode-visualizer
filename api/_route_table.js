@@ -28,7 +28,7 @@ export const ROUTES = [
   {
     path: '/compute',
     methods: ['GET', 'POST'],
-    description: 'Run inference math. ?model=singleTurn|speculative|batched|agentic|kvCache plus parameters. No model param returns a self-describing capability list. POST {"batch": [up to 50 parameter sets]} returns per-index results with per-item ok/error status.',
+    description: 'Run inference math. ?model=singleTurn|speculative|batched|agentic|kvCache|flagged|cost plus parameters. No model param returns a self-describing capability list. POST {"batch": [up to 50 parameter sets]} returns per-index results with per-item ok/error status.',
     returns: 'application/json',
     sinceVersion: '1.0.0',
   },
@@ -63,7 +63,7 @@ export const ROUTES = [
   {
     path: '/diff',
     methods: ['GET'],
-    description: 'Compare two runs or configurations side by side; also accepts what-if parameters to compare a stored run against hypothetical hardware/settings.',
+    description: 'Compare two measured runs side by side (?runA=<id>&runB=<id>), or diff two /api/best-style constraint sets in what-if mode (?mode=whatif&a=<constraints>&b=<constraints>). What-if sets are filters over the benchmark pool — they cannot reference a single stored run id.',
     returns: 'application/json',
     sinceVersion: '1.0.0',
   },
@@ -174,15 +174,8 @@ export const ROUTES = [
   {
     path: '/version',
     methods: ['GET'],
-    description: 'Machine-readable version report: service name, app version (package.json), wire schema_version (single spelling, stamped by the API layer), generatedAt timestamp and links to /api/versions, /api/spec, CHANGELOG-API.md and CHANGELOG.json.',
-    returns: '{ service, version, generatedAt, links{} } + universal schema_version stamp',
-    sinceVersion: '2.6.0',
-  },
-  {
-    path: '/versions',
-    methods: ['GET'],
-    description: 'Version discovery (#685): every served URL prefix (/api, /v1) with its wire schema_version and lifecycle status (current|deprecated, canonical flag, deprecatedAt, sunset). Pin a prefix whose status is "current"; deprecated prefixes also carry Deprecation/Sunset headers on every response.',
-    returns: '{ description, generatedAt, current, versions[]{prefix, schema_version, status, canonical, deprecatedAt, sunset}, links{} }',
+    description: 'Machine-readable version report: service name, app version (package.json), wire schemaVersion, generatedAt timestamp and links to /api/spec, CHANGELOG-API.md and CHANGELOG.json.',
+    returns: '{ service, version, schemaVersion, generatedAt, links{} }',
     sinceVersion: '2.6.0',
   },
   {
@@ -203,7 +196,7 @@ export const ROUTES = [
     path: '/agent/benchmarks.json',
     methods: ['GET'],
     description: 'Agent-friendly wrapper around the raw community run search (same data as the MCP search_runs tool and /api/localmaxxing). Flat per-run records with freshness stamps, echoed filters, cursor pagination. Filters mirror search_runs: ?hardware=, ?model=, ?quant= plus ?context_band=, ?max_age=, ?limit=, ?cursor=, ?snapshot=.',
-    returns: '{ description, endpoint, generatedAt, filters, results[], pagination{}, schema_version }',
+    returns: '{ description, endpoint, snapshot, generatedAt, filters, total, count, runs[], has_more, next_cursor, caveats, relatedEndpoints, schema_version }',
     sinceVersion: '2.6.0',
   },
   {
@@ -227,14 +220,6 @@ export const ROUTES = [
     description: 'Alias for GET /api/agent/freshness.json — identical handler and response shape.',
     returns: 'same as /api/agent/freshness.json',
     sinceVersion: '2.6.0',
-  },
-  {
-    path: '/problems',
-    methods: ['GET'],
-    description:
-      'RFC 9457 problem-type documentation for every error code advertised in problem+json `type` URIs (/problems/<slug>, slug = lowercased CODE with _ → -). No argument returns the registry index; ?code=<slug|CODE> or /problems/<slug> returns { code, slug, type, title, status, description, spec }. Unknown codes return 404 with the available slugs.',
-    returns: '{ description, codes[] } index, or per-code { code, slug, type, title, status, description, spec }',
-    sinceVersion: '2.6.1',
   },
 ];
 
