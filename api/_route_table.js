@@ -228,6 +228,14 @@ export const ROUTES = [
     returns: 'same as /api/agent/freshness.json',
     sinceVersion: '2.6.0',
   },
+  {
+    path: '/problems',
+    methods: ['GET'],
+    description:
+      'RFC 9457 problem-type documentation for every error code advertised in problem+json `type` URIs (/problems/<slug>, slug = lowercased CODE with _ → -). No argument returns the registry index; ?code=<slug|CODE> or /problems/<slug> returns { code, slug, type, title, status, description, spec }. Unknown codes return 404 with the available slugs.',
+    returns: '{ description, codes[] } index, or per-code { code, slug, type, title, status, description, spec }',
+    sinceVersion: '2.6.1',
+  },
 ];
 
 /** Flattened view: one entry per (method, path) pair, sorted for stable output. */
