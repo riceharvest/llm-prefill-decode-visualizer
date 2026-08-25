@@ -109,6 +109,8 @@ export function buildFreshnessBody(runs, params = {}, { now = new Date(), endpoi
     ageSeconds: c.ageMs == null ? null : Math.round(c.ageMs / 1000),
     ttlSeconds: Math.round(c.ttlMs / 1000),
     rowCount: c.rowCount,
+    crawlComplete: c.crawlComplete,
+    upstreamRows: c.upstreamRows,
     source: c.upstream
   };
 

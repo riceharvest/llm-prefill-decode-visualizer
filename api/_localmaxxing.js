@@ -10,11 +10,15 @@ import { contextBandOf, contextBandMix } from './_contextbands.js';
 const UPSTREAM = 'https://www.localmaxxing.com/api';
 const PAGE = 200;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+// Hard ceiling on the paginated upstream crawl (offsets 0..CRAWL_MAX_OFFSET).
+// When the leaderboard outgrows this, the crawl stops early — surfaced as
+// `crawlComplete: false` by getCacheInfo() instead of silently truncating.
+const CRAWL_MAX_OFFSET = 20000;
 
 /** Runs further than this many IQRs from their group median are flagged as outliers. */
 export const DEFAULT_OUTLIER_IQRS = 2.5;
 
-let cache = { rows: null, fetchedAt: 0, promise: null };
+let cache = { rows: null, fetchedAt: 0, promise: null, truncated: false };
 // Full index (comparable + non-comparable runs), populated by the same
 // upstream fetch that fills `cache` — used only by the /api/runs dump.
 let rawCache = { rows: null, fetchedAt: 0 };
@@ -84,7 +88,8 @@ export async function getDataset() {
     // every subsequent offset by one) cannot duplicate a row inside the
     // cached dataset (#1102).
     const seen = new Set();
-    for (let offset = 0; offset <= 20000; offset += PAGE) {
+    let truncated = false;
+    for (let offset = 0; offset <= CRAWL_MAX_OFFSET; offset += PAGE) {
       const res = await fetch(`${UPSTREAM}/leaderboard?limit=${PAGE}&offset=${offset}`, {
         headers: { accept: 'application/json' }
       });
@@ -100,10 +105,14 @@ export async function getDataset() {
         rows.push(r);
       }
       if (batch.length < PAGE) break;
+      // A full page at the last allowed offset means upstream has more rows
+      // than the cap lets us read — remember that instead of failing silently.
+      if (offset + PAGE > CRAWL_MAX_OFFSET) truncated = true;
     }
     const comparableRows = rows.filter(comparable).map(slim);
     cache.rows = comparableRows;
     cache.fetchedAt = Date.now();
+    cache.truncated = truncated;
     // Full index for /api/runs: every run, tagged. Same upstream pages —
     // zero additional requests.
     rawCache.rows = rows.map(r => {
@@ -116,7 +125,18 @@ export async function getDataset() {
     return comparableRows;
   })();
 
-  return settleWalk(cache.promise);
+  try {
+    const rows = await cache.promise;
+    // Clear the in-flight handle on success too (#1076): leaving the resolved
+    // promise in place made the `if (cache.promise)` branch short-circuit
+    // every post-TTL call, freezing the dataset at its first load forever.
+    cache.promise = null;
+    return { rows, fetchedAt: cache.fetchedAt };
+  } catch (err) {
+    cache.promise = null; // allow retry; serve stale if we have it
+    if (cache.rows) return { rows: cache.rows, fetchedAt: cache.fetchedAt };
+    throw err;
+  }
 }
 
 function slim(r) {
@@ -155,12 +175,14 @@ function slim(r) {
 }
 
 export function invalidateCache() {
-  cache = { rows: null, fetchedAt: 0, promise: null };
+  cache = { rows: null, fetchedAt: 0, promise: null, truncated: false };
   rawCache = { rows: null, fetchedAt: 0 };
 }
 
 /**
  * Cache-freshness snapshot for /api/health. Cheap: no network calls.
+ * `crawlComplete` is false when the upstream leaderboard exceeded the crawl
+ * offset cap, so consumers can tell a truncated dataset from a complete one.
  */
 export function getCacheInfo() {
   const now = Date.now();
@@ -171,6 +193,8 @@ export function getCacheInfo() {
     ageMs: cache.rows ? now - cache.fetchedAt : null,
     rowCount: cache.rows ? cache.rows.length : 0,
     ttlMs: CACHE_TTL_MS,
+    crawlComplete: !cache.truncated,
+    upstreamRows: rawCache.rows ? rawCache.rows.length : 0,
     upstream: UPSTREAM
   };
 }
