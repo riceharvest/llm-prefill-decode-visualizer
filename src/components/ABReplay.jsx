@@ -12,6 +12,7 @@ import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { downloadJson } from '../utils/exportJson';
 import { buildAbMarkdown, buildAbJson } from '../utils/exportAb';
+import { shouldCompleteInstantly } from '../utils/simPlayback';
 
 // Map an /api/presets hardware entry onto the internal preset shape so the
 // fetched agent data can seed/extend the lane selectors exactly like the
@@ -180,6 +181,22 @@ export default function ABReplay({
       return;
     }
 
+    // Complete synchronously when no animation frame is needed (#1079):
+    // instant mode / reduced-motion / degenerate master timeline used to jump
+    // from INSIDE the rAF tick, which hidden/background tabs never service —
+    // playback hung forever there. Same completions, same precedence order,
+    // but before any rAF is armed.
+    if (!Number.isFinite(masterTotal) || masterTotal <= 0) {
+      seekTo(0);
+      setIsPlaying(false);
+      return;
+    }
+    if (shouldCompleteInstantly(simSpeedMultiplier, prefersReducedMotion)) {
+      seekTo(masterTotal);
+      setIsPlaying(false);
+      return;
+    }
+
     const tick = (now) => {
       if (!lastTickRef.current) {
         lastTickRef.current = now;
@@ -188,21 +205,6 @@ export default function ABReplay({
       }
       const realDeltaSec = (now - lastTickRef.current) / 1000;
       lastTickRef.current = now;
-
-      // Non-finite master timeline (e.g. a lane with zero speed): jump to done
-      if (!Number.isFinite(masterTotal) || masterTotal <= 0) {
-        seekTo(0);
-        setIsPlaying(false);
-        return;
-      }
-
-      // Instant mode — or prefers-reduced-motion (issue #63): complete the
-      // whole synchronized run in one frame with no motion.
-      if (simSpeedMultiplier === 'instant' || prefersReducedMotion) {
-        seekTo(masterTotal);
-        setIsPlaying(false);
-        return;
-      }
 
       const next = simTimeRef.current + realDeltaSec * simSpeedMultiplier;
       if (next >= masterTotal) {

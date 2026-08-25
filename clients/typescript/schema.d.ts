@@ -745,10 +745,36 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** @description Computed inference metrics plus the standard envelope stamp. */
         ComputeResponse: {
+            /** @description Deterministic content hash of the resolved request */
+            id?: string;
+            /** @description Resolved input parameters (defaults filled in) */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /** @description Implausibility warnings (empty when inputs are plausible); never affect the math or HTTP status. */
+            warnings: ({
+                /** @enum {string} */
+                code?: "decode_above_bandwidth_roofline" | "prefill_above_compute_roofline" | "ttft_below_kernel_launch_floor";
+                message?: string;
+            } & {
+                [key: string]: unknown;
+            })[];
+            /** @description Time to first token (singleTurn/batched/agentic/kvCache/cost modes) */
+            ttftSeconds?: number;
+            /** @description Time per output token in ms */
+            tpotMs?: number;
+            decodeSeconds?: number;
+            totalWalltimeSeconds?: number;
+            effectiveThroughputTokPerSec?: number;
+            prefillSharePct?: number;
+            decodeSharePct?: number;
             /** @constant */
             schema_version: "1";
-        } & components["schemas"]["ComputeResult"];
+        } & {
+            [key: string]: unknown;
+        };
         /** @description Cursor-paginated raw run list, sorted by decode speed desc (runId tiebreak). Follow next_cursor until has_more is false. */
         RunListEnvelope: {
             description?: string;
@@ -965,8 +991,7 @@ export interface operations {
                 architecture?: "llama70b" | "llama8b" | "qwen72b" | "mistral7b";
                 /** @description kvCache (must be >= 1; checked against the architecture max context — overflow emits a warning plus contextWindow.withinLimit/overflowTokens) */
                 contextLength?: number;
-                /** @description kvCache: FP16/FP8/INT4 */
-                precisionBytes?: 2 | 1 | 0.5;
+                precisionBytes?: number;
                 /** @description flagged: comma-separated engine flag ids (flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3). Documented heuristic deltas; response carries a per-flag audit trail. */
                 flags?: string;
                 /** @description Validate + echo parsed params (defaults filled in) without executing any math. Returns { dry_run: true, model, inputs, id?, note }; the id matches the real call. Also applies per-item inside a batch via "dry_run": true in the POST body. */
@@ -1429,7 +1454,19 @@ export interface operations {
                  *       "webhookUrl": "https://example.com/hooks/llm-watch"
                  *     }
                  */
-                "application/json": unknown;
+                "application/json": {
+                    /** @description Model family/name substring to match */
+                    model?: string;
+                    /** @description Hardware key or label substring to match */
+                    hardware?: string;
+                    /** @description Exact quantization match (optional) */
+                    quant?: string | null;
+                    /**
+                     * Format: uri
+                     * @description https-only webhook notified of new matching runs
+                     */
+                    webhookUrl?: string;
+                };
             };
         };
         responses: {

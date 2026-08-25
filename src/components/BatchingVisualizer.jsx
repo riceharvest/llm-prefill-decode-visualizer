@@ -7,6 +7,7 @@ import { clockToRunState, runStateToBusy } from '../utils/viewState';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import Metric from './Metric';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
+import { shouldCompleteInstantly } from '../utils/simPlayback';
 import { t } from '../i18n/strings';
 import { buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { downloadJson } from '../utils/exportJson';
@@ -156,6 +157,20 @@ export default function BatchingVisualizer({
     }
     if (simTimeRef.current >= makespan) simTimeRef.current = 0; // replay from start
 
+    // Complete synchronously when no animation frame is needed (#1079):
+    // instant mode / reduced-motion / degenerate makespan used to jump from
+    // INSIDE the rAF tick, which hidden/background tabs never service —
+    // playback hung forever there. Same completion, before any rAF is armed.
+    if (
+      shouldCompleteInstantly(simSpeedMultiplier, prefersReducedMotion) ||
+      !Number.isFinite(makespan) ||
+      makespan <= 0
+    ) {
+      setElapsedSim(makespan);
+      setIsPlaying(false);
+      return;
+    }
+
     const tick = (now) => {
       if (!lastTickRef.current) {
         lastTickRef.current = now;
@@ -164,14 +179,6 @@ export default function BatchingVisualizer({
       }
       const realDelta = (now - lastTickRef.current) / 1000;
       lastTickRef.current = now;
-
-      // Instant mode — or prefers-reduced-motion (issue #63): jump straight
-      // to the final schedule instead of animating the playhead across it.
-      if (simSpeedMultiplier === 'instant' || prefersReducedMotion || !Number.isFinite(makespan) || makespan <= 0) {
-        setElapsedSim(makespan);
-        setIsPlaying(false);
-        return;
-      }
 
       simTimeRef.current += realDelta * simSpeedMultiplier;
       if (simTimeRef.current >= makespan) {

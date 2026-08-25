@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ProblemCode(str, Enum):
     BATCH_ALL_FAILED = "BATCH_ALL_FAILED"
     INTERNAL = "INTERNAL"

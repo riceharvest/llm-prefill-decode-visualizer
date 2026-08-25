@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ContradictionMetric(str, Enum):
     DECODE = "decode"
     PREFILL = "prefill"

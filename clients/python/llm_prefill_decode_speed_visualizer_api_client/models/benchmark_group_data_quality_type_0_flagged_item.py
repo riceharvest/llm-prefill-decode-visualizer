@@ -1,40 +1,27 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
-from ..types import UNSET, Unset
-from typing import cast
-
-
-
-
-
-
 T = TypeVar("T", bound="BenchmarkGroupDataQualityType0FlaggedItem")
-
 
 
 @_attrs_define
 class BenchmarkGroupDataQualityType0FlaggedItem:
-    """ 
-        Attributes:
-            run_id (int | Unset):
-            codes (list[str] | Unset):
-     """
+    """
+    Attributes:
+        run_id (int | Unset):
+        codes (list[str] | Unset):
+    """
 
     run_id: int | Unset = UNSET
     codes: list[str] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
-
-
-
-
 
     def to_dict(self) -> dict[str, Any]:
         run_id = self.run_id
@@ -43,21 +30,15 @@ class BenchmarkGroupDataQualityType0FlaggedItem:
         if not isinstance(self.codes, Unset):
             codes = self.codes
 
-
-
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-        })
+        field_dict.update({})
         if run_id is not UNSET:
             field_dict["runId"] = run_id
         if codes is not UNSET:
             field_dict["codes"] = codes
 
         return field_dict
-
-
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
@@ -66,12 +47,10 @@ class BenchmarkGroupDataQualityType0FlaggedItem:
 
         codes = cast(list[str], d.pop("codes", UNSET))
 
-
         benchmark_group_data_quality_type_0_flagged_item = cls(
             run_id=run_id,
             codes=codes,
         )
-
 
         benchmark_group_data_quality_type_0_flagged_item.additional_properties = d
         return benchmark_group_data_quality_type_0_flagged_item

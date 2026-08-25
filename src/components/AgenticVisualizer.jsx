@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, FileDown, Copy, Zap, Gauge, FileJson } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, readParamBool, readParam, consumeAutoplay, writeParams } from '../utils/urlState';
+import { shouldCompleteInstantly } from '../utils/simPlayback';
 import { calculateAgenticTimeline, waterfallGeometry, waterfallSegmentLabels } from '../utils/agenticMath';
 import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { exportNodeAsPng } from '../utils/exportPng';
@@ -336,6 +337,25 @@ export default function AgenticVisualizer({
       simTimeRef.current = 0;
     }
 
+    // Complete synchronously when no animation frame is needed (#1079):
+    // instant mode / reduced-motion / degenerate walltime used to jump from
+    // INSIDE the rAF tick, which hidden/background tabs never service —
+    // playback hung forever there. Same completion, before any rAF is armed.
+    if (
+      shouldCompleteInstantly(simSpeedMultiplier, prefersReducedMotion) ||
+      !Number.isFinite(totalAgentWalltime) ||
+      totalAgentWalltime <= 0
+    ) {
+      const last = turnBreakdown[turnBreakdown.length - 1] || { newTokensPrefilled: 0, decodeTokens: 0 };
+      setActiveTurn(numTurns);
+      setCurrentPhase('completed');
+      setPrefillProgress(last.newTokensPrefilled);
+      setDecodeProgress(last.decodeTokens);
+      setElapsedSim(totalAgentWalltime);
+      setIsPlaying(false);
+      return;
+    }
+
     const tick = (now) => {
       if (!lastTickRef.current) {
         lastTickRef.current = now;
@@ -345,21 +365,6 @@ export default function AgenticVisualizer({
 
       const realDelta = (now - lastTickRef.current) / 1000;
       lastTickRef.current = now;
-
-      if (simSpeedMultiplier === 'instant' || prefersReducedMotion || !Number.isFinite(totalAgentWalltime) || totalAgentWalltime <= 0) {
-        // Instant mode — or prefers-reduced-motion (issue #63), or a
-        // non-finite/zero walltime (e.g. a speed typed as 0, which would
-        // otherwise hang the loop on turn 1 forever). Reduced-motion users
-        // get the final state in one step instead of a frame-by-frame stream.
-        const last = turnBreakdown[turnBreakdown.length - 1] || { newTokensPrefilled: 0, decodeTokens: 0 };
-        setActiveTurn(numTurns);
-        setCurrentPhase('completed');
-        setPrefillProgress(last.newTokensPrefilled);
-        setDecodeProgress(last.decodeTokens);
-        setElapsedSim(totalAgentWalltime);
-        setIsPlaying(false);
-        return;
-      }
 
       const simDelta = realDelta * simSpeedMultiplier;
       simTimeRef.current += simDelta;

@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class BestResultContextBandsBandsItemBand(str, Enum):
     LT1K = "lt1k"
     VALUE_1 = "1k-8k"
