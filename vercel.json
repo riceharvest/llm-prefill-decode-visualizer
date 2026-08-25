@@ -6,36 +6,8 @@
       "destination": "/api/calc?id=:id"
     },
     {
-      "source": "/api/watch/rss.xml",
-      "destination": "/api/watch-rss"
-    },
-    {
       "source": "/api/watch/dispatch",
       "destination": "/api/watch-dispatch"
-    },
-    {
-      "source": "/api/agent/capabilities.json",
-      "destination": "/api/agent-json?file=capabilities.json"
-    },
-    {
-      "source": "/api/agent/compute.json",
-      "destination": "/api/agent-json?file=compute.json"
-    },
-    {
-      "source": "/api/agent/benchmarks.json",
-      "destination": "/api/agent-json?file=benchmarks.json"
-    },
-    {
-      "source": "/api/agent/scenario.json",
-      "destination": "/api/agent-json?file=scenario.json"
-    },
-    {
-      "source": "/api/agent/freshness.json",
-      "destination": "/api/agent-json?file=freshness.json"
-    },
-    {
-      "source": "/api/agent/confidence.json",
-      "destination": "/api/agent-json?file=confidence.json"
     },
     {
       "source": "/v1/calc/:id",
@@ -86,34 +58,6 @@
       "destination": "/api/:path*"
     },
     {
-      "source": "/api/agent/capabilities.json",
-      "destination": "/api/agent/capabilities"
-    },
-    {
-      "source": "/api/agent/compute.json",
-      "destination": "/api/agent/compute"
-    },
-    {
-      "source": "/api/agent/benchmarks.json",
-      "destination": "/api/agent/benchmarks"
-    },
-    {
-      "source": "/api/agent/scenario.json",
-      "destination": "/api/agent/scenario"
-    },
-    {
-      "source": "/api/agent/freshness.json",
-      "destination": "/api/agent/freshness"
-    },
-    {
-      "source": "/api/agent/confidence.json",
-      "destination": "/api/agent/confidence"
-    },
-    {
-      "source": "/api/watch/rss.xml",
-      "destination": "/api/watch/rss"
-    },
-    {
       "source": "/localmaxxing-api/:path*",
       "destination": "https://www.localmaxxing.com/api/:path*"
     },
@@ -156,6 +100,38 @@
     {
       "source": "/problems/:code",
       "destination": "/api/problems/:code"
+    },
+    {
+      "source": "/api/:a/:b*",
+      "destination": "/api/notfound?a=:a&b=:b*"
+    },
+    {
+      "source": "/api/watch/rss.xml",
+      "destination": "/api/watch-rss"
+    },
+    {
+      "source": "/api/agent/capabilities.json",
+      "destination": "/api/agent/capabilities"
+    },
+    {
+      "source": "/api/agent/compute.json",
+      "destination": "/api/agent/compute"
+    },
+    {
+      "source": "/api/agent/benchmarks.json",
+      "destination": "/api/agent/benchmarks"
+    },
+    {
+      "source": "/api/agent/scenario.json",
+      "destination": "/api/agent/scenario"
+    },
+    {
+      "source": "/api/agent/freshness.json",
+      "destination": "/api/agent/freshness"
+    },
+    {
+      "source": "/api/agent/confidence.json",
+      "destination": "/api/agent/confidence"
     }
   ],
   "headers": [

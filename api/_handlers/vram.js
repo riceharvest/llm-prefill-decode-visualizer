@@ -23,6 +23,7 @@
 import { resolveModel } from '../_hfconfig.js';
 import { resolveQuant } from '../_quant.js';
 import { lookupHfArch, guessArchFromName } from '../_hflookup.js';
+import { ApiError, sendProblem, sendProblemFromError } from '../_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -55,20 +56,24 @@ function normalizeHfId(hfIdRaw) {
 async function estimate(params) {
   const hfId = params.hfId ?? params.model ?? params.repo;
   if (!hfId) {
-    return {
-      status: 400,
-      body: {
-        error: 'missing hfId — pass ?hfId=org/model (e.g. meta-llama/Llama-3.1-8B-Instruct)',
-        params: ['hfId (required)', 'context (tokens, default 32768)', 'quant (default q4_k_m)',
-          'batchSize (default 1)', 'kvPrecisionBytes (default 2 = FP16)', 'vramGb (optional budget, GiB)',
-          'numTurns + tokensPerTurn (optional per-turn KV projection)'],
-        units: 'all memory figures are GiB (binary, 1024-based), not decimal GB',
-        examples: [
-          '/api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m',
-          '/api/vram?hfId=Qwen/Qwen2.5-32B&context=131072&quant=q4_k_m&vramGb=24'
-        ]
+    // RFC 9457 problem+json (#539): the stable `code` is what agents branch
+    // on; the parameter list and examples ride along as extra members so
+    // nothing discoverable is lost versus the old ad-hoc {error} shape.
+    throw new ApiError(
+      'INVALID_PARAMS',
+      'missing hfId — pass ?hfId=org/model (e.g. meta-llama/Llama-3.1-8B-Instruct)',
+      {
+        extras: {
+          params: ['hfId (required)', 'context (tokens, default 32768)', 'quant (default q4_k_m)',
+            'batchSize (default 1)', 'kvPrecisionBytes (default 2 = FP16)', 'vramGb (optional budget)',
+            'numTurns + tokensPerTurn (optional per-turn KV projection)'],
+          examples: [
+            '/api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m',
+            '/api/vram?hfId=Qwen/Qwen2.5-32B&context=131072&quant=q4_k_m&vramGb=24'
+          ]
+        }
       }
-    };
+    );
   }
 
   // Resolution tiers (issue #68): built-in table → Hugging Face → name
@@ -248,7 +253,16 @@ export default async function handler(req, res) {
     const { status, body } = await estimate(params);
     return json(res, body, status);
   } catch (err) {
+    // RFC 9457 problem+json (#539): ApiErrors keep their stable code/status;
+    // legacy tagged errors carry err.status from the resolution tiers
+    // (502 HF unreachable, 403 gated/private, 422 bad header, 400/404
+    // caller-wrong id) and map to their stable codes here.
+    if (err instanceof ApiError) return sendProblemFromError(res, req, err);
     const status = Number.isInteger(err.status) ? err.status : 500;
-    return json(res, { error: String(err.message || err) }, status);
+    const code = status === 502 ? 'UPSTREAM_UNAVAILABLE'
+      : status >= 500 ? 'INTERNAL'
+      : status === 404 ? 'NOT_FOUND'
+      : 'INVALID_PARAMS';
+    return sendProblem(res, req, { status, code, detail: String(err.message || err) });
   }
 }

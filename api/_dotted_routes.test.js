@@ -46,10 +46,14 @@ test('vercel.json rewrites every dotted /api route to its extensionless form', (
   for (const p of dottedRoutes) {
     const extless = p.replace(/\.(json|xml)$/, '');
     const source = `/api${p}`;
+    // /api/watch/rss.xml funnels to the single-segment /api/watch-rss
+    // carrier (#540's platform constraint supersedes the naive extless map);
+    // every other dotted route rewrites to its extensionless spelling.
+    const expected = p === '/watch/rss.xml' ? '/api/watch-rss' : `/api${extless}`;
     assert.equal(
       bySource.get(source),
-      `/api${extless}`,
-      `missing rewrite ${source} -> /api${extless} in vercel.json`
+      expected,
+      `missing rewrite ${source} -> ${expected} in vercel.json`
     );
   }
 });

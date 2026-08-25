@@ -27,7 +27,7 @@ async function callHandler(url, headers = {}) {
       captured.body = body;
     }
   };
-  await handler({ url, query: {}, headers }, res);
+  await handler({ url, query: {}, headers, method: 'GET' }, res);
   return { status: captured.status, headers: res.headers, body: captured.body };
 }
 
