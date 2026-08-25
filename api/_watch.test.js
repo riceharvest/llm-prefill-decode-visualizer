@@ -6,8 +6,10 @@ import { join } from 'node:path';
 import {
   validateWatch, matchesWatch, runsForWatch, unseenRunsForWatch,
   markRunsSeen, buildRssFeed, webhookPayload, deliverWebhook,
+  recordDeliveryFailure, recordDeliverySuccess, retryDue, rssEtag,
   watchLabel, rssPathFor, saveWatch, listWatches, findWatch,
-  removeWatch, updateWatch, MAX_WATCHES, MAX_SEEN_RUN_IDS, RSS_MAX_ITEMS
+  removeWatch, updateWatch, MAX_WATCHES, MAX_SEEN_RUN_IDS, RSS_MAX_ITEMS,
+  WEBHOOK_MAX_FAILURES, WEBHOOK_BACKOFF_BASE_MS
 } from './_watch.js';
 
 const RUN = (over = {}) => ({
@@ -90,6 +92,71 @@ test('unseenRunsForWatch skips pre-watch runs and the seen-set', () => {
   assert.deepEqual(unseen.map(r => r.runId), ['new', 'undated']);
 });
 
+test('#699: includeExisting removes the createdAt floor so backfilled runs are delivered', () => {
+  const watch = {
+    model: null, hardware: '4090', quant: null,
+    includeExisting: true,
+    createdAt: '2026-08-20T00:00:00Z',
+    lastSeenRunIds: []
+  };
+  const runs = [
+    RUN({ runId: 'backfill1', createdAt: '2026-08-01T00:00:00Z' }),
+    RUN({ runId: 'newer', createdAt: '2026-08-25T00:00:00Z' })
+  ];
+  assert.deepEqual(unseenRunsForWatch(runs, watch).map(r => r.runId), ['newer', 'backfill1']);
+
+  // Default (opt-out) keeps the floor.
+  const plain = { ...watch, includeExisting: false };
+  assert.deepEqual(unseenRunsForWatch(runs, plain).map(r => r.runId), ['newer']);
+});
+
+test('validateWatch accepts the includeExisting opt-in', () => {
+  const on = validateWatch({ model: 'qwen3', includeExisting: true });
+  assert.equal(on.ok, true);
+  assert.equal(on.watch.includeExisting, true);
+  const off = validateWatch({ model: 'qwen3' });
+  assert.equal(off.watch.includeExisting, false);
+});
+
+// ---------- Delivery health (#694) ----------
+
+test('#694: recordDeliveryFailure backs off exponentially and never marks runs seen', () => {
+  const watch = { lastSeenRunIds: [] };
+  const t0 = 1_700_000_000_000;
+  for (let i = 1; i < WEBHOOK_MAX_FAILURES; i++) {
+    recordDeliveryFailure(watch, { error: 'boom', now: t0 });
+    assert.equal(watch.consecutiveFailures, i);
+    const expectedDelay = Math.min(WEBHOOK_BACKOFF_BASE_MS * 2 ** (i - 1), 24 * 60 * 60 * 1000);
+    assert.equal(new Date(watch.nextRetryAt).getTime(), t0 + expectedDelay, `failure ${i}`);
+    assert.equal(watch.deadLettered, undefined);
+  }
+  // Last failure flips the dead-letter switch and clears nextRetryAt.
+  recordDeliveryFailure(watch, { status: 500, now: t0 });
+  assert.equal(watch.consecutiveFailures, WEBHOOK_MAX_FAILURES);
+  assert.equal(watch.deadLettered, true);
+  assert.equal(watch.nextRetryAt, undefined);
+  assert.match(watch.lastDeliveryError, /HTTP 500/);
+  assert.deepEqual(watch.lastSeenRunIds, [], 'failures must not mutate the seen-set');
+});
+
+test('#694: retryDue gates backing-off and dead-lettered watches', () => {
+  const now = 1_700_000_000_000;
+  assert.equal(retryDue({}, now), true);
+  assert.equal(retryDue({ nextRetryAt: new Date(now + 1000).toISOString() }, now), false);
+  assert.equal(retryDue({ nextRetryAt: new Date(now - 1000).toISOString() }, now), true);
+  assert.equal(retryDue({ deadLettered: true }, now), false);
+});
+
+test('#694: recordDeliverySuccess resets failure state', () => {
+  const watch = recordDeliveryFailure({ lastSeenRunIds: [] }, { error: 'x' });
+  assert.ok(watch.consecutiveFailures >= 1);
+  recordDeliverySuccess(watch);
+  assert.equal(watch.consecutiveFailures, undefined);
+  assert.equal(watch.nextRetryAt, undefined);
+  assert.equal(watch.lastDeliveryError, undefined);
+  assert.equal(watch.deadLettered, undefined);
+});
+
 test('markRunsSeen keeps the seen-set bounded and stamps lastDispatchAt', () => {
   const watch = { lastSeenRunIds: [] };
   const runs = Array.from({ length: MAX_SEEN_RUN_IDS + 10 }, (_, i) => RUN({ runId: `r${i}` }));
@@ -112,6 +179,31 @@ test('buildRssFeed emits valid RSS with escaped titles and capped items', () => 
 
   const empty = buildRssFeed({ runs: [], title: 'x' });
   assert.ok(!empty.includes('<item>'));
+});
+
+test('#696: undated runs get a stable epoch pubDate, not the feed build time', () => {
+  const xml1 = buildRssFeed({ runs: [RUN({ runId: 'u', createdAt: null })], builtAt: 1_700_000_000_000 });
+  const xml2 = buildRssFeed({ runs: [RUN({ runId: 'u', createdAt: null })], builtAt: 1_700_060_000_000 });
+  const pub = x => (x.match(/<pubDate>([^<]+)<\/pubDate>/) || [])[1];
+  assert.match(pub(xml1), /Jan 1970/);
+  assert.equal(pub(xml1), pub(xml2), 'pubDate must not churn between builds');
+});
+
+test('#696: limit option overrides the default cap for paginated pages', () => {
+  const runs = Array.from({ length: 10 }, (_, i) => RUN({ runId: `p${i}` }));
+  const xml = buildRssFeed({ runs, limit: 3 });
+  assert.equal((xml.match(/<item>/g) || []).length, 3);
+});
+
+test('#696: rssEtag is deterministic, order-insensitive and content-sensitive', async () => {
+  const a = await rssEtag(['urn:1', 'urn:2'], 5);
+  const b = await rssEtag(['urn:2', 'urn:1'], 5);
+  const c = await rssEtag(['urn:1', 'urn:3'], 5);
+  const d = await rssEtag(['urn:1', 'urn:2'], 6);
+  assert.equal(a, b);
+  assert.notEqual(a, c);
+  assert.notEqual(a, d);
+  assert.match(a, /^"rss-[0-9a-f]{32}"$/);
 });
 
 test('webhookPayload carries watch identity + normalized runs', () => {

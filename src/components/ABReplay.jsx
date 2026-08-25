@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Play, Pause, RotateCcw, Zap, Gauge, Columns2 } from 'lucide-react';
+import { Play, Pause, RotateCcw, Zap, Gauge, Columns2, FileDown, Copy, FileJson } from 'lucide-react';
 import {
   HARDWARE_PRESETS,
   SCENARIO_PRESETS,
@@ -7,7 +7,11 @@ import {
   formatTokens
 } from '../utils/presets';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import { clockToRunState, runStateToBusy } from '../utils/viewState';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
+import { buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
+import { downloadJson } from '../utils/exportJson';
+import { buildAbMarkdown, buildAbJson } from '../utils/exportAb';
 
 // Map an /api/presets hardware entry onto the internal preset shape so the
 // fetched agent data can seed/extend the lane selectors exactly like the
@@ -229,6 +233,33 @@ export default function ABReplay({
       ? `${presetB.name} finishes first`
       : 'Dead heat';
 
+  // Issue #403: Export MD / Export JSON / Copy MD — the same machine-readable
+  // exit the single-turn view ships, so the comparison outlives the animation.
+  const [abCopied, setAbCopied] = useState(false);
+  const [abCopyFailed, setAbCopyFailed] = useState(false);
+  const abExportArgs = () => ({
+    presetA,
+    presetB,
+    promptTokens: safePromptTokens,
+    outputTokens: safeOutputTokens,
+    ttftA,
+    ttftB,
+    decodeTimeA,
+    decodeTimeB,
+    totalA,
+    totalB,
+    deepLink: buildDeepLink('ab')
+  });
+  const handleExportMd = () => downloadMarkdown(buildAbMarkdown(abExportArgs()), 'ab-replay-comparison.md');
+  const handleExportJson = () => downloadJson(buildAbJson(abExportArgs()), 'ab-replay-comparison.json');
+  const handleCopyMd = async () => {
+    const ok = await copyMarkdownToClipboard(buildAbMarkdown(abExportArgs()));
+    // Issue #401 parity: never claim success over a failed clipboard write.
+    setAbCopied(ok);
+    setAbCopyFailed(!ok);
+    setTimeout(() => { setAbCopied(false); setAbCopyFailed(false); }, 2000);
+  };
+
   const phaseTagClass = v => v.phase === 'prefilling' ? 'tag-prefill'
     : v.phase === 'decoding' || v.phase === 'completed' ? 'tag-decode' : '';
   const phaseLabel = v => v.phase === 'idle' ? 'READY'
@@ -249,19 +280,26 @@ export default function ABReplay({
 
   const renderLane = ({ letter, tagline, accentBorder, preset, view, ttft, totalTime }) => (
     <div className="panel-inset" style={{ borderLeft: `2px solid ${accentBorder}` }}>
-      <div className="section-label" style={{ marginBottom: '8px' }}>
+      {/* #404: real heading role so lane structure survives text extraction */}
+      <h3 className="section-label" style={{ marginBottom: '8px' }}>
         System {letter} · {tagline}
-      </div>
+      </h3>
       <select
         value={preset.id}
         onChange={(e) => (letter === 'A' ? setHardwareA : setHardwareB)(e.target.value)}
         aria-label={`System ${letter} hardware profile`}
-        style={{ width: '100%', marginBottom: '14px' }}
+        style={{ width: '100%', marginBottom: '6px' }}
       >
         {lanePresets.map(p => (
           <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
         ))}
       </select>
+      {/* #404: restate the selected profile as plain text — text-based readers
+          see every option label inline in the select and could not tell which
+          system was being compared. */}
+      <div className="hint-text" style={{ marginBottom: '14px', fontSize: '0.72rem' }}>
+        Selected: <strong>{preset.icon} {preset.name}</strong>
+      </div>
 
       <div style={rowStyle}>
         <span>Prefill</span>
@@ -417,7 +455,12 @@ export default function ABReplay({
       </section>
 
       {/* Synchronized stage: shared transport + both lanes */}
-      <section className="panel" aria-label="Synchronized A/B simulation stage">
+      <section
+        className="panel"
+        aria-label="Synchronized A/B simulation stage"
+        data-state={clockToRunState(simTime, masterTotal)}
+        aria-busy={runStateToBusy(clockToRunState(simTime, masterTotal))}
+      >
 
         {/* Shared transport controls */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
@@ -447,6 +490,25 @@ export default function ABReplay({
             >
               <RotateCcw size={15} />
               Reset
+            </button>
+
+            {/* Issue #403: export the comparison as a scrapeable artifact */}
+            <button onClick={handleExportMd} className="btn" title="Export this A/B comparison as markdown (download)">
+              <FileDown size={15} />
+              Export MD
+            </button>
+            <button onClick={handleExportJson} className="btn" title="Export this A/B comparison as machine-readable JSON (download)">
+              <FileJson size={15} />
+              Export JSON
+            </button>
+            <button
+              onClick={handleCopyMd}
+              className="btn"
+              title="Copy the markdown comparison to the clipboard"
+              aria-label="Copy A/B comparison to clipboard"
+            >
+              <Copy size={15} />
+              {abCopied ? 'Copied!' : abCopyFailed ? 'Copy failed' : 'Copy MD'}
             </button>
           </div>
         </div>

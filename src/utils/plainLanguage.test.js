@@ -71,3 +71,26 @@ test('every dictionary term exposes short, plain and long strings', () => {
     }
   }
 });
+
+// ---------- #583: glossary deep-link anchors ----------
+
+test('glossaryTermId mints stable, URL-safe per-term anchors', async () => {
+  const { glossaryTermId } = await import('./plainLanguage.js');
+  assert.equal(glossaryTermId('prefill'), 'glossary-prefill');
+  assert.equal(glossaryTermId('kvCache'), 'glossary-kvcache');
+  assert.equal(glossaryTermId('computeBound'), 'glossary-computebound');
+  assert.equal(glossaryTermId('prefix caching!'), 'glossary-prefix-caching');
+  // Stable across calls and unique across the dictionary.
+  const ids = PLAIN_TERMS.map(glossaryTermId);
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test('JargonGlossary wires glossary anchors + hash activation (#583 source contract)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../components/JargonGlossary.jsx', import.meta.url), 'utf8');
+  assert.match(src, /id=\{glossaryTermId\(term\)\}/, 'each term wrapper must carry its anchor id');
+  assert.match(src, /hashchange/, 'must react to hash changes');
+  assert.match(src, /#glossary-/, 'must recognize the #glossary- prefix');
+  assert.match(src, /scrollIntoView/, 'must scroll to the requested term');
+  assert.match(src, /setOpen\(true\)/, 'a glossary hash must unfold the collapsed <details>');
+});
