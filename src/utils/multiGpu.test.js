@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
   parseParamBillions,
   planSplit,
@@ -117,4 +118,38 @@ test('single GPU has no interconnect penalty and no split warnings', () => {
 test('card catalog is ordered by VRAM ascending (first-fit suggestion logic)', () => {
   const sizes = GPU_CARDS.map(c => c.vramGb);
   assert.deepEqual(sizes, [...sizes].sort((a, b) => a - b));
+});
+
+// Issue #499: a missing/non-finite totalKvBytes used to poison every plan
+// metric into NaN — the UI rendered literal '—' and "over by —" in every mode.
+test('#499: non-finite totalKvBytes degrades to a weights-only finite plan', () => {
+  for (const bad of [undefined, NaN, null, Infinity, 'not-a-number']) {
+    const plan = planSplit({
+      paramB: 70,
+      weightBytesPerParam: 0.5,
+      totalKvBytes: bad,
+      kvHeads: 8,
+      gpuCount: 2,
+      mode: 'tp',
+      interconnect: 'pcie',
+      cardVramGb: 24
+    });
+    assert.equal(plan.kvPerGpuGb, 0, `kvPerGpuGb must be 0 for ${bad}`);
+    assert.ok(Number.isFinite(plan.perGpuNeededGb));
+    assert.ok(Number.isFinite(plan.headroomGb));
+    assert.equal(typeof plan.fits, 'boolean');
+    // Weights still computed correctly: 70B × 0.5 B ÷ 2 GPUs in GiB.
+    assert.ok(Math.abs(plan.weightsPerGpuGb - (70e9 * 0.5 / 2) / (1024 ** 3)) < 1e-6);
+  }
+});
+
+test('#499: KVCacheCalculator passes its KV total under the prop name MultiGpuPlanner reads', async () => {
+  const caller = await readFile(new URL('../components/KVCacheCalculator.jsx', import.meta.url), 'utf8');
+  const planner = await readFile(new URL('../components/MultiGpuPlanner.jsx', import.meta.url), 'utf8');
+
+  // The planner destructures { preset, totalKvBytes } — the caller must use
+  // exactly that name (the old totalKVCacheBytes= spelling was silently
+  // undefined, rendering '—' for every metric).
+  assert.match(planner, /totalKvBytes/);
+  assert.match(caller, /<MultiGpuPlanner[^>]*totalKvBytes=\{totalKVCacheBytes\}/s);
 });

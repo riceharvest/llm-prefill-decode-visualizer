@@ -88,6 +88,11 @@ export function planSplit({
   const n = Math.max(1, Math.round(gpuCount));
   const warnings = [];
 
+  // Issue #499 defense-in-depth: a missing/non-finite KV total must never
+  // poison every plan metric into NaN ('—' in the UI). Treat it as 0 so the
+  // weights-only plan still renders real numbers.
+  const kvBytes = Number.isFinite(totalKvBytes) ? totalKvBytes : 0;
+
   // Weights are always evenly sharded across the pipeline/tensor group.
   const weightsTotalBytes = paramB * 1e9 * weightBytesPerParam;
   const weightsPerGpuBytes = weightsTotalBytes / n;
@@ -96,23 +101,23 @@ export function planSplit({
   let kvPerGpuBytes;
   let kvSharded;
   if (n === 1) {
-    kvPerGpuBytes = totalKvBytes;
+    kvPerGpuBytes = kvBytes;
     kvSharded = false;
   } else if (mode === 'tp') {
     if (Number.isFinite(kvHeads) && kvHeads >= n && kvHeads % n === 0) {
-      kvPerGpuBytes = totalKvBytes / n;
+      kvPerGpuBytes = kvBytes / n;
       kvSharded = true;
     } else {
-      kvPerGpuBytes = totalKvBytes; // replicated: too few KV heads to divide
+      kvPerGpuBytes = kvBytes; // replicated: too few KV heads to divide
       kvSharded = false;
       warnings.push('kvReplicated');
     }
   } else {
     if (!Number.isFinite(kvLayers) || kvLayers >= n) {
-      kvPerGpuBytes = totalKvBytes / n;
+      kvPerGpuBytes = kvBytes / n;
       kvSharded = true;
     } else {
-      kvPerGpuBytes = totalKvBytes;
+      kvPerGpuBytes = kvBytes;
       kvSharded = false;
       warnings.push('kvReplicated');
     }
@@ -135,7 +140,7 @@ export function planSplit({
   // Find the smallest catalog card that hosts the WHOLE model alone.
   let largerCard = null;
   if (n > 1 && mode === 'tp' && interconnect === 'pcie') {
-    const singleGpuBytes = weightsTotalBytes + totalKvBytes + overheadBytes;
+    const singleGpuBytes = weightsTotalBytes + kvBytes + overheadBytes;
     largerCard = GPU_CARDS.find(c => c.vramGb * USABLE_VRAM_FRACTION * GiB >= singleGpuBytes) || null;
     if (largerCard && largerCard.vramGb >= cardVramGb) warnings.push('singleCardFaster');
   }

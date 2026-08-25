@@ -9,31 +9,51 @@
 // The SVG serialization is shared by every consumer (#104): exportNodeAsPng
 // and nodeToPngDataUri rasterize it, exportNodeAsSvg downloads it verbatim.
 
+/**
+ * Export a DOM node as a PNG download, falling back to a raw SVG download
+ * when rasterization is unavailable (issue #497: headless/software-rendering
+ * browsers throw 'SVG rasterization failed' with no download and no UI).
+ *
+ * @returns {Promise<'png'|'svg-fallback'>} what actually happened, so callers
+ *   can surface a machine-detectable status message.
+ * @throws only if even the SVG serialization fails (no usable node/DOM).
+ */
 export async function exportNodeAsPng(node, filename = 'chart.png', scale = 2) {
   const { width, height, html } = serializeNodeToSvg(node);
   const svgBlob = new Blob([html], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(svgBlob);
 
   try {
-    const img = await loadImage(url);
-    const canvas = document.createElement('canvas');
-    canvas.width = width * scale;
-    canvas.height = height * scale;
-    const ctx = canvas.getContext('2d');
-    ctx.scale(scale, scale);
-    ctx.drawImage(img, 0, 0, width, height);
+    let img;
+    try {
+      img = await loadImage(url);
+      const canvas = document.createElement('canvas');
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0, width, height);
 
-    await new Promise((resolve) => canvas.toBlob((blob) => {
-      const pngUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = pngUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(pngUrl), 5000);
-      resolve();
-    }, 'image/png'));
+      await new Promise((resolve, reject) => canvas.toBlob((blob) => {
+        if (!blob) return reject(new Error('canvas.toBlob returned null'));
+        const pngUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = pngUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(pngUrl), 5000);
+        resolve();
+      }, 'image/png'));
+      return 'png';
+    } catch {
+      // Rasterization unavailable (headless / no GPU / tainted canvas):
+      // still give the user an export — the standalone SVG (#104) — and
+      // report the fallback instead of throwing an uncaught error.
+      exportNodeAsSvg(node, filename.replace(/\.png$/i, '') + '.svg');
+      return 'svg-fallback';
+    }
   } finally {
     URL.revokeObjectURL(url);
   }

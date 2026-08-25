@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Cpu, Link2, Check } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Cpu, Link2, Check, X } from 'lucide-react';
 import { HARDWARE_PRESETS } from '../utils/presets';
 import { t } from '../i18n/strings';
 import { TESTIDS } from '../utils/testids';
@@ -28,12 +28,22 @@ export default function Header({
   onApplyPreset,
   onShare
 }) {
+  // Issue #501: the share button previously flashed ✓ unconditionally — even
+  // when the clipboard write threw — and never signalled failure. Track both
+  // states and announce them via an aria-live region so headless agents and
+  // assistive tech can detect the outcome from the DOM alone.
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const copyTimer = useRef(null);
+
+  useEffect(() => () => clearTimeout(copyTimer.current), []);
 
   const handleShare = async () => {
-    await onShare();
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const ok = await onShare();
+    setCopied(ok);
+    setCopyFailed(!ok);
+    clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => { setCopied(false); setCopyFailed(false); }, 2000);
   };
 
   return (
@@ -83,9 +93,18 @@ export default function Header({
             ))}
           </select>
 
-          <button onClick={handleShare} className="btn btn-icon" data-testid={TESTIDS.shareButton} aria-label={t('header.shareTooltip')} title={t('header.shareTooltip')}>
-            {copied ? <Check size={15} /> : <Link2 size={15} />}
+          <button
+            onClick={handleShare}
+            className="btn btn-icon"
+            aria-label={t('header.shareTooltip')}
+            title={copied ? t('header.shareCopied') : copyFailed ? t('header.shareCopyFailed') : t('header.shareTooltip')}
+          >
+            {copied ? <Check size={15} /> : copyFailed ? <X size={15} /> : <Link2 size={15} />}
           </button>
+          {/* Issue #501: machine-detectable copy outcome for the share link */}
+          <span role="status" aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
+            {copied ? t('header.shareCopied') : copyFailed ? t('header.shareCopyFailed') : ''}
+          </span>
         </div>
       </div>
     </header>

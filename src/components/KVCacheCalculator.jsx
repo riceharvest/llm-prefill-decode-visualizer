@@ -949,8 +949,11 @@ export default function KVCacheCalculator() {
 
         </section>
 
-        {/* Multi-GPU split planner (#48) — reuses this panel's KV total */}
-        <MultiGpuPlanner preset={preset} totalKVCacheBytes={totalKVCacheBytes} />
+        {/* Multi-GPU split planner (#48) — reuses this panel's KV total.
+            Issue #499: the prop is named totalKvBytes on MultiGpuPlanner;
+            passing totalKVCacheBytes left it undefined so every planner
+            metric rendered '—'. */}
+        <MultiGpuPlanner preset={preset} totalKvBytes={totalKVCacheBytes} />
 
     </div>
   );

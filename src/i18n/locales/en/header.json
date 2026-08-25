@@ -5,6 +5,8 @@
   "viewAriaLabel": "Switch visualizer view",
   "localMaxxingRun": "LocalMaxxing measured run",
   "shareTooltip": "Copy share link with current settings",
+  "shareCopied": "Share link copied",
+  "shareCopyFailed": "Copy failed — clipboard unavailable",
   "shortcutsTooltip": "Keyboard shortcuts (?)",
   "themeLabel": "Theme",
   "themeAriaLabel": "Color theme (dark, light, or high contrast)",

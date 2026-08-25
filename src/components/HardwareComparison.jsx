@@ -11,6 +11,7 @@ import Metric from './Metric';
 import SloBadge from './SloBadge';
 import { estimateFromLabel } from '../utils/streetPricing';
 import { exportNodeAsPng } from '../utils/exportPng';
+import { copyTextToClipboard } from '../utils/clipboard';
 import EmbedDialog from './EmbedDialog';
 import { buildCompareBatchBody, buildSnippet } from '../utils/copyAsCode';
 import { evaluateSlo } from '../utils/slo.js';
@@ -374,6 +375,8 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   // "dry_run": true it previews without executing.
   const chartRef = useRef(null);
   const [copiedLang, setCopiedLang] = useState('');
+  const [copyFailedLang, setCopyFailedLang] = useState('');
+  const [pngExportNote, setPngExportNote] = useState('');
   const [embedOpen, setEmbedOpen] = useState(false);
   const copyTimer = useRef(null);
 
@@ -387,13 +390,31 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
     outputTokens: safeCo
   });
 
+  // Issue #501: surface the failure too — a bare `catch {}` left headless
+  // agents with zero signal on either outcome. Success keeps the transient
+  // "Copied!" state; failure shows "Copy failed" + an aria-live announcement.
   const copySnippet = async (lang) => {
+    const ok = await copyTextToClipboard(buildSnippet(lang, { origin: window.location.origin, body: snippetBody }));
+    setCopiedLang(ok ? lang : '');
+    setCopyFailedLang(ok ? '' : lang);
+    clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => { setCopiedLang(''); setCopyFailedLang(''); }, 2000);
+  };
+
+  // Issue #497: PNG rasterization fails in headless/software-rendering
+  // browsers (uncaught 'SVG rasterization failed', no download, no UI).
+  // exportNodeAsPng now falls back to a raw SVG download and reports what
+  // happened so the row can show a machine-detectable status message.
+  const exportChartPng = async () => {
+    if (!chartRef.current) return;
     try {
-      await navigator.clipboard.writeText(buildSnippet(lang, { origin: window.location.origin, body: snippetBody }));
-      setCopiedLang(lang);
-      clearTimeout(copyTimer.current);
-      copyTimer.current = setTimeout(() => setCopiedLang(''), 2000);
-    } catch { /* clipboard unavailable (insecure context / denied) — no-op */ }
+      const outcome = await exportNodeAsPng(chartRef.current, 'hardware-compare.png');
+      setPngExportNote(outcome === 'svg-fallback'
+        ? t('compare.pngFallbackNote')
+        : '');
+    } catch {
+      setPngExportNote(t('compare.exportFailedNote'));
+    }
   };
 
   const exportBtnStyle = { padding: '2px 8px', fontSize: '0.68rem' };
@@ -489,7 +510,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
               {t('compare.exportRowLabel')}
             </span>
             <button
-              onClick={() => chartRef.current && exportNodeAsPng(chartRef.current, 'hardware-compare.png')}
+              onClick={exportChartPng}
               className="btn"
               style={exportBtnStyle}
               title={t('compare.exportPngTooltip')}
@@ -509,14 +530,34 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
                 key={lang}
                 onClick={() => copySnippet(lang)}
                 className="btn"
-                style={{ ...exportBtnStyle, color: copiedLang === lang ? 'var(--decode)' : undefined }}
-                title={copiedLang === lang ? t('compare.copiedFeedback') : t('compare.copySnippetTooltip')}
+                style={{
+                  ...exportBtnStyle,
+                  color: copiedLang === lang ? 'var(--decode)' : copyFailedLang === lang ? 'var(--agent)' : undefined
+                }}
+                title={copiedLang === lang
+                  ? t('compare.copiedFeedback')
+                  : copyFailedLang === lang
+                    ? t('compare.copyFailedFeedback')
+                    : t('compare.copySnippetTooltip')}
               >
-                {copiedLang === lang ? `✓ ${t('compare.copiedFeedback')}` : t(`compare.copy${lang === 'curl' ? 'Curl' : lang === 'python' ? 'Python' : 'TypeScript'}`)}
+                {copiedLang === lang
+                  ? `✓ ${t('compare.copiedFeedback')}`
+                  : copyFailedLang === lang
+                    ? `✗ ${t('compare.copyFailedFeedback')}`
+                    : t(`compare.copy${lang === 'curl' ? 'Curl' : lang === 'python' ? 'Python' : 'TypeScript'}`)}
               </button>
             ))}
           </div>
         </div>
+
+        {/* Issue #501/#497: machine-detectable outcome for copy + PNG export */}
+        {(copyFailedLang || pngExportNote) && (
+          <p role="status" aria-live="polite" style={{ fontSize: '0.72rem', color: 'var(--agent)', margin: '4px 0 0' }}>
+            {copyFailedLang && !copiedLang ? `${t('compare.copyFailedFeedback')} (${copyFailedLang})` : ''}
+            {copyFailedLang && pngExportNote ? ' · ' : ''}
+            {pngExportNote}
+          </p>
+        )}
 
         {localMaxxingContext?.runs?.length > 0 && (
           <div className="panel-inset" style={{ marginBottom: '14px', borderColor: 'var(--prefill-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: '0.76rem', fontWeight: 600 }}>

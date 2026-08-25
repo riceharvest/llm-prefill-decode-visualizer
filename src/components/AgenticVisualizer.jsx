@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, FileDown, Copy, Zap, Gauge, FileJson } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
-import { readParamNum, readParamBool, consumeAutoplay, writeParams } from '../utils/urlState';
-import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
+import { readParamNum, readParamBool, readParam, consumeAutoplay, writeParams } from '../utils/urlState';
+import { calculateAgenticTimeline, waterfallGeometry, waterfallSegmentLabels } from '../utils/agenticMath';
 import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { exportNodeAsPng } from '../utils/exportPng';
 import EmbedDialog from './EmbedDialog';
@@ -283,6 +283,21 @@ export default function AgenticVisualizer({
   const simTimeRef = useRef(0);
   const waterfallRef = useRef(null);
   const [embedOpen, setEmbedOpen] = useState(false);
+  // Issue #497: PNG export must report failure/fallback, not throw uncaught.
+  const [pngExportNote, setPngExportNote] = useState('');
+
+  // Issue #497: exportNodeAsPng falls back to a raw SVG download when
+  // rasterization is unavailable (headless/software rendering) and reports
+  // what happened; surface that as machine-detectable status text.
+  const exportWaterfallPng = async () => {
+    if (!waterfallRef.current) return;
+    try {
+      const outcome = await exportNodeAsPng(waterfallRef.current, 'agentic-waterfall.png');
+      setPngExportNote(outcome === 'svg-fallback' ? t('agentic.pngFallbackNote') : '');
+    } catch {
+      setPngExportNote(t('agentic.exportFailedNote'));
+    }
+  };
 
   // Global Reset button (App resetKey) clears ALL sim state
   const resetKeyRef = useRef(resetKey);
@@ -1069,13 +1084,18 @@ export default function AgenticVisualizer({
                 <span style={{ width: '10px', height: '10px', background: 'var(--decode)', borderRadius: '2px' }} /> {t('agentic.legendDecode')}
               </span>
               <button
-                onClick={() => exportNodeAsPng(waterfallRef.current, 'agentic-waterfall.png')}
+                onClick={exportWaterfallPng}
                 className="btn"
                 style={{ padding: '2px 8px', fontSize: '0.68rem' }}
                 title={t('agentic.exportPngTooltip')}
               >
                 PNG
               </button>
+              {pngExportNote && (
+                <span role="status" aria-live="polite" style={{ color: 'var(--agent)', fontWeight: 500 }}>
+                  {pngExportNote}
+                </span>
+              )}
               <button
                 onClick={() => setEmbedOpen(true)}
                 className="btn"
@@ -1118,6 +1138,9 @@ export default function AgenticVisualizer({
                 widthPercent: barWidth,
                 prefillPercent: prefillRatio
               } = waterfallLayout[turnIndex];
+              // Issue #495: segments too narrow for an inline label must still
+              // expose their value as visible text in the row, not tooltip-only.
+              const labels = waterfallSegmentLabels(prefillRatio);
 
               return (
                 <div
@@ -1173,7 +1196,7 @@ export default function AgenticVisualizer({
                           tokens: turnItem.newTokensPrefilled
                         })}
                       >
-                        {prefillRatio > 15 && formatTime(turnItem.prefillTime)}
+                        {labels.prefillInline && formatTime(turnItem.prefillTime)}
                       </div>
 
                       {/* Decode segment */}
@@ -1196,7 +1219,7 @@ export default function AgenticVisualizer({
                           tokens: turnItem.decodeTokens
                         })}
                       >
-                        {(100 - prefillRatio) > 15 && formatTime(turnItem.decodeTime)}
+                        {labels.decodeInline && formatTime(turnItem.decodeTime)}
                       </div>
                     </div>
                   </div>
@@ -1206,6 +1229,15 @@ export default function AgenticVisualizer({
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', fontVariantNumeric: 'tabular-nums' }}>
                       {formatTime(turnItem.turnWalltime)}
                     </div>
+                    {/* Issue #495: segments whose inline label was suppressed
+                        (segment < 15% of the bar) keep their value visible as
+                        text here instead of disappearing into a tooltip. */}
+                    {labels.needsTextFallback && (
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>
+                        {labels.prefillInline ? '' : `${formatTime(turnItem.prefillTime)} + `}
+                        {labels.decodeInline ? '' : formatTime(turnItem.decodeTime)}
+                      </div>
+                    )}
                     <div style={{ fontSize: '0.64rem', color: turnItem.isCached ? 'var(--prefill)' : 'var(--text-subtle)', marginBottom: sloEnabled ? '3px' : undefined }}>
                       {turnItem.isCached ? t('agentic.cachedLabel') : t('agentic.fullIngestLabel')}
                     </div>

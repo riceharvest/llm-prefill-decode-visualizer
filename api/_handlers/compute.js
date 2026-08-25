@@ -187,9 +187,24 @@ function computeOne(params, dryRun = false) {
         });
       }
       const preset = presetKey ? MODEL_PRESETS[presetKey] : null;
-
       // Input validation (#775): reject non-numeric and non-positive values
       // instead of silently defaulting or multiplying sign-cancelled garbage.
+
+      // Issue #504: an unrecognized architecture id used to fall through to
+      // the generic 80-layer geometry with HTTP 200 — confident wrong numbers
+      // for any UI share-link model id (qwen3627b, dsv4flash, kimik3, …).
+      // Fail loudly like an unknown `model` does, unless the caller supplies
+      // the geometry explicitly (documented 'architecture|numLayers+kvHeads+headDim'
+      // contract: an unknown label with explicit layers/heads/dims is fine).
+      if (presetKey && !preset
+        && params.numLayers === undefined && params.kvHeads === undefined && params.headDim === undefined) {
+        throw new ApiError('INVALID_PARAMS', `Unknown architecture '${presetKey}' for model=kvCache`, {
+          extras: {
+            available: Object.keys(MODEL_PRESETS),
+            note: "Pass numLayers+kvHeads+headDim explicitly to compute an unlisted architecture."
+          }
+        });
+      }
       const inputs = {
         architecture: presetKey || 'generic',
         numLayers: positiveIntParam(params, 'numLayers', preset?.numLayers ?? 80),
