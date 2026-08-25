@@ -81,11 +81,15 @@ export function writeParams(updates) {
     }
   }
   const qs = p.toString();
+  // Preserve any location hash (#s/<slug> permalinks, ?tab=theory#<anchor>
+  // deep links) across param rewrites (#919) - building the URL from
+  // pathname+search alone silently dropped it on every mount-time sync.
+  const hash = window.location.hash || '';
   const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
   if (push) {
-    window.history.pushState(null, '', url);
+    window.history.pushState(null, '', `${url}${hash}`);
   } else {
-    window.history.replaceState(null, '', url);
+    window.history.replaceState(null, '', `${url}${hash}`);
   }
 }
 

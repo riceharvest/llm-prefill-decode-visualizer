@@ -1,0 +1,24 @@
+{
+  "description": "Machine-readable palette: CSS custom property -> hex value + semantic role (#924). Mirrors src/utils/palette.js and the :root block in src/index.css; kept in sync by src/utils/palette.test.js.",
+  "palette": {
+    "--bg-app": { "value": "#0A0D11", "role": "app background" },
+    "--bg-panel": { "value": "#10151B", "role": "panel background" },
+    "--bg-inset": { "value": "#0C1015", "role": "inset background" },
+    "--bg-raised": { "value": "#161C24", "role": "raised surface background" },
+    "--bg-hover": { "value": "#1B222C", "role": "hover surface background" },
+    "--text-main": { "value": "#E6EAF0", "role": "primary text" },
+    "--text-muted": { "value": "#97A3B2", "role": "secondary text" },
+    "--text-subtle": { "value": "#5E6A78", "role": "tertiary text" },
+    "--border": { "value": "#212B36", "role": "default border" },
+    "--border-strong": { "value": "#31404F", "role": "emphasized border" },
+    "--border-focus": { "value": "#22D3EE", "role": "focus ring" },
+    "--accent": { "value": "#22D3EE", "role": "primary accent" },
+    "--accent-strong": { "value": "#67E8F9", "role": "hover accent" },
+    "--accent-ink": { "value": "#06222A", "role": "text on accent" },
+    "--prefill": { "value": "#38BDF8", "role": "prefill phase chart color" },
+    "--decode": { "value": "#34D399", "role": "decode phase chart color" },
+    "--agent": { "value": "#FBBF24", "role": "agentic loop phase chart color" },
+    "--danger": { "value": "#F87171", "role": "danger/error status" },
+    "--warn": { "value": "#F59E0B", "role": "warning status" }
+  }
+}

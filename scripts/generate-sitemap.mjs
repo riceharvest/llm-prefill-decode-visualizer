@@ -7,14 +7,14 @@
 // Offline/failure mode: falls back to a curated seed list of high-intent
 // pairs so `npm run build` never fails just because the API is unreachable.
 //
-// Base URL comes from SITE_URL; defaults to the Vercel project URL — override
-// in CI/prod (e.g. SITE_URL=https://example.com npm run build) once the real
-// domain is pinned down. Sitemap URLs must be absolute.
-import { writeFileSync } from 'node:fs';
+// Base URL comes from site-origin.mjs (SITE_URL > VERCEL_* host > prod
+// default) so self-hosted deployments emit their own origin (#925).
+import { writeFileSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { resolveSiteUrl, withSitemapDirective } from './site-origin.mjs';
 
-const SITE_URL = (process.env.SITE_URL || 'https://llm-prefill-decode-visualizer.vercel.app').replace(/\/+$/, '');
+const SITE_URL = resolveSiteUrl(process.env);
 const TOP_N = 10;
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'sitemap.xml');
 
@@ -86,6 +86,19 @@ async function main() {
   ].join('\n');
 
   writeFileSync(OUT, xml);
+
+  // Keep robots.txt's Sitemap directive on the same resolved origin (#925)
+  // so crawler discovery never points away from the serving deployment.
+  const ROBOTS = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'robots.txt');
+  try {
+    const robots = readFileSync(ROBOTS, 'utf8');
+    const updated = withSitemapDirective(robots, SITE_URL);
+    if (updated !== robots) writeFileSync(ROBOTS, updated);
+    console.log(`[sitemap] robots.txt Sitemap -> ${SITE_URL}/sitemap.xml`);
+  } catch (err) {
+    console.warn(`[sitemap] robots.txt not updated: ${err.message}`);
+  }
+
   console.log(`[sitemap] wrote ${paths.length} URLs (${source}) -> ${OUT}`);
 }
 
