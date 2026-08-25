@@ -49,6 +49,31 @@ test('settingsEqual ignores representation noise', () => {
   assert.ok(!settingsEqual({ prefill: 100 }, { prefill: 200 }));
 });
 
+// #414: snapshots/undo entries must carry the single-turn workload so restore
+// and share links reproduce the full configuration.
+test('serialize includes prompt/output workload tokens (#414)', () => {
+  assert.equal(
+    serializeSettings({ preset: 'a', prefill: 1, decode: 2, prompt: 2048, output: 512 }),
+    'preset=a&prefill=1&decode=2&prompt=2048&output=512'
+  );
+  // Absent workload stays omitted — old callers produce identical strings.
+  assert.equal(serializeSettings({ preset: 'a' }), 'preset=a');
+});
+
+test('parse round-trips prompt/output and tolerates their absence', () => {
+  const s = parseSettings('prompt=32768&output=4096');
+  assert.equal(s.prompt, 32768);
+  assert.equal(s.output, 4096);
+  assert.equal(serializeSettings(s), 'prompt=32768&output=4096');
+  const bare = parseSettings('preset=a');
+  assert.equal(bare.prompt, null);
+  assert.equal(bare.output, null);
+  // Garbage values degrade to null instead of NaN-poisoning the settings.
+  const garbage = parseSettings('prompt=abc&output=');
+  assert.equal(garbage.prompt, null);
+  assert.equal(garbage.output, null);
+});
+
 test('undo moves current to future and pops the last past entry', () => {
   let h = createHistory();
   h = recordChange(h, 'preset=a');

@@ -5,6 +5,8 @@ import {
   sanitizeBudgets,
   loadSloBudgets,
   saveSloBudgets,
+  budgetsFromUrlParams,
+  budgetUrlParams,
   evaluateMetric,
   evaluateSlo,
   evaluateAgenticSlo
@@ -145,4 +147,40 @@ test('evaluateAgenticSlo handles empty loops and disabled budgets', () => {
   assert.deepEqual(r.failingTurns, []);
   assert.equal(r.worstTurn, null);
   assert.equal(r.loopTotal, null);                // disabled budget → no loop verdict
+});
+
+// #407: budgets must be reconstructable from the share link, not just
+// whichever browser's localStorage happened to carry them.
+test('budgetsFromUrlParams overlays present params on a base (#407)', () => {
+  const fromParams = budgetsFromUrlParams(
+    k => ({ sloTtft: '100', sloTpot: null, sloWall: undefined }[k] ?? (k === 'sloTtft' ? '100' : null)),
+    DEFAULT_SLO_BUDGETS
+  );
+  assert.equal(fromParams.ttftMs, 100); // URL wins over localStorage base
+  assert.equal(fromParams.tpotMs, DEFAULT_SLO_BUDGETS.tpotMs);
+  assert.equal(fromParams.walltimeSec, DEFAULT_SLO_BUDGETS.walltimeSec);
+
+  // No params at all → base passes through sanitized.
+  const untouched = budgetsFromUrlParams(() => null, { ttftMs: '250', tpotMs: null, walltimeSec: 0 });
+  assert.equal(untouched.ttftMs, 250);
+  assert.equal(untouched.tpotMs, null);
+  assert.equal(untouched.walltimeSec, null);
+});
+
+test('invalid URL budget values disable their check instead of falling back silently', () => {
+  const r = budgetsFromUrlParams(k => (k === 'sloWall' ? 'garbage' : null), DEFAULT_SLO_BUDGETS);
+  assert.equal(r.walltimeSec, null);
+  const negative = budgetsFromUrlParams(k => (k === 'sloTpot' ? '-5' : null), DEFAULT_SLO_BUDGETS);
+  assert.equal(negative.tpotMs, null);
+});
+
+test('budgetUrlParams round-trips and maps disabled budgets to deletable empties (#407)', () => {
+  const params = budgetUrlParams({ ttftMs: 100, tpotMs: null, walltimeSec: 2.5 });
+  assert.equal(params.sloTtft, '100');
+  assert.equal(params.sloTpot, '');
+  assert.equal(params.sloWall, '2.5');
+  // Round-trip through a URLSearchParams-style getter.
+  const p = new URLSearchParams({ sloTtft: params.sloTtft, sloTpot: params.sloTpot, sloWall: params.sloWall });
+  const restored = budgetsFromUrlParams(k => p.get(k), {});
+  assert.deepEqual(restored, { ttftMs: 100, tpotMs: null, walltimeSec: 2.5 });
 });

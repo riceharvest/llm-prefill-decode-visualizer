@@ -43,7 +43,14 @@ export default function EmbedApp() {
     HARDWARE_PRESETS.find(x => x.id === readParam('preset')) || HARDWARE_PRESETS[0];
   const [prefillSpeed] = useState(() => readParamNum('prefill', initialPresetObj.prefillSpeed));
   const [decodeSpeed] = useState(() => readParamNum('decode', initialPresetObj.decodeSpeed));
+<<<<<<< main
   const [simSpeedMultiplier] = useState(() => readSimSpeed());
+=======
+  const [simSpeedMultiplier] = useState(() => {
+    const v = readParam('sim');
+    return v === 'instant' || v === 'inst' ? 'instant' : (readParamNum('sim', 1));
+  });
+>>>>>>> base
   // autoplay=1 starts the simulation on load (same convention as demoUrl).
   const [isPlaying, setIsPlaying] = useState(() => readParamBool('autoplay', false));
   const [resetKey] = useState(0);

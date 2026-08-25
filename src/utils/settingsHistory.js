@@ -18,15 +18,19 @@ function toNumOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Canonical settings shape shared by the URL writer, history and snapshots. */
+/** Canonical settings shape shared by the URL writer, history and snapshots.
+ *  prompt/output carry the single-turn workload so snapshots, undo entries and
+ *  share links reproduce the full configuration (issue #414). */
 export function makeSettings(settings = {}) {
-  const { preset = '', prefill = null, decode = null, sim = 1, flags = [] } = settings || {};
+  const { preset = '', prefill = null, decode = null, sim = 1, flags = [], prompt = null, output = null } = settings || {};
   return {
     preset: preset || '',
     prefill: toNumOrNull(prefill),
     decode: toNumOrNull(decode),
     sim: sim === 'instant' ? 'instant' : (toNumOrNull(sim) ?? 1),
-    flags: Array.isArray(flags) ? flags.filter(Boolean) : []
+    flags: Array.isArray(flags) ? flags.filter(Boolean) : [],
+    prompt: toNumOrNull(prompt),
+    output: toNumOrNull(output)
   };
 }
 
@@ -39,6 +43,8 @@ export function serializeSettings(settings) {
   if (s.decode !== null) p.set('decode', String(s.decode));
   if (s.sim !== 1) p.set('sim', String(s.sim));
   if (s.flags.length > 0) p.set('flags', s.flags.join(','));
+  if (s.prompt !== null) p.set('prompt', String(s.prompt));
+  if (s.output !== null) p.set('output', String(s.output));
   return p.toString();
 }
 
@@ -50,7 +56,9 @@ export function parseSettings(qs) {
     prefill: p.get('prefill'),
     decode: p.get('decode'),
     sim: p.get('sim') === null ? 1 : p.get('sim'),
-    flags: (p.get('flags') || '').split(',').filter(Boolean)
+    flags: (p.get('flags') || '').split(',').filter(Boolean),
+    prompt: p.get('prompt'),
+    output: p.get('output')
   });
 }
 

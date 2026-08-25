@@ -7,8 +7,12 @@ import {
   estimateImageTiles,
   estimateImageTokens
 } from '../utils/multimodal';
+<<<<<<< main
 import { readParamNum, readParam, readParamBool, consumeAutoplay, writeParams } from '../utils/urlState';
 import { phaseToRunState, runStateToBusy } from '../utils/viewState';
+=======
+import { readParamNum, readParam, readParamBool, writeParams, clampNum } from '../utils/urlState';
+>>>>>>> base
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
@@ -41,6 +45,11 @@ import { buildSingleTurnMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownT
 import { buildSingleTurnJson, downloadJson } from '../utils/exportJson';
 import { t } from '../i18n/strings';
 
+// Workload slider bounds — shared by the range inputs, the number twins
+// (issue #409: min/max attributes + clamped commit) and the URL loaders.
+export const PROMPT_TOKENS_RANGE = { min: 128, max: 32768, step: 128 };
+export const OUTPUT_TOKENS_RANGE = { min: 32, max: 4096, step: 32 };
+
 export default function SingleTurnVisualizer({
   prefillSpeed,
   decodeSpeed,
@@ -48,10 +57,52 @@ export default function SingleTurnVisualizer({
   isPlaying,
   setIsPlaying,
   resetKey,
-  sloBudgets
+  sloBudgets,
+  // Optional workload props (#414): when App owns prompt/output state it passes
+  // them down so snapshots/undo/share links can carry the workload. Embed and
+  // other standalone callers fall back to internal state read from the URL.
+  promptTokens: promptTokensProp,
+  setPromptTokens: setPromptTokensProp,
+  outputTokens: outputTokensProp,
+  setOutputTokens: setOutputTokensProp,
+  engineFlags
 }) {
-  const [promptTokens, setPromptTokens] = useState(() => readParamNum('prompt', 2048));
-  const [outputTokens, setOutputTokens] = useState(() => readParamNum('output', 512));
+  const [localPromptTokens, setLocalPromptTokens] = useState(
+    () => clampNum(readParamNum('prompt', 2048), PROMPT_TOKENS_RANGE.min, PROMPT_TOKENS_RANGE.max)
+  );
+  const [localOutputTokens, setLocalOutputTokens] = useState(
+    () => clampNum(readParamNum('output', 512), OUTPUT_TOKENS_RANGE.min, OUTPUT_TOKENS_RANGE.max)
+  );
+  const promptTokens = promptTokensProp ?? localPromptTokens;
+  const setPromptTokens = setPromptTokensProp ?? setLocalPromptTokens;
+  const outputTokens = outputTokensProp ?? localOutputTokens;
+  const setOutputTokens = setOutputTokensProp ?? setLocalOutputTokens;
+
+  // Issue #409: number twins clamp to the slider range on commit so the field
+  // never shows a value the simulation is not using. Empty/garbage input keeps
+  // the current value (standard controlled-input behaviour).
+  const commitTokenNumber = (setter, { min, max }) => (e) => {
+    if (e.target.value === '') return;
+    const n = Number(e.target.value);
+    if (!Number.isFinite(n)) return;
+    setter(clampNum(n, min, max));
+    handleReset();
+  };
+
+  // Issue #412: the C½ control is an integer index into HALF_SPEED_CONTEXT_
+  // PRESETS; the number twin accepts exact token targets and snaps to the
+  // nearest modeled depth so agents don't have to probe all five steps.
+  const nearestHalfSpeedContext = (tokens) => HALF_SPEED_CONTEXT_PRESETS.reduce(
+    (best, v) => (Math.abs(v - tokens) < Math.abs(best - tokens) ? v : best),
+    HALF_SPEED_CONTEXT_PRESETS[0]
+  );
+  const commitHalfContextNumber = (e) => {
+    if (e.target.value === '') return;
+    const n = Number(e.target.value);
+    if (!Number.isFinite(n)) return;
+    setCtxHalf(nearestHalfSpeedContext(n));
+    handleReset();
+  };
   // Speculative decoding: draft model proposes k tokens per step, target verifies.
   // Effective tok/s ≈ decodeSpeed × (k+1) × acceptance / (1 + k × acceptance × draftCost)
   // where draftCost is draft-model TPOT as a fraction of target TPOT (~0.15-0.3 typical).
@@ -454,6 +505,7 @@ export default function SingleTurnVisualizer({
     draftTokens,
     acceptance,
     effectiveDecodeSpeed,
+<<<<<<< main
     ctxScaleEnabled,
     ctxHalf,
     imagesEnabled,
@@ -462,6 +514,17 @@ export default function SingleTurnVisualizer({
     jitterEnabled,
     jitterPct,
     deepLink: buildDeepLink('single')
+=======
+    deepLink: buildDeepLink('single'),
+    // Richer run provenance (#408): which model adjustments and budgets
+    // produced these metrics, as structured data instead of URL-string archaeology.
+    engineFlags,
+    itlJitter: { enabled: jitterEnabled, cvPct: jitterPct },
+    images: { enabled: imagesEnabled, count: imageCount, resolutionId: imageResId },
+    contextScaling: { enabled: ctxScaleEnabled, halfSpeedContextTokens: ctxHalfSafe },
+    sloBudgets,
+    sloResults
+>>>>>>> base
   });
   const handleExportJson = () => downloadJson(buildJson(), 'single-turn-simulation.json');
   const handleCopyMd = async () => {
@@ -807,16 +870,33 @@ export default function SingleTurnVisualizer({
                       {formatTokens(ctxHalfSafe)} tok
                     </span>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max={HALF_SPEED_CONTEXT_PRESETS.length - 1}
-                    step="1"
-                    value={ctxPresetIndex}
-                    aria-label={t('singleTurn.ctxHalfAria')}
-                    aria-valuetext={`${formatTokens(HALF_SPEED_CONTEXT_PRESETS[ctxPresetIndex])} context`}
-                    onChange={(e) => setCtxHalf(HALF_SPEED_CONTEXT_PRESETS[Number(e.target.value)])}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input
+                      type="range"
+                      min="0"
+                      max={HALF_SPEED_CONTEXT_PRESETS.length - 1}
+                      step="1"
+                      value={ctxPresetIndex}
+                      aria-label={t('singleTurn.ctxHalfAria')}
+                      aria-valuetext={`${formatTokens(HALF_SPEED_CONTEXT_PRESETS[ctxPresetIndex])} context`}
+                      onChange={(e) => setCtxHalf(HALF_SPEED_CONTEXT_PRESETS[Number(e.target.value)])}
+                      style={{ flex: 1 }}
+                    />
+                    {/* #412: number twin accepting exact token depths — snaps
+                        to the nearest modeled C½ step instead of guessing. */}
+                    <input
+                      type="number"
+                      min={HALF_SPEED_CONTEXT_PRESETS[0]}
+                      max={HALF_SPEED_CONTEXT_PRESETS[HALF_SPEED_CONTEXT_PRESETS.length - 1]}
+                      step="1024"
+                      value={ctxHalfSafe}
+                      aria-label={`${t('singleTurn.ctxHalfAria')} value`}
+                      title={`Modeled steps: ${HALF_SPEED_CONTEXT_PRESETS.map(formatTokens).join(', ')} tokens — entered values snap to the nearest step`}
+                      onChange={commitHalfContextNumber}
+                      style={{ width: '5.5rem' }}
+                    />
+                    <span className="field-label">tok</span>
+                  </div>
                   <div className="field-scale">
                     <span>{formatTokens(HALF_SPEED_CONTEXT_PRESETS[0])}</span>
                     <span>{formatTokens(HALF_SPEED_CONTEXT_PRESETS[HALF_SPEED_CONTEXT_PRESETS.length - 1])}</span>
@@ -924,7 +1004,7 @@ export default function SingleTurnVisualizer({
                 color: imagesEnabled ? 'var(--prefill)' : 'var(--text-muted)'
               }}
             >
-              <ImageIcon size={14} /> Attached Images: {imagesEnabled ? `${imageCount} × ${imageResolution.label}` : 'OFF'}
+              <ImageIcon size={14} /> Attached Images: {imagesEnabled ? `ON · ${imageCount} × ${imageResolution.label}` : 'OFF'}
             </button>
             {imagesEnabled && (
               <span className="tag tag-prefill">
@@ -1015,12 +1095,13 @@ export default function SingleTurnVisualizer({
               />
               <input
                 type="number"
+                min={PROMPT_TOKENS_RANGE.min}
+                max={PROMPT_TOKENS_RANGE.max}
+                step={PROMPT_TOKENS_RANGE.step}
                 value={promptTokens}
                 aria-label={t('singleTurn.promptValueAria')}
-                onChange={(e) => {
-                  setPromptTokens(Number(e.target.value));
-                  handleReset();
-                }}
+                title={`Valid range ${PROMPT_TOKENS_RANGE.min}–${PROMPT_TOKENS_RANGE.max} tokens; values outside it are clamped`}
+                onChange={commitTokenNumber(setPromptTokens, PROMPT_TOKENS_RANGE)}
                 style={{ width: '5rem' }}
               />
             </div>
@@ -1056,12 +1137,13 @@ export default function SingleTurnVisualizer({
               />
               <input
                 type="number"
+                min={OUTPUT_TOKENS_RANGE.min}
+                max={OUTPUT_TOKENS_RANGE.max}
+                step={OUTPUT_TOKENS_RANGE.step}
                 value={outputTokens}
                 aria-label={t('singleTurn.outputValueAria')}
-                onChange={(e) => {
-                  setOutputTokens(Number(e.target.value));
-                  handleReset();
-                }}
+                title={`Valid range ${OUTPUT_TOKENS_RANGE.min}–${OUTPUT_TOKENS_RANGE.max} tokens; values outside it are clamped`}
+                onChange={commitTokenNumber(setOutputTokens, OUTPUT_TOKENS_RANGE)}
                 style={{ width: '5rem' }}
               />
             </div>

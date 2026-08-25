@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Target } from 'lucide-react';
-import { DEFAULT_SLO_BUDGETS, loadSloBudgets, saveSloBudgets, sanitizeBudgets } from '../utils/slo.js';
+import {
+  DEFAULT_SLO_BUDGETS, loadSloBudgets, saveSloBudgets, sanitizeBudgets,
+  budgetsFromUrlParams, budgetUrlParams
+} from '../utils/slo.js';
+import { readParam, writeParams } from '../utils/urlState';
 import { t } from '../i18n/strings';
 
 /**
@@ -8,13 +12,19 @@ import { t } from '../i18n/strings';
  * localStorage so budgets persist across reloads and are shared by every tab —
  * the panel lives once in App, above the tab content, and the resulting object
  * is passed down to each visualizer for badge evaluation.
+ *
+ * Issue #407: budgets are ALSO carried in the URL (sloTtft / sloTpot / sloWall,
+ * ms / ms / s) so share links and exports reproduce the thresholds a run was
+ * judged against instead of silently using whichever browser's localStorage.
+ * URL params win over localStorage at load; every change rewrites the params.
  */
 export function useSloBudgets() {
-  const [budgets, setBudgets] = useState(() => loadSloBudgets());
+  const [budgets, setBudgets] = useState(() => budgetsFromUrlParams(readParam, loadSloBudgets()));
   const update = (next) => {
     const clean = sanitizeBudgets(next);
     setBudgets(clean);
     saveSloBudgets(clean); // storage failures are non-fatal (private mode)
+    writeParams(budgetUrlParams(clean));
   };
   return [budgets, update];
 }
@@ -46,6 +56,8 @@ export default function SloBudgetsPanel({ budgets, onChange }) {
           onClick={() => setOpen(!open)}
           className="btn"
           aria-expanded={open}
+          aria-controls="slo-budget-editor"
+          aria-label="Edit SLO budgets"
           title={t('slo.toggleTooltip')}
         >
           <Target size={15} />
@@ -60,9 +72,13 @@ export default function SloBudgetsPanel({ budgets, onChange }) {
         </p>
       </div>
 
+      {/* #411: this panel sits inside the outer "SLO budgets" CollapsibleSection,
+          so the toggle gets a distinct accessible name ("Edit SLO budgets") plus
+          aria-controls, letting AT users tell the editor trigger apart from the
+          container disclosure and detect open/closed state programmatically. */}
       {open && (
         <>
-          <div className="grid-auto" style={{ '--grid-min': '12.5rem', marginTop: '12px' }}>
+          <div id="slo-budget-editor" className="grid-auto" style={{ '--grid-min': '12.5rem', marginTop: '12px' }}>
             {fields.map(f => (
               <div className="panel-inset field" key={f.key}>
                 <div className="field-head">

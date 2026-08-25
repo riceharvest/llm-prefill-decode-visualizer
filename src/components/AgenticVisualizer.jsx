@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, FileDown, Copy, Zap, Gauge, FileJson } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
+<<<<<<< main
 import { readParamNum, readParamBool, consumeAutoplay, writeParams } from '../utils/urlState';
+=======
+import { readParamNum, readParamBool, readParam, writeParams, clampNum } from '../utils/urlState';
+>>>>>>> base
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
 import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { exportNodeAsPng } from '../utils/exportPng';
@@ -33,12 +37,33 @@ export default function AgenticVisualizer({
   resetKey,
   sloBudgets
 }) {
+<<<<<<< main
   // Agent configuration parameters
   const [numTurns, setNumTurns] = useState(() => readParamNum('turns', 4, 1, 200));
   const [basePromptTokens, setBasePromptTokens] = useState(() => readParamNum('sprompt', 1500));
   const [toolOutputTokensPerTurn, setToolOutputTokensPerTurn] = useState(() => readParamNum('tool', 800));
   const [decodeTokensPerTurn, setDecodeTokensPerTurn] = useState(() => readParamNum('thought', 250));
+=======
+  // Agent configuration parameters. URL values clamp to each control's slider
+  // range (#416): ?turns=500 used to leave the range at 200 while the number
+  // twin and share link kept 500 — now every surface shows the same clamped
+  // value and the URL is rewritten with the normalized number.
+  const [numTurns, setNumTurns] = useState(() => readParamNum('turns', 4, 1, 200));
+  const [basePromptTokens, setBasePromptTokens] = useState(() => readParamNum('sprompt', 1500, 500, 262144));
+  const [toolOutputTokensPerTurn, setToolOutputTokensPerTurn] = useState(() => readParamNum('tool', 800, 100, 50000));
+  const [decodeTokensPerTurn, setDecodeTokensPerTurn] = useState(() => readParamNum('thought', 250, 50, 20000));
+>>>>>>> base
   const [enablePrefixCaching, setEnablePrefixCaching] = useState(() => readParamBool('cache', true));
+
+  // Number twins clamp to the slider range on commit (#409); empty/garbage
+  // input keeps the current value (standard controlled-input behaviour).
+  const commitClampedNumber = (setter, min, max) => (e) => {
+    if (e.target.value === '') return;
+    const n = Number(e.target.value);
+    if (!Number.isFinite(n)) return;
+    setter(clampNum(n, min, max));
+    handleReset();
+  };
 
   // --- Misconception callout: fires when the user explicitly enables prefix
   // caching — the moment to note that turn 1 still prefills everything. ---
@@ -525,9 +550,13 @@ export default function AgenticVisualizer({
               />
               <input
                 type="number"
+                min="1"
+                max="200"
+                step="1"
                 value={numTurns}
                 aria-label={t('agentic.turnsValueAria')}
-                onChange={(e) => { setNumTurns(Number(e.target.value)); handleReset(); }}
+                title="Valid range 1–200 turns; values outside it are clamped"
+                onChange={commitClampedNumber(setNumTurns, 1, 200)}
                 style={{ width: '4rem' }}
               />
             </div>
@@ -553,9 +582,13 @@ export default function AgenticVisualizer({
               />
               <input
                 type="number"
+                min="500"
+                max="262144"
+                step="250"
                 value={basePromptTokens}
                 aria-label={t('agentic.systemPromptValueAria')}
-                onChange={(e) => { setBasePromptTokens(Number(e.target.value)); handleReset(); }}
+                title="Valid range 500–262,144 tokens; values outside it are clamped"
+                onChange={commitClampedNumber(setBasePromptTokens, 500, 262144)}
                 style={{ width: '5rem' }}
               />
             </div>
@@ -581,9 +614,13 @@ export default function AgenticVisualizer({
               />
               <input
                 type="number"
+                min="100"
+                max="50000"
+                step="100"
                 value={toolOutputTokensPerTurn}
                 aria-label={t('agentic.toolOutputValueAria')}
-                onChange={(e) => { setToolOutputTokensPerTurn(Number(e.target.value)); handleReset(); }}
+                title="Valid range 100–50,000 tokens; values outside it are clamped"
+                onChange={commitClampedNumber(setToolOutputTokensPerTurn, 100, 50000)}
                 style={{ width: '5rem' }}
               />
             </div>
@@ -609,9 +646,13 @@ export default function AgenticVisualizer({
               />
               <input
                 type="number"
+                min="50"
+                max="20000"
+                step="50"
                 value={decodeTokensPerTurn}
                 aria-label={t('agentic.thoughtValueAria')}
-                onChange={(e) => { setDecodeTokensPerTurn(Number(e.target.value)); handleReset(); }}
+                title="Valid range 50–20,000 tokens; values outside it are clamped"
+                onChange={commitClampedNumber(setDecodeTokensPerTurn, 50, 20000)}
                 style={{ width: '5rem' }}
               />
             </div>
