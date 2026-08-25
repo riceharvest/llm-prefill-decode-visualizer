@@ -29,7 +29,7 @@ import { copyTextToClipboard } from './utils/clipboard';
 import {
   serializeSettings, parseSettings,
   createHistory, recordChange, undo as historyUndo, redo as historyRedo,
-  loadHistory, saveHistory, planRestore
+  clampPrefill, clampDecode
 } from './utils/settingsHistory';
 import SnapshotsSidebar from './components/SnapshotsSidebar';
 import KeyboardShortcutsDialog from './components/KeyboardShortcutsDialog';
@@ -85,18 +85,13 @@ export default function App() {
     warnInvalidParams(invalidShareParams);
   }, [invalidShareParams]);
   const initialPresetObj = HARDWARE_PRESETS.find(x => x.id === initialPreset) || HARDWARE_PRESETS[0];
-  // Keep an unknown id verbatim in state so the URL is never rewritten (#876);
-  // only a missing param boots the default preset.
-  const [selectedPreset, setSelectedPreset] = useState(
-    () => (presetParam ? presetParam : initialPreset)
-  );
-  // Ref mirror of selectedPreset so applySettingsQs (stable deps) can resolve
-  // default-speed anchors without re-creating on every preset change.
-  const selectedPresetRef = useRef(selectedPreset);
-  useEffect(() => { selectedPresetRef.current = selectedPreset; }, [selectedPreset]);
-  const [prefillSpeed, setPrefillSpeed] = useState(() => Number(readParam('prefill')) || initialPresetObj.prefillSpeed);
-  const [decodeSpeed, setDecodeSpeed] = useState(() => Number(readParam('decode')) || initialPresetObj.decodeSpeed);
-  const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => readSimSpeed());
+  const [selectedPreset, setSelectedPreset] = useState(initialPreset);
+  const [prefillSpeed, setPrefillSpeed] = useState(() => clampPrefill(Number(readParam('prefill')) || initialPresetObj.prefillSpeed, initialPresetObj.prefillSpeed));
+  const [decodeSpeed, setDecodeSpeed] = useState(() => clampDecode(Number(readParam('decode')) || initialPresetObj.decodeSpeed, initialPresetObj.decodeSpeed));
+  const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => {
+    const v = readParam('sim');
+    return v === 'instant' ? 'instant' : (Number(v) || 1);
+  });
   const [isPlaying, setIsPlaying] = useState(false);
   // #818: playback state must not carry across view switches — arriving on a
   // new tab with the old tab's run still "playing" starts that simulation

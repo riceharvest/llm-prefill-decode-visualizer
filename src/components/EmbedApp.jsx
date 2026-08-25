@@ -10,7 +10,8 @@ import KVCacheCalculator from './KVCacheCalculator';
 import TheoryGuide from './TheoryGuide';
 import CurriculumMode from './CurriculumMode';
 import { HARDWARE_PRESETS } from '../utils/presets';
-import { readParam, readParamNum, readParamBool, readSimSpeed, writeParams } from '../utils/urlState';
+import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
+import { clampPrefill, clampDecode } from '../utils/settingsHistory';
 import { setLocale, getLocale, getDirection, t } from '../i18n/strings';
 import { EMBED_EVENTS, postEmbedEvent, installEmbedBridge } from '../utils/embedBridge';
 
@@ -42,9 +43,12 @@ export default function EmbedApp() {
   // prefill/decode params win over the preset defaults.
   const initialPresetObj =
     HARDWARE_PRESETS.find(x => x.id === readParam('preset')) || HARDWARE_PRESETS[0];
-  const [prefillSpeed] = useState(() => readParamNum('prefill', initialPresetObj.prefillSpeed));
-  const [decodeSpeed] = useState(() => readParamNum('decode', initialPresetObj.decodeSpeed));
-  const [simSpeedMultiplier] = useState(() => readSimSpeed());
+  const [prefillSpeed] = useState(() => clampPrefill(readParamNum('prefill', initialPresetObj.prefillSpeed), initialPresetObj.prefillSpeed));
+  const [decodeSpeed] = useState(() => clampDecode(readParamNum('decode', initialPresetObj.decodeSpeed), initialPresetObj.decodeSpeed));
+  const [simSpeedMultiplier] = useState(() => {
+    const v = readParam('sim');
+    return v === 'instant' ? 'instant' : (readParamNum('sim', 1));
+  });
   // autoplay=1 starts the simulation on load (same convention as demoUrl).
   const [isPlaying, setIsPlaying] = useState(() => readParamBool('autoplay', false));
   const [resetKey, bumpReset] = useState(0);

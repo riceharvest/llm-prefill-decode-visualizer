@@ -17,7 +17,7 @@ import ChartDataTable from './ChartDataTable';
 import Metric from './Metric';
 import Analogy from './Analogy';
 import SloBadge from './SloBadge';
-import { evaluateAgenticSlo } from '../utils/slo.js';
+import { evaluateAgenticSlo, evaluateMetric, formatSloMs } from '../utils/slo.js';
 
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
@@ -218,8 +218,9 @@ export default function AgenticVisualizer({
 
   // Human-readable summary of a turn's failing checks, e.g.
   // "TTFT 900 ms vs 500 ms (+80% over) · TPOT ∞".
+  // formatSloMs (issue #869): guards Infinity/NaN → '∞' and keeps one
+  // decimal below 100 ms so marginal fails aren't hidden by rounding.
   const fmtPct = (r) => Number.isFinite(r.marginPct) ? `${Math.abs(r.marginPct).toFixed(0)}%` : '∞';
-  const fmtMs = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${Math.round(ms)} ms`);
   const turnSloDetail = (triple) => (
     [
       ['TTFT', triple.ttft],
@@ -228,8 +229,8 @@ export default function AgenticVisualizer({
     ]
       .filter(([, r]) => r && !r.pass)
       .map(([label, r]) => {
-        const val = label === 'TTFT' || label === 'TPOT' ? fmtMs(r.value) : formatTime(r.value);
-        return `${label} ${val} vs ${label === 'TTFT' || label === 'TPOT' ? fmtMs(r.budget) : formatTime(r.budget)} (+${fmtPct(r)} over)`;
+        const val = label === 'TTFT' || label === 'TPOT' ? formatSloMs(r.value) : formatTime(r.value);
+        return `${label} ${val} vs ${label === 'TTFT' || label === 'TPOT' ? formatSloMs(r.budget) : formatTime(r.budget)} (+${fmtPct(r)} over)`;
       })
       .join(' · ')
   );
@@ -500,7 +501,12 @@ export default function AgenticVisualizer({
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
       {/* Issue #63: live narration of the animated run for screen readers */}
-      <div className="visually-hidden" role="status" aria-live="polite" data-testid="run-state">{srSummary}</div>
+      {/* #63 run summary text: deliberately NOT an aria-live region (#1010) —
+          the throttled AriaLiveRegion above is this view's single announcer;
+          a second polite region here re-announced every turn/bucket transition
+          and defeated the 5 s throttle ("queue never floods" invariant).
+          Text stays available to SR browsing. */}
+      <div className="visually-hidden">{srSummary}</div>
 
       {/* Top Configuration Card */}
       <section className="panel" aria-label={t('agentic.paramsPanelAria')}>

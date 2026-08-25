@@ -12,25 +12,43 @@
 
 export const HISTORY_LIMIT = 100;
 
+// Declared slider ranges (SpeedControls.jsx min/max attributes). Every write
+// path into prefillSpeed/decodeSpeed must land inside these (#850/#1005) so
+// the slider thumb, the number twins, exports and og:image URLs can't drift.
+export const SPEED_RANGES = {
+  prefill: { min: 50, max: 50000 },
+  decode: { min: 2, max: 1000 }
+};
+
 function toNumOrNull(v) {
   if (v === undefined || v === null || v === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
+/** Clamp a speed to its declared slider range; absent/non-finite input →
+ *  fallback (itself clamped) or null so "no value" stays "no value". */
+export function clampSpeed(kind, v, fallback = null) {
+  const range = SPEED_RANGES[kind];
+  const n = toNumOrNull(v);
+  if (!range || n === null) return typeof fallback === 'number' ? clampSpeed(kind, fallback) : null;
+  return Math.min(range.max, Math.max(range.min, n));
+}
+
+export const clampPrefill = (v, fallback) => clampSpeed('prefill', v, fallback);
+export const clampDecode = (v, fallback) => clampSpeed('decode', v, fallback);
+
 /** Canonical settings shape shared by the URL writer, history and snapshots.
- *  prompt/output carry the single-turn workload so snapshots, undo entries and
- *  share links reproduce the full configuration (issue #414). */
+ *  Speeds are clamped to the declared slider ranges (#1005) so undo/redo and
+ *  snapshot restores can't re-inject out-of-range minted values into state. */
 export function makeSettings(settings = {}) {
   const { preset = '', prefill = null, decode = null, sim = 1, flags = [], prompt = null, output = null } = settings || {};
   return {
     preset: preset || '',
-    prefill: toNumOrNull(prefill),
-    decode: toNumOrNull(decode),
-    sim: (sim === 'instant' || sim === 'inst') ? 'instant' : (toNumOrNull(sim) ?? 1),
-    flags: Array.isArray(flags) ? flags.filter(Boolean) : [],
-    prompt: toNumOrNull(prompt),
-    output: toNumOrNull(output)
+    prefill: clampPrefill(toNumOrNull(prefill)),
+    decode: clampDecode(toNumOrNull(decode)),
+    sim: sim === 'instant' ? 'instant' : (toNumOrNull(sim) ?? 1),
+    flags: Array.isArray(flags) ? flags.filter(Boolean) : []
   };
 }
 
