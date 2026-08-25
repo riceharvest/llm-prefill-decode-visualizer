@@ -374,6 +374,9 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   // "dry_run": true it previews without executing.
   const chartRef = useRef(null);
   const [copiedLang, setCopiedLang] = useState('');
+  // #1048: also render the last-requested snippet in a selectable <pre>, so
+  // the snippet is obtainable even when the clipboard is blocked/denied.
+  const [visibleSnippet, setVisibleSnippet] = useState('');
   const [embedOpen, setEmbedOpen] = useState(false);
   const copyTimer = useRef(null);
 
@@ -388,12 +391,13 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   });
 
   const copySnippet = async (lang) => {
+    setVisibleSnippet(lang);
     try {
       await navigator.clipboard.writeText(buildSnippet(lang, { origin: window.location.origin, body: snippetBody }));
       setCopiedLang(lang);
       clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopiedLang(''), 2000);
-    } catch { /* clipboard unavailable (insecure context / denied) — no-op */ }
+    } catch { /* clipboard unavailable (insecure context / denied) — snippet still shown below */ }
   };
 
   const exportBtnStyle = { padding: '2px 8px', fontSize: '0.68rem' };
@@ -517,6 +521,23 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
             ))}
           </div>
         </div>
+
+        {visibleSnippet && (
+          <div className="panel-inset" data-testid="compare-snippet" aria-label={t(`compare.copy${visibleSnippet === 'curl' ? 'Curl' : visibleSnippet === 'python' ? 'Python' : 'TypeScript'}`)}>
+            <pre
+              tabIndex={0}
+              style={{
+                margin: 0, padding: '10px 12px', background: 'var(--bg-inset)',
+                border: '1px solid var(--border)', borderRadius: '6px',
+                fontFamily: 'var(--font-mono)', fontSize: '0.66rem', lineHeight: 1.5,
+                color: 'var(--text-muted)', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                maxHeight: '160px', overflowY: 'auto'
+              }}
+            >
+              {buildSnippet(visibleSnippet, { origin: typeof window !== 'undefined' ? window.location.origin : '', body: snippetBody })}
+            </pre>
+          </div>
+        )}
 
         {localMaxxingContext?.runs?.length > 0 && (
           <div className="panel-inset" style={{ marginBottom: '14px', borderColor: 'var(--prefill-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: '0.76rem', fontWeight: 600 }}>

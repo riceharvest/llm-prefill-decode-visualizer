@@ -17,8 +17,9 @@ const res = {
   end(body) { chunks.push(String(body)); },
 };
 
-const { default: specHandler } = await import('./_handlers/spec.js');
-specHandler({ method: 'GET', url: '/api/spec' }, res);
+const specModule = await import('./_handlers/spec.js');
+const X_EXAMPLES = specModule.X_EXAMPLES;
+specModule.default({ method: 'GET', url: '/api/spec' }, res);
 
 const spec = JSON.parse(chunks.join(''));
 
@@ -48,3 +49,47 @@ for (const [p, item] of Object.entries(spec.paths)) {
     }
   });
 }
+
+// Truthfulness spot-checks: an x-example claims to be "derived from handler
+// code … (no invented fields)", so its documented values must match what the
+// handlers actually return for the documented call (#1115).
+// These guards fail when handler math changes and leaves a stale example
+// behind — exactly the drift the batch example had accumulated.
+
+function mockRes() {
+  const chunks = [];
+  const headers = {};
+  return {
+    headers,
+    statusCode: 0,
+    setHeader(k, v) { headers[String(k).toLowerCase()] = v; },
+    getHeader(k) { return headers[String(k).toLowerCase()]; },
+    end(body) { chunks.push(String(body)); },
+    body: () => chunks.join('')
+  };
+}
+
+async function runHandler(handlerMod, req) {
+  const res = mockRes();
+  await handlerMod(req, res);
+  return JSON.parse(res.body());
+}
+
+test('/api/compute POST batch x-example result ids match the real deterministic calc ids', async () => {
+  // The POST batch entry lives in the X_EXAMPLES table (module-scope export);
+  // it documents the POST batch dialect even though /api/compute currently
+  // declares only a GET operation (#1057 tracks adding the POST op).
+  const ex = X_EXAMPLES['/api/compute'].post;
+  const items = ex.requestBody?.batch;
+  assert.ok(Array.isArray(items) && items.length > 0, 'batch x-example lost its requestBody.batch items');
+  const { default: computeHandler } = await import('./_handlers/compute.js');
+
+  for (let i = 0; i < items.length; i++) {
+    const expectedId = ex.response.results[i]?.result?.id;
+    assert.ok(expectedId, `batch item ${i} has no id in the example`);
+    // The same params via GET mint the same content-hash id as the batch item.
+    const actual = await runHandler(computeHandler, { method: 'GET', query: { ...items[i] } });
+    assert.equal(actual.id, expectedId,
+      `batch item ${i}: example id ${expectedId} is not the real calc id (${actual.id}) for ${JSON.stringify(items[i])}`);
+  }
+});

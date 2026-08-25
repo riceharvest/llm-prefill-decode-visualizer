@@ -23,6 +23,7 @@ function fetchSpec() {
     statusCode: 200,
     setHeader(k, v) { headers[k.toLowerCase()] = v; },
     getHeader(k) { return headers[String(k).toLowerCase()]; },
+    hasHeader(k) { return String(k).toLowerCase() in headers; },
     end(body) { chunks.push(String(body)); }
   };
   handler({ method: 'GET', url: '/api/spec', query: {} }, res);

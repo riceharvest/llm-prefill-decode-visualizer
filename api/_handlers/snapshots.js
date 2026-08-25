@@ -1,14 +1,8 @@
 import { listSnapshots, ensureSnapshot } from '../_snapshots.js';
+import { sendJson } from '../_schema.js';
+import { listEnvelope } from '../_pagination.js';
 
 export const config = { runtime: 'nodejs' };
-
-function json(res, body, status = 200, cacheTtl = 60) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', `public, max-age=${cacheTtl}`);
-  res.end(JSON.stringify(body, null, 2));
-}
 
 /**
  * GET /api/snapshots — versioned dataset snapshot IDs usable as
@@ -21,12 +15,17 @@ export default async function handler(req, res) {
     const { snapshot: current } = await ensureSnapshot();
     const snapshots = listSnapshots();
     if (!snapshots.some(s => s.id === current.id)) snapshots.unshift(current);
-    return json(res, {
+    // Shared list envelope (#951): collection under `items` + one top-level
+    // `total`; `snapshots` stays as a deprecation-window alias. Routed
+    // through the single shared sender (#963) so the schema version is
+    // stamped like on every other endpoint.
+    return sendJson(res, listEnvelope({
       description: 'Content-addressed dataset snapshots. Pin any data endpoint with ?snapshot=<id> for reproducible results. Snapshot IDs are stable for identical run sets within a fetch-time bucket; instances keep a bounded in-memory ring, so old IDs may expire.',
       current: current.id,
-      snapshots
-    });
+      items: snapshots,
+      aliases: { snapshots }
+    }), { cacheTtl: 60 });
   } catch (err) {
-    return json(res, { error: String(err.message || err) }, 502);
+    return sendJson(res, { error: String(err.message || err) }, { status: 502 });
   }
 }

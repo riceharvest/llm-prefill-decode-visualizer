@@ -59,6 +59,63 @@ test('single-turn export includes speculative decoding formulas when enabled', (
   assert.match(md, /tokens\/step = 1 \+ k·α = 1 \+ 4·0\.7 = 3\.80/);
 });
 
+test('single-turn export applies engine flags to inputs, sections and metrics (#698)', () => {
+  const md = buildSingleTurnMarkdown({
+    promptTokens: 2048,
+    outputTokens: 512,
+    prefillSpeed: 30000,
+    decodeSpeed: 150,
+    specEnabled: false,
+    draftTokens: 0,
+    acceptance: 0,
+    effectiveDecodeSpeed: 150,
+    ctxScaleEnabled: true,
+    ctxHalf: 32768,
+    imagesEnabled: true,
+    imageCount: 2,
+    imageResId: '1080p',
+    jitterEnabled: true,
+    jitterPct: 25,
+    deepLink: 'https://example.test/?tab=single&img=1&ctx=1&jit=1'
+  });
+
+  // Input rows expose every active toggle — a reader can detect the features
+  // from the payload alone.
+  assert.match(md, /\| Attached images \| ON \(2 × 1080p · photo, 4,400 vision tok\) \|/);
+  assert.match(md, /\| Context scaling \| ON \(C½ = 32,768 tok\) \|/);
+  assert.match(md, /\| ITL jitter \| ON \(±25%\) \|/);
+  // Per-feature walkthrough sections with feature-aware math.
+  assert.match(md, /prefill tokens = prompt \+ vision = 2,048 \+ 4,400 = 6,448 tok/);
+  assert.match(md, /TTFT\s+= 6,448 ÷ 30000 = 0\.2149s/);
+  assert.match(md, /### Context scaling/);
+  assert.match(md, /C½ = 32,768 tok\./);
+  assert.match(md, /### ITL jitter/);
+  // Final metrics reflect the flag-aware run (flag-blind TTFT would be 0.0683s).
+  assert.match(md, /\| TTFT \(time to first token\) \| 214\.9 ms \|/);
+  assert.match(md, /matching the on-page run for this exact configuration/);
+
+  // Deterministic: same inputs → byte-identical output.
+  const again = buildSingleTurnMarkdown({
+    promptTokens: 2048,
+    outputTokens: 512,
+    prefillSpeed: 30000,
+    decodeSpeed: 150,
+    specEnabled: false,
+    draftTokens: 0,
+    acceptance: 0,
+    effectiveDecodeSpeed: 150,
+    ctxScaleEnabled: true,
+    ctxHalf: 32768,
+    imagesEnabled: true,
+    imageCount: 2,
+    imageResId: '1080p',
+    jitterEnabled: true,
+    jitterPct: 25,
+    deepLink: 'https://example.test/?tab=single&img=1&ctx=1&jit=1'
+  });
+  assert.equal(md, again);
+});
+
 test('agentic export lists every turn in the waterfall table', () => {
   const md = buildAgenticMarkdown({
     numTurns: 3,

@@ -2,6 +2,7 @@
 // Kept free of req/res so the shape can be unit-tested without a server.
 
 import { getAllRuns } from './_localmaxxing.js';
+import { listEnvelope } from './_pagination.js';
 
 export const DATASET_VERSION = 1;
 
@@ -41,14 +42,25 @@ export function csvEscape(value) {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/** Serialize run objects to RFC 4180 CSV text (header + rows, trailing newline). */
+/** UTF-8 BOM prepended to CSV exports: Excel on ANSI-locale Windows ignores
+ * the Content-Type charset for double-clicked files and needs a BOM to render
+ * the non-ASCII em-dashes in the `#` preamble correctly. */
+export const CSV_BOM = '\ufeff';
+
+/**
+ * Serialize run objects to RFC 4180 CSV text (header + rows).
+ *
+ * Framing contract: LF (`\n`) line endings with a trailing terminator. LF
+ * (instead of RFC 4180's CRLF) keeps naive `split('\n')` parsers free of
+ * `\r` pollution in the last column; lenient RFC 4180 parsers accept LF.
+ */
 export function toCsv(rows) {
   const header = COLUMNS.map(c => c.key).join(',');
   const lines = [header];
   for (const r of rows) {
     lines.push(COLUMNS.map(c => csvEscape(r[c.key])).join(','));
   }
-  return lines.join('\r\n') + '\r\n';
+  return lines.join('\n') + '\n';
 }
 
 /**
@@ -66,19 +78,23 @@ export function csvPreamble(rowCount, generatedAt) {
   ];
   for (const c of COLUMNS) lines.push(`#   ${c.key}: ${c.type} — ${c.description}`);
   lines.push(`# source: https://localmaxxing.com — exported via /api/export`);
-  return lines.join('\r\n') + '\r\n';
+  return lines.join('\n') + '\n';
 }
 
 /** JSON export envelope with the same dictionary in structured form. */
 export function buildJsonPayload(rows, generatedAt) {
-  return {
+  // Shared list envelope (#951): collection under `items` + one top-level
+  // `total`; `runs` stays as a deprecation-window alias. The wire schema
+  // version is stamped by sendJson as snake_case schema_version — the old
+  // camelCase number-typed schemaVersion is gone (#963).
+  return listEnvelope({
     description: 'Full comparable dataset: community-measured single-stream LLM benchmark runs (batchSize=1, concurrency<=1).',
-    schemaVersion: DATASET_VERSION,
     generatedAt,
     rowCount: rows.length,
     dataDictionary: COLUMNS.map(c => ({ column: c.key, type: c.type, description: c.description })),
-    runs: rows
-  };
+    items: rows,
+    aliases: { runs: rows }
+  });
 }
 
 /** Load the full comparable dataset (cached upstream fetch). */

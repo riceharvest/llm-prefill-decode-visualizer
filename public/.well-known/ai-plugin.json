@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "LLM Prefill & Decode Speed Visualizer",
+  "name_for_model": "llm_prefill_decode_visualizer",
+  "description_for_human": "Deterministic LLM inference performance math: TTFT/TPOT per hardware preset, KV-cache VRAM, agentic loop walltime, batching throughput and $/1M-token cost.",
+  "description_for_model": "Deterministic JSON API for LLM inference performance math: TTFT/TPOT per hardware preset, KV-cache VRAM by architecture and precision, agentic loop walltime with prefix caching, speculative decoding speedups, batching throughput, engine flag deltas, and $/1M-token cost. Start with GET /api/spec (OpenAPI) for the full schema or /llms.txt for when-to-use guidance. All compute endpoints are stateless and require no auth.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://llm-prefill-decode-visualizer.vercel.app/api/spec",
+    "is_user_authenticated": false
+  },
+  "logo_url": "https://llm-prefill-decode-visualizer.vercel.app/favicon.svg",
+  "legal_info_url": "https://github.com/riceharvest/llm-prefill-decode-visualizer/issues"
+}

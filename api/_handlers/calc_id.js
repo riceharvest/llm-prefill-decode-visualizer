@@ -6,18 +6,24 @@
 // returns the result stamped `verified: true`. Agents can therefore cite a
 // result as calc_xxxx forever and anyone can re-derive it.
 
-import { isValidCalcId } from '../_calc_id.js';
+import { isValidCalcId, computeCalcId } from '../_calc_id.js';
 import { computeBody as computeResponse } from './compute.js';
 import { bestBody as bestResponse } from './best.js';
+import { enforceRateLimit } from '../_ratelimit.js';
+import { sendJson } from '../_schema.js';
 
 export const config = { runtime: 'nodejs' };
 
+// Thin wrapper over the shared sender so every response carries schema_version
+// + X-Schema-Version + the rate_limit block (see _schema.js). A replay is a
+// fresh verification, not cacheable content: responses are explicitly private
+// and never stored at the edge (#957) — a cached body would assert verified:true
+// without the hash check re-running and would bypass rate limiting.
 function json(res, body, status = 200) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, max-age=3600');
-  res.end(JSON.stringify(body, null, 2));
+  if (!res.getHeader('Cache-Control')) {
+    res.setHeader('Cache-Control', 'private, no-store');
+  }
+  return sendJson(res, body, { status });
 }
 
 export default async function handler(req, res) {
@@ -26,6 +32,11 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     return res.status(204).end();
   }
+
+  // Metered like /api/compute (#957): a replay re-runs the same math, so it
+  // must not be an unmetered bypass — and the rate_limit block below is
+  // stamped by this call.
+  if (!enforceRateLimit(req, res)) return;
 
   const raw = req.method === 'POST' ? { ...(req.query || {}), ...(req.body || {}) } : (req.query || {});
   const id = raw.id;
@@ -49,7 +60,12 @@ export default async function handler(req, res) {
   delete params.endpoint;
 
   // A hash cannot be inverted: replaying requires the original parameters.
-  const hasParams = endpoint === 'compute' ? Boolean(params.model || params.m) : Object.keys(params).length > 0;
+  // Batch payloads (#964) qualify: either the full `batch` array (replayed
+  // through computeBody like any other request) or the caller-supplied
+  // `batchId` the id was pinned to.
+  const hasParams = endpoint === 'compute'
+    ? Boolean(params.model || params.m || params.batch !== undefined || params.batchId !== undefined)
+    : Object.keys(params).length > 0;
   if (!hasParams) {
     return json(res, {
       error: 'Missing request parameters',
@@ -58,6 +74,35 @@ export default async function handler(req, res) {
         ? `/api/calc/${id}?endpoint=best&by=decode&maxParamsB=8`
         : `/api/calc/${id}?model=singleTurn&promptTokens=4096&outputTokens=512`
     }, 400);
+  }
+
+  // #964: batch recovery by id. A batch id minted under a caller-supplied
+  // batchId is a pure hash of that batchId, so it can be VERIFIED from the
+  // batchId alone — no need to still hold the original item payload. This
+  // makes GET /api/calc/<batch-id>?batchId=<batchId> resolve instead of
+  // dead-ending, giving partial-failure recovery an id-based path.
+  if (
+    endpoint === 'compute' &&
+    params.batchId !== undefined &&
+    params.batch === undefined && params.variants === undefined &&
+    !params.model && !params.m
+  ) {
+    const batchId = String(params.batchId);
+    const expected = computeCalcId('compute', { batchId });
+    if (expected !== id) {
+      return json(res, {
+        error: 'Calc id does not match the given parameters',
+        id,
+        expected,
+        hint: 'The batchId does not hash to this id. Use the expected id, or fix the batchId.'
+      }, 400);
+    }
+    return json(res, {
+      id,
+      verified: true,
+      batchId,
+      note: 'Batch id verified against the caller-supplied batchId. To continue a partially failed run, resend POST /api/compute {"batchId": "...", "batch": [...]} — any subset of items, same batchId, same id.'
+    }, 200);
   }
 
   let out;

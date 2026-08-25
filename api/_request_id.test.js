@@ -11,8 +11,11 @@ async function callHandler(url, headers = {}) {
   const res = {
     statusCode: 0,
     headers: {},
+    // Node's res.getHeader is case-insensitive; store under the given key so
+    // test assertions can read either casing.
     setHeader(k, v) { this.headers[k] = v; },
-    getHeader(k) { return this.headers[String(k).toLowerCase()]; },
+    getHeader(k) { const key = String(k); return this.headers[key] ?? this.headers[key.toLowerCase()]; },
+    hasHeader(k) { const key = String(k); return key in this.headers || key.toLowerCase() in this.headers; },
     end(body) {
       captured.status = this.statusCode;
       captured.body = body;

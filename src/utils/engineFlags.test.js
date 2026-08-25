@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ENGINE_FLAGS, applyEngineFlags, getEngineFlag } from './engineFlags.js';
+import { ENGINE_FLAGS, applyEngineFlags, getEngineFlag, normalizeFlagIds } from './engineFlags.js';
 
 test('no flags returns base speeds untouched with empty audit trail', () => {
   const r = applyEngineFlags({ prefillSpeed: 3800, decodeSpeed: 105, flags: [] });
@@ -50,6 +50,36 @@ test('comma-separated string input works (URL param shape)', () => {
   const arr = applyEngineFlags({ flags: ['flash-attn', 'kv-q8'] });
   const str = applyEngineFlags({ flags: 'flash-attn,kv-q8' });
   assert.deepEqual(str.adjusted, arr.adjusted);
+});
+
+test('both multi-value encodings produce identical results (#932)', () => {
+  const comma = applyEngineFlags({ prefillSpeed: 1000, decodeSpeed: 100, flags: 'flash-attn,kv-q8' });
+  const repeated = applyEngineFlags({ prefillSpeed: 1000, decodeSpeed: 100, flags: ['flash-attn', 'kv-q8'] });
+  assert.deepEqual(comma.inputs.flags, repeated.inputs.flags);
+  assert.deepEqual(comma.adjusted, repeated.adjusted);
+  assert.deepEqual(comma.warnings, repeated.warnings);
+});
+
+test('repeated-key array elements containing commas are split, not mangled (#932)', () => {
+  // A layer that joins repeated keys back into one string must not poison
+  // the ids into an unmatchable 'flash-attn,kv-q8' token.
+  const joined = applyEngineFlags({ flags: ['flash-attn,kv-q8'] });
+  const clean = applyEngineFlags({ flags: ['flash-attn', 'kv-q8'] });
+  assert.deepEqual(joined.inputs.flags, ['flash-attn', 'kv-q8']);
+  assert.deepEqual(joined.adjusted, clean.adjusted);
+  assert.deepEqual(joined.warnings, clean.warnings);
+});
+
+test('mixed encodings, whitespace and empty parts normalize cleanly (#932)', () => {
+  const r = applyEngineFlags({ flags: ['flash-attn , kv-q8', '', ' no-mmap '] });
+  assert.deepEqual(r.inputs.flags, ['flash-attn', 'kv-q8', 'no-mmap']);
+  assert.equal(r.adjustments.length, 3);
+});
+
+test('normalizeFlagIds handles non-array scalars and defaults', () => {
+  assert.deepEqual(normalizeFlagIds('flash-attn'), ['flash-attn']);
+  assert.deepEqual(normalizeFlagIds(undefined), []);
+  assert.deepEqual(normalizeFlagIds(''), []);
 });
 
 test('dependent flags warn when their requirement is missing', () => {

@@ -31,6 +31,7 @@ import {
 import { parseContextBandParam, filterByContextBand } from '../_contextbands.js';
 import { datasetCaveats } from '../_caveats.js';
 import { enforceRateLimit } from '../_ratelimit.js';
+import { listEnvelope } from '../_pagination.js';
 import { sendJson } from '../_schema.js';
 import { sendProblemFromError } from '../_errors.js';
 
@@ -152,7 +153,10 @@ export function buildFreshnessBody(runs, params = {}, { now = new Date(), endpoi
 
   return {
     status: 200,
-    body: {
+    // Shared list envelope (#951): the group collection is exposed under the
+    // standard `items` key with one top-level `total`; `groups` stays as a
+    // deprecation-window alias and dataset.totalRuns keeps its meaning.
+    body: listEnvelope({
       description: DESCRIPTION,
       endpoint,
       generatedAt: now.toISOString(),
@@ -166,6 +170,9 @@ export function buildFreshnessBody(runs, params = {}, { now = new Date(), endpoi
         groupBy
       },
       cache,
+      items: groups,
+      total: groups.length,
+      aliases: { groups },
       dataset: {
         totalRuns: filtered.length,
         datedRuns: filtered.length - tierCounts.unknown,
@@ -177,7 +184,6 @@ export function buildFreshnessBody(runs, params = {}, { now = new Date(), endpoi
         staleness: overall.staleness,
         majorReleaseWarnings: overall.majorReleaseWarnings
       },
-      groups,
       summary: {
         groups: groups.length,
         confidence: {
@@ -198,7 +204,7 @@ export function buildFreshnessBody(runs, params = {}, { now = new Date(), endpoi
         }
       ],
       relatedEndpoints: RELATED_ENDPOINTS
-    }
+    })
   };
 }
 

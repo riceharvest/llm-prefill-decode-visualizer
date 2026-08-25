@@ -13,6 +13,7 @@ async function callHandler(url, query = {}) {
     headers: {},
     setHeader(k, v) { this.headers[k] = v; },
     getHeader(k) { return this.headers[k]; },
+    hasHeader(k) { return k in this.headers; },
     end(body) {
       captured.status = this.statusCode;
       captured.body = JSON.parse(body);

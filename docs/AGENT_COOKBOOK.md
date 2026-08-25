@@ -498,12 +498,27 @@ matches your agent's vocabulary; both carry the same filters and schema.
 
 Machine-readable version report for agents and clients
 (`api/_handlers/version.js`): service name, app `version` (package.json),
-`schemaVersion` (the wire schema_version stamped on every JSON response),
-`generatedAt` timestamp and links to `/api/spec`, `CHANGELOG-API.md` and the
-machine-readable `CHANGELOG.json`. Additive — no existing fields changed.
+the wire `schema_version` stamped on every JSON response (single spelling —
+the API layer owns the value), `generatedAt` timestamp and links to
+`/api/versions`, `/api/spec`, `CHANGELOG-API.md` and the machine-readable
+`CHANGELOG.json`. Additive — no existing fields changed.
 
 ```bash
 curl -s "$BASE/api/version"
+```
+
+## `GET /api/versions`
+
+Version discovery (`api/_handlers/versions.js`, issue #685): enumerates every
+served URL prefix (`/api`, `/v1`) with its wire `schema_version`, lifecycle
+`status` (`current` | `deprecated`), `canonical` flag and `sunset` date. Pin a
+prefix whose status is `current`; when a prefix turns `deprecated`, every
+response on it automatically carries `Deprecation` / `Sunset` /
+`Link rel="deprecation"` headers (stamped centrally by
+`applyVersionTrustHeaders`) — migrate before the `Sunset` date.
+
+```bash
+curl -s "$BASE/api/versions"
 ```
 
 ## `GET /api/snapshots`

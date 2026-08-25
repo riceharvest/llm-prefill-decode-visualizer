@@ -58,7 +58,7 @@ async function call(url) {
   const chunks = [];
   const res = {
     statusCode: 200,
-    setHeader() {}, getHeader() { return undefined; }, removeHeader() {},
+    setHeader() {}, getHeader() { return undefined; }, removeHeader() {}, hasHeader() { return false; },
     end(b) { chunks.push(String(b)); }
   };
   const u = new URL(url, 'https://unit.test');

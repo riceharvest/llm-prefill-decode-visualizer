@@ -114,3 +114,27 @@ test('enforceRateLimit writes a full 429 with Retry-After when exhausted', () =>
   assert.equal(parsed.limit, RATE_LIMIT);
   assert.equal(parsed.retryAfterSeconds, Number(res.headers['Retry-After']));
 });
+
+test('exhausted 429 body carries the documented RATE_LIMITED problem members', () => {
+  _resetRateLimits();
+  const t0 = Date.now();
+  const req = mockReq('8.8.8.8');
+  for (let i = 0; i < RATE_LIMIT; i++) rateLimit('8.8.8.8', t0);
+
+  const res = mockRes();
+  const ok = enforceRateLimit(req, res);
+  assert.equal(ok, false);
+  assert.equal(res.statusCode, 429);
+  const parsed = JSON.parse(res.body);
+  // Documented contract (spec x-error-codes + watch/parse-constraints 429s)
+  assert.equal(parsed.code, 'RATE_LIMITED');
+  assert.equal(parsed.title, 'Rate limited');
+  assert.equal(parsed.status, 429);
+  assert.match(parsed.type, /\/problems\/rate-limited$/);
+  assert.equal(parsed.detail, parsed.error); // legacy field kept as alias
+  // Legacy flat fields remain intact for existing clients
+  assert.equal(parsed.limit, RATE_LIMIT);
+  assert.equal(parsed.remaining, 0);
+  assert.equal(parsed.reset, Number(res.headers['X-RateLimit-Reset']));
+  assert.match(parsed.note, /llms\.txt/);
+});

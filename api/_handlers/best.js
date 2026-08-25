@@ -1,5 +1,6 @@
 import { aggregate } from '../_localmaxxing.js';
 import { resolveRuns } from '../_snapshots.js';
+import { listEnvelope } from '../_pagination.js';
 import { sendJson } from '../_schema.js';
 import { singleTurn, cost } from '../_math.js';
 import { SCENARIO_PRESETS } from '../../src/utils/presets.js';
@@ -30,21 +31,38 @@ const CHAT_PRESET = SCENARIO_PRESETS.find(s => s.id === 'chat');
  * (see /api/presets); otherwise the standard-chat defaults apply.
  */
 export function resolveWorkload({ scenario, promptTokens, outputTokens } = {}) {
-  const preset = scenario
-    ? SCENARIO_PRESETS.find(s => s.id === String(scenario).toLowerCase())
+  const requestedScenario = scenario == null || scenario === ''
+    ? null
+    : String(scenario).toLowerCase();
+  const preset = requestedScenario
+    ? SCENARIO_PRESETS.find(s => s.id === requestedScenario)
     : null;
 
   const p = Number(promptTokens);
   const o = Number(outputTokens);
   const hasP = Number.isFinite(p) && p > 0;
   const hasO = Number.isFinite(o) && o > 0;
+  // Which axes came from explicit query params rather than the preset/default
+  // (#836): lets workload.source stay honest for mixed requests.
+  const overrides = [
+    ...(hasP ? ['promptTokens'] : []),
+    ...(hasO ? ['outputTokens'] : [])
+  ];
+
+  let source;
+  if (overrides.length === 2) source = 'query';
+  else if (preset && overrides.length) source = `mixed:${preset.id}+query`;
+  else if (preset) source = `scenario:${preset.id}`;
+  else if (overrides.length) source = 'mixed:default+query';
+  else source = 'default:chat';
 
   return {
     promptTokens: Math.round(hasP ? p : preset?.promptTokens ?? CHAT_PRESET.promptTokens),
     outputTokens: Math.round(hasO ? o : preset?.outputTokens ?? CHAT_PRESET.outputTokens),
-    source: hasP && hasO
-      ? 'query'
-      : preset ? `scenario:${preset.id}` : 'default:chat',
+    source,
+    overrides,
+    requestedScenario,
+    scenarioKnown: !requestedScenario || Boolean(preset),
     scenarioLabel: preset ? `${preset.icon} ${preset.label}` : null
   };
 }
@@ -103,11 +121,11 @@ export function rankGroups(groups, by, workload, limit) {
       };
     })
     .sort((a, b) =>
-      by === 'walltime' ? a._rawWalltime - b._rawWalltime
+      ((by === 'walltime' ? a._rawWalltime - b._rawWalltime
       : by === 'confidence' ? (b.confidence?.score ?? 0) - (a.confidence?.score ?? 0)
       : by === 'prefill' ? b.medianPrefillTokPerSec - a.medianPrefillTokPerSec
       : by === 'efficiency' ? (b.medianDecodeTokPerSec / Math.max(1, b.exampleModel ? 1 : 1)) - (a.medianDecodeTokPerSec / Math.max(1, a.exampleModel ? 1 : 1))
-      : b.medianDecodeTokPerSec - a.medianDecodeTokPerSec
+      : b.medianDecodeTokPerSec - a.medianDecodeTokPerSec)) || byGroupKey(a, b)
     )
     .slice(0, limit)
     .map(({ _rawWalltime, ...entry }) => entry);
@@ -129,6 +147,15 @@ function num(v, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+// Deterministic final tie-break for ranked lists (#812 #813 #793): equal sort
+// keys used to resolve by upstream insertion order, so the same calc_ id
+// could replay to a different rank order or top-N membership. The composite
+// group identity (hardwareKey|modelFamily) is stable content that total-orders
+// whatever the primary metric leaves tied.
+const byGroupKey = (a, b) =>
+  String(a.hardwareKey ?? '').localeCompare(String(b.hardwareKey ?? '')) ||
+  String(a.modelFamily ?? '').localeCompare(String(b.modelFamily ?? ''));
+
 // Rough wall-power estimates when the caller doesn't pass ?powerWatts.
 // Whole-rig figures (idle-ish load while serving), not TDP sums.
 const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
@@ -138,9 +165,9 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  *
  * ?by=decode|prefill|efficiency|walltime|cost|confidence  rank metric (default decode)
  * ?sort_by=<metric>                                        alias for ?by
- * ?scenario=<preset-id>                    workload shape for by=walltime
+ * ?scenario=<preset-id>                    workload shape for by=walltime / by=cost
  *                                          (chat|rag|longdoc|codegen|reasoning)
- * ?promptTokens=N&outputTokens=M           explicit workload shape for by=walltime
+ * ?promptTokens=N&outputTokens=M           explicit workload shape for by=walltime / by=cost
  * ?model=<substr>                 restrict to model family / hfId substring
  * ?maxParamsB=8                   only models at or under this size
  * ?quant=q4_k_m                   exact quantization match (case-insensitive)
@@ -184,11 +211,19 @@ export async function bestBody(query = {}) {
       hardwarePriceUsd: num(q.hardwarePriceUsd ?? q.price, 0),
       electricityRatePerKwh: num(q.electricityRatePerKwh ?? q.electricityRate, 0.15),
       amortizationMonths: num(q.amortizationMonths, 36),
-      promptTokens: num(q.promptTokens, 2048),
-      outputTokens: num(q.outputTokens, 512)
+      // Workload shape resolves exactly like by=walltime (#631): explicit
+      // tokens win, then the ?scenario= preset, then chat defaults — instead
+      // of silently pricing every cost ranking at the 2048/512 chat shape.
+      promptTokens: num(q.promptTokens, workload.promptTokens),
+      outputTokens: num(q.outputTokens, workload.outputTokens)
     };
+    // Accept compute's documented ?powerDrawWatts spelling alongside
+    // ?powerWatts (#1111) so callers copying the /api/compute?model=cost
+    // param names aren't silently ignored.
+    const requestedPowerWatts = q.powerWatts ?? q.powerDrawWatts;
 
     const snapshotAt = new Date();
+    let excludedUnknownVramGb = 0;
     const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
     const contextBand = parseContextBandParam(q.context_band ?? q.contextBand);
 
@@ -218,7 +253,17 @@ export async function bestBody(query = {}) {
     }
     if (q.maxVramGb) {
       const maxV = Number(q.maxVramGb);
-      if (Number.isFinite(maxV)) runs = runs.filter(r => effectiveVramGb(r) != null && effectiveVramGb(r) <= maxV);
+      if (Number.isFinite(maxV)) {
+        // Count rigs dropped for UNKNOWN memory separately (#780): an agent
+        // capping VRAM should be able to tell "over budget" from "no data".
+        let unknownVram = 0;
+        runs = runs.filter(r => {
+          const v = effectiveVramGb(r);
+          if (v == null) { unknownVram++; return false; }
+          return v <= maxV;
+        });
+        excludedUnknownVramGb = unknownVram;
+      }
     }
 
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
@@ -260,7 +305,10 @@ export async function bestBody(query = {}) {
           const sample = g.bestRun;
           const c = cost({
             ...costInputs,
-            powerDrawWatts: num(q.powerWatts, DEFAULT_POWER_WATTS[sample.hwClass] ?? 150),
+            // hwClass arrives UPPERCASE on the wire (#482) — normalize the
+            // lookup key so the per-class watt estimates aren't dead code
+            // and every rig falls back to a flat 150 W (#1111).
+            powerDrawWatts: num(requestedPowerWatts, DEFAULT_POWER_WATTS[String(sample.hwClass ?? '').toLowerCase()] ?? 150),
             prefillSpeed: g.prefill.median,
             decodeSpeed: g.decode.median
           });
@@ -297,7 +345,7 @@ export async function bestBody(query = {}) {
             costUsdPerThousandRequests: c.costUsdPerThousandRequests
           };
         })
-        .sort((a, b) => (a.costUsdPerMillionTokens ?? Infinity) - (b.costUsdPerMillionTokens ?? Infinity))
+        .sort((a, b) => ((a.costUsdPerMillionTokens ?? Infinity) - (b.costUsdPerMillionTokens ?? Infinity)) || byGroupKey(a, b))
         .slice(0, limit);
     } else {
       ranked = rankGroups(groups, by, workload, limit);
@@ -305,7 +353,7 @@ export async function bestBody(query = {}) {
         // rankGroups doesn't know the confidence metric — sort here (#36).
         const confByKey = new Map(groups.map(g => [g.key, g.confidence ?? 0]));
         ranked = ranked.slice().sort((x, y) =>
-          (confByKey.get(`${y.hardwareKey}|${y.modelFamily}`)?.score ?? 0) - (confByKey.get(`${x.hardwareKey}|${x.modelFamily}`)?.score ?? 0));
+          ((confByKey.get(`${y.hardwareKey}|${y.modelFamily}`)?.score ?? 0) - (confByKey.get(`${x.hardwareKey}|${x.modelFamily}`)?.score ?? 0)) || byGroupKey(x, y));
       }    }
     if (fitCheck) {
       // Attach the estimated fit verdict for each ranked group's best run.
@@ -368,6 +416,12 @@ export async function bestBody(query = {}) {
     warnings.push(...groups.filter(g => g.mixedContextBands)
       .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
 
+    // Unknown ?scenario= ids are silently ignored by resolveWorkload (#840) —
+    // name the rejected id in warnings[] so a typo'd preset is visible.
+    if (workload.requestedScenario && !workload.scenarioKnown) {
+      warnings.push(`Unknown ?scenario=${workload.requestedScenario} — not one of ${SCENARIO_PRESETS.map(s => s.id).join('|')}; the default ${CHAT_PRESET.promptTokens}/${CHAT_PRESET.outputTokens} chat shape was used instead.`);
+    }
+
     const filters = { by, limit };
     if (q.model) filters.model = String(q.model).toLowerCase();
     if (q.maxParamsB) filters.maxParamsB = Number(q.maxParamsB);
@@ -375,6 +429,17 @@ export async function bestBody(query = {}) {
     if (q.hwClass) filters.hwClass = String(q.hwClass).toLowerCase();
     if (q.hardware) filters.hardware = String(q.hardware).toLowerCase();
     if (contextBand) filters.contextBand = contextBand;
+    // Bind the id to every resolved input that shapes the result, not just
+    // the headline filters — sets differing only in fit/context/engine/
+    // staleness knobs used to mint identical ids (#557).
+    if (fitCheck) filters.fitCheck = true;
+    if (fitContextLength !== 32768 || fitCheck) filters.contextLength = fitContextLength;
+    if (fitPrecisionBytes !== 2) filters.precisionBytes = fitPrecisionBytes;
+    if (fitBatchSize !== 1) filters.batchSize = fitBatchSize;
+    if (q.engine) filters.engine = String(q.engine);
+    if (Number.isFinite(Number(q.minDecode)) && Number(q.minDecode) > 0) filters.minDecode = Number(q.minDecode);
+    if (Number.isFinite(Number(q.maxVramGb)) && Number(q.maxVramGb) > 0) filters.maxVramGb = Number(q.maxVramGb);
+    if (maxAgeDays) filters.maxAgeDays = maxAgeDays;
 
     // Attach effective VRAM (discrete, falling back to unified) per row (#53).
     const sampleByKey = new Map(groups.map(g => [g.key, g.bestRun]));
@@ -421,8 +486,15 @@ export async function bestBody(query = {}) {
 
     return {
       status: 200,
-      body: {
+      // Shared list envelope (#951): the ranked collection lives under
+      // `items` with one top-level `total` (all filtered groups, not just
+      // the ?limit page); the historical `results` key stays as a
+      // deprecation-window alias.
+      body: listEnvelope({
         id: computeCalcId('best', filters),
+        items: ranked,
+        total: groups.length,
+        aliases: { results: ranked },
       description: by === 'walltime'
         ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant and carry a 95% percentile bootstrap CI (medianXxxCi95 + medianXxxLabel); overlapping intervals mean statistical ties. runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), ?engine=<substr> restricts to same-engine builds only, and staleness/newestRunAt flag how old the newest measurement is; ?max_age=<days> drops older runs.`
         : by === 'cost'
@@ -433,25 +505,32 @@ export async function bestBody(query = {}) {
       snapshotAt: snapshotAt.toISOString(),
       maxAgeDays: maxAgeDays || null,
       contextBand: contextBand || null,
+      requestedScenario: workload.requestedScenario,
       matchedRuns: runs.length,
+      // #780: surface constraint-elimination telemetry. excludedRuns is the
+      // field the OpenAPI spec already declares (present only with fitCheck);
+      // excludedUnknownVramGb separates "dropped for missing memory data"
+      // from "over budget" when ?maxVramGb= is applied.
+      ...(fitCheck ? { excludedRuns: excludedByFit } : {}),
+      ...(excludedUnknownVramGb > 0 ? { excludedUnknownVramGb } : {}),
       caveats: buildCaveats(runs, groups),
       warnings,
-      ...(by === 'walltime' ? {
+      ...(by === 'walltime' || by === 'cost' ? {
         workload: {
           promptTokens: workload.promptTokens,
           outputTokens: workload.outputTokens,
           source: workload.source,
+          overrides: workload.overrides,
+          requestedScenario: workload.requestedScenario,
           ...(workload.scenarioLabel ? { scenario: workload.scenarioLabel } : {})
         }
-      } : {}),
-      results: ranked
-      }
+      } : {})
+    })
     };
   } catch (err) {
     throw err;
   }
 }
-
 export default async function handler(req, res) {
   if (!enforceRateLimit(req, res)) return;
   try {

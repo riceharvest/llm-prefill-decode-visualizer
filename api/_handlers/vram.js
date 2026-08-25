@@ -14,21 +14,24 @@
 //   /api/vram?hfId=...&context=...&vramGb=24            → fits + max context
 //   /api/vram?hfId=...&numTurns=40&tokensPerTurn=1200   → per-turn KV growth
 //                                                          with overflow turns
+//
+// Units (#738 #866): every memory figure in the response is GiB (binary,
+// 1024-based), never decimal GB. The response states this explicitly in its
+// top-level `units` block so agents budgeting against spec-sheet decimal-GB
+// numbers can't mis-read it.
 
 import { resolveModel } from '../_hfconfig.js';
 import { resolveQuant } from '../_quant.js';
 import { lookupHfArch, guessArchFromName } from '../_hflookup.js';
+import { sendJson } from '../_schema.js';
 
 export const config = { runtime: 'nodejs' };
 
 const GB = 1024 ** 3;
 
+// Single shared sender (#963): stamps schema_version + X-Schema-Version.
 function json(res, body, status = 200) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, max-age=600');
-  res.end(JSON.stringify(body, null, 2));
+  return sendJson(res, body, { status, cacheTtl: 600 });
 }
 
 function num(v, fallback) {
@@ -55,8 +58,9 @@ async function estimate(params) {
       body: {
         error: 'missing hfId — pass ?hfId=org/model (e.g. meta-llama/Llama-3.1-8B-Instruct)',
         params: ['hfId (required)', 'context (tokens, default 32768)', 'quant (default q4_k_m)',
-          'batchSize (default 1)', 'kvPrecisionBytes (default 2 = FP16)', 'vramGb (optional budget)',
+          'batchSize (default 1)', 'kvPrecisionBytes (default 2 = FP16)', 'vramGb (optional budget, GiB)',
           'numTurns + tokensPerTurn (optional per-turn KV projection)'],
+        units: 'all memory figures are GiB (binary, 1024-based), not decimal GB',
         examples: [
           '/api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m',
           '/api/vram?hfId=Qwen/Qwen2.5-32B&context=131072&quant=q4_k_m&vramGb=24'
@@ -89,9 +93,53 @@ async function estimate(params) {
   }
   resolved.resolutionSource ??= resolved.source ?? 'huggingface';
   const quant = resolveQuant(params.quant ?? params.q);
-  const context = Math.max(1, Math.round(num(params.context ?? params.contextLength, 32768)));
-  const batchSize = Math.max(1, Math.round(num(params.batchSize, 1)));
-  const kvPrecisionBytes = num(params.kvPrecisionBytes, 2);
+
+  // #646: numeric params are validated at the boundary — unparseable or
+  // out-of-range values fall back LOUDLY (additive warnings[]) instead of
+  // silently rewriting inputs. Clean calls emit no warnings field at all,
+  // so existing consumers see byte-identical responses.
+  const warnings = [];
+  const numInput = (raw, fallback, name) => {
+    if (raw == null || raw === '') return fallback;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) {
+      warnings.push({
+        code: 'input_coerced_to_default',
+        message: `${name}='${raw}' is not a finite number — using default ${fallback}`
+      });
+      return fallback;
+    }
+    return n;
+  };
+  const clampMin = (parsed, raw, min, name) => {
+    if (!warnings.some(w => w.message.startsWith(`${name}=`)) && parsed < min) {
+      warnings.push({
+        code: 'input_clamped_to_minimum',
+        message: `${name}=${raw} is below the minimum of ${min} — using ${min}`
+      });
+      return min;
+    }
+    return parsed;
+  };
+
+  const context = clampMin(Math.round(numInput(params.context ?? params.contextLength, 32768, 'context')),
+    params.context ?? params.contextLength, 1, 'context');
+  const batchSize = clampMin(Math.round(numInput(params.batchSize, 1, 'batchSize')),
+    params.batchSize, 1, 'batchSize');
+  // #646: kvPrecisionBytes <= 0 previously produced negative/zero KV caches
+  // and false fits:true — non-finite/non-positive values now use the
+  // documented default (2 = FP16) with an explicit warning.
+  let kvPrecisionBytes = num(params.kvPrecisionBytes, null);
+  if (kvPrecisionBytes == null) {
+    // param absent — documented default
+    kvPrecisionBytes = 2;
+  } else if (!(kvPrecisionBytes > 0)) {
+    warnings.push({
+      code: 'kv_precision_bytes_invalid',
+      message: `kvPrecisionBytes='${params.kvPrecisionBytes}' must be a finite number > 0 — using default 2`
+    });
+    kvPrecisionBytes = 2;
+  }
 
   const { architecture: arch } = resolved;
 
@@ -127,7 +175,16 @@ async function estimate(params) {
   };
 
   // Optional VRAM budget → does it fit, and what context would fit instead?
-  const vramGb = num(params.vramGb, null);
+  // #646: an unparseable budget is no longer silently dropped (which looked
+  // identical to not passing one) — it emits a vram_budget_ignored warning.
+  const vramRaw = params.vramGb;
+  let vramGb = num(vramRaw, null);
+  if (vramGb == null && vramRaw != null && vramRaw !== '') {
+    warnings.push({
+      code: 'vram_budget_ignored',
+      message: `vramGb='${vramRaw}' is not a finite number — budget check skipped (fits will be null)`
+    });
+  }
   let fits = null;
   if (vramGb != null && totalGb != null) {
     const budgetBytes = vramGb * GB;
@@ -166,6 +223,15 @@ async function estimate(params) {
     projection = {
       tokensPerTurn,
       numTurns: turns.length,
+      // (#651) Echo what was asked and flag the silent 200-turn window cap so
+      // a "no overflow" verdict can't be read as covering an unprojected tail.
+      requestedNumTurns: numTurns,
+      ...(numTurns > turns.length
+        ? {
+            truncated: true,
+            note: `projection window capped at ${turns.length} of ${numTurns} requested turns — first*OverflowTurn verdicts cover only the projected window`
+          }
+        : {}),
       perTurnKvGb: round((bytesPerToken * tokensPerTurn * batchSize) / GB),
       turns,
       firstContextOverflowTurn,
@@ -176,10 +242,29 @@ async function estimate(params) {
   return {
     status: 200,
     body: {
+      units: {
+        memory: 'GiB',
+        note: 'all memory figures (weights, KV cache, totals, headroom, vramGb budgets) are GiB — binary, 1024-based, NOT decimal GB',
+        kvRate: 'bytes/token'
+      },
       inputs: {
         hfId: resolved.hfId, context, quant: params.quant ?? 'q4_k_m',
         resolvedQuant: quant.key, quantAssumed: quant.assumed,
         batchSize, kvPrecisionBytes, ...(vramGb != null ? { vramGb } : {})
+      },
+      // #646: present only when a numeric input was rewritten or ignored.
+      ...(warnings.length ? { warnings } : {}),
+      // #637: fit-model provenance — /api/sizing answers the same fit
+      // question with its own bpw table (4.25 fallback vs 4.85 here),
+      // bucket-guessed architectures and a flat +1.5 GB overhead. These
+      // fields let an agent detect and reconcile that divergence instead of
+      // trusting two contradictory verdicts blind.
+      fitAssumptions: {
+        bpw: quant.bpw,
+        bpwSource: quant.assumed ? 'assumed-fallback' : 'quant-table',
+        archSource: resolved.resolutionSource,
+        overheadModel: 'none',
+        overheadNote: 'no activation/runtime overhead added; /api/sizing adds a flat 1.5 GB'
       },
       model: {
         hfId: resolved.hfId,
