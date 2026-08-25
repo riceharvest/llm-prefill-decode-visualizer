@@ -306,3 +306,51 @@ export function onExternalSnapshots(cb) {
   globalThis.window.addEventListener('storage', handler);
   return () => globalThis.window.removeEventListener('storage', handler);
 }
+
+// ---------------------------------------------------------------------------
+// Snapshot export/import (#427): get the snapshot set out of (and back into)
+// the browser as a versioned JSON document, so workspaces survive profile,
+// incognito and device switches and agents can read the store without
+// executing JS against localStorage.
+// ---------------------------------------------------------------------------
+
+export const SNAPSHOT_EXPORT_VERSION = 1;
+
+/** Build a downloadable/importable document from a snapshot list. */
+export function buildSnapshotExport(list) {
+  return {
+    schemaVersion: SNAPSHOT_EXPORT_VERSION,
+    generator: 'llm-prefill-decode-visualizer',
+    snapshots: (Array.isArray(list) ? list : []).filter(validSnapshot)
+  };
+}
+
+/**
+ * Parse an exported snapshots document (or a bare snapshot array — both the
+ * document shape and the raw llmpdv.snapshots.v1 shape are accepted).
+ * Returns { snapshots } with only valid entries, or null on unparsable input.
+ * Entries are deduped by id against `existingIds`; colliding imports get a
+ * fresh id so nothing already stored is overwritten silently.
+ */
+export function parseSnapshotImport(text, existingIds = []) {
+  let parsed;
+  try {
+    parsed = typeof text === 'string' ? JSON.parse(text) : text;
+  } catch {
+    return null;
+  }
+  const raw = Array.isArray(parsed) ? parsed : parsed?.snapshots;
+  if (!Array.isArray(raw)) return null;
+  const taken = new Set(existingIds);
+  const snapshots = [];
+  for (const s of raw) {
+    if (!validSnapshot(s)) continue;
+    const entry = { id: s.id, name: s.name, qs: s.qs };
+    if (typeof s.createdAt === 'number') entry.createdAt = s.createdAt;
+    if (taken.has(entry.id)) entry.id = `${entry.id}-import${snapshots.length}`;
+    taken.add(entry.id);
+    snapshots.push(entry);
+  }
+  return { snapshots };
+}
+

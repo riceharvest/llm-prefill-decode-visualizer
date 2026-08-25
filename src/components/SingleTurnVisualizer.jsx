@@ -40,7 +40,7 @@ import SloBadge from './SloBadge';
 import { evaluateSlo } from '../utils/slo.js';
 
 import { buildSingleTurnMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
-import { buildSingleTurnJson, downloadJson } from '../utils/exportJson';
+import { buildSingleTurnJson, downloadJson, serializeJson, MAX_SERIES_TOKENS } from '../utils/exportJson';
 import { resolveActiveScenario } from '../utils/scenarioState';
 import { t } from '../i18n/strings';
 import { runStateAttrs, phaseTagClass as phaseTagClassFor } from '../utils/runState';
@@ -487,9 +487,21 @@ export default function SingleTurnVisualizer({
     ? (totalPrefillTokens + outputTokens) / expectedTotalTime
     : NaN;
   const throughputAnchorText = throughputAnchor(throughputNow);
-  // Markdown walkthrough export (download + clipboard)
+  // Markdown walkthrough export (download + clipboard). Inline <details>
+  // viewers (#418) render the exact same payloads so agents/headless contexts
+  // without download or clipboard plumbing can still read the full result.
   const [mdCopied, setMdCopied] = useState(false);
   const [mdCopyFailed, setMdCopyFailed] = useState(false);
+  // #426: ?series=1 adds the deterministic per-token decode timeline to the
+  // JSON export (jittered schedule when ITL jitter is on, constant otherwise),
+  // capped at MAX_SERIES_TOKENS so runaway output values stay bounded.
+  const seriesRequested = readParamBool('series', false);
+  const seriesSchedule = (() => {
+    if (!seriesRequested || !Number.isFinite(tpotMs) || safeOutputTokens <= 0) return null;
+    if (itlSchedule && itlSchedule.length > 0) return itlSchedule.slice(0, MAX_SERIES_TOKENS);
+    const n = Math.min(safeOutputTokens, MAX_SERIES_TOKENS);
+    return Array.from({ length: n }, (_, i) => (i + 1) * tpotMs);
+  })();
   const buildMarkdown = () => buildSingleTurnMarkdown({
     promptTokens,
     outputTokens,
@@ -506,6 +518,7 @@ export default function SingleTurnVisualizer({
     imageResId,
     jitterEnabled,
     jitterPct,
+    sloBudgets,
     deepLink: buildDeepLink('single'),
     provenance: lmxProvenanceBlock
   });
@@ -526,6 +539,10 @@ export default function SingleTurnVisualizer({
     imageResId,
     jitterEnabled,
     jitterPct,
+    sloBudgets,
+    includeSeries: seriesRequested,
+    prefillEndMs: Number.isFinite(expectedTTFT) ? expectedTTFT * 1000 : 0,
+    itlScheduleMs: seriesSchedule,
     deepLink: buildDeepLink('single'),
     provenance: lmxProvenanceBlock
   });
@@ -1256,6 +1273,33 @@ export default function SingleTurnVisualizer({
             </button>
           </div>
         </div>
+
+        {/* Inline export payload viewers (#418): the download/clipboard buttons
+            are unusable in headless/download-restricted contexts, so the exact
+            payloads are also rendered as selectable text. */}
+        <details className="panel-inset" style={{ marginBottom: '18px', fontSize: '0.78rem' }}>
+          <summary style={{ cursor: 'pointer' }}>View export payload inline (MD / JSON)</summary>
+          <div className="grid-auto" style={{ '--grid-min': '22rem', marginTop: '10px' }}>
+            <div>
+              <div className="field-label" style={{ marginBottom: '4px' }}>Markdown walkthrough</div>
+              <pre style={{
+                margin: 0, padding: '8px', maxHeight: '18rem', overflow: 'auto',
+                background: 'var(--bg-raised)', borderRadius: 'var(--radius-sm)',
+                fontSize: '0.7rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                fontFamily: 'var(--font-mono)', userSelect: 'all'
+              }}>{buildMarkdown()}</pre>
+            </div>
+            <div>
+              <div className="field-label" style={{ marginBottom: '4px' }}>JSON export</div>
+              <pre style={{
+                margin: 0, padding: '8px', maxHeight: '18rem', overflow: 'auto',
+                background: 'var(--bg-raised)', borderRadius: 'var(--radius-sm)',
+                fontSize: '0.7rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                fontFamily: 'var(--font-mono)', userSelect: 'all'
+              }}>{serializeJson(buildJson())}</pre>
+            </div>
+          </div>
+        </details>
 
         {/* Phase Split Dual Progress Bars */}
         <div className="grid-auto" style={{ '--grid-min': '18.75rem', marginBottom: '20px' }}>

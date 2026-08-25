@@ -22,7 +22,8 @@ import { evaluateAgenticSlo, evaluateMetric, formatSloMs } from '../utils/slo.js
 
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
-import { buildAgenticJson, downloadJson } from '../utils/exportJson';
+import { buildAgenticJson, downloadJson, serializeJson } from '../utils/exportJson';
+import { waterfallAriaSummary } from '../utils/agenticChartA11y';
 import { t } from '../i18n/strings';
 import { runStateAttrs } from '../utils/runState';
 
@@ -247,7 +248,9 @@ export default function AgenticVisualizer({
   // can never disagree about the loop-total scope.
   const evaluateAgenticSloWalltime = agenticSlo.loopTotal;
 
-  // Markdown walkthrough export (download + clipboard)
+  // Markdown walkthrough export (download + clipboard). Inline <details>
+  // viewers (#423) render the exact same payloads so agents/headless contexts
+  // without download or clipboard plumbing can still read the full result.
   const [mdCopied, setMdCopied] = useState(false);
   const [mdCopyFailed, setMdCopyFailed] = useState(false);
   const buildMarkdown = () => buildAgenticMarkdown({
@@ -258,6 +261,7 @@ export default function AgenticVisualizer({
     enablePrefixCaching,
     prefillSpeed,
     decodeSpeed,
+    sloBudgets,
     deepLink: buildDeepLink('agentic')
   });
   const handleExportMd = () => downloadMarkdown(buildMarkdown(), 'agentic-loop-simulation.md');
@@ -269,6 +273,7 @@ export default function AgenticVisualizer({
     enablePrefixCaching,
     prefillSpeed,
     decodeSpeed,
+    sloBudgets,
     deepLink: buildDeepLink('agentic')
   });
   const handleExportJson = () => downloadJson(buildJson(), 'agentic-loop-simulation.json');
@@ -711,6 +716,7 @@ export default function AgenticVisualizer({
             <button
               onClick={() => setIsPlaying(!isPlaying)}
               className={`btn ${isPlaying ? 'btn-warn' : 'btn-accent'}`}
+              aria-label={isPlaying ? t('agentic.pauseAria') : t('agentic.simulateAria')}
             >
               {isPlaying ? <Pause size={15} /> : <Play size={15} />}
               {isPlaying ? t('common.pause') : t('agentic.simulateLoop')}
@@ -719,7 +725,7 @@ export default function AgenticVisualizer({
             <button
               onClick={handleReset}
               title={t('agentic.resetTooltip')}
-              aria-label={t('agentic.resetTooltip')}
+              aria-label={t('agentic.resetAria')}
               className="btn"
             >
               <RotateCcw size={15} />
@@ -755,6 +761,33 @@ export default function AgenticVisualizer({
             </button>
           </div>
         </div>
+
+        {/* Inline export payload viewers (#423): the download/clipboard buttons
+            are unusable in headless/download-restricted contexts, so the exact
+            payloads are also rendered as selectable text. */}
+        <details className="panel-inset" style={{ marginBottom: '18px', fontSize: '0.78rem' }}>
+          <summary style={{ cursor: 'pointer' }}>View export payload inline (MD / JSON)</summary>
+          <div className="grid-auto" style={{ '--grid-min': '22rem', marginTop: '10px' }}>
+            <div>
+              <div className="field-label" style={{ marginBottom: '4px' }}>Markdown walkthrough</div>
+              <pre style={{
+                margin: 0, padding: '8px', maxHeight: '18rem', overflow: 'auto',
+                background: 'var(--bg-raised)', borderRadius: 'var(--radius-sm)',
+                fontSize: '0.7rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                fontFamily: 'var(--font-mono)', userSelect: 'all'
+              }}>{buildMarkdown()}</pre>
+            </div>
+            <div>
+              <div className="field-label" style={{ marginBottom: '4px' }}>JSON export</div>
+              <pre style={{
+                margin: 0, padding: '8px', maxHeight: '18rem', overflow: 'auto',
+                background: 'var(--bg-raised)', borderRadius: 'var(--radius-sm)',
+                fontSize: '0.7rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                fontFamily: 'var(--font-mono)', userSelect: 'all'
+              }}>{serializeJson(buildJson())}</pre>
+            </div>
+          </div>
+        </details>
 
         {/* Prefix Caching Time Savings Banner */}
         {enablePrefixCaching ? (
@@ -1141,8 +1174,15 @@ export default function AgenticVisualizer({
             </div>
           </div>
 
-          {/* Scrollable strip on narrow viewports (see .waterfall-rows CSS) */}
-          <div className="waterfall-rows">
+          {/* Scrollable strip on narrow viewports (see .waterfall-rows CSS).
+              role="img" + summary label (#421): the per-turn values are only
+              encoded as positioned divs/tooltips, so the chart carries its
+              own readable summary without needing the table toggle. */}
+          <div
+            className="waterfall-rows"
+            role="img"
+            aria-label={waterfallAriaSummary(turnBreakdown, totalAgentWalltime)}
+          >
             {turnBreakdown.map((turnItem, turnIndex) => {
               const isCurrentTurn = activeTurn === turnItem.turn;
               const {

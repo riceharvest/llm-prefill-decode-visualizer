@@ -53,6 +53,16 @@ export const TABS = [
     purpose: 'Simulate a multi-turn tool-calling loop that re-ingests growing history every turn; compare walltime growth with and without prefix caching.',
     surfaces: ['turn-by-turn timeline', 'per-turn token breakdown', 'prefix-caching toggle', 'cumulative walltime chart'],
     endpoints: ['GET /api/compute?model=agentic'],
+    // #424: the tab's share-link params use abbreviated names; publish the
+    // mechanical mapping to the documented /api/compute params so agents can
+    // turn any share link into an instant API call without reverse-engineering.
+    paramMap: [
+      { shareParam: 'turns', apiParam: 'numTurns' },
+      { shareParam: 'sprompt', apiParam: 'basePromptTokens' },
+      { shareParam: 'tool', apiParam: 'toolOutputTokensPerTurn' },
+      { shareParam: 'thought', apiParam: 'decodeTokensPerTurn' },
+      { shareParam: 'cache=1|0', apiParam: 'enablePrefixCaching=true|false' },
+    ],
   },
   {
     id: 'batching',
