@@ -66,6 +66,10 @@
       "destination": "/compare.html"
     },
     {
+      "source": "/compare/:a-vs-:b/",
+      "destination": "/compare.html"
+    },
+    {
       "source": "/about",
       "destination": "/about.html"
     },

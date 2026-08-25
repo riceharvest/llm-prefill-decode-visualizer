@@ -435,10 +435,34 @@ function capabilityList() {
       flagged: {
         params: ['prefillSpeed', 'decodeSpeed', 'promptTokens', 'outputTokens', 'flags'],
         flags: Object.fromEntries(ENGINE_FLAGS.map(f => [f.id, { flag: f.flag, engine: f.engine, prefillDeltaPct: Math.round((f.prefillMult - 1) * 100), decodeDeltaPct: Math.round((f.decodeMult - 1) * 100), kvBits: f.kvBits, source: f.source, sourceNote: f.sourceNote }])),
-        description: 'Applies documented engine launch-flag deltas to base speeds and simulates a single turn. All deltas are heuristics with a source note each — not measurements.',
+        description: 'Applies documented engine launch-flag deltas to base speeds and simulates a single turn. All deltas are heuristics with a source note each — not measurements. NOTE: these are engine LAUNCH FLAGS (llama.cpp/vLLM), not the web UI\'s feature toggles — see uiToggles below for that mapping.',
         example: '/api/compute?model=flagged&prefillSpeed=2400&decodeSpeed=65&flags=flash-attn,kv-q8'
       },
       cost: { params: ['hardwarePriceUsd', 'electricityRatePerKwh', 'powerDrawWatts', 'amortizationMonths', 'promptTokens', 'outputTokens', 'prefillSpeed', 'decodeSpeed'], example: '/api/compute?model=cost&hardwarePriceUsd=2000&electricityRatePerKwh=0.15&powerDrawWatts=450&prefillSpeed=3800&decodeSpeed=105' }
+    },
+    uiToggles: {
+      description: 'Mapping from the Single-turn view\'s four feature toggles to API parameters, so an agent reproducing UI state does NOT land on model=flagged (that models engine launch flags, which share zero overlap with these toggles).',
+      speculativeDecoding: {
+        uiToggle: 'Speculative Decoding',
+        api: 'model=speculative',
+        params: ['baseDecodeSpeed', 'draftTokens', 'acceptanceRate'],
+        example: '/api/compute?model=speculative&baseDecodeSpeed=105&draftTokens=4&acceptanceRate=0.7'
+      },
+      itlJitter: {
+        uiToggle: 'ITL Jitter',
+        api: null,
+        note: 'No /api/compute equivalent: inter-token-latency jitter is a seeded per-token latency tail simulated client-side only; this endpoint returns deterministic point estimates.'
+      },
+      contextScaling: {
+        uiToggle: 'Context Scaling',
+        api: null,
+        note: 'No /api/compute equivalent: linear-in-cache decode decay is applied client-side only. Closest server-side proxy: model=kvCache for context-driven KV-cache VRAM math.'
+      },
+      attachedImages: {
+        uiToggle: 'Attached Images',
+        api: null,
+        note: 'No /api/compute equivalent: ~1,100 vision tokens per image tile are added client-side only; pass an inflated promptTokens to approximate.'
+      }
     },
     batch: {
       description: 'Compare variants in one call: POST {"batch": [{"model": "singleTurn", "promptTokens": 4096}, ...]}. Each item is a normal parameter set including its own "model" field. Returns { results: [{ index, ok, result | error }] } — one bad item does not fail the batch. Failed entries echo their input ("inputs", or "input" for non-object items) and carry a deterministic per-item id plus ApiError extras such as available[], so a subset retry can be correlated by id instead of index. Optionally pass a top-level "batchId" string to pin the response id across subset retries: every attempt under the same batchId returns the same id, verifiable via /api/calc/<id>?batchId=<batchId>. When EVERY item fails the call instead returns 400 problem+json with code BATCH_ALL_FAILED and an errors[] member carrying each item\'s stable code/status/type.',

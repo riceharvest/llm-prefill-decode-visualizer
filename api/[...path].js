@@ -34,7 +34,7 @@ import { default as problems } from './_handlers/problems.js';
 import { ROUTES } from './_route_table.js';
 import { withMarkdownNegotiation } from './_markdown.js';
 import { applyVersionTrustHeaders } from './_versions.js';
-import { sendJson, withConditionalGet } from './_schema.js';
+import { sendJson, withConditionalGet, applyStableBodyMode } from './_schema.js';
 import { sendProblem, sendProblemFromError } from './_errors.js';
 import { applyDeprecationForPath } from './_schema.js';
 
@@ -190,6 +190,9 @@ export default async function handler(req, res) {
   withConditionalGet(req, res);
   applyRequestIdEcho(req, res);
   applyAgentEndpointsHeader(req, res);
+  // Opt-in byte-stable bodies (#697): ?stable=1 omits the volatile
+  // rate_limit block from JSON bodies (headers still carry the quota).
+  applyStableBodyMode(req, res);
   const pathname = (req.url || '').split('?')[0].replace(/^\/api\/?/, '/');
   // Version trust (issue #685): if the request targets a deprecated URL
   // prefix, stamp Deprecation/Sunset/Link headers centrally — handlers never
