@@ -8,6 +8,8 @@ import { enforceRateLimit } from '../_ratelimit.js';
 
 export const config = { runtime: 'nodejs' };
 
+// Shared sender: stamps schema_version + X-Schema-Version on EVERY response
+// body and header, success and error alike (#481 — the spec promises both).
 function json(res, body, status = 200, cacheTtl = 300) {
   return sendJson(res, body, { status, cacheTtl });
 }
@@ -17,7 +19,9 @@ function json(res, body, status = 200, cacheTtl = 300) {
 // that branch on `error` keep working.
 function problem(res, req, { status, code, detail, ...legacy }) {
   applySchemaHeaders(res);
-  return sendProblem(res, req, { status, code, detail, ...legacy });
+  // Error bodies carry schema_version too (#481) — the spec promises the
+  // stamp on EVERY response, success and error alike.
+  return sendProblem(res, req, { status, code, detail, schema_version: '1', ...legacy });
 }
 
 /**
@@ -191,8 +195,12 @@ export default async function handler(req, res) {
     const runB = findRun(idB);
     if (!runB) return notFound(idB);
 
+    // SLO budgets (#481/#1240): attach a slo block only when the caller
+    // actually passed at least one slo* budget param.
+    const hasBudgets = [q.sloTtftMs, q.sloTpotMs, q.sloWalltimeSec].some(v => v !== undefined && v !== null && String(v).trim() !== '');
+
     return json(res, {
-      description: `Diffs two measured runs. Time metrics are normalized to a reference workload (${REF_PROMPT_TOKENS}-token prompt, ${REF_OUTPUT_TOKENS}-token output); delta is B − A, ratio is B ÷ A, winner is from A's point of view.`,
+      description: `Diffs two measured runs. Time metrics are normalized to a reference workload (${REF_PROMPT_TOKENS}-token prompt, ${REF_OUTPUT_TOKENS}-token output); delta is B − A, ratio is B ÷ A, winner is from A's point of view. Time metrics (ttft/tpot/walltime) are SECONDS — join with /api/compute by multiplying tpot by 1000 for its tpotMs — throughputs are tok/s, and every deltaPct is a FRACTION (0.25 = 25%).`,
       runA,
       runB,
       diff: computeRunDiff(runA, runB),

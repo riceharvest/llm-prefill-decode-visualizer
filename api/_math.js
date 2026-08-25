@@ -145,6 +145,12 @@ export function agentic(options = {}) {
     inputs: options,
     warnings: sanityWarnings({ promptTokens: basePromptTokens, prefillSpeed, decodeSpeed }),
     turns,
+    // Time-to-first-token for the loop: turn 1 has a cold cache, so its
+    // prefill time IS the first-token latency an agent waits on (#473).
+    // Same quantity singleTurn reports as ttftSeconds — same name so agents
+    // can join the two endpoints without guessing that turns[0].
+    // prefillSeconds is it.
+    ttftSeconds: turns.length ? turns[0].prefillSeconds : null,
     finalContextTokens: turns.length ? turns[turns.length - 1].totalPromptTokens + decodeTokensPerTurn : 0,
     totalWalltimeSeconds: round(cumulativeWalltime),
     walltimeWithoutCachingSeconds: round(noCacheTotal),

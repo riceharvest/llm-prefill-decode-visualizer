@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/calc/:id",
-      "destination": "/api/calc-replay?id=:id"
+      "destination": "/api/calc?id=:id"
     },
     {
       "source": "/api/watch/rss.xml",
@@ -39,7 +39,7 @@
     },
     {
       "source": "/v1/calc/:id",
-      "destination": "/api/calc-replay?id=:id"
+      "destination": "/api/calc?id=:id"
     },
     {
       "source": "/v1/watch/rss.xml",
@@ -161,11 +161,21 @@
   "headers": [
     {
       "source": "/api/agent/index.json",
-      "headers": [{ "key": "Vary", "value": "Accept-Encoding" }]
+      "headers": [
+        {
+          "key": "Vary",
+          "value": "Accept-Encoding"
+        }
+      ]
     },
     {
       "source": "/api/agent",
-      "headers": [{ "key": "Vary", "value": "Accept-Encoding" }]
+      "headers": [
+        {
+          "key": "Vary",
+          "value": "Accept-Encoding"
+        }
+      ]
     }
   ],
   "crons": [

@@ -17,6 +17,11 @@ import { annotate, THEORETICAL } from '../_basis.js';
 import { parseBool, BOOL_WORDS, isUnrecognizedBool } from '../_params.js';
 import { empiricalDecayExponentCaveat, heuristicFlagDeltasCaveat } from '../_caveats.js';
 import { ROUTES } from '../_route_table.js';
+import {
+  resolveSingleTurnFeatures,
+  simulateSingleTurnFeatures,
+  evaluateSlo
+} from '../_single_turn_features.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -112,6 +117,49 @@ function num(v, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/**
+ * Hardware-preset bridge (#476): llms.txt says "use /api/presets as
+ * /api/compute inputs" — this makes ?preset=<hardware preset id> actually do
+ * that. A known id fills prefillSpeed/decodeSpeed for any speed the caller
+ * did NOT pass explicitly (explicit params still win); an unknown id is
+ * reported via a non-blocking warning instead of being silently dropped.
+ */
+export function resolveHardwarePreset(params = {}) {
+  const id = params.preset;
+  if (id === undefined || id === null || String(id) === '') {
+    return { speeds: {}, echo: undefined, warning: undefined };
+  }
+  const found = HARDWARE_PRESETS.find(p => p.id === id);
+  if (!found) {
+    return {
+      speeds: {},
+      echo: undefined,
+      warning: {
+        code: 'unknown_preset',
+        message: `Unknown hardware preset '${id}' — default speeds were used. Browse ids via /api/presets.`,
+        available: HARDWARE_PRESETS.map(p => p.id)
+      }
+    };
+  }
+  return {
+    speeds: { prefillSpeed: found.prefillSpeed, decodeSpeed: found.decodeSpeed },
+    echo: { id: found.id, name: found.name },
+    warning: undefined
+  };
+}
+
+// Attach the ?preset= echo + any unknown-preset warning to a result body.
+// Purely additive fields; absent when no preset was requested.
+function withPresetMeta(params, body) {
+  const { echo, warning } = resolveHardwarePreset(params);
+  if (!echo && !warning) return body;
+  return {
+    ...body,
+    ...(echo ? { presetApplied: echo } : {}),
+    ...(warning ? { warnings: [...(body.warnings || []), warning] } : {})
+  };
+}
+
 // Run one parameter set. Returns { status, body } — never throws for
 // expected input problems; unexpected math errors bubble up to the caller.
 // With dryRun, each branch validates + echoes its parsed inputs instead of
@@ -121,13 +169,28 @@ function computeOne(params, dryRun = false) {
 
   switch (model) {
     case 'singleTurn': {
+      const { speeds } = resolveHardwarePreset(params);
       const inputs = {
         promptTokens: num(params.promptTokens, 2048),
         outputTokens: num(params.outputTokens, 512),
-        prefillSpeed: num(params.prefillSpeed, 3800),
-        decodeSpeed: num(params.decodeSpeed, 105)
+        prefillSpeed: num(params.prefillSpeed, speeds.prefillSpeed ?? 3800),
+        decodeSpeed: num(params.decodeSpeed, speeds.decodeSpeed ?? 105)
       };
-      return withId('singleTurn', inputs, singleTurn(inputs), dryRun);
+      // Engine features (#472): ITL jitter / context scaling / attached
+      // images — opt-in; when none requested the plain math runs untouched.
+      const features = resolveSingleTurnFeatures(params);
+      let body = features
+        ? simulateSingleTurnFeatures(inputs, features)
+        : singleTurn(inputs);
+      // SLO budgets (#480): optional server-side pass/fail evaluation.
+      const slo = evaluateSlo({
+        maxTtftSeconds: params.maxTtftSeconds,
+        maxTpotMs: params.maxTpotMs,
+        ttftSeconds: body.ttftSeconds,
+        tpotMs: body.tpotMs
+      });
+      if (slo) body = { ...body, slo };
+      return withId('singleTurn', inputs, withPresetMeta(params, body), dryRun);
     }
 
     case 'speculative': {
@@ -141,15 +204,16 @@ function computeOne(params, dryRun = false) {
     }
 
     case 'batched': {
+      const { speeds: bSpeeds } = resolveHardwarePreset(params);
       const inputs = {
-        prefillSpeed: num(params.prefillSpeed, 3800),
-        decodeSpeed: num(params.decodeSpeed, 105),
+        prefillSpeed: num(params.prefillSpeed, bSpeeds.prefillSpeed ?? 3800),
+        decodeSpeed: num(params.decodeSpeed, bSpeeds.decodeSpeed ?? 105),
         batchSize: num(params.batchSize, 1),
         promptTokens: num(params.promptTokens, 4096),
         outputTokens: num(params.outputTokens, 512),
         decodeDecayExponent: num(params.decodeDecayExponent, 0.25)
       };
-      return withId('batched', inputs, batched(inputs), dryRun);
+      return withId('batched', inputs, withPresetMeta(params, batched(inputs)), dryRun);
     }
 
     case 'agentic': {
@@ -160,23 +224,33 @@ function computeOne(params, dryRun = false) {
       // Floor at parse time so `inputs.numTurns` echoes the EXECUTED count,
       // and flag the coercion in warnings[] when it engaged.
       const numTurns = Math.floor(requested);
+      const { speeds } = resolveHardwarePreset(params);
       const inputs = {
         numTurns,
         basePromptTokens: num(params.basePromptTokens, 1500),
         toolOutputTokensPerTurn: num(params.toolOutputTokensPerTurn, 800),
         decodeTokensPerTurn: num(params.decodeTokensPerTurn, 250),
-        prefillSpeed: num(params.prefillSpeed, 3800),
-        decodeSpeed: num(params.decodeSpeed, 105),
+        prefillSpeed: num(params.prefillSpeed, speeds.prefillSpeed ?? 3800),
+        decodeSpeed: num(params.decodeSpeed, speeds.decodeSpeed ?? 105),
         enablePrefixCaching: params.enablePrefixCaching !== 'false' && params.enablePrefixCaching !== false
       };
-      const result = agentic(inputs);
+      let result = agentic(inputs);
       if (numTurns !== requested) {
         result.warnings.push({
           code: 'num_turns_floored',
           message: `numTurns=${requested} is fractional — the simulation ran ${numTurns} turns; inputs echo the executed count.`
         });
       }
-      return withId('agentic', inputs, result, dryRun);
+      // SLO budgets (#480): evaluated against the loop's first-token latency
+      // (ttftSeconds) and its implied per-token time.
+      const slo = evaluateSlo({
+        maxTtftSeconds: params.maxTtftSeconds,
+        maxTpotMs: params.maxTpotMs,
+        ttftSeconds: result.ttftSeconds,
+        tpotMs: inputs.decodeSpeed > 0 ? 1000 / inputs.decodeSpeed : null
+      });
+      if (slo) result = { ...result, slo };
+      return withId('agentic', inputs, withPresetMeta(params, result), dryRun);
     }
 
     case 'kvCache': {
@@ -291,6 +365,7 @@ function computeOne(params, dryRun = false) {
     }
 
     case 'cost': {
+      const { speeds: cSpeeds } = resolveHardwarePreset(params);
       const costInputs = {
         hardwarePriceUsd: num(params.hardwarePriceUsd ?? params.price, 0),
         electricityRatePerKwh: num(params.electricityRatePerKwh ?? params.electricityRate, 0.15),
@@ -298,8 +373,8 @@ function computeOne(params, dryRun = false) {
         amortizationMonths: num(params.amortizationMonths, 36),
         promptTokens: num(params.promptTokens, 2048),
         outputTokens: num(params.outputTokens, 512),
-        prefillSpeed: num(params.prefillSpeed, 3800),
-        decodeSpeed: num(params.decodeSpeed, 105)
+        prefillSpeed: num(params.prefillSpeed, cSpeeds.prefillSpeed ?? 3800),
+        decodeSpeed: num(params.decodeSpeed, cSpeeds.decodeSpeed ?? 105)
       };
       if (dryRun) return { status: 200, body: dryRunBody('cost', costInputs) };
       // #736: bare model=cost calls default price AND power to 0, which makes
@@ -318,7 +393,7 @@ function computeOne(params, dryRun = false) {
           message: 'powerDrawWatts=0 (default) — electricity contributes nothing; pass ?powerDrawWatts= for a realistic $/1M tokens.'
         });
       }
-      return { status: 200, body: { ...cost(costInputs), warnings } };
+      return { status: 200, body: withPresetMeta(params, { ...cost(costInputs), warnings }) };
     }
 
     case '':
@@ -334,12 +409,12 @@ function computeOne(params, dryRun = false) {
 
 function capabilityList() {
   return {
-    description: 'LLM inference math API. Pass ?model=<name> plus parameters, or batch up to 50 parameter sets via POST {"batch":[...]} (or ?batch=[...] as JSON).',
+    description: 'LLM inference math API. Pass ?model=<name> plus parameters, or batch up to 50 parameter sets via POST {"batch":[...]} (or ?batch=[...] as JSON). Speed-based models accept ?preset=<hardware preset id> from /api/presets to source prefillSpeed/decodeSpeed defaults (explicit params win; unknown ids get an unknown_preset warning). singleTurn/agentic also accept optional SLO budgets maxTtftSeconds/maxTpotMs and return a pass/fail `slo` block (#472/#480).',
     models: {
-      singleTurn: { params: ['promptTokens', 'outputTokens', 'prefillSpeed', 'decodeSpeed'], example: '/api/compute?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105' },
+      singleTurn: { params: ['promptTokens', 'outputTokens', 'prefillSpeed', 'decodeSpeed', '?preset', '?jit&jitPct', '?ctx&ctxHalf', '?img&imgN&imgRes', '?maxTtftSeconds&maxTpotMs'], example: '/api/compute?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105' },
       speculative: { params: ['baseDecodeSpeed', 'draftTokens', 'acceptanceRate', 'draftCostFraction'], example: '/api/compute?model=speculative&baseDecodeSpeed=105&draftTokens=4&acceptanceRate=0.7' },
       batched: { params: ['prefillSpeed', 'decodeSpeed', 'batchSize', 'promptTokens', 'outputTokens', 'decodeDecayExponent'], example: '/api/compute?model=batched&batchSize=16&decodeSpeed=105' },
-      agentic: { params: ['numTurns', 'basePromptTokens', 'toolOutputTokensPerTurn', 'decodeTokensPerTurn', 'prefillSpeed', 'decodeSpeed', 'enablePrefixCaching'], example: '/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true' },
+      agentic: { params: ['numTurns', 'basePromptTokens', 'toolOutputTokensPerTurn', 'decodeTokensPerTurn', 'prefillSpeed', 'decodeSpeed', 'enablePrefixCaching', '?preset', '?maxTtftSeconds&maxTpotMs'], example: '/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true' },
       kvCache: { params: ['architecture|numLayers+kvHeads+headDim', 'contextLength', 'precisionBytes', 'batchSize'], architectures: Object.keys(MODEL_PRESETS), example: '/api/compute?model=kvCache&architecture=llama70b&contextLength=65536' },
       flagged: {
         params: ['prefillSpeed', 'decodeSpeed', 'promptTokens', 'outputTokens', 'flags'],

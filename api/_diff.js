@@ -136,6 +136,16 @@ export function computeRunDiff(runA, runB) {
     walltime: diffMetric(timesA.walltimeSeconds, timesB.walltimeSeconds, { higherIsBetter: false })
   };
 
+  // Units + scale contract (#479): the bare time keys are SECONDS (join with
+  // /api/compute's tpotMs by multiplying by 1000), throughputs are tok/s, and
+  // deltaPct is a FRACTION (0.25 = 25% faster/slower), unlike /api/compute's
+  // 0–100 *SharePct fields. Declared in-band so agents don't have to guess.
+  metrics.prefill.unit = 'tokPerSec';
+  metrics.decode.unit = 'tokPerSec';
+  metrics.ttft.unit = 'seconds';
+  metrics.tpot.unit = 'seconds';
+  metrics.walltime.unit = 'seconds';
+
   // Context flags: same model family / same hardware make the comparison
   // apples-to-apples; differing token counts are absorbed by the reference
   // workload but still worth surfacing.
@@ -146,7 +156,14 @@ export function computeRunDiff(runA, runB) {
     referenceWorkload: `${REF_PROMPT_TOKENS}-token prompt, ${REF_OUTPUT_TOKENS}-token output`
   };
 
-  return { context, metrics, summary: buildSummary(runA, runB, metrics, context) };
+  return {
+    context,
+    metrics,
+    // Scale declaration for the per-metric deltaPct fields (#479): a
+    // fraction, not a percentage — 0.5 means B is 50% slower/faster than A.
+    deltaPctScale: 'fraction',
+    summary: buildSummary(runA, runB, metrics, context)
+  };
 }
 
 function buildSummary(runA, runB, metrics, context) {
