@@ -10,6 +10,7 @@ import { auditRuns, dataQuality } from '../_unit_audit.js';
 import { sendProblem, sendProblemFromError } from '../_errors.js';
 import { filterByMaxAge, parseMaxAgeParam } from '../_freshness.js';
 import { parseContextBandParam, filterByContextBand } from '../_contextbands.js';
+import { slugify } from '../../src/utils/compareSlug.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -133,6 +134,14 @@ export default async function handler(req, res) {
       confidence: { ...confidence(members.get(g.key) || []), ...(g.confidence || {}) },
       crossCheck: crossCheck(members.get(g.key) || []),
       dataQuality: dataQuality(members.get(g.key) || []),
+      // Issue #757: with ?groupBy=hardware each group also exposes the exact
+      // slug used by the SEO comparison pages, so an agent can construct
+      // /compare/:slugA-vs-:slugB URLs without reverse-engineering slugify.
+      // Same algorithm as the compare page: slugify(bestRun.hardware || key).
+      ...(groupBy === 'hardware' ? {
+        hardwareLabel: g.bestRun?.hardware || g.key,
+        slug: slugify(g.bestRun?.hardware || g.key),
+      } : {}),
       bestRun: {
         runId: g.bestRun.runId,
         modelName: g.bestRun.modelName,
@@ -157,7 +166,7 @@ export default async function handler(req, res) {
       .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
 
     return json(res, {
-      description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=&context_band=lt1k|1k-8k|8k-32k|32k+; regroup with ?groupBy=hardware|model|quant|hardwareModel; exclude old measurements with ?max_age=<days>. Filter params accept both snake_case and camelCase spellings (e.g. group_by/groupBy, cross_engine/crossEngine, outlier_iqrs/outlierIqrs, include_outliers/includeOutliers, max_age/maxAge, context_band/contextBand). Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false. Each group carries a confidence block (run count, IQR spread %, outlier count, recency, grade) and a cross_check comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.',
+      description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=&context_band=lt1k|1k-8k|8k-32k|32k+; regroup with ?groupBy=hardware|model|quant|hardwareModel; exclude old measurements with ?max_age=<days>. Filter params accept both snake_case and camelCase spellings (e.g. group_by/groupBy, cross_engine/crossEngine, outlier_iqrs/outlierIqrs, include_outliers/includeOutliers, max_age/maxAge, context_band/contextBand). Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false. Each group carries a confidence block (run count, IQR spread %, outlier count, recency, grade) and a cross_check comparing multi-GPU rigs against the single-GPU baseline on the same model/quant. With ?groupBy=hardware every item also carries slug + hardwareLabel — combine any two as /compare/<slugA>-vs-<slugB>; pairs whose slugs are not in this response return HTTP 404.',
       snapshot,
       snapshotAt: snapshotAt.toISOString(),
       maxAgeDays: maxAgeDays || null,
