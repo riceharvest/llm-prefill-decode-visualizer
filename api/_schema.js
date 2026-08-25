@@ -15,7 +15,7 @@
  *     `Deprecation` and `Sunset` headers plus a CHANGELOG-API.md entry.
  */
 
-import { rateLimitBody } from './_ratelimit.js';
+import { rateLimitBody, applyRateLimitHeaders, defaultRateLimitInfo } from './_ratelimit.js';
 import { createHash } from 'node:crypto';
 
 export const SCHEMA_VERSION = '1';
@@ -170,6 +170,15 @@ export function sendJson(res, body, { status = 200, cacheTtl } = {}) {
   // "Rate limits".
   const rl = rateLimitBody(res);
   if (rl && payload.rate_limit === undefined) payload.rate_limit = rl;
+  if (rl && payload.rate_limit === undefined) payload.rate_limit = rl;
+  else if (!rl) {
+    // Request path bypassed enforceRateLimit (e.g. /api/health, /api/version,
+    // /api/agent/capabilities.json, /api/calc/<id>, router-level 404/500):
+    // still honour the documented contract (public/llms.txt "Rate limits")
+    // that every /api/* JSON response carries X-RateLimit-* headers. Reports
+    // the documented budget without consuming from any client bucket.
+    applyRateLimitHeaders(res, defaultRateLimitInfo());
+  }
   // Trailing newline: POSIX-text-friendly final byte, matching the client
   // exporter (src/utils/exportJson.js serializeJson) so every JSON surface in
   // this repo agrees on the framing.
