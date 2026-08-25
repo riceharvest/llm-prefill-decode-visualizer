@@ -10,6 +10,7 @@ import {
 import { readParamNum, readParam, readParamBool, consumeAutoplay, writeParams } from '../utils/urlState';
 import { shouldCompleteInstantly } from '../utils/simPlayback';
 import { phaseToRunState, runStateToBusy } from '../utils/viewState';
+import { buildDecayCurveSamples } from '../utils/ctxDecayCurve';
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
@@ -440,12 +441,16 @@ export default function SingleTurnVisualizer({
   const yHi = Math.max(effectiveDecodeSpeed, 1) * 1.05;
   const yLo = Math.max(0, curveEndSpeed - Math.max((curveStartSpeed - curveEndSpeed) * 0.08, effectiveDecodeSpeed * 0.03));
   const yAt = (s) => PAD_T + (1 - (Math.min(Math.max(s, yLo), yHi) - yLo) / Math.max(yHi - yLo, 1e-9)) * innerH;
-  const CURVE_SAMPLES = 96;
-  const curvePoints = Array.from({ length: CURVE_SAMPLES + 1 }, (_, i) => {
-    const g = (i / CURVE_SAMPLES) * chartMaxGen;
-    const s = ctxScaleEnabled ? instantSpeedAt(g) : effectiveDecodeSpeed;
-    return `${xAt(g).toFixed(1)},${yAt(s).toFixed(1)}`;
-  }).join(' ');
+  const curveSamples = buildDecayCurveSamples({
+    maxGen: chartMaxGen,
+    scaleEnabled: ctxScaleEnabled,
+    baseSpeed: effectiveDecodeSpeed,
+    prefillTokens: totalPrefillTokens,
+    ctxHalf: ctxHalfSafe
+  });
+  const curvePoints = curveSamples
+    .map((p) => `${xAt(p.gen).toFixed(1)},${yAt(p.tokps).toFixed(1)}`)
+    .join(' ');
   const probeSpeed = ctxScaleEnabled ? instantSpeedAt(probeGen) : effectiveDecodeSpeed;
   const probePctOfBase = effectiveDecodeSpeed > 0 ? (probeSpeed / effectiveDecodeSpeed) * 100 : 0;
   const decaySvgRef = useRef(null);
@@ -967,6 +972,22 @@ export default function SingleTurnVisualizer({
                   </text>
                 </g>
               </svg>
+              {/* Curve-to-table alternative (#720): the decay curve above is
+                  pure SVG geometry; this sr-only table exposes the same
+                  samples as exact token → tok/s values (every 8th sample). */}
+              <ChartDataTable
+                caption={t('chartTable.decayCurveCaption')}
+                rowHeaderLabel={t('chartTable.generatedToken')}
+                columns={[{ key: 'tokps', label: t('chartTable.decodeSpeed'), numeric: true }]}
+                mode="sr-only"
+                rows={curveSamples
+                  .filter((_, i) => i % 8 === 0)
+                  .map((p) => ({
+                    id: `gen-${p.gen}`,
+                    label: `+${Math.round(p.gen).toLocaleString()}`,
+                    cells: { tokps: `${Math.round(p.tokps).toLocaleString()} tok/s` }
+                  }))}
+              />
               <input
                 type="range"
                 min="0"

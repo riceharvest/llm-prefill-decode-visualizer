@@ -91,7 +91,7 @@ async function handlePost(req, res) {
 /**
  * GET /api/localmaxxing — raw comparable runs (flattened, normalized).
  * POST /api/localmaxxing — submit a run for review (validated, queued).
- * GET: ?hardware=<substr> &model=<substr> &quant=<exact> &context_band=lt1k|1k-8k|8k-32k|32k+ &limit=N (default 50, max 500) &cursor=<opaque>
+ * GET: ?runId=<id> single-run lookup (404 problem on unknown id) | ?hardware=<substr> &model=<substr> &quant=<exact> &context_band=lt1k|1k-8k|8k-32k|32k+ &limit=N (default 50, max 500) &cursor=<opaque>
  * &max_age=<days> excludes runs measured longer than N days ago (undated runs dropped)
  * Bare call returns the hardware-group summary.
  */
@@ -124,6 +124,29 @@ export default async function handler(req, res) {
     const resolved = await resolveRuns(q);
     let runs = resolved.runs;
     const { snapshot } = resolved;
+
+    // Single-run lookup (#719): ?runId=<id> returns exactly the record the
+    // LocalMaxxing wizard applies as its lmx:<id> preset — previously the
+    // param did not exist and was silently ignored, falling back to the bare
+    // summary envelope.
+    const runIdParam = q.runId ?? q.id;
+    if (runIdParam) {
+      const found = runs.find(r => String(r.runId) === String(runIdParam));
+      if (!found) {
+        return sendProblem(res, req, {
+          status: 404,
+          code: 'NOT_FOUND',
+          detail: `No comparable localmaxxing run with runId "${String(runIdParam).slice(0, 64)}". Omit ?runId= to list runs.`
+        });
+      }
+      return json(res, {
+        description: 'Single community-measured comparable run by id. The LocalMaxxing wizard applies this exact record as preset "lmx:<runId>"; batchSize/concurrency/numParallel re-derive the single-stream comparability filter.',
+        snapshot,
+        snapshotAt: snapshotAt.toISOString(),
+        presetId: `lmx:${found.runId}`,
+        run: decorateRun(found, snapshotAt)
+      });
+    }
 
     const hardware = q.hardware ? String(q.hardware).toLowerCase() : null;
     const model = q.model ? normalizeQueryModel(q.model) : null;

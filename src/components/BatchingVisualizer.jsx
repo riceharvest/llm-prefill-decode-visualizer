@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Layers, Play, Pause, RotateCcw, FileDown, Copy, FileJson } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
-import { readParamNum, writeParams } from '../utils/urlState';
+import { readParam, readParamNum, writeParams } from '../utils/urlState';
 import { generateRequests, simulateBatching, simulateStaticBatching } from '../utils/batchScheduling';
 import { clockToRunState, runStateToBusy } from '../utils/viewState';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import Metric from './Metric';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { shouldCompleteInstantly } from '../utils/simPlayback';
+import { requestRowAttrs, queueWaitAttrs, segmentAttrs, occupancyBarAttrs, itlBarAttrs } from '../utils/batchingChartAttrs';
 import { t } from '../i18n/strings';
 import { buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { downloadJson } from '../utils/exportJson';
@@ -58,6 +59,15 @@ export default function BatchingVisualizer({
       bseed: workloadSeed
     });
   }, [numRequests, meanPromptTokens, meanOutputTokens, maxBatchSize, chunkSize, arrivalIntervalMs, workloadSeed]);
+
+  // Honor ?autoplay=1 (#716): the documented demo-URL convention starts the
+  // simulation on load. Agentic and the embed shell already consume it —
+  // without this the batching deep link landed on an idle simulator with no
+  // signal that the flag was dropped.
+  useEffect(() => {
+    if (readParam('autoplay') === '1') setIsPlaying(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- Misconception callout: fires the moment chunked prefill is disabled ---
   const [showChunkCallout, setShowChunkCallout] = useState(false);
@@ -677,6 +687,7 @@ export default function BatchingVisualizer({
                 <div
                   key={req.id}
                   onClick={() => setSelectedRequestId(isSelected ? null : req.id)}
+                  {...requestRowAttrs(req)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -702,6 +713,7 @@ export default function BatchingVisualizer({
                     {/* Queue wait: arrival → first prefill segment */}
                     {rowSegments.get(req.id)?.length > 0 && (
                       <div
+                        {...queueWaitAttrs(rowSegments.get(req.id)[0].tStart - req.arrivalTime)}
                         style={{
                           left: `${timePct(req.arrivalTime)}%`,
                           width: `${Math.max(0, timePct(rowSegments.get(req.id)[0].tStart) - timePct(req.arrivalTime))}%`,
@@ -716,6 +728,7 @@ export default function BatchingVisualizer({
                     {rowSegments.get(req.id)?.map((seg, i) => (
                       <div
                         key={i}
+                        {...segmentAttrs(seg)}
                         style={{
                           left: `${timePct(seg.tStart)}%`,
                           width: `${Math.max(0.15, timePct(seg.tEnd) - timePct(seg.tStart))}%`,
@@ -776,6 +789,7 @@ export default function BatchingVisualizer({
             {occupancyBars.map((size, i) => (
               <div
                 key={i}
+                {...occupancyBarAttrs(size, i, maxBatchSize)}
                 style={{
                   flex: 1,
                   minWidth: 0,
@@ -808,6 +822,7 @@ export default function BatchingVisualizer({
                 return (
                   <div
                     key={i}
+                    {...itlBarAttrs(itl, i, spike)}
                     style={{
                       flex: 1,
                       minWidth: 0,

@@ -315,3 +315,27 @@ export function constraintsToSizingQuery(constraints) {
   if (constraints.hwClass) params.set('hwClass', constraints.hwClass);
   return params;
 }
+
+/**
+ * Map the parsed constraint struct onto /api/best query params (#718), so the
+ * documented NL pipeline can reach BOTH recommendation endpoints instead of
+ * dead-ending at sizingQuery. Mapping:
+ *   modelFamily → model, quantization → quant, paramsB → maxParamsB,
+ *   maxVramGb → maxVramGb, hwClass → hwClass,
+ *   contextLength → contextLength + fitCheck=true (VRAM feasibility filter).
+ * budgetUsdMax has no /api/best counterpart (#607) and is deliberately not
+ * emitted here.
+ */
+export function constraintsToBestQuery(constraints) {
+  const params = new URLSearchParams();
+  if (constraints.modelFamily) params.set('model', constraints.modelFamily);
+  if (constraints.quantization) params.set('quant', constraints.quantization);
+  if (constraints.paramsB) params.set('maxParamsB', String(constraints.paramsB));
+  if (constraints.maxVramGb) params.set('maxVramGb', String(constraints.maxVramGb));
+  if (constraints.hwClass) params.set('hwClass', constraints.hwClass);
+  if (constraints.contextLength) {
+    params.set('contextLength', String(constraints.contextLength));
+    params.set('fitCheck', 'true');
+  }
+  return params;
+}
