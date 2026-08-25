@@ -58,6 +58,8 @@
   "legendPrefill": "Prefill",
   "legendDecode": "Decode",
   "exportPngTooltip": "Export this chart as PNG",
+  "pngFallbackNote": "PNG rasterization unavailable — downloaded .svg instead",
+  "exportFailedNote": "Export failed",
   "cachedLabel": "cached",
   "fullIngestLabel": "full ingest",
   "segmentPrefillTooltip": "Turn {turn} Prefill: {time} ({tokens} tok)",

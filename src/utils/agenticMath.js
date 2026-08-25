@@ -39,6 +39,35 @@ export function calculateAgenticTimeline({
   return turns;
 }
 
+// Issue #495: the waterfall suppresses a segment's inline numeric label when
+// that segment is narrower than this percentage of the bar (too little room
+// to draw the text). Suppressed values must still appear as visible text in
+// the row (see MultiGpuPlanner-style fallback), never tooltip-only.
+export const WATERFALL_LABEL_MIN_PERCENT = 15;
+
+/**
+ * Decide which waterfall segment labels fit inline and which need a text
+ * fallback. Returns { prefillInline, decodeInline, hiddenSegments,
+ * needsTextFallback } so the renderer can move suppressed values into the
+ * row's text column instead of dropping them (#495).
+ */
+export function waterfallSegmentLabels(prefillPercent, minPercent = WATERFALL_LABEL_MIN_PERCENT) {
+  const p = Number(prefillPercent);
+  const ratio = Number.isFinite(p) ? Math.min(100, Math.max(0, p)) : 0;
+  const prefillInline = ratio > minPercent;
+  const decodeInline = (100 - ratio) > minPercent;
+  const hiddenSegments = [
+    ...(prefillInline ? [] : ['prefill']),
+    ...(decodeInline ? [] : ['decode'])
+  ];
+  return {
+    prefillInline,
+    decodeInline,
+    hiddenSegments,
+    needsTextFallback: hiddenSegments.length > 0
+  };
+}
+
 export function waterfallGeometry(turns) {
   const totalWalltime = turns.reduce((total, turn) => total + turn.turnWalltime, 0);
 

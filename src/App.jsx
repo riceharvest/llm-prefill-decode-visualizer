@@ -15,6 +15,7 @@ import KVCacheCalculator from './components/KVCacheCalculator';
 import TheoryGuide from './components/TheoryGuide';
 import SloBudgetsPanel, { useSloBudgets } from './components/SloBudgetsPanel';
 import { HARDWARE_PRESETS } from './utils/presets';
+import { copyTextToClipboard } from './utils/clipboard';
 import { toLocalPreset, hardwareName } from './utils/localMaxxing';
 import {
   describeConfig, buildShareLink, readPermalinkTitle, documentTitleFor
@@ -448,6 +449,8 @@ export default function App() {
   // and every tab's sim inputs) with `tab` pinned to the active view and
   // transient keys stripped. Titles stay display-only (#106): document.title
   // derives the readable config name, the link itself stays deterministic.
+  // Issue #501: returns whether the copy actually succeeded so the header can
+  // render an honest success/failure state instead of an unconditional ✓.
   const handleShare = async () => {
     // Shared helper (#1034): falls back to execCommand in blocked-clipboard
     // contexts instead of failing silently.
@@ -457,7 +460,7 @@ export default function App() {
       search: window.location.search,
       tab: activeTab
     });
-    await copyTextToClipboard(href);
+    return copyTextToClipboard(href);
   };
 
   // Issue #108: copy a ready-to-paste <iframe> snippet pointing at /embed
@@ -466,7 +469,7 @@ export default function App() {
   const handleEmbed = async () => {
     const src = `${window.location.origin}/embed${window.location.search}`;
     const snippet = `<iframe src="${src}" width="100%" height="520" frameborder="0" loading="lazy" title="${t('header.brandTitle')}"></iframe>`;
-    await copyTextToClipboard(snippet);
+    return copyTextToClipboard(snippet);
   };
 
   return (
