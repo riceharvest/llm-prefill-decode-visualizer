@@ -75,9 +75,13 @@ def sync_detailed(
     """ Deliver unseen matching runs to registered webhooks (#109)
 
      Cron-friendly (Vercel Cron sends GET). For each watch with a webhookUrl: POST a watch.new_runs
-    payload (X-Watch-Secret header) with runs created after the watch that are not yet in its bounded
-    seen-set, then persist the set. Set WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret.
-    Delivery failures are reported per watch, never thrown.
+    payload (X-Watch-Secret header) with unseen matching runs (runs dated before the watch are included
+    only when the watch was created with includeExisting=true — #699), then persist the seen-set. Set
+    WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret. Delivery failures are reported per
+    watch, never thrown, and do NOT mark runs seen (#694): the watch backs off exponentially (1min → 24h
+    cap) and is retried on later passes; after 5 consecutive failures it is dead-lettered (no more
+    attempts) but stays visible in GET /api/watch with its failure state. A successful delivery resets
+    the failure state.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -106,9 +110,13 @@ def sync(
     """ Deliver unseen matching runs to registered webhooks (#109)
 
      Cron-friendly (Vercel Cron sends GET). For each watch with a webhookUrl: POST a watch.new_runs
-    payload (X-Watch-Secret header) with runs created after the watch that are not yet in its bounded
-    seen-set, then persist the set. Set WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret.
-    Delivery failures are reported per watch, never thrown.
+    payload (X-Watch-Secret header) with unseen matching runs (runs dated before the watch are included
+    only when the watch was created with includeExisting=true — #699), then persist the seen-set. Set
+    WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret. Delivery failures are reported per
+    watch, never thrown, and do NOT mark runs seen (#694): the watch backs off exponentially (1min → 24h
+    cap) and is retried on later passes; after 5 consecutive failures it is dead-lettered (no more
+    attempts) but stays visible in GET /api/watch with its failure state. A successful delivery resets
+    the failure state.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -132,9 +140,13 @@ async def asyncio_detailed(
     """ Deliver unseen matching runs to registered webhooks (#109)
 
      Cron-friendly (Vercel Cron sends GET). For each watch with a webhookUrl: POST a watch.new_runs
-    payload (X-Watch-Secret header) with runs created after the watch that are not yet in its bounded
-    seen-set, then persist the set. Set WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret.
-    Delivery failures are reported per watch, never thrown.
+    payload (X-Watch-Secret header) with unseen matching runs (runs dated before the watch are included
+    only when the watch was created with includeExisting=true — #699), then persist the seen-set. Set
+    WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret. Delivery failures are reported per
+    watch, never thrown, and do NOT mark runs seen (#694): the watch backs off exponentially (1min → 24h
+    cap) and is retried on later passes; after 5 consecutive failures it is dead-lettered (no more
+    attempts) but stays visible in GET /api/watch with its failure state. A successful delivery resets
+    the failure state.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -163,9 +175,13 @@ async def asyncio(
     """ Deliver unseen matching runs to registered webhooks (#109)
 
      Cron-friendly (Vercel Cron sends GET). For each watch with a webhookUrl: POST a watch.new_runs
-    payload (X-Watch-Secret header) with runs created after the watch that are not yet in its bounded
-    seen-set, then persist the set. Set WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret.
-    Delivery failures are reported per watch, never thrown.
+    payload (X-Watch-Secret header) with unseen matching runs (runs dated before the watch are included
+    only when the watch was created with includeExisting=true — #699), then persist the seen-set. Set
+    WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret. Delivery failures are reported per
+    watch, never thrown, and do NOT mark runs seen (#694): the watch backs off exponentially (1min → 24h
+    cap) and is retried on later passes; after 5 consecutive failures it is dead-lettered (no more
+    attempts) but stays visible in GET /api/watch with its failure state. A successful delivery resets
+    the failure state.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

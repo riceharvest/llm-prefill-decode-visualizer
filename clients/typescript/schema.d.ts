@@ -136,7 +136,7 @@ export interface paths {
         put?: never;
         /**
          * Create a watch for a hardware+model combo (#109)
-         * @description Body: { model?, hardware?, quant?, webhookUrl? } — at least one of model/hardware required; webhookUrl must be https. Returns 201 with watchId + secret (shown exactly once; required to DELETE, sent to your webhook as X-Watch-Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET /api/watch/rss.xml?model=&hardware=&quant=.
+         * @description Body: { model?, hardware?, quant?, webhookUrl?, includeExisting? } — at least one of model/hardware required; webhookUrl must be https. includeExisting=true opts into receiving matching runs dated before the watch was created (backfilled/imported data) on the first dispatch (#699). Returns 201 with watchId + secret (shown exactly once; required to DELETE, sent to your webhook as X-Watch-Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET /api/watch/rss.xml?model=&hardware=&quant=&page=&perPage=.
          */
         post: operations["createWatch"];
         /** Remove a watch */
@@ -155,7 +155,7 @@ export interface paths {
         };
         /**
          * RSS 2.0 feed of community runs for a watched combo (#109)
-         * @description Filters mirror GET /api/localmaxxing (model/hardware substring, quant exact). Items are the newest matching runs (max 50), each linking to the upstream run. Poll like any feed — no registration needed.
+         * @description Filters mirror GET /api/localmaxxing (model/hardware substring, quant exact). Items are the newest matching runs (perPage per page, max 50), each linking to the upstream run. Poll like any feed — no registration needed. Change detection: a deterministic ETag (hash of the page GUIDs + match count) is returned; send If-None-Match to get a body-less 304 when nothing changed; Last-Modified reflects the newest matching run (#696). Undated runs carry a stable epoch pubDate so guid-based clients do not see phantom updates.
          */
         get: operations["getWatchRssFeed"];
         put?: never;
@@ -175,7 +175,7 @@ export interface paths {
         };
         /**
          * Deliver unseen matching runs to registered webhooks (#109)
-         * @description Cron-friendly (Vercel Cron sends GET). For each watch with a webhookUrl: POST a watch.new_runs payload (X-Watch-Secret header) with runs created after the watch that are not yet in its bounded seen-set, then persist the set. Set WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret. Delivery failures are reported per watch, never thrown.
+         * @description Cron-friendly (Vercel Cron sends GET). For each watch with a webhookUrl: POST a watch.new_runs payload (X-Watch-Secret header) with unseen matching runs (runs dated before the watch are included only when the watch was created with includeExisting=true — #699), then persist the seen-set. Set WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret. Delivery failures are reported per watch, never thrown, and do NOT mark runs seen (#694): the watch backs off exponentially (1min → 24h cap) and is retried on later passes; after 5 consecutive failures it is dead-lettered (no more attempts) but stays visible in GET /api/watch with its failure state. A successful delivery resets the failure state.
          */
         get: operations["dispatchWatchWebhooks"];
         put?: never;
@@ -1504,6 +1504,10 @@ export interface operations {
                 quant?: string;
                 /** @description only runs measured in the last N days (undated runs always included) */
                 days?: number;
+                /** @description 1-based page over the days-filtered matches (newest first) */
+                page?: number;
+                /** @description items per page (max 50); combine with X-Matched-Runs to walk all pages */
+                perPage?: number;
             };
             header?: never;
             path?: never;
@@ -1511,8 +1515,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description RSS 2.0 XML (application/rss+xml); X-Matched-Runs header reports the pre-cap match count */
+            /** @description RSS 2.0 XML (application/rss+xml). X-Matched-Runs reports the post-days-filter, pre-cap match count (all pages combined); ETag + Last-Modified support conditional polling. */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not modified — If-None-Match matched the current ETag; empty body */
+            304: {
                 headers: {
                     [name: string]: unknown;
                 };

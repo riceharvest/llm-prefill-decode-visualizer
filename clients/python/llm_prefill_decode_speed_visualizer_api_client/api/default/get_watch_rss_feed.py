@@ -20,6 +20,8 @@ def _get_kwargs(
     hardware: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     days: int | Unset = 30,
+    page: int | Unset = 1,
+    per_page: int | Unset = 50,
 
 ) -> dict[str, Any]:
     
@@ -35,6 +37,10 @@ def _get_kwargs(
     params["quant"] = quant
 
     params["days"] = days
+
+    params["page"] = page
+
+    params["perPage"] = per_page
 
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
@@ -55,6 +61,10 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
     if response.status_code == 200:
         response_200 = cast(Any, None)
         return response_200
+
+    if response.status_code == 304:
+        response_304 = cast(Any, None)
+        return response_304
 
     if response.status_code == 429:
         response_429 = GetWatchRssFeedResponse429.from_dict(response.json())
@@ -85,19 +95,26 @@ def sync_detailed(
     hardware: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     days: int | Unset = 30,
+    page: int | Unset = 1,
+    per_page: int | Unset = 50,
 
 ) -> Response[Any | GetWatchRssFeedResponse429]:
     """ RSS 2.0 feed of community runs for a watched combo (#109)
 
      Filters mirror GET /api/localmaxxing (model/hardware substring, quant exact). Items are the newest
-    matching runs (max 50), each linking to the upstream run. Poll like any feed — no registration
-    needed.
+    matching runs (perPage per page, max 50), each linking to the upstream run. Poll like any feed — no
+    registration needed. Change detection: a deterministic ETag (hash of the page GUIDs + match count)
+    is returned; send If-None-Match to get a body-less 304 when nothing changed; Last-Modified reflects
+    the newest matching run (#696). Undated runs carry a stable epoch pubDate so guid-based clients do
+    not see phantom updates.
 
     Args:
         model (str | Unset):
         hardware (str | Unset):
         quant (str | Unset):
         days (int | Unset):  Default: 30.
+        page (int | Unset):  Default: 1.
+        per_page (int | Unset):  Default: 50.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -113,6 +130,8 @@ def sync_detailed(
 hardware=hardware,
 quant=quant,
 days=days,
+page=page,
+per_page=per_page,
 
     )
 
@@ -129,19 +148,26 @@ def sync(
     hardware: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     days: int | Unset = 30,
+    page: int | Unset = 1,
+    per_page: int | Unset = 50,
 
 ) -> Any | GetWatchRssFeedResponse429 | None:
     """ RSS 2.0 feed of community runs for a watched combo (#109)
 
      Filters mirror GET /api/localmaxxing (model/hardware substring, quant exact). Items are the newest
-    matching runs (max 50), each linking to the upstream run. Poll like any feed — no registration
-    needed.
+    matching runs (perPage per page, max 50), each linking to the upstream run. Poll like any feed — no
+    registration needed. Change detection: a deterministic ETag (hash of the page GUIDs + match count)
+    is returned; send If-None-Match to get a body-less 304 when nothing changed; Last-Modified reflects
+    the newest matching run (#696). Undated runs carry a stable epoch pubDate so guid-based clients do
+    not see phantom updates.
 
     Args:
         model (str | Unset):
         hardware (str | Unset):
         quant (str | Unset):
         days (int | Unset):  Default: 30.
+        page (int | Unset):  Default: 1.
+        per_page (int | Unset):  Default: 50.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -158,6 +184,8 @@ model=model,
 hardware=hardware,
 quant=quant,
 days=days,
+page=page,
+per_page=per_page,
 
     ).parsed
 
@@ -168,19 +196,26 @@ async def asyncio_detailed(
     hardware: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     days: int | Unset = 30,
+    page: int | Unset = 1,
+    per_page: int | Unset = 50,
 
 ) -> Response[Any | GetWatchRssFeedResponse429]:
     """ RSS 2.0 feed of community runs for a watched combo (#109)
 
      Filters mirror GET /api/localmaxxing (model/hardware substring, quant exact). Items are the newest
-    matching runs (max 50), each linking to the upstream run. Poll like any feed — no registration
-    needed.
+    matching runs (perPage per page, max 50), each linking to the upstream run. Poll like any feed — no
+    registration needed. Change detection: a deterministic ETag (hash of the page GUIDs + match count)
+    is returned; send If-None-Match to get a body-less 304 when nothing changed; Last-Modified reflects
+    the newest matching run (#696). Undated runs carry a stable epoch pubDate so guid-based clients do
+    not see phantom updates.
 
     Args:
         model (str | Unset):
         hardware (str | Unset):
         quant (str | Unset):
         days (int | Unset):  Default: 30.
+        page (int | Unset):  Default: 1.
+        per_page (int | Unset):  Default: 50.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -196,6 +231,8 @@ async def asyncio_detailed(
 hardware=hardware,
 quant=quant,
 days=days,
+page=page,
+per_page=per_page,
 
     )
 
@@ -212,19 +249,26 @@ async def asyncio(
     hardware: str | Unset = UNSET,
     quant: str | Unset = UNSET,
     days: int | Unset = 30,
+    page: int | Unset = 1,
+    per_page: int | Unset = 50,
 
 ) -> Any | GetWatchRssFeedResponse429 | None:
     """ RSS 2.0 feed of community runs for a watched combo (#109)
 
      Filters mirror GET /api/localmaxxing (model/hardware substring, quant exact). Items are the newest
-    matching runs (max 50), each linking to the upstream run. Poll like any feed — no registration
-    needed.
+    matching runs (perPage per page, max 50), each linking to the upstream run. Poll like any feed — no
+    registration needed. Change detection: a deterministic ETag (hash of the page GUIDs + match count)
+    is returned; send If-None-Match to get a body-less 304 when nothing changed; Last-Modified reflects
+    the newest matching run (#696). Undated runs carry a stable epoch pubDate so guid-based clients do
+    not see phantom updates.
 
     Args:
         model (str | Unset):
         hardware (str | Unset):
         quant (str | Unset):
         days (int | Unset):  Default: 30.
+        page (int | Unset):  Default: 1.
+        per_page (int | Unset):  Default: 50.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -241,5 +285,7 @@ model=model,
 hardware=hardware,
 quant=quant,
 days=days,
+page=page,
+per_page=per_page,
 
     )).parsed
