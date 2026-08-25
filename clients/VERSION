@@ -1,1 +1,3 @@
 2.6.0
+typescript-generator: openapi-typescript@7.13.0
+python-generator: openapi-python-client==0.29.0
