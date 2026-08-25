@@ -70,20 +70,42 @@ function hardwareDisplayName({ presetId, hardwareLabel }) {
 //   { modelId: 'Qwen/Qwen3-32B', quantization: 'Q4_K_M',
 //     presetId: 'rtx4090_exl2', promptTokens: 8192, activeTab: 'agentic' }
 //     → "Qwen3 32B Q4 on RTX 4090 24GB, 8K agentic loop"
+//
+// Issue #630: on the Find HW tab the simulator globals describe a rig/model
+// the recipient never sees — the view's actual state is the constraint set
+// (?sd=&sv=&sm=&sq=). When activeTab is 'shortlist' and constraints are
+// supplied, the title describes THOSE instead of the unrelated sim config.
 export function describeConfig({
   presetId,
   hardwareLabel,
   modelId,
   quantization,
   promptTokens,
-  activeTab
+  activeTab,
+  shortlist
 } = {}) {
+  const phrase = TAB_TITLE_PHRASES[activeTab] || '';
+
+  if (activeTab === 'shortlist' && shortlist) {
+    const parts = [];
+    const model = shortModelName(shortlist.model);
+    if (model) parts.push(model);
+    const quant = shortQuant(shortlist.quant);
+    if (quant) parts.push(quant);
+    const minDecode = Number(shortlist.minDecode);
+    if (Number.isFinite(minDecode) && minDecode > 0) {
+      parts.push(`≥${Math.round(minDecode)} tok/s`);
+    }
+    const maxVram = Number(shortlist.maxVramGb);
+    if (Number.isFinite(maxVram) && maxVram > 0) parts.push(`≤${maxVram} GB`);
+    return [parts.join(' · '), phrase].filter(Boolean).join(' · ') || phrase;
+  }
+
   const hw = hardwareDisplayName({ presetId, hardwareLabel });
   const model = shortModelName(modelId);
   const quant = shortQuant(quantization);
   const subject = model ? `${model}${quant ? ` ${quant}` : ''} on ${hw}` : hw;
 
-  const phrase = TAB_TITLE_PHRASES[activeTab] || '';
   const ctx = formatTokenCountShort(promptTokens);
   const workload = [ctx, phrase].filter(Boolean).join(' ');
 
@@ -119,6 +141,22 @@ export const TRANSIENT_SHARE_PARAMS = ['autoplay', 'title'];
 // verbatim. Async because signing goes through Web Crypto; `loc` is injected
 // ({ origin, pathname, search }) so this stays unit-testable outside the
 // browser; callers pass window.location.
+// Title -> URL slug: "Qwen3 32B Q4 on RTX 4090, 8K agentic loop"
+//   -> "qwen3-32b-q4-on-rtx4090-8k-agentic-loop"
+export function slugifyTitle(title) {
+  const slug = String(title || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  // Cap length on a word boundary so slugs stay copy-paste friendly.
+  if (slug.length <= 80) return slug;
+  const cut = slug.slice(0, 81);
+  const lastDash = cut.lastIndexOf('-');
+  if (lastDash > 40) return cut.slice(0, lastDash);
+  return cut.slice(0, 80).replace(/-+$/, '');
+}
+
 export async function permalinkHref(loc, title) {
   const p = new URLSearchParams(loc.search || '');
   p.set('title', title);

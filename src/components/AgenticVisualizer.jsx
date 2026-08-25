@@ -1174,6 +1174,23 @@ export default function AgenticVisualizer({
             </div>
           </div>
 
+          {/* Issue #591: absolute time axis inside the chart — the bars are
+              percent-of-loop only, so without a scale reference inside the
+              chart node a scraper had to find the unrelated total-walltime
+              header elsewhere on the page to convert anything to seconds. */}
+          <div
+            className="waterfall-scale"
+            style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.66rem', color: 'var(--text-subtle)', fontFamily: 'var(--font-mono)', marginBottom: '4px' }}
+            data-total-walltime-seconds={totalAgentWalltime}
+          >
+            <span>0 s</span>
+            <span>% of loop walltime</span>
+            <span>{formatTime(totalAgentWalltime)}</span>
+          </div>
+
+          {/* Scrollable strip on narrow viewports (see .waterfall-rows CSS) */}
+          <div className="waterfall-rows" data-total-walltime-seconds={totalAgentWalltime}>
+
           {/* Scrollable strip on narrow viewports (see .waterfall-rows CSS).
               role="img" + summary label (#421): the per-turn values are only
               encoded as positioned divs/tooltips, so the chart carries its
@@ -1188,7 +1205,11 @@ export default function AgenticVisualizer({
               const {
                 leftPercent: barLeft,
                 widthPercent: barWidth,
-                prefillPercent: prefillRatio
+                prefillPercent: prefillRatio,
+                startSeconds,
+                durationSeconds,
+                prefillSeconds,
+                decodeSeconds
               } = waterfallLayout[turnIndex];
               // Issue #495: segments too narrow for an inline label must still
               // expose their value as visible text in the row, not tooltip-only.
@@ -1218,7 +1239,14 @@ export default function AgenticVisualizer({
                   </div>
 
                   {/* Waterfall Bar — rows use cumulative left offsets */}
-                  <div style={{ flex: 1, height: '22px', background: 'var(--bg-raised)', borderRadius: 'var(--radius-sm)', position: 'relative', overflow: 'hidden', minWidth: 0 }}>
+                  <div
+                    style={{ flex: 1, height: '22px', background: 'var(--bg-raised)', borderRadius: 'var(--radius-sm)', position: 'relative', overflow: 'hidden', minWidth: 0 }}
+                    data-turn={turnItem.turn}
+                    data-start-seconds={startSeconds}
+                    data-duration-seconds={durationSeconds}
+                    data-prefill-seconds={prefillSeconds}
+                    data-decode-seconds={decodeSeconds}
+                  >
                     <div
                       style={{
                         width: `${barWidth}%`,

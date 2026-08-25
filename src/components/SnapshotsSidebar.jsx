@@ -5,6 +5,7 @@ import {
   loadSnapshots, saveSnapshots, parseSettings,
   exportSnapshots, importSnapshots, mergeSnapshots, onExternalSnapshots
 } from '../utils/settingsHistory';
+import { uniqueSnapshotName, snapshotTimestampAttrs } from '../utils/snapshotMeta';
 import { buildShareLink } from '../utils/permalink';
 import { copyTextToClipboard } from '../utils/clipboard';
 import { sanitizeBudgets } from '../utils/slo';
@@ -122,9 +123,15 @@ export default function SnapshotsSidebar({ currentQs, activeTab, budgets, onRest
   };
 
   const handleSave = () => {
+    // Issue #629: default names used to be identical for every unnamed
+    // snapshot — make them unique so rows stay distinguishable.
+    const fallback = uniqueSnapshotName(
+      snapshots.map(s => s.name),
+      t('snapshots.defaultName')
+    );
     persist([{
       id: makeId(),
-      name: name.trim() || t('snapshots.defaultName'),
+      name: name.trim() || fallback,
       qs: currentQs,
       budgets: sanitizeBudgets(budgets), // #613: restore re-judges with THESE budgets
       createdAt: Date.now()
@@ -237,14 +244,27 @@ export default function SnapshotsSidebar({ currentQs, activeTab, budgets, onRest
         <p className="hint-text">{t('snapshots.empty')}</p>
       ) : (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          {snapshots.map((snap) => (
-            <li key={snap.id} className="panel-inset" style={{ padding: '8px 10px' }}>
+          {snapshots.map((snap) => {
+            const ts = snapshotTimestampAttrs(snap.createdAt);
+            return (
+            <li key={snap.id} className="panel-inset" data-snapshot-id={snap.id} style={{ padding: '8px 10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{snap.name}</div>
                   <div className="hint-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {snapshotSummary(snap)}
                   </div>
+                  {/* Issue #629: createdAt was stored but never surfaced —
+                      render it as machine-readable <time> + data attr. */}
+                  {ts && (
+                    <time
+                      dateTime={ts.iso}
+                      data-created-at={snap.createdAt}
+                      style={{ fontSize: '0.66rem', color: 'var(--text-subtle)', fontFamily: 'var(--font-mono)' }}
+                    >
+                      {ts.iso}
+                    </time>
+                  )}
                 </div>
                 <button
                   onClick={() => onRestore(snap.qs, snap.budgets)}
@@ -272,7 +292,8 @@ export default function SnapshotsSidebar({ currentQs, activeTab, budgets, onRest
                 </button>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </section>
