@@ -182,19 +182,29 @@ export default async function handler(req, res) {
     }
 
     const runs = await getAllRuns();
-    const findRun = id => runs.find(r => String(r.runId) === String(id));
-    const notFound = id => problem(res, req, {
-      status: 404,
-      code: 'NOT_FOUND',
-      detail: `run ${id} not found`,
-      error: `run ${id} not found`,
-      hint: 'browse ids via /api/localmaxxing'
-    });
+    // Issue #395: ids are generated lowercase, but agents commonly normalize
+    // casing — fall back to a case-insensitive match instead of failing.
+    const findRun = id => {
+      const wanted = String(id);
+      return runs.find(r => String(r.runId) === wanted)
+        || runs.find(r => String(r.runId).toLowerCase() === wanted.toLowerCase());
+    };
+    const missing = [];
     const runA = findRun(idA);
-    if (!runA) return notFound(idA);
+    if (!runA) missing.push(String(idA));
     const runB = findRun(idB);
-    if (!runB) return notFound(idB);
-
+    if (!runB) missing.push(String(idB));
+    // Issue #395: report EVERY unknown id in one response so an agent fixing
+    // two bad ids needs one round-trip, not one per mistake.
+    if (missing.length) {
+      return problem(res, req, {
+        status: 404,
+        code: 'NOT_FOUND',
+        detail: missing.length === 1 ? `run ${missing[0]} not found` : `runs ${missing.join(' and ')} not found`,
+        error: missing.length === 1 ? `run ${missing[0]} not found` : `runs ${missing.join(' and ')} not found`,
+        hint: 'browse ids via /api/localmaxxing'
+      });
+    }
     // SLO budgets (#481/#1240): attach a slo block only when the caller
     // actually passed at least one slo* budget param.
     const hasBudgets = [q.sloTtftMs, q.sloTpotMs, q.sloWalltimeSec].some(v => v !== undefined && v !== null && String(v).trim() !== '');
