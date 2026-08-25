@@ -148,6 +148,14 @@
     {
       "source": "/.well-known/ai-plugin",
       "destination": "/.well-known/ai-plugin.json"
+    },
+    {
+      "source": "/problems",
+      "destination": "/api/problems"
+    },
+    {
+      "source": "/problems/:code",
+      "destination": "/api/problems/:code"
     }
   ],
   "crons": [

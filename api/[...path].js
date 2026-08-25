@@ -29,6 +29,7 @@ import { default as mcp } from './mcp.js';
 import { default as agentCompute } from './_handlers/agent_compute.js';
 import { default as agentFreshness } from './_handlers/agent_freshness.js';
 import { default as versions } from './_handlers/versions.js';
+import { default as problems } from './_handlers/problems.js';
 
 import { ROUTES } from './_route_table.js';
 import { withMarkdownNegotiation } from './_markdown.js';
@@ -223,12 +224,19 @@ export default async function handler(req, res) {
       case '/agent/scenario.json': return agentScenario(req, res);
       case '/agent/freshness.json': return agentFreshness(req, res);
       case '/agent/confidence.json': return agentFreshness(req, res); // alias, same report
+      case '/problems': return problems(req, res);
       default:
         // /api/calc/<id>
         const calcMatch = clean.match(/^\/calc\/([^/]+)$/);
         if (calcMatch) {
           req.query = { ...req.query, id: calcMatch[1] };
           return calcId(req, res);
+        }
+        // /api/problems/<slug> — RFC 9457 problem-type documentation (#1093 #1108)
+        const probMatch = clean.match(/^\/problems\/([^/]+)$/);
+        if (probMatch) {
+          req.query = { ...req.query, code: probMatch[1] };
+          return problems(req, res);
         }
         // Unknown routes speak the same RFC 9457 problem+json contract as
         // every other error (#687) — not the ad-hoc `{ error }` shape.

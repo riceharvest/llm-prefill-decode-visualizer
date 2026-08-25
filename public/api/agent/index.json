@@ -28,13 +28,13 @@
     {
       "method": "GET",
       "path": "/api/presets",
-      "description": "Built-in hardware speed presets (RTX 4090, dual RTX 3090, M3 Ultra, Groq LPU, H100, RPi5…) and workload scenarios (RAG query, code generation) — feed as /api/compute inputs.",
+      "description": "Built-in hardware speed presets (RTX 4090, dual RTX 3090, M3 Ultra, Groq LPU, H100, RPi5\u2026) and workload scenarios (RAG query, code generation) \u2014 feed as /api/compute inputs.",
       "responseSchema": "{ description, hardware[{id, name, prefillSpeedTokPerSec, decodeSpeedTokPerSec, vramBandwidth, badge}], scenarios[{id, label, promptTokens, outputTokens}], schema_version }"
     },
     {
       "method": "GET",
       "path": "/api/vram",
-      "description": "Combined weights + KV-cache VRAM from just an hfId (?hfId=&context=&quant=). Optional vramGb budget → fits flag + maxContextTokens; optional numTurns+tokensPerTurn → per-turn KV growth projection with first overflow turns. Also accepts POST with a JSON body.",
+      "description": "Combined weights + KV-cache VRAM from just an hfId (?hfId=&context=&quant=). Optional vramGb budget \u2192 fits flag + maxContextTokens; optional numTurns+tokensPerTurn \u2192 per-turn KV growth projection with first overflow turns. Also accepts POST with a JSON body.",
       "responseSchema": "{ inputs, model{architecture, resolutionSource}, weights{gb}, kvCache{bytesPerToken, gbAtContext, formula}, total{gb, breakdown}, contextWindow, fits, projection }"
     },
     {
@@ -48,13 +48,13 @@
       "path": "/api/localmaxxing",
       "description": "Submit a community benchmark run for manual review. Required: model, quant, hardware, hwClass (discrete_gpu|unified|cpu_only), prefillTokPerSec, decodeTokPerSec. Sanity bounds + near-duplicate rejection; 202 = queued, never published immediately.",
       "requestSchema": "{ model, quant, hardware, hwClass, prefillTokPerSec, decodeTokPerSec, engine?, provenance?, submitter? }",
-      "responseSchema": "202 { description, status: 'queued', reviewStatus, submissionId } · 400/409 { error, errors[] }"
+      "responseSchema": "202 { description, status: 'queued', reviewStatus, submissionId } \u00b7 400/409 { error, errors[] }"
     },
     {
       "method": "GET",
       "path": "/api/benchmarks",
-      "description": "Aggregated median + IQR + 95% bootstrap CI per hardware×model group (outlier-resistant). ?groupBy=hardware|model|quant regroups. Cursor-paginated; each item carries confidence + crossCheck + bestRun.",
-      "responseSchema": "{ snapshot, total, caveats[], items[{key, runs, prefill{median, ci95, label}, decode{…}, engines[], confidence, crossCheck, bestRun}], has_more, next_cursor }"
+      "description": "Aggregated median + IQR + 95% bootstrap CI per hardware\u00d7model group (outlier-resistant). ?groupBy=hardware|model|quant regroups. Cursor-paginated; each item carries confidence + crossCheck + bestRun.",
+      "responseSchema": "{ snapshot, total, caveats[], items[{key, runs, prefill{median, ci95, label}, decode{\u2026}, engines[], confidence, crossCheck, bestRun}], has_more, next_cursor }"
     },
     {
       "method": "GET",
@@ -66,7 +66,7 @@
       "method": "GET",
       "path": "/api/diff",
       "description": "Diff two measured runs (?runA=<id>&runB=<id>) or two constraint sets (?mode=whatif&a=<set>&b=<set>): deltas, ratios, feasible-set changes and headroom. Also accepts POST {mode,a,b} for what-if mode.",
-      "responseSchema": "{ runA, runB, diff{…} } · what-if: { entered[], left[], headroom[] }"
+      "responseSchema": "{ runA, runB, diff{\u2026} } \u00b7 what-if: { entered[], left[], headroom[] }"
     },
     {
       "method": "GET",
@@ -83,8 +83,8 @@
     {
       "method": "GET",
       "path": "/api/parse-constraints",
-      "description": "Turn plain-language constraints into the canonical struct: ?q=self-hosted Qwen 27B at Q4 for 10 users under $1500 → constraints + ambiguities + ready-made sizingQuery. Deterministic regex/heuristics, no LLM.",
-      "responseSchema": "{ input, recognizedCount, constraints{deployment, modelFamily, paramsB, quantization, contextLength, concurrency, budgetUsdMax, …}, ambiguities[{field, message}], sizingQuery }"
+      "description": "Turn plain-language constraints into the canonical struct: ?q=self-hosted Qwen 27B at Q4 for 10 users under $1500 \u2192 constraints + ambiguities + ready-made sizingQuery. Deterministic regex/heuristics, no LLM.",
+      "responseSchema": "{ input, recognizedCount, constraints{deployment, modelFamily, paramsB, quantization, contextLength, concurrency, budgetUsdMax, \u2026}, ambiguities[{field, message}], sizingQuery }"
     },
     {
       "method": "GET",
@@ -101,7 +101,7 @@
     {
       "method": "POST",
       "path": "/api/watch",
-      "description": "Create a watch for a hardware+model combo: {model?, hardware?, quant?, webhookUrl?} — at least one of model/hardware required. Returns 201 with one-time secret and a ready-made rssUrl (RSS needs no webhook).",
+      "description": "Create a watch for a hardware+model combo: {model?, hardware?, quant?, webhookUrl?} \u2014 at least one of model/hardware required. Returns 201 with one-time secret and a ready-made rssUrl (RSS needs no webhook).",
       "requestSchema": "{ model?, hardware?, quant?, webhookUrl? }",
       "responseSchema": "201 { watchId, secret, rssUrl, matchingExistingRuns }"
     },
@@ -114,7 +114,7 @@
     {
       "method": "GET",
       "path": "/api/watch/rss.xml",
-      "description": "RSS 2.0 feed of community runs for a watched combo — poll in any feed reader, no registration. Filters mirror GET /api/localmaxxing; newest matching runs first, max 50 items.",
+      "description": "RSS 2.0 feed of community runs for a watched combo \u2014 poll in any feed reader, no registration. Filters mirror GET /api/localmaxxing; newest matching runs first, max 50 items.",
       "responseSchema": "application/rss+xml"
     },
     {
@@ -133,7 +133,7 @@
     {
       "method": "GET",
       "path": "/api/spec",
-      "description": "Full OpenAPI 3.1 spec with x-examples per operation — derive typed clients from this.",
+      "description": "Full OpenAPI 3.1 spec with x-examples per operation \u2014 derive typed clients from this.",
       "responseSchema": "OpenAPI 3.1 document"
     },
     {
@@ -163,7 +163,7 @@
     {
       "method": "GET",
       "path": "/api/agent/capabilities.json",
-      "description": "This index — machine-readable discovery document listing every agent-facing surface with methods, kind and descriptions. Static, CDN-cached 1h.",
+      "description": "This index \u2014 machine-readable discovery document listing every agent-facing surface with methods, kind and descriptions. Static, CDN-cached 1h.",
       "responseSchema": "{ description, generatedAt, schema_version, surfaces[] }"
     },
     {
@@ -193,8 +193,14 @@
     {
       "method": "GET",
       "path": "/api/agent/confidence.json",
-      "description": "Alias for GET /api/agent/freshness.json — identical handler and response shape.",
+      "description": "Alias for GET /api/agent/freshness.json \u2014 identical handler and response shape.",
       "responseSchema": "same as /api/agent/freshness.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/problems",
+      "description": "RFC 9457 problem-type documentation for every error code advertised in problem+json `type` URIs (/problems/<slug>, slug = lowercased CODE with _ -> -). No argument returns the registry index; ?code=<slug|CODE> or /api/problems/<slug> returns { code, slug, type, title, status, description, spec }. Unknown codes return 404 with the available slugs.",
+      "responseSchema": "{ description, codes[] } index, or per-code { code, slug, type, title, status, description, spec }"
     }
   ]
 }
