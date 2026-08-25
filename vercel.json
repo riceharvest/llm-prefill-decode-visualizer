@@ -58,8 +58,12 @@
       "destination": "/api/:path*"
     },
     {
-      "source": "/localmaxxing-api/:path*",
-      "destination": "https://www.localmaxxing.com/api/:path*"
+      "source": "/localmaxxing-api/leaderboard",
+      "destination": "https://www.localmaxxing.com/api/leaderboard"
+    },
+    {
+      "source": "/localmaxxing-api/models",
+      "destination": "https://www.localmaxxing.com/api/models"
     },
     {
       "source": "/compare/:a-vs-:b",

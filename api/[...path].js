@@ -37,6 +37,7 @@ import { applyVersionTrustHeaders } from './_versions.js';
 import { sendJson, withConditionalGet, applyStableBodyMode } from './_schema.js';
 import { sendProblem, sendProblemFromError } from './_errors.js';
 import { applyDeprecationForPath } from './_schema.js';
+import { sendPreflight } from './_cors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -177,8 +178,9 @@ function handleOptions(req, res, clean) {
   res.setHeader('Access-Control-Allow-Methods', allow);
   res.setHeader(
     'Access-Control-Allow-Headers',
-    EXTRA_ALLOW_HEADERS[clean] || 'Content-Type'
+    EXTRA_ALLOW_HEADERS[clean] || 'Content-Type, Accept, X-Request-Id'
   );
+  res.setHeader('Access-Control-Max-Age', '86400');
   res.end();
   return true;
 }
@@ -218,6 +220,19 @@ export default async function handler(req, res) {
     // announce themselves via Deprecation/Sunset/Link headers on every
     // response (including errors) until they are sunset. No-op otherwise.
     applyDeprecationForPath(res, clean);
+
+    // Unified CORS preflight (issue #634): every /api/* route answers OPTIONS
+    // with one shared 204 + full preflight header set instead of each handler
+    // hand-rolling its own (vram omitted Allow-Headers; most catch-all routes
+    // answered OPTIONS with a 200 GET body and no CORS headers at all;
+    // X-Request-Id was allowlisted nowhere). /mcp keeps its own richer
+    // preflight (Mcp-Session-Id + protocol headers) — see api/mcp.js.
+    const knownRoute = ROUTES.find(r => r.path === clean);
+    if (req.method === 'OPTIONS' && knownRoute && clean !== '/mcp') {
+      // Known routes answer with the uniform 204 preflight; unknown paths fall
+      // through so the JSON 404 contract (with no-store) stays intact.
+      return sendPreflight(req, res, { methods: knownRoute.methods || ['GET'] });
+    }
 
     switch (clean) {
       case '/compute': return compute(req, res);

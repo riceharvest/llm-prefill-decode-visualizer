@@ -43,6 +43,28 @@ test('waterfall geometry positions each turn after the previous turn', () => {
   assert.equal(geometry[1].prefillPercent, 20);
 });
 
+test('waterfall geometry exposes absolute seconds so the chart is self-describing (#591)', () => {
+  const geometry = waterfallGeometry([
+    { prefillTime: 1, decodeTime: 2, turnWalltime: 3, cumulativeWalltime: 3 },
+    { prefillTime: 0.5, decodeTime: 2, turnWalltime: 2.5, cumulativeWalltime: 5.5 }
+  ]);
+
+  assert.equal(geometry[0].startSeconds, 0);
+  assert.equal(geometry[0].durationSeconds, 3);
+  assert.equal(geometry[0].prefillSeconds, 1);
+  assert.equal(geometry[0].decodeSeconds, 2);
+
+  assert.ok(Math.abs(geometry[1].startSeconds - 3) < 1e-12);
+  assert.equal(geometry[1].durationSeconds, 2.5);
+  assert.equal(geometry[1].prefillSeconds, 0.5);
+  assert.equal(geometry[1].decodeSeconds, 2);
+
+  // start + duration must reconstruct the loop total — that's the property a
+  // scraper needs to convert percent bars to absolute time.
+  const total = geometry.reduce((sum, g) => sum + g.durationSeconds, 0);
+  assert.ok(Math.abs(total - 5.5) < 1e-12);
+});
+
 test('live progress bars do not restart CSS width transitions every animation frame', async () => {
   const source = await readFile(new URL('../components/AgenticVisualizer.jsx', import.meta.url), 'utf8');
 
@@ -91,4 +113,13 @@ test('#495: AgenticVisualizer renders segment values via waterfallSegmentLabels 
   // …replaced by the shared helper + a visible text fallback in the row.
   assert.match(source, /waterfallSegmentLabels\(prefillRatio\)/);
   assert.match(source, /labels\.needsTextFallback/);
+});
+
+test('waterfall rows carry per-row absolute-time data attributes + an in-chart scale (#591)', async () => {
+  const source = await readFile(new URL('../components/AgenticVisualizer.jsx', import.meta.url), 'utf8');
+
+  for (const attr of ['data-turn=', 'data-start-seconds=', 'data-duration-seconds=', 'data-prefill-seconds=', 'data-decode-seconds=']) {
+    assert.ok(source.includes(attr), `missing ${attr} on waterfall rows`);
+  }
+  assert.ok(source.includes('data-total-walltime-seconds='), 'missing total-scale marker inside the chart');
 });

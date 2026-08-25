@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   shortModelName, shortQuant, formatTokenCountShort,
   describeConfig, buildShareLink, TRANSIENT_SHARE_PARAMS,
-  readPermalinkTitle, documentTitleFor
+  permalinkHref, readPermalinkTitle, documentTitleFor
 } from './permalink.js';
 import { verifyShareLink } from './shareIntegrity.js';
 
@@ -113,6 +113,64 @@ test('buildShareLink omits empty/blank params and the ? when nothing remains', (
   );
 });
 
+// Issue #630: the Find HW tab's title must describe the constraint set the
+// recipient lands on (?sd=&sv=&sm=&sq=), not simulator globals.
+test('describeConfig describes shortlist constraints instead of sim state (#630)', () => {
+  assert.equal(
+    describeConfig({
+      presetId: 'rtx4090_exl2',
+      modelId: 'Qwen/Qwen3-32B',
+      quantization: 'Q4_K_M',
+      promptTokens: 8192,
+      activeTab: 'shortlist',
+      shortlist: { minDecode: '100', maxVramGb: '', model: '', quant: 'Q4_K_M' }
+    }),
+    'Q4 · ≥100 tok/s · hardware finder'
+  );
+});
+
+test('shortlist title includes model + vram cap when constrained', () => {
+  assert.equal(
+    describeConfig({
+      activeTab: 'shortlist',
+      shortlist: { minDecode: '2500', maxVramGb: '24', model: 'meta-llama/Llama-3.3-70B-Instruct', quant: '' }
+    }),
+    'Llama 3.3 70B Instruct · ≥2500 tok/s · ≤24 GB · hardware finder'
+  );
+});
+
+test('empty shortlist constraints still avoid naming unrelated sim state (#630)', () => {
+  const title = describeConfig({
+    presetId: 'rtx4090_exl2',
+    promptTokens: 8192,
+    activeTab: 'shortlist',
+    shortlist: { minDecode: '', maxVramGb: '', model: '', quant: '' }
+  });
+  assert.equal(title, 'hardware finder');
+  assert.ok(!title.includes('RTX'));
+});
+
+test('non-shortlist tabs ignore the shortlist constraints (back-compat)', () => {
+  assert.equal(
+    describeConfig({
+      presetId: 'rtx4090_exl2',
+      modelId: 'Qwen/Qwen3-32B',
+      quantization: 'Q4_K_M',
+      promptTokens: 8192,
+      activeTab: 'agentic',
+      shortlist: { minDecode: '100' }
+    }),
+    'Qwen3 32B Q4 on RTX 4090 24GB, 8K agentic loop'
+  );
+});
+
+test('slugifyTitle produces readable slugs', () => {
+  assert.equal(
+    buildShareLink({ origin: 'https://example.com', pathname: '/', params: { prompt: '', preset: null, title: 'x' } }),
+    'https://example.com/'
+  );
+});
+
 test('permalinkHref appends the title param, slug hash and integrity signature', async () => {
   const loc = { origin: 'https://example.com', pathname: '/', search: '?tab=agentic&preset=rtx4090_exl2&prefill=3800&decode=105' };
   const href = await permalinkHref(loc, 'Qwen3 32B on RTX 4090 24GB, 8K agentic loop');
@@ -147,6 +205,10 @@ test('permalink round-trips through readPermalinkTitle', async () => {
   const loc = { origin: 'https://example.com', pathname: '/x', search: '' };
   const href = await permalinkHref(loc, 'RTX 3090, 2K single turn');
   const search = href.slice(href.indexOf('?')).split('#')[0];
+  const title = readPermalinkTitle(search);
+  assert.equal(title, 'RTX 3090, 2K single turn');
+});
+
 test('buildShareLink is byte-identical for equal configs across emitters', () => {
   // Same state arriving as a query string (share/export) vs an explicit
   // object (demo links) must produce the same URL.

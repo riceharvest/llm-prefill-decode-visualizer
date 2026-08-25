@@ -151,7 +151,17 @@ export default function App() {
     modelId: selectedLmxRun?.model?.hfId || localMaxxingContext.modelId,
     quantization: selectedLmxRun?.engine?.quantization || localMaxxingContext.quantization,
     promptTokens: Number(readParam('prompt')) || undefined,
-    activeTab
+    activeTab,
+    // Issue #630: on Find HW the title must describe the constraint set the
+    // recipient lands on (?sd=&sv=&sm=&sq=), not simulator globals.
+    shortlist: activeTab === 'shortlist'
+      ? {
+          minDecode: readParam('sd'),
+          maxVramGb: readParam('sv'),
+          model: readParam('sm'),
+          quant: readParam('sq')
+        }
+      : undefined
   }), [selectedPreset, selectedLmxRun, localMaxxingContext.modelId, localMaxxingContext.quantization, activeTab]);
 
   // Share-link tamper-evidence (#917): permalinkHref() signs the params it

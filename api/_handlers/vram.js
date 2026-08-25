@@ -282,6 +282,12 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    // Issue #634: this handler's preflight previously omitted
+    // Access-Control-Allow-Headers entirely, so browser preflights carrying
+    // Content-Type were rejected even though POST + JSON body is supported.
+    // Same baseline allowlist as the shared api/_cors.js helper.
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, X-Request-Id');
+    res.setHeader('Access-Control-Max-Age', '86400');
     return res.status(204).end();
   }
 

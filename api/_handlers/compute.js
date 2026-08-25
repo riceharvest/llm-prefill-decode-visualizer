@@ -515,6 +515,12 @@ function runBatch(rawItems, dryRun = false) {
   }
 
   const results = items.map((item, index) => {
+    // Issue #626: echo an optional opaque `label` back on the result entry so
+    // agents can attribute results to inputs without relying on array order
+    // alone (order breaks silently when an item errors or is reordered).
+    const label = typeof item?.label === 'string' && item.label.length > 0
+      ? { label: item.label.slice(0, 200) }
+      : {};
     // Failed entries carry the full problem identity (stable `code`, HTTP
     // `status`, RFC 9457 `type` URI) so agents branch without prose-matching
     // the `error` field (#707).
@@ -550,11 +556,10 @@ function runBatch(rawItems, dryRun = false) {
       const { status, body } = computeOne(item, dryRun || isDryRun(item));
       // Stamp schema_version + the same deterministic calc id an individual
       // call would get, so batch results match standalone calls (#68).
-      // Stamp schema_version + the same deterministic calc id an individual
-      // call would get, so batch results match standalone calls (#68).
-      if (status === 200) return { index, ok: true, result: { id: itemId, ...withSchemaVersion(body) } };
+      if (status === 200) return { index, ...label, ok: true, result: { id: itemId, ...withSchemaVersion(body) } };
       return {
         index,
+        ...label,
         ok: false,
         id: itemId,
         code: body?.code || 'INTERNAL',
@@ -566,6 +571,7 @@ function runBatch(rawItems, dryRun = false) {
       const apiErr = err instanceof ApiError ? err : null;
       return {
         index,
+        ...label,
         ok: false,
         id: itemId,
         code: apiErr ? err.code : 'INTERNAL',
