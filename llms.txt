@@ -14,6 +14,7 @@
 - [OpenAPI spec](https://llm-prefill-decode-visualizer.vercel.app/api/spec): derive every endpoint programmatically (identical under `/v1/spec`)
 - [Agent manifest](https://llm-prefill-decode-visualizer.vercel.app/agents.json): machine-readable manifest of every agent-facing endpoint, generated from the route table
 - [Agent endpoint index](https://llm-prefill-decode-visualizer.vercel.app/api/agent/index.json): complete per-endpoint index with request/response shape sketches (sibling of the agent manifest)
+- [Compare slug manifest](public/compare-hardware-slugs.json): every measured hardware group's slug — join any two as `/compare/:slugA-vs-:slugB`; invalid pairs return HTTP 404
 - [MCP server](mcp/server.js): Streamable HTTP JSON-RPC at `/api/mcp`; usage in the [MCP README](mcp/README.md)
 - [Changelog feed](https://llm-prefill-decode-visualizer.vercel.app/changelog.json)
 - [Status page](https://llm-prefill-decode-visualizer.vercel.app/status.html)

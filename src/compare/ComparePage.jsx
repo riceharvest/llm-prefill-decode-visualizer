@@ -20,13 +20,40 @@ function findBySlug(groups, slug) {
   return groups.find(g => slugify(labelOf(g)) === slug) || null
 }
 
-function useDocumentMeta(title, description) {
+/**
+ * Title/meta/canonical/robots manager (#759). When `noIndex` is true the page
+ * asserts "hardware not found": no SEO description is written and a
+ * robots noindex meta is added so crawlers never index generated metadata
+ * for nonexistent pairs. `canonical` pins the resolved pair URL when it
+ * differs from what was requested.
+ */
+function useDocumentMeta({ title, description, noIndex = false, canonical = null }) {
   useEffect(() => {
     if (!title) return
     document.title = title
     const desc = document.querySelector('meta[name="description"]')
     if (desc && description) desc.setAttribute('content', description)
-  }, [title, description])
+
+    let robots = document.querySelector('meta[name="robots"]')
+    if (noIndex) {
+      if (!robots) {
+        robots = document.createElement('meta')
+        robots.setAttribute('name', 'robots')
+        document.head.appendChild(robots)
+      }
+      robots.setAttribute('content', 'noindex, follow')
+    }
+
+    if (canonical) {
+      let link = document.querySelector('link[rel="canonical"]')
+      if (!link) {
+        link = document.createElement('link')
+        link.setAttribute('rel', 'canonical')
+        document.head.appendChild(link)
+      }
+      link.setAttribute('href', canonical)
+    }
+  }, [title, description, noIndex, canonical])
 }
 
 function StatCard({ title, testId, children }) {
@@ -67,13 +94,35 @@ export default function ComparePage() {
   const a = parsed ? findBySlug(groups, parsed.a) : null
   const b = parsed ? findBySlug(groups, parsed.b) : null
 
+  const loaded = Array.isArray(groups)
+  // Issue #759: a well-formed pair whose slugs don't resolve to measured
+  // hardware is a 404, not a "no data yet" 200. (The edge middleware already
+  // answers real HTTP 404s; this covers the fail-open path.)
+  const notFound = loaded && (!a || !b)
+
   const nameA = a ? labelOf(a) : prettifySlug(parsed?.a)
   const nameB = b ? labelOf(b) : prettifySlug(parsed?.b)
 
-  useDocumentMeta(
-    `${nameA} vs ${nameB} LLM inference speed — tok/s compared | LLM Prefill & Decode Visualizer`,
-    `${nameA} vs ${nameB}: community-measured LLM prefill and decode tok/s, median + 95% CI. Which is faster for local LLM inference?`,
-  )
+  // Canonical: when both sides resolved, point at the canonical pair URL —
+  // relevant when the requested slug differs from the resolved label's slug.
+  const canonicalHref = useMemo(() => {
+    if (!parsed || !a || !b) return null
+    const sa = slugify(labelOf(a))
+    const sb = slugify(labelOf(b))
+    if (!sa || !sb) return null
+    return `${window.location.origin}/compare/${sa}-vs-${sb}`
+  }, [parsed, a, b])
+
+  useDocumentMeta({
+    title: notFound
+      ? `Comparison not found (404) | LLM Prefill & Decode Visualizer`
+      : `${nameA} vs ${nameB} LLM inference speed — tok/s compared | LLM Prefill & Decode Visualizer`,
+    description: notFound
+      ? ''
+      : `${nameA} vs ${nameB}: community-measured LLM prefill and decode tok/s, median + 95% CI. Which is faster for local LLM inference?`,
+    noIndex: notFound,
+    canonical: canonicalHref,
+  })
 
   // Internal linking for crawlers: pairwise links across the top hardware by
   // median decode speed.
@@ -99,7 +148,6 @@ export default function ComparePage() {
     )
   }
 
-  const loaded = Array.isArray(groups)
   const winner = loaded && a && b
     ? ((a.decode?.median ?? 0) >= (b.decode?.median ?? 0) ? { side: 'a', g: a } : { side: 'b', g: b })
     : null
@@ -113,7 +161,7 @@ export default function ComparePage() {
     <main style={{ maxWidth: 900, margin: '0 auto', padding: '40px 20px 64px', fontFamily: 'Inter, system-ui, sans-serif' }} data-testid="compare-page">
       <p style={{ marginBottom: 4 }}><a href="/">← LLM Prefill &amp; Decode Visualizer</a></p>
       <h1 style={{ fontSize: 'clamp(24px, 4vw, 34px)', lineHeight: 1.2 }}>
-        {nameA} vs {nameB}: LLM inference speed
+        {notFound ? `${nameA} vs ${nameB}: comparison not found (404)` : `${nameA} vs ${nameB}: LLM inference speed`}
       </h1>
       <p style={{ opacity: 0.85 }}>
         Community-measured tokens/sec (batch&nbsp;1), median over all runs with a 95% bootstrap
@@ -124,13 +172,21 @@ export default function ComparePage() {
         <p role="alert" data-testid="compare-error" style={{ color: '#f87171' }}>Could not load benchmarks ({error}). Try refreshing.</p>
       )}
       {!loaded && !error && <p data-testid="compare-loading">Loading live benchmark data…</p>}
-      {loaded && (!a || !b) && (
+      {notFound && (
         <>
-          <p role="alert" data-testid="compare-not-found" style={{ color: '#fbbf24' }}>
-            No measured runs yet for {!a ? `"${nameA}"` : `"${nameB}"`}. Comparisons are generated for hardware in the
-            benchmark database — check the spelling or browse the visualizer.
+          <p role="alert" style={{
+            border: '1px solid #fbbf2455', background: '#fbbf2418', borderRadius: 12,
+            padding: '14px 16px', margin: '20px 0',
+          }}>
+            <strong>404 — comparison not found.</strong> No measured runs for{' '}
+            {!a ? `"${nameA}"` : `"${nameB}"`}. Comparisons exist only for hardware in the benchmark
+            database — check the spelling or browse the visualizer.
           </p>
-          <p><a href="/">Browse measured hardware →</a></p>
+          <p>
+            <a href="/compare-hardware-slugs.json">Valid comparison slugs (JSON)</a>
+            {' · '}
+            <a href="/">Browse measured hardware →</a>
+          </p>
         </>
       )}
 

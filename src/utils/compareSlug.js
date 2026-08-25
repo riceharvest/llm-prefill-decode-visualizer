@@ -15,11 +15,34 @@ export function slugify(text) {
 /**
  * Parse "/compare/:a-vs-:b" into { a, b } slugs.
  * Returns null for anything that isn't a well-formed /compare/ path.
+ * Malformed %-encoding in a segment is kept verbatim instead of throwing,
+ * so a garbage URL still reaches the not-found path rather than crashing.
  */
 export function parseComparePath(pathname) {
   const m = /^\/compare\/([^/]+?)-vs-([^/]+?)\/?$/.exec(String(pathname || ''));
   if (!m || !m[1] || !m[2]) return null;
-  return { a: decodeURIComponent(m[1]), b: decodeURIComponent(m[2]) };
+  let a = m[1];
+  let b = m[2];
+  try {
+    a = decodeURIComponent(a);
+    b = decodeURIComponent(b);
+  } catch {
+    // Keep raw segments; they simply won't match any known slug.
+  }
+  return { a, b };
+}
+
+/**
+ * Issue #759: decide whether a parsed /compare pair refers to hardware that
+ * actually exists. `slugs` is any Set-like of known slugs (from the build-time
+ * manifest or the API's `slug` fields). Returns:
+ *   'ok'      — both sides resolved; serve 200
+ *   'unknown' — at least one side has no measured runs; callers must 404
+ */
+export function comparePairStatus(slugs, a, b) {
+  if (!a || !b) return 'unknown';
+  const known = slugs && typeof slugs.has === 'function' ? slugs : new Set(slugs || []);
+  return known.has(a) && known.has(b) ? 'ok' : 'unknown';
 }
 
 /**
