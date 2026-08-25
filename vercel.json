@@ -158,6 +158,16 @@
       "destination": "/api/problems/:code"
     }
   ],
+  "headers": [
+    {
+      "source": "/api/agent/index.json",
+      "headers": [{ "key": "Vary", "value": "Accept-Encoding" }]
+    },
+    {
+      "source": "/api/agent",
+      "headers": [{ "key": "Vary", "value": "Accept-Encoding" }]
+    }
+  ],
   "crons": [
     {
       "path": "/api/watch/dispatch",
