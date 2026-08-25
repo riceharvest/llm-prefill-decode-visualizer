@@ -1,18 +1,25 @@
 from http import HTTPStatus
-from typing import Any
+from typing import Any, cast
+from urllib.parse import quote
 
 import httpx
 
-from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...types import UNSET, Response
+from ...types import Response, UNSET
+from ... import errors
+
+
 
 
 def _get_kwargs(
     *,
     id: str,
     secret: str,
+
 ) -> dict[str, Any]:
+    
+
+    
 
     params: dict[str, Any] = {}
 
@@ -20,7 +27,9 @@ def _get_kwargs(
 
     params["secret"] = secret
 
+
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
+
 
     _kwargs: dict[str, Any] = {
         "method": "delete",
@@ -28,7 +37,9 @@ def _get_kwargs(
         "params": params,
     }
 
+
     return _kwargs
+
 
 
 def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | None:
@@ -61,8 +72,9 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     id: str,
     secret: str,
+
 ) -> Response[Any]:
-    """Remove a watch
+    """ Remove a watch
 
     Args:
         id (str):
@@ -74,11 +86,13 @@ def sync_detailed(
 
     Returns:
         Response[Any]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         id=id,
-        secret=secret,
+secret=secret,
+
     )
 
     response = client.get_httpx_client().request(
@@ -93,8 +107,9 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     id: str,
     secret: str,
+
 ) -> Response[Any]:
-    """Remove a watch
+    """ Remove a watch
 
     Args:
         id (str):
@@ -106,13 +121,18 @@ async def asyncio_detailed(
 
     Returns:
         Response[Any]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         id=id,
-        secret=secret,
+secret=secret,
+
     )
 
-    response = await client.get_async_httpx_client().request(**kwargs)
+    response = await client.get_async_httpx_client().request(
+        **kwargs
+    )
 
     return _build_response(client=client, response=response)
+

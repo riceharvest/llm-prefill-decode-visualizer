@@ -1,7 +1,7 @@
 from enum import Enum
 
-
 class ComputeResponseWarningsItemCode(str, Enum):
+    CONTEXT_EXCEEDS_MODEL_LIMIT = "context_exceeds_model_limit"
     DECODE_ABOVE_BANDWIDTH_ROOFLINE = "decode_above_bandwidth_roofline"
     PREFILL_ABOVE_COMPUTE_ROOFLINE = "prefill_above_compute_roofline"
     TTFT_BELOW_KERNEL_LAUNCH_FLOOR = "ttft_below_kernel_launch_floor"

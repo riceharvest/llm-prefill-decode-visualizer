@@ -1,20 +1,30 @@
 from http import HTTPStatus
 from typing import Any, cast
+from urllib.parse import quote
 
 import httpx
 
-from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...types import Response, UNSET
+from ... import errors
+
 from ...models.create_watch_body import CreateWatchBody
 from ...models.create_watch_response_429 import CreateWatchResponse429
-from ...types import Response
+from typing import cast
+
 
 
 def _get_kwargs(
     *,
     body: CreateWatchBody,
+
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
+
+
+    
+
+    
 
     _kwargs: dict[str, Any] = {
         "method": "post",
@@ -29,9 +39,8 @@ def _get_kwargs(
     return _kwargs
 
 
-def _parse_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Any | CreateWatchResponse429 | None:
+
+def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | CreateWatchResponse429 | None:
     if response.status_code == 201:
         response_201 = cast(Any, None)
         return response_201
@@ -42,6 +51,8 @@ def _parse_response(
 
     if response.status_code == 429:
         response_429 = CreateWatchResponse429.from_dict(response.json())
+
+
 
         return response_429
 
@@ -55,9 +66,7 @@ def _parse_response(
         return None
 
 
-def _build_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[Any | CreateWatchResponse429]:
+def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[Any | CreateWatchResponse429]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -70,13 +79,16 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: CreateWatchBody,
-) -> Response[Any | CreateWatchResponse429]:
-    """Create a watch for a hardware+model combo (#109)
 
-     Body: { model?, hardware?, quant?, webhookUrl? } — at least one of model/hardware required;
-    webhookUrl must be https. Returns 201 with watchId + secret (shown exactly once; required to DELETE,
-    sent to your webhook as X-Watch-Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET
-    /api/watch/rss.xml?model=&hardware=&quant=.
+) -> Response[Any | CreateWatchResponse429]:
+    """ Create a watch for a hardware+model combo (#109)
+
+     Body: { model?, hardware?, quant?, webhookUrl?, includeExisting? } — at least one of model/hardware
+    required; webhookUrl must be https. includeExisting=true opts into receiving matching runs dated
+    before the watch was created (backfilled/imported data) on the first dispatch (#699). Returns 201
+    with watchId + secret (shown exactly once; required to DELETE, sent to your webhook as X-Watch-
+    Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET
+    /api/watch/rss.xml?model=&hardware=&quant=&page=&perPage=.
 
     Args:
         body (CreateWatchBody): Watched combo. At least one of 'model' / 'hardware' is required;
@@ -88,10 +100,12 @@ def sync_detailed(
 
     Returns:
         Response[Any | CreateWatchResponse429]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         body=body,
+
     )
 
     response = client.get_httpx_client().request(
@@ -100,18 +114,20 @@ def sync_detailed(
 
     return _build_response(client=client, response=response)
 
-
 def sync(
     *,
     client: AuthenticatedClient | Client,
     body: CreateWatchBody,
-) -> Any | CreateWatchResponse429 | None:
-    """Create a watch for a hardware+model combo (#109)
 
-     Body: { model?, hardware?, quant?, webhookUrl? } — at least one of model/hardware required;
-    webhookUrl must be https. Returns 201 with watchId + secret (shown exactly once; required to DELETE,
-    sent to your webhook as X-Watch-Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET
-    /api/watch/rss.xml?model=&hardware=&quant=.
+) -> Any | CreateWatchResponse429 | None:
+    """ Create a watch for a hardware+model combo (#109)
+
+     Body: { model?, hardware?, quant?, webhookUrl?, includeExisting? } — at least one of model/hardware
+    required; webhookUrl must be https. includeExisting=true opts into receiving matching runs dated
+    before the watch was created (backfilled/imported data) on the first dispatch (#699). Returns 201
+    with watchId + secret (shown exactly once; required to DELETE, sent to your webhook as X-Watch-
+    Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET
+    /api/watch/rss.xml?model=&hardware=&quant=&page=&perPage=.
 
     Args:
         body (CreateWatchBody): Watched combo. At least one of 'model' / 'hardware' is required;
@@ -123,25 +139,29 @@ def sync(
 
     Returns:
         Any | CreateWatchResponse429
-    """
+     """
+
 
     return sync_detailed(
         client=client,
-        body=body,
-    ).parsed
+body=body,
 
+    ).parsed
 
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: CreateWatchBody,
-) -> Response[Any | CreateWatchResponse429]:
-    """Create a watch for a hardware+model combo (#109)
 
-     Body: { model?, hardware?, quant?, webhookUrl? } — at least one of model/hardware required;
-    webhookUrl must be https. Returns 201 with watchId + secret (shown exactly once; required to DELETE,
-    sent to your webhook as X-Watch-Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET
-    /api/watch/rss.xml?model=&hardware=&quant=.
+) -> Response[Any | CreateWatchResponse429]:
+    """ Create a watch for a hardware+model combo (#109)
+
+     Body: { model?, hardware?, quant?, webhookUrl?, includeExisting? } — at least one of model/hardware
+    required; webhookUrl must be https. includeExisting=true opts into receiving matching runs dated
+    before the watch was created (backfilled/imported data) on the first dispatch (#699). Returns 201
+    with watchId + secret (shown exactly once; required to DELETE, sent to your webhook as X-Watch-
+    Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET
+    /api/watch/rss.xml?model=&hardware=&quant=&page=&perPage=.
 
     Args:
         body (CreateWatchBody): Watched combo. At least one of 'model' / 'hardware' is required;
@@ -153,28 +173,34 @@ async def asyncio_detailed(
 
     Returns:
         Response[Any | CreateWatchResponse429]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         body=body,
+
     )
 
-    response = await client.get_async_httpx_client().request(**kwargs)
+    response = await client.get_async_httpx_client().request(
+        **kwargs
+    )
 
     return _build_response(client=client, response=response)
-
 
 async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     body: CreateWatchBody,
-) -> Any | CreateWatchResponse429 | None:
-    """Create a watch for a hardware+model combo (#109)
 
-     Body: { model?, hardware?, quant?, webhookUrl? } — at least one of model/hardware required;
-    webhookUrl must be https. Returns 201 with watchId + secret (shown exactly once; required to DELETE,
-    sent to your webhook as X-Watch-Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET
-    /api/watch/rss.xml?model=&hardware=&quant=.
+) -> Any | CreateWatchResponse429 | None:
+    """ Create a watch for a hardware+model combo (#109)
+
+     Body: { model?, hardware?, quant?, webhookUrl?, includeExisting? } — at least one of model/hardware
+    required; webhookUrl must be https. includeExisting=true opts into receiving matching runs dated
+    before the watch was created (backfilled/imported data) on the first dispatch (#699). Returns 201
+    with watchId + secret (shown exactly once; required to DELETE, sent to your webhook as X-Watch-
+    Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET
+    /api/watch/rss.xml?model=&hardware=&quant=&page=&perPage=.
 
     Args:
         body (CreateWatchBody): Watched combo. At least one of 'model' / 'hardware' is required;
@@ -186,11 +212,11 @@ async def asyncio(
 
     Returns:
         Any | CreateWatchResponse429
-    """
+     """
 
-    return (
-        await asyncio_detailed(
-            client=client,
-            body=body,
-        )
-    ).parsed
+
+    return (await asyncio_detailed(
+        client=client,
+body=body,
+
+    )).parsed

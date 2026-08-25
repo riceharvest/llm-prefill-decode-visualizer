@@ -1,32 +1,39 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
+from ..types import UNSET, Unset
+from typing import cast
+
 if TYPE_CHECKING:
-    from ..models.parse_constraints_response_200_ambiguities_item import ParseConstraintsResponse200AmbiguitiesItem
-    from ..models.parse_constraints_response_200_constraints import ParseConstraintsResponse200Constraints
+  from ..models.parse_constraints_response_200_ambiguities_item import ParseConstraintsResponse200AmbiguitiesItem
+  from ..models.parse_constraints_response_200_constraints import ParseConstraintsResponse200Constraints
+
+
+
 
 
 T = TypeVar("T", bound="ParseConstraintsResponse200")
 
 
+
 @_attrs_define
 class ParseConstraintsResponse200:
-    """
-    Attributes:
-        input_ (str | Unset):
-        recognized_count (int | Unset):
-        constraints (ParseConstraintsResponse200Constraints | Unset):
-        ambiguities (list[ParseConstraintsResponse200AmbiguitiesItem] | Unset):
-        sizing_query (None | str | Unset): Ready-made /api/sizing query string; null when nothing mappable was
-            recognized
-    """
+    """ 
+        Attributes:
+            input_ (str | Unset):
+            recognized_count (int | Unset):
+            constraints (ParseConstraintsResponse200Constraints | Unset):
+            ambiguities (list[ParseConstraintsResponse200AmbiguitiesItem] | Unset):
+            sizing_query (None | str | Unset): Ready-made /api/sizing query string; null when nothing mappable was
+                recognized
+     """
 
     input_: str | Unset = UNSET
     recognized_count: int | Unset = UNSET
@@ -35,7 +42,13 @@ class ParseConstraintsResponse200:
     sizing_query: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
+
+
+
+
     def to_dict(self) -> dict[str, Any]:
+        from ..models.parse_constraints_response_200_ambiguities_item import ParseConstraintsResponse200AmbiguitiesItem
+        from ..models.parse_constraints_response_200_constraints import ParseConstraintsResponse200Constraints
         input_ = self.input_
 
         recognized_count = self.recognized_count
@@ -51,15 +64,19 @@ class ParseConstraintsResponse200:
                 ambiguities_item = ambiguities_item_data.to_dict()
                 ambiguities.append(ambiguities_item)
 
+
+
         sizing_query: None | str | Unset
         if isinstance(self.sizing_query, Unset):
             sizing_query = UNSET
         else:
             sizing_query = self.sizing_query
 
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({})
+        field_dict.update({
+        })
         if input_ is not UNSET:
             field_dict["input"] = input_
         if recognized_count is not UNSET:
@@ -73,11 +90,12 @@ class ParseConstraintsResponse200:
 
         return field_dict
 
+
+
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.parse_constraints_response_200_ambiguities_item import ParseConstraintsResponse200AmbiguitiesItem
         from ..models.parse_constraints_response_200_constraints import ParseConstraintsResponse200Constraints
-
         d = dict(src_dict)
         input_ = d.pop("input", UNSET)
 
@@ -85,10 +103,13 @@ class ParseConstraintsResponse200:
 
         _constraints = d.pop("constraints", UNSET)
         constraints: ParseConstraintsResponse200Constraints | Unset
-        if isinstance(_constraints, Unset):
+        if isinstance(_constraints,  Unset):
             constraints = UNSET
         else:
             constraints = ParseConstraintsResponse200Constraints.from_dict(_constraints)
+
+
+
 
         _ambiguities = d.pop("ambiguities", UNSET)
         ambiguities: list[ParseConstraintsResponse200AmbiguitiesItem] | Unset = UNSET
@@ -97,7 +118,10 @@ class ParseConstraintsResponse200:
             for ambiguities_item_data in _ambiguities:
                 ambiguities_item = ParseConstraintsResponse200AmbiguitiesItem.from_dict(ambiguities_item_data)
 
+
+
                 ambiguities.append(ambiguities_item)
+
 
         def _parse_sizing_query(data: object) -> None | str | Unset:
             if data is None:
@@ -108,6 +132,7 @@ class ParseConstraintsResponse200:
 
         sizing_query = _parse_sizing_query(d.pop("sizingQuery", UNSET))
 
+
         parse_constraints_response_200 = cls(
             input_=input_,
             recognized_count=recognized_count,
@@ -115,6 +140,7 @@ class ParseConstraintsResponse200:
             ambiguities=ambiguities,
             sizing_query=sizing_query,
         )
+
 
         parse_constraints_response_200.additional_properties = d
         return parse_constraints_response_200

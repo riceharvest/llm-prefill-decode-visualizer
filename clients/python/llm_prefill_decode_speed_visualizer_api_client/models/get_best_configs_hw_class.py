@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class GetBestConfigsHwClass(str, Enum):
     CPU_ONLY = "cpu_only"
     DISCRETE_GPU = "discrete_gpu"

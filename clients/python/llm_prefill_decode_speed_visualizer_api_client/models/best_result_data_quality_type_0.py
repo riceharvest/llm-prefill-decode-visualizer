@@ -1,33 +1,40 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..models.best_result_data_quality_type_0_status import BestResultDataQualityType0Status
 from ..types import UNSET, Unset
 
+from ..models.best_result_data_quality_type_0_status import BestResultDataQualityType0Status
+from ..types import UNSET, Unset
+from typing import cast
+
 if TYPE_CHECKING:
-    from ..models.best_result_data_quality_type_0_flag_counts import BestResultDataQualityType0FlagCounts
-    from ..models.best_result_data_quality_type_0_flagged_item import BestResultDataQualityType0FlaggedItem
+  from ..models.best_result_data_quality_type_0_flag_counts import BestResultDataQualityType0FlagCounts
+  from ..models.best_result_data_quality_type_0_flagged_item import BestResultDataQualityType0FlaggedItem
+
+
+
 
 
 T = TypeVar("T", bound="BestResultDataQualityType0")
 
 
+
 @_attrs_define
 class BestResultDataQualityType0:
-    """Unit-consistency audit over the group's runs (status ok|flagged).
+    """ Unit-consistency audit over the group's runs (status ok|flagged).
 
-    Attributes:
-        status (BestResultDataQualityType0Status | Unset):
-        runs_audited (int | Unset):
-        flagged_runs (int | Unset):
-        flag_counts (BestResultDataQualityType0FlagCounts | Unset):
-        flagged (list[BestResultDataQualityType0FlaggedItem] | Unset):
-    """
+        Attributes:
+            status (BestResultDataQualityType0Status | Unset):
+            runs_audited (int | Unset):
+            flagged_runs (int | Unset):
+            flag_counts (BestResultDataQualityType0FlagCounts | Unset):
+            flagged (list[BestResultDataQualityType0FlaggedItem] | Unset):
+     """
 
     status: BestResultDataQualityType0Status | Unset = UNSET
     runs_audited: int | Unset = UNSET
@@ -36,10 +43,17 @@ class BestResultDataQualityType0:
     flagged: list[BestResultDataQualityType0FlaggedItem] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
+
+
+
+
     def to_dict(self) -> dict[str, Any]:
+        from ..models.best_result_data_quality_type_0_flag_counts import BestResultDataQualityType0FlagCounts
+        from ..models.best_result_data_quality_type_0_flagged_item import BestResultDataQualityType0FlaggedItem
         status: str | Unset = UNSET
         if not isinstance(self.status, Unset):
             status = self.status.value
+
 
         runs_audited = self.runs_audited
 
@@ -56,9 +70,13 @@ class BestResultDataQualityType0:
                 flagged_item = flagged_item_data.to_dict()
                 flagged.append(flagged_item)
 
+
+
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({})
+        field_dict.update({
+        })
         if status is not UNSET:
             field_dict["status"] = status
         if runs_audited is not UNSET:
@@ -72,18 +90,22 @@ class BestResultDataQualityType0:
 
         return field_dict
 
+
+
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.best_result_data_quality_type_0_flag_counts import BestResultDataQualityType0FlagCounts
         from ..models.best_result_data_quality_type_0_flagged_item import BestResultDataQualityType0FlaggedItem
-
         d = dict(src_dict)
         _status = d.pop("status", UNSET)
         status: BestResultDataQualityType0Status | Unset
-        if isinstance(_status, Unset):
+        if isinstance(_status,  Unset):
             status = UNSET
         else:
             status = BestResultDataQualityType0Status(_status)
+
+
+
 
         runs_audited = d.pop("runsAudited", UNSET)
 
@@ -91,10 +113,13 @@ class BestResultDataQualityType0:
 
         _flag_counts = d.pop("flagCounts", UNSET)
         flag_counts: BestResultDataQualityType0FlagCounts | Unset
-        if isinstance(_flag_counts, Unset):
+        if isinstance(_flag_counts,  Unset):
             flag_counts = UNSET
         else:
             flag_counts = BestResultDataQualityType0FlagCounts.from_dict(_flag_counts)
+
+
+
 
         _flagged = d.pop("flagged", UNSET)
         flagged: list[BestResultDataQualityType0FlaggedItem] | Unset = UNSET
@@ -103,7 +128,10 @@ class BestResultDataQualityType0:
             for flagged_item_data in _flagged:
                 flagged_item = BestResultDataQualityType0FlaggedItem.from_dict(flagged_item_data)
 
+
+
                 flagged.append(flagged_item)
+
 
         best_result_data_quality_type_0 = cls(
             status=status,
@@ -112,6 +140,7 @@ class BestResultDataQualityType0:
             flag_counts=flag_counts,
             flagged=flagged,
         )
+
 
         best_result_data_quality_type_0.additional_properties = d
         return best_result_data_quality_type_0

@@ -1,21 +1,30 @@
 from http import HTTPStatus
 from typing import Any, cast
+from urllib.parse import quote
 
 import httpx
 
-from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...types import Response, UNSET
+from ... import errors
+
 from ...models.dump_run_index_comparable import DumpRunIndexComparable
 from ...models.dump_run_index_format import DumpRunIndexFormat
 from ...models.problem import Problem
-from ...types import UNSET, Response, Unset
+from ...types import UNSET, Unset
+from typing import cast
+
 
 
 def _get_kwargs(
     *,
     format_: DumpRunIndexFormat | Unset = DumpRunIndexFormat.JSON,
     comparable: DumpRunIndexComparable | Unset = DumpRunIndexComparable.ALL,
+
 ) -> dict[str, Any]:
+    
+
+    
 
     params: dict[str, Any] = {}
 
@@ -31,7 +40,9 @@ def _get_kwargs(
 
     params["comparable"] = json_comparable
 
+
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
+
 
     _kwargs: dict[str, Any] = {
         "method": "get",
@@ -39,7 +50,9 @@ def _get_kwargs(
         "params": params,
     }
 
+
     return _kwargs
+
 
 
 def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | Problem | None:
@@ -50,20 +63,28 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
     if response.status_code == 400:
         response_400 = Problem.from_dict(response.json())
 
+
+
         return response_400
 
     if response.status_code == 405:
         response_405 = Problem.from_dict(response.json())
+
+
 
         return response_405
 
     if response.status_code == 429:
         response_429 = Problem.from_dict(response.json())
 
+
+
         return response_429
 
     if response.status_code == 502:
         response_502 = Problem.from_dict(response.json())
+
+
 
         return response_502
 
@@ -87,8 +108,9 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     format_: DumpRunIndexFormat | Unset = DumpRunIndexFormat.JSON,
     comparable: DumpRunIndexComparable | Unset = DumpRunIndexComparable.ALL,
+
 ) -> Response[Any | Problem]:
-    """Machine-readable dump of the FULL run index (comparable + non-comparable)
+    """ Machine-readable dump of the FULL run index (comparable + non-comparable)
 
      One-shot export of every community-measured run — including batched/non-comparable ones — so agents
     and crawlers can consume the whole dataset without JS or pagination round-trips. JSON envelope
@@ -108,11 +130,13 @@ def sync_detailed(
 
     Returns:
         Response[Any | Problem]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         format_=format_,
-        comparable=comparable,
+comparable=comparable,
+
     )
 
     response = client.get_httpx_client().request(
@@ -121,14 +145,14 @@ def sync_detailed(
 
     return _build_response(client=client, response=response)
 
-
 def sync(
     *,
     client: AuthenticatedClient | Client,
     format_: DumpRunIndexFormat | Unset = DumpRunIndexFormat.JSON,
     comparable: DumpRunIndexComparable | Unset = DumpRunIndexComparable.ALL,
+
 ) -> Any | Problem | None:
-    """Machine-readable dump of the FULL run index (comparable + non-comparable)
+    """ Machine-readable dump of the FULL run index (comparable + non-comparable)
 
      One-shot export of every community-measured run — including batched/non-comparable ones — so agents
     and crawlers can consume the whole dataset without JS or pagination round-trips. JSON envelope
@@ -148,22 +172,24 @@ def sync(
 
     Returns:
         Any | Problem
-    """
+     """
+
 
     return sync_detailed(
         client=client,
-        format_=format_,
-        comparable=comparable,
-    ).parsed
+format_=format_,
+comparable=comparable,
 
+    ).parsed
 
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     format_: DumpRunIndexFormat | Unset = DumpRunIndexFormat.JSON,
     comparable: DumpRunIndexComparable | Unset = DumpRunIndexComparable.ALL,
+
 ) -> Response[Any | Problem]:
-    """Machine-readable dump of the FULL run index (comparable + non-comparable)
+    """ Machine-readable dump of the FULL run index (comparable + non-comparable)
 
      One-shot export of every community-measured run — including batched/non-comparable ones — so agents
     and crawlers can consume the whole dataset without JS or pagination round-trips. JSON envelope
@@ -183,25 +209,29 @@ async def asyncio_detailed(
 
     Returns:
         Response[Any | Problem]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         format_=format_,
-        comparable=comparable,
+comparable=comparable,
+
     )
 
-    response = await client.get_async_httpx_client().request(**kwargs)
+    response = await client.get_async_httpx_client().request(
+        **kwargs
+    )
 
     return _build_response(client=client, response=response)
-
 
 async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     format_: DumpRunIndexFormat | Unset = DumpRunIndexFormat.JSON,
     comparable: DumpRunIndexComparable | Unset = DumpRunIndexComparable.ALL,
+
 ) -> Any | Problem | None:
-    """Machine-readable dump of the FULL run index (comparable + non-comparable)
+    """ Machine-readable dump of the FULL run index (comparable + non-comparable)
 
      One-shot export of every community-measured run — including batched/non-comparable ones — so agents
     and crawlers can consume the whole dataset without JS or pagination round-trips. JSON envelope
@@ -221,12 +251,12 @@ async def asyncio(
 
     Returns:
         Any | Problem
-    """
+     """
 
-    return (
-        await asyncio_detailed(
-            client=client,
-            format_=format_,
-            comparable=comparable,
-        )
-    ).parsed
+
+    return (await asyncio_detailed(
+        client=client,
+format_=format_,
+comparable=comparable,
+
+    )).parsed

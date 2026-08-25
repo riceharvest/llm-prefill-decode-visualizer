@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class GetBenchmarkAggregatesGroupBy(str, Enum):
     HARDWARE = "hardware"
     HARDWAREMODEL = "hardwareModel"

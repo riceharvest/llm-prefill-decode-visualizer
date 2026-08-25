@@ -1,35 +1,42 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..models.parse_constraints_response_200_constraints_deployment import (
-    ParseConstraintsResponse200ConstraintsDeployment,
-)
+from ..types import UNSET, Unset
+
+from ..models.parse_constraints_response_200_constraints_deployment import ParseConstraintsResponse200ConstraintsDeployment
 from ..models.parse_constraints_response_200_constraints_hw_class import ParseConstraintsResponse200ConstraintsHwClass
 from ..types import UNSET, Unset
+from typing import cast
+
+
+
+
+
 
 T = TypeVar("T", bound="ParseConstraintsResponse200Constraints")
 
 
+
 @_attrs_define
 class ParseConstraintsResponse200Constraints:
-    """
-    Attributes:
-        deployment (ParseConstraintsResponse200ConstraintsDeployment | Unset):
-        model_family (None | str | Unset):
-        params_b (float | None | Unset):
-        quantization (None | str | Unset):
-        context_length (int | None | Unset):
-        concurrency (int | None | Unset):
-        budget_usd_max (float | None | Unset):
-        min_decode_tok_per_sec (float | None | Unset):
-        max_vram_gb (float | None | Unset):
-        hw_class (ParseConstraintsResponse200ConstraintsHwClass | Unset):
-    """
+    """ 
+        Attributes:
+            deployment (ParseConstraintsResponse200ConstraintsDeployment | Unset):
+            model_family (None | str | Unset):
+            params_b (float | None | Unset):
+            quantization (None | str | Unset):
+            context_length (int | None | Unset):
+            concurrency (int | None | Unset):
+            budget_usd_max (float | None | Unset):
+            min_decode_tok_per_sec (float | None | Unset):
+            max_vram_gb (float | None | Unset):
+            hw_class (ParseConstraintsResponse200ConstraintsHwClass | Unset):
+     """
 
     deployment: ParseConstraintsResponse200ConstraintsDeployment | Unset = UNSET
     model_family: None | str | Unset = UNSET
@@ -43,10 +50,15 @@ class ParseConstraintsResponse200Constraints:
     hw_class: ParseConstraintsResponse200ConstraintsHwClass | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
+
+
+
+
     def to_dict(self) -> dict[str, Any]:
         deployment: str | Unset = UNSET
         if not isinstance(self.deployment, Unset):
             deployment = self.deployment.value
+
 
         model_family: None | str | Unset
         if isinstance(self.model_family, Unset):
@@ -100,9 +112,12 @@ class ParseConstraintsResponse200Constraints:
         if not isinstance(self.hw_class, Unset):
             hw_class = self.hw_class.value
 
+
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({})
+        field_dict.update({
+        })
         if deployment is not UNSET:
             field_dict["deployment"] = deployment
         if model_family is not UNSET:
@@ -126,15 +141,20 @@ class ParseConstraintsResponse200Constraints:
 
         return field_dict
 
+
+
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
         _deployment = d.pop("deployment", UNSET)
         deployment: ParseConstraintsResponse200ConstraintsDeployment | Unset
-        if isinstance(_deployment, Unset):
+        if isinstance(_deployment,  Unset):
             deployment = UNSET
         else:
             deployment = ParseConstraintsResponse200ConstraintsDeployment(_deployment)
+
+
+
 
         def _parse_model_family(data: object) -> None | str | Unset:
             if data is None:
@@ -145,6 +165,7 @@ class ParseConstraintsResponse200Constraints:
 
         model_family = _parse_model_family(d.pop("modelFamily", UNSET))
 
+
         def _parse_params_b(data: object) -> float | None | Unset:
             if data is None:
                 return data
@@ -153,6 +174,7 @@ class ParseConstraintsResponse200Constraints:
             return cast(float | None | Unset, data)
 
         params_b = _parse_params_b(d.pop("paramsB", UNSET))
+
 
         def _parse_quantization(data: object) -> None | str | Unset:
             if data is None:
@@ -163,6 +185,7 @@ class ParseConstraintsResponse200Constraints:
 
         quantization = _parse_quantization(d.pop("quantization", UNSET))
 
+
         def _parse_context_length(data: object) -> int | None | Unset:
             if data is None:
                 return data
@@ -171,6 +194,7 @@ class ParseConstraintsResponse200Constraints:
             return cast(int | None | Unset, data)
 
         context_length = _parse_context_length(d.pop("contextLength", UNSET))
+
 
         def _parse_concurrency(data: object) -> int | None | Unset:
             if data is None:
@@ -181,6 +205,7 @@ class ParseConstraintsResponse200Constraints:
 
         concurrency = _parse_concurrency(d.pop("concurrency", UNSET))
 
+
         def _parse_budget_usd_max(data: object) -> float | None | Unset:
             if data is None:
                 return data
@@ -189,6 +214,7 @@ class ParseConstraintsResponse200Constraints:
             return cast(float | None | Unset, data)
 
         budget_usd_max = _parse_budget_usd_max(d.pop("budgetUsdMax", UNSET))
+
 
         def _parse_min_decode_tok_per_sec(data: object) -> float | None | Unset:
             if data is None:
@@ -199,6 +225,7 @@ class ParseConstraintsResponse200Constraints:
 
         min_decode_tok_per_sec = _parse_min_decode_tok_per_sec(d.pop("minDecodeTokPerSec", UNSET))
 
+
         def _parse_max_vram_gb(data: object) -> float | None | Unset:
             if data is None:
                 return data
@@ -208,12 +235,16 @@ class ParseConstraintsResponse200Constraints:
 
         max_vram_gb = _parse_max_vram_gb(d.pop("maxVramGb", UNSET))
 
+
         _hw_class = d.pop("hwClass", UNSET)
         hw_class: ParseConstraintsResponse200ConstraintsHwClass | Unset
-        if isinstance(_hw_class, Unset):
+        if isinstance(_hw_class,  Unset):
             hw_class = UNSET
         else:
             hw_class = ParseConstraintsResponse200ConstraintsHwClass(_hw_class)
+
+
+
 
         parse_constraints_response_200_constraints = cls(
             deployment=deployment,
@@ -227,6 +258,7 @@ class ParseConstraintsResponse200Constraints:
             max_vram_gb=max_vram_gb,
             hw_class=hw_class,
         )
+
 
         parse_constraints_response_200_constraints.additional_properties = d
         return parse_constraints_response_200_constraints

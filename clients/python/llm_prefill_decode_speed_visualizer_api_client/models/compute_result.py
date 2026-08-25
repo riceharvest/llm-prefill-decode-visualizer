@@ -1,24 +1,31 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
+from ..types import UNSET, Unset
+from typing import cast
+
 if TYPE_CHECKING:
-    from ..models.compute_result_inputs import ComputeResultInputs
-    from ..models.compute_result_warnings_item import ComputeResultWarningsItem
+  from ..models.compute_result_inputs import ComputeResultInputs
+  from ..models.compute_result_warnings_item import ComputeResultWarningsItem
+
+
+
 
 
 T = TypeVar("T", bound="ComputeResult")
 
 
+
 @_attrs_define
 class ComputeResult:
-    """Computed inference metrics. Every successful result carries a deterministic `id` (calc_<hash> of the resolved
+    """ Computed inference metrics. Every successful result carries a deterministic `id` (calc_<hash> of the resolved
     inputs) replayable via /api/calc/{id}, plus a non-blocking `warnings` array flagging physically implausible inputs.
 
         Attributes:
@@ -33,7 +40,7 @@ class ComputeResult:
             effective_throughput_tok_per_sec (float | Unset):
             prefill_share_pct (float | Unset):
             decode_share_pct (float | Unset):
-    """
+     """
 
     inputs: ComputeResultInputs
     warnings: list[ComputeResultWarningsItem]
@@ -47,13 +54,21 @@ class ComputeResult:
     decode_share_pct: float | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
+
+
+
+
     def to_dict(self) -> dict[str, Any]:
+        from ..models.compute_result_inputs import ComputeResultInputs
+        from ..models.compute_result_warnings_item import ComputeResultWarningsItem
         inputs = self.inputs.to_dict()
 
         warnings = []
         for warnings_item_data in self.warnings:
             warnings_item = warnings_item_data.to_dict()
             warnings.append(warnings_item)
+
+
 
         id = self.id
 
@@ -71,14 +86,13 @@ class ComputeResult:
 
         decode_share_pct = self.decode_share_pct
 
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update(
-            {
-                "inputs": inputs,
-                "warnings": warnings,
-            }
-        )
+        field_dict.update({
+            "inputs": inputs,
+            "warnings": warnings,
+        })
         if id is not UNSET:
             field_dict["id"] = id
         if ttft_seconds is not UNSET:
@@ -98,20 +112,27 @@ class ComputeResult:
 
         return field_dict
 
+
+
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.compute_result_inputs import ComputeResultInputs
         from ..models.compute_result_warnings_item import ComputeResultWarningsItem
-
         d = dict(src_dict)
         inputs = ComputeResultInputs.from_dict(d.pop("inputs"))
 
+
+
+
         warnings = []
         _warnings = d.pop("warnings")
-        for warnings_item_data in _warnings:
+        for warnings_item_data in (_warnings):
             warnings_item = ComputeResultWarningsItem.from_dict(warnings_item_data)
 
+
+
             warnings.append(warnings_item)
+
 
         id = d.pop("id", UNSET)
 
@@ -141,6 +162,7 @@ class ComputeResult:
             prefill_share_pct=prefill_share_pct,
             decode_share_pct=decode_share_pct,
         )
+
 
         compute_result.additional_properties = d
         return compute_result

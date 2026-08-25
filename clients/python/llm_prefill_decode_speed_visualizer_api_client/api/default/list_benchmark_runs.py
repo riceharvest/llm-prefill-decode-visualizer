@@ -1,15 +1,20 @@
 from http import HTTPStatus
-from typing import Any
+from typing import Any, cast
+from urllib.parse import quote
 
 import httpx
 
-from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...types import Response, UNSET
+from ... import errors
+
 from ...models.hardware_summary_envelope import HardwareSummaryEnvelope
 from ...models.list_benchmark_runs_context_band import ListBenchmarkRunsContextBand
 from ...models.list_benchmark_runs_response_429 import ListBenchmarkRunsResponse429
 from ...models.run_list_envelope import RunListEnvelope
-from ...types import UNSET, Response, Unset
+from ...types import UNSET, Unset
+from typing import cast
+
 
 
 def _get_kwargs(
@@ -21,7 +26,11 @@ def _get_kwargs(
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
+
 ) -> dict[str, Any]:
+    
+
+    
 
     params: dict[str, Any] = {}
 
@@ -43,7 +52,9 @@ def _get_kwargs(
 
     params["snapshot"] = snapshot
 
+
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
+
 
     _kwargs: dict[str, Any] = {
         "method": "get",
@@ -51,19 +62,20 @@ def _get_kwargs(
         "params": params,
     }
 
+
     return _kwargs
 
 
-def _parse_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> HardwareSummaryEnvelope | RunListEnvelope | ListBenchmarkRunsResponse429 | None:
-    if response.status_code == 200:
 
+def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> HardwareSummaryEnvelope | RunListEnvelope | ListBenchmarkRunsResponse429 | None:
+    if response.status_code == 200:
         def _parse_response_200(data: object) -> HardwareSummaryEnvelope | RunListEnvelope:
             try:
                 if not isinstance(data, dict):
                     raise TypeError()
                 response_200_type_0 = RunListEnvelope.from_dict(data)
+
+
 
                 return response_200_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
@@ -71,6 +83,8 @@ def _parse_response(
             if not isinstance(data, dict):
                 raise TypeError()
             response_200_type_1 = HardwareSummaryEnvelope.from_dict(data)
+
+
 
             return response_200_type_1
 
@@ -81,6 +95,8 @@ def _parse_response(
     if response.status_code == 429:
         response_429 = ListBenchmarkRunsResponse429.from_dict(response.json())
 
+
+
         return response_429
 
     if client.raise_on_unexpected_status:
@@ -89,9 +105,7 @@ def _parse_response(
         return None
 
 
-def _build_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[HardwareSummaryEnvelope | RunListEnvelope | ListBenchmarkRunsResponse429]:
+def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[HardwareSummaryEnvelope | RunListEnvelope | ListBenchmarkRunsResponse429]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -110,8 +124,9 @@ def sync_detailed(
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
+
 ) -> Response[HardwareSummaryEnvelope | RunListEnvelope | ListBenchmarkRunsResponse429]:
-    """Raw community benchmark runs (flattened, model-normalized)
+    """ Raw community benchmark runs (flattened, model-normalized)
 
      Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: {
     total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow
@@ -132,16 +147,18 @@ def sync_detailed(
 
     Returns:
         Response[HardwareSummaryEnvelope | RunListEnvelope | ListBenchmarkRunsResponse429]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         hardware=hardware,
-        model=model,
-        quant=quant,
-        context_band=context_band,
-        limit=limit,
-        cursor=cursor,
-        snapshot=snapshot,
+model=model,
+quant=quant,
+context_band=context_band,
+limit=limit,
+cursor=cursor,
+snapshot=snapshot,
+
     )
 
     response = client.get_httpx_client().request(
@@ -149,7 +166,6 @@ def sync_detailed(
     )
 
     return _build_response(client=client, response=response)
-
 
 def sync(
     *,
@@ -161,8 +177,9 @@ def sync(
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
+
 ) -> HardwareSummaryEnvelope | RunListEnvelope | ListBenchmarkRunsResponse429 | None:
-    """Raw community benchmark runs (flattened, model-normalized)
+    """ Raw community benchmark runs (flattened, model-normalized)
 
      Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: {
     total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow
@@ -183,19 +200,20 @@ def sync(
 
     Returns:
         HardwareSummaryEnvelope | RunListEnvelope | ListBenchmarkRunsResponse429
-    """
+     """
+
 
     return sync_detailed(
         client=client,
-        hardware=hardware,
-        model=model,
-        quant=quant,
-        context_band=context_band,
-        limit=limit,
-        cursor=cursor,
-        snapshot=snapshot,
-    ).parsed
+hardware=hardware,
+model=model,
+quant=quant,
+context_band=context_band,
+limit=limit,
+cursor=cursor,
+snapshot=snapshot,
 
+    ).parsed
 
 async def asyncio_detailed(
     *,
@@ -207,8 +225,9 @@ async def asyncio_detailed(
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
+
 ) -> Response[HardwareSummaryEnvelope | RunListEnvelope | ListBenchmarkRunsResponse429]:
-    """Raw community benchmark runs (flattened, model-normalized)
+    """ Raw community benchmark runs (flattened, model-normalized)
 
      Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: {
     total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow
@@ -229,22 +248,25 @@ async def asyncio_detailed(
 
     Returns:
         Response[HardwareSummaryEnvelope | RunListEnvelope | ListBenchmarkRunsResponse429]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         hardware=hardware,
-        model=model,
-        quant=quant,
-        context_band=context_band,
-        limit=limit,
-        cursor=cursor,
-        snapshot=snapshot,
+model=model,
+quant=quant,
+context_band=context_band,
+limit=limit,
+cursor=cursor,
+snapshot=snapshot,
+
     )
 
-    response = await client.get_async_httpx_client().request(**kwargs)
+    response = await client.get_async_httpx_client().request(
+        **kwargs
+    )
 
     return _build_response(client=client, response=response)
-
 
 async def asyncio(
     *,
@@ -256,8 +278,9 @@ async def asyncio(
     limit: int | Unset = 50,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
+
 ) -> HardwareSummaryEnvelope | RunListEnvelope | ListBenchmarkRunsResponse429 | None:
-    """Raw community benchmark runs (flattened, model-normalized)
+    """ Raw community benchmark runs (flattened, model-normalized)
 
      Bare call returns a hardware-group summary. With any filter, returns a cursor-paginated run list: {
     total, items[], has_more, next_cursor } sorted by decode speed desc (runId tiebreak) — follow
@@ -278,17 +301,17 @@ async def asyncio(
 
     Returns:
         HardwareSummaryEnvelope | RunListEnvelope | ListBenchmarkRunsResponse429
-    """
+     """
 
-    return (
-        await asyncio_detailed(
-            client=client,
-            hardware=hardware,
-            model=model,
-            quant=quant,
-            context_band=context_band,
-            limit=limit,
-            cursor=cursor,
-            snapshot=snapshot,
-        )
-    ).parsed
+
+    return (await asyncio_detailed(
+        client=client,
+hardware=hardware,
+model=model,
+quant=quant,
+context_band=context_band,
+limit=limit,
+cursor=cursor,
+snapshot=snapshot,
+
+    )).parsed

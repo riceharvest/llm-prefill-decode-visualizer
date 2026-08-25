@@ -1,15 +1,20 @@
 from http import HTTPStatus
-from typing import Any
+from typing import Any, cast
+from urllib.parse import quote
 
 import httpx
 
-from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...types import Response, UNSET
+from ... import errors
+
 from ...models.compute_inference_architecture import ComputeInferenceArchitecture
 from ...models.compute_inference_model import ComputeInferenceModel
 from ...models.compute_response import ComputeResponse
 from ...models.problem import Problem
-from ...types import UNSET, Response, Unset
+from ...types import UNSET, Unset
+from typing import cast
+
 
 
 def _get_kwargs(
@@ -22,6 +27,7 @@ def _get_kwargs(
     num_turns: int | Unset = UNSET,
     enable_prefix_caching: bool | Unset = UNSET,
     batch_size: int | Unset = UNSET,
+    decode_decay_exponent: float | Unset = 0.25,
     draft_tokens: int | Unset = UNSET,
     acceptance_rate: float | Unset = UNSET,
     hardware_price_usd: float | Unset = UNSET,
@@ -33,7 +39,11 @@ def _get_kwargs(
     precision_bytes: float | Unset = UNSET,
     flags: str | Unset = UNSET,
     dry_run: bool | Unset = UNSET,
+
 ) -> dict[str, Any]:
+    
+
+    
 
     params: dict[str, Any] = {}
 
@@ -56,6 +66,8 @@ def _get_kwargs(
     params["enablePrefixCaching"] = enable_prefix_caching
 
     params["batchSize"] = batch_size
+
+    params["decodeDecayExponent"] = decode_decay_exponent
 
     params["draftTokens"] = draft_tokens
 
@@ -83,7 +95,9 @@ def _get_kwargs(
 
     params["dry_run"] = dry_run
 
+
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
+
 
     _kwargs: dict[str, Any] = {
         "method": "get",
@@ -91,24 +105,30 @@ def _get_kwargs(
         "params": params,
     }
 
+
     return _kwargs
 
 
-def _parse_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> ComputeResponse | Problem | None:
+
+def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> ComputeResponse | Problem | None:
     if response.status_code == 200:
         response_200 = ComputeResponse.from_dict(response.json())
+
+
 
         return response_200
 
     if response.status_code == 400:
         response_400 = Problem.from_dict(response.json())
 
+
+
         return response_400
 
     if response.status_code == 500:
         response_500 = Problem.from_dict(response.json())
+
+
 
         return response_500
 
@@ -118,9 +138,7 @@ def _parse_response(
         return None
 
 
-def _build_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[ComputeResponse | Problem]:
+def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[ComputeResponse | Problem]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -140,6 +158,7 @@ def sync_detailed(
     num_turns: int | Unset = UNSET,
     enable_prefix_caching: bool | Unset = UNSET,
     batch_size: int | Unset = UNSET,
+    decode_decay_exponent: float | Unset = 0.25,
     draft_tokens: int | Unset = UNSET,
     acceptance_rate: float | Unset = UNSET,
     hardware_price_usd: float | Unset = UNSET,
@@ -151,14 +170,19 @@ def sync_detailed(
     precision_bytes: float | Unset = UNSET,
     flags: str | Unset = UNSET,
     dry_run: bool | Unset = UNSET,
+
 ) -> Response[ComputeResponse | Problem]:
-    r"""Run inference math (TTFT, TPOT, walltime, VRAM)
+    r""" Run inference math (TTFT, TPOT, walltime, VRAM)
 
      Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts
     POST with a JSON body, or a batch of up to 50 parameter sets via POST {\"batch\": [...]} / GET
     ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response
     carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via
-    /api/calc/{id}.
+    /api/calc/{id}. Caveat for model=batched: aggregate throughput = decodeSpeed × batchSize^(1 −
+    decodeDecayExponent) grows monotonically with batch size by construction (defaults: ×B^0.75) — the
+    heuristic has NO saturation point or optimal batch size, so it must not be used alone for sizing
+    decisions. To read a scaling curve, sweep batchSize via the batch endpoint (homogeneous items, one
+    param varied).
 
     Args:
         model (ComputeInferenceModel | Unset):
@@ -169,6 +193,7 @@ def sync_detailed(
         num_turns (int | Unset):
         enable_prefix_caching (bool | Unset):
         batch_size (int | Unset):
+        decode_decay_exponent (float | Unset):  Default: 0.25.
         draft_tokens (int | Unset):
         acceptance_rate (float | Unset):
         hardware_price_usd (float | Unset):
@@ -187,28 +212,31 @@ def sync_detailed(
 
     Returns:
         Response[ComputeResponse | Problem]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         model=model,
-        prompt_tokens=prompt_tokens,
-        output_tokens=output_tokens,
-        prefill_speed=prefill_speed,
-        decode_speed=decode_speed,
-        num_turns=num_turns,
-        enable_prefix_caching=enable_prefix_caching,
-        batch_size=batch_size,
-        draft_tokens=draft_tokens,
-        acceptance_rate=acceptance_rate,
-        hardware_price_usd=hardware_price_usd,
-        electricity_rate_per_kwh=electricity_rate_per_kwh,
-        power_draw_watts=power_draw_watts,
-        amortization_months=amortization_months,
-        architecture=architecture,
-        context_length=context_length,
-        precision_bytes=precision_bytes,
-        flags=flags,
-        dry_run=dry_run,
+prompt_tokens=prompt_tokens,
+output_tokens=output_tokens,
+prefill_speed=prefill_speed,
+decode_speed=decode_speed,
+num_turns=num_turns,
+enable_prefix_caching=enable_prefix_caching,
+batch_size=batch_size,
+decode_decay_exponent=decode_decay_exponent,
+draft_tokens=draft_tokens,
+acceptance_rate=acceptance_rate,
+hardware_price_usd=hardware_price_usd,
+electricity_rate_per_kwh=electricity_rate_per_kwh,
+power_draw_watts=power_draw_watts,
+amortization_months=amortization_months,
+architecture=architecture,
+context_length=context_length,
+precision_bytes=precision_bytes,
+flags=flags,
+dry_run=dry_run,
+
     )
 
     response = client.get_httpx_client().request(
@@ -216,7 +244,6 @@ def sync_detailed(
     )
 
     return _build_response(client=client, response=response)
-
 
 def sync(
     *,
@@ -229,6 +256,7 @@ def sync(
     num_turns: int | Unset = UNSET,
     enable_prefix_caching: bool | Unset = UNSET,
     batch_size: int | Unset = UNSET,
+    decode_decay_exponent: float | Unset = 0.25,
     draft_tokens: int | Unset = UNSET,
     acceptance_rate: float | Unset = UNSET,
     hardware_price_usd: float | Unset = UNSET,
@@ -240,14 +268,19 @@ def sync(
     precision_bytes: float | Unset = UNSET,
     flags: str | Unset = UNSET,
     dry_run: bool | Unset = UNSET,
+
 ) -> ComputeResponse | Problem | None:
-    r"""Run inference math (TTFT, TPOT, walltime, VRAM)
+    r""" Run inference math (TTFT, TPOT, walltime, VRAM)
 
      Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts
     POST with a JSON body, or a batch of up to 50 parameter sets via POST {\"batch\": [...]} / GET
     ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response
     carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via
-    /api/calc/{id}.
+    /api/calc/{id}. Caveat for model=batched: aggregate throughput = decodeSpeed × batchSize^(1 −
+    decodeDecayExponent) grows monotonically with batch size by construction (defaults: ×B^0.75) — the
+    heuristic has NO saturation point or optimal batch size, so it must not be used alone for sizing
+    decisions. To read a scaling curve, sweep batchSize via the batch endpoint (homogeneous items, one
+    param varied).
 
     Args:
         model (ComputeInferenceModel | Unset):
@@ -258,6 +291,7 @@ def sync(
         num_turns (int | Unset):
         enable_prefix_caching (bool | Unset):
         batch_size (int | Unset):
+        decode_decay_exponent (float | Unset):  Default: 0.25.
         draft_tokens (int | Unset):
         acceptance_rate (float | Unset):
         hardware_price_usd (float | Unset):
@@ -276,31 +310,33 @@ def sync(
 
     Returns:
         ComputeResponse | Problem
-    """
+     """
+
 
     return sync_detailed(
         client=client,
-        model=model,
-        prompt_tokens=prompt_tokens,
-        output_tokens=output_tokens,
-        prefill_speed=prefill_speed,
-        decode_speed=decode_speed,
-        num_turns=num_turns,
-        enable_prefix_caching=enable_prefix_caching,
-        batch_size=batch_size,
-        draft_tokens=draft_tokens,
-        acceptance_rate=acceptance_rate,
-        hardware_price_usd=hardware_price_usd,
-        electricity_rate_per_kwh=electricity_rate_per_kwh,
-        power_draw_watts=power_draw_watts,
-        amortization_months=amortization_months,
-        architecture=architecture,
-        context_length=context_length,
-        precision_bytes=precision_bytes,
-        flags=flags,
-        dry_run=dry_run,
-    ).parsed
+model=model,
+prompt_tokens=prompt_tokens,
+output_tokens=output_tokens,
+prefill_speed=prefill_speed,
+decode_speed=decode_speed,
+num_turns=num_turns,
+enable_prefix_caching=enable_prefix_caching,
+batch_size=batch_size,
+decode_decay_exponent=decode_decay_exponent,
+draft_tokens=draft_tokens,
+acceptance_rate=acceptance_rate,
+hardware_price_usd=hardware_price_usd,
+electricity_rate_per_kwh=electricity_rate_per_kwh,
+power_draw_watts=power_draw_watts,
+amortization_months=amortization_months,
+architecture=architecture,
+context_length=context_length,
+precision_bytes=precision_bytes,
+flags=flags,
+dry_run=dry_run,
 
+    ).parsed
 
 async def asyncio_detailed(
     *,
@@ -313,6 +349,7 @@ async def asyncio_detailed(
     num_turns: int | Unset = UNSET,
     enable_prefix_caching: bool | Unset = UNSET,
     batch_size: int | Unset = UNSET,
+    decode_decay_exponent: float | Unset = 0.25,
     draft_tokens: int | Unset = UNSET,
     acceptance_rate: float | Unset = UNSET,
     hardware_price_usd: float | Unset = UNSET,
@@ -324,14 +361,19 @@ async def asyncio_detailed(
     precision_bytes: float | Unset = UNSET,
     flags: str | Unset = UNSET,
     dry_run: bool | Unset = UNSET,
+
 ) -> Response[ComputeResponse | Problem]:
-    r"""Run inference math (TTFT, TPOT, walltime, VRAM)
+    r""" Run inference math (TTFT, TPOT, walltime, VRAM)
 
      Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts
     POST with a JSON body, or a batch of up to 50 parameter sets via POST {\"batch\": [...]} / GET
     ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response
     carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via
-    /api/calc/{id}.
+    /api/calc/{id}. Caveat for model=batched: aggregate throughput = decodeSpeed × batchSize^(1 −
+    decodeDecayExponent) grows monotonically with batch size by construction (defaults: ×B^0.75) — the
+    heuristic has NO saturation point or optimal batch size, so it must not be used alone for sizing
+    decisions. To read a scaling curve, sweep batchSize via the batch endpoint (homogeneous items, one
+    param varied).
 
     Args:
         model (ComputeInferenceModel | Unset):
@@ -342,6 +384,7 @@ async def asyncio_detailed(
         num_turns (int | Unset):
         enable_prefix_caching (bool | Unset):
         batch_size (int | Unset):
+        decode_decay_exponent (float | Unset):  Default: 0.25.
         draft_tokens (int | Unset):
         acceptance_rate (float | Unset):
         hardware_price_usd (float | Unset):
@@ -360,34 +403,38 @@ async def asyncio_detailed(
 
     Returns:
         Response[ComputeResponse | Problem]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         model=model,
-        prompt_tokens=prompt_tokens,
-        output_tokens=output_tokens,
-        prefill_speed=prefill_speed,
-        decode_speed=decode_speed,
-        num_turns=num_turns,
-        enable_prefix_caching=enable_prefix_caching,
-        batch_size=batch_size,
-        draft_tokens=draft_tokens,
-        acceptance_rate=acceptance_rate,
-        hardware_price_usd=hardware_price_usd,
-        electricity_rate_per_kwh=electricity_rate_per_kwh,
-        power_draw_watts=power_draw_watts,
-        amortization_months=amortization_months,
-        architecture=architecture,
-        context_length=context_length,
-        precision_bytes=precision_bytes,
-        flags=flags,
-        dry_run=dry_run,
+prompt_tokens=prompt_tokens,
+output_tokens=output_tokens,
+prefill_speed=prefill_speed,
+decode_speed=decode_speed,
+num_turns=num_turns,
+enable_prefix_caching=enable_prefix_caching,
+batch_size=batch_size,
+decode_decay_exponent=decode_decay_exponent,
+draft_tokens=draft_tokens,
+acceptance_rate=acceptance_rate,
+hardware_price_usd=hardware_price_usd,
+electricity_rate_per_kwh=electricity_rate_per_kwh,
+power_draw_watts=power_draw_watts,
+amortization_months=amortization_months,
+architecture=architecture,
+context_length=context_length,
+precision_bytes=precision_bytes,
+flags=flags,
+dry_run=dry_run,
+
     )
 
-    response = await client.get_async_httpx_client().request(**kwargs)
+    response = await client.get_async_httpx_client().request(
+        **kwargs
+    )
 
     return _build_response(client=client, response=response)
-
 
 async def asyncio(
     *,
@@ -400,6 +447,7 @@ async def asyncio(
     num_turns: int | Unset = UNSET,
     enable_prefix_caching: bool | Unset = UNSET,
     batch_size: int | Unset = UNSET,
+    decode_decay_exponent: float | Unset = 0.25,
     draft_tokens: int | Unset = UNSET,
     acceptance_rate: float | Unset = UNSET,
     hardware_price_usd: float | Unset = UNSET,
@@ -411,14 +459,19 @@ async def asyncio(
     precision_bytes: float | Unset = UNSET,
     flags: str | Unset = UNSET,
     dry_run: bool | Unset = UNSET,
+
 ) -> ComputeResponse | Problem | None:
-    r"""Run inference math (TTFT, TPOT, walltime, VRAM)
+    r""" Run inference math (TTFT, TPOT, walltime, VRAM)
 
      Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts
     POST with a JSON body, or a batch of up to 50 parameter sets via POST {\"batch\": [...]} / GET
     ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response
     carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via
-    /api/calc/{id}.
+    /api/calc/{id}. Caveat for model=batched: aggregate throughput = decodeSpeed × batchSize^(1 −
+    decodeDecayExponent) grows monotonically with batch size by construction (defaults: ×B^0.75) — the
+    heuristic has NO saturation point or optimal batch size, so it must not be used alone for sizing
+    decisions. To read a scaling curve, sweep batchSize via the batch endpoint (homogeneous items, one
+    param varied).
 
     Args:
         model (ComputeInferenceModel | Unset):
@@ -429,6 +482,7 @@ async def asyncio(
         num_turns (int | Unset):
         enable_prefix_caching (bool | Unset):
         batch_size (int | Unset):
+        decode_decay_exponent (float | Unset):  Default: 0.25.
         draft_tokens (int | Unset):
         acceptance_rate (float | Unset):
         hardware_price_usd (float | Unset):
@@ -447,29 +501,30 @@ async def asyncio(
 
     Returns:
         ComputeResponse | Problem
-    """
+     """
 
-    return (
-        await asyncio_detailed(
-            client=client,
-            model=model,
-            prompt_tokens=prompt_tokens,
-            output_tokens=output_tokens,
-            prefill_speed=prefill_speed,
-            decode_speed=decode_speed,
-            num_turns=num_turns,
-            enable_prefix_caching=enable_prefix_caching,
-            batch_size=batch_size,
-            draft_tokens=draft_tokens,
-            acceptance_rate=acceptance_rate,
-            hardware_price_usd=hardware_price_usd,
-            electricity_rate_per_kwh=electricity_rate_per_kwh,
-            power_draw_watts=power_draw_watts,
-            amortization_months=amortization_months,
-            architecture=architecture,
-            context_length=context_length,
-            precision_bytes=precision_bytes,
-            flags=flags,
-            dry_run=dry_run,
-        )
-    ).parsed
+
+    return (await asyncio_detailed(
+        client=client,
+model=model,
+prompt_tokens=prompt_tokens,
+output_tokens=output_tokens,
+prefill_speed=prefill_speed,
+decode_speed=decode_speed,
+num_turns=num_turns,
+enable_prefix_caching=enable_prefix_caching,
+batch_size=batch_size,
+decode_decay_exponent=decode_decay_exponent,
+draft_tokens=draft_tokens,
+acceptance_rate=acceptance_rate,
+hardware_price_usd=hardware_price_usd,
+electricity_rate_per_kwh=electricity_rate_per_kwh,
+power_draw_watts=power_draw_watts,
+amortization_months=amortization_months,
+architecture=architecture,
+context_length=context_length,
+precision_bytes=precision_bytes,
+flags=flags,
+dry_run=dry_run,
+
+    )).parsed

@@ -1,43 +1,51 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
+from ..types import UNSET, Unset
+from typing import cast
+from typing import Literal, cast
+
 if TYPE_CHECKING:
-    from ..models.compute_response_inputs import ComputeResponseInputs
-    from ..models.compute_response_warnings_item import ComputeResponseWarningsItem
+  from ..models.compute_response_inputs import ComputeResponseInputs
+  from ..models.compute_response_warnings_item import ComputeResponseWarningsItem
+
+
+
 
 
 T = TypeVar("T", bound="ComputeResponse")
 
 
+
 @_attrs_define
 class ComputeResponse:
-    """Computed inference metrics plus the standard envelope stamp.
+    """ Computed inference metrics plus the standard envelope stamp.
 
-    Attributes:
-        inputs (ComputeResponseInputs): Resolved input parameters (defaults filled in)
-        warnings (list[ComputeResponseWarningsItem]): Implausibility warnings (empty when inputs are plausible); never
-            affect the math or HTTP status.
-        schema_version (Literal['1']):
-        id (str | Unset): Deterministic content hash of the resolved request
-        ttft_seconds (float | Unset): Time to first token (singleTurn/batched/agentic/kvCache/cost modes)
-        tpot_ms (float | Unset): Time per output token in ms
-        decode_seconds (float | Unset):
-        total_walltime_seconds (float | Unset):
-        effective_throughput_tok_per_sec (float | Unset):
-        prefill_share_pct (float | Unset):
-        decode_share_pct (float | Unset):
-    """
+        Attributes:
+            inputs (ComputeResponseInputs): Resolved input parameters (defaults filled in)
+            warnings (list[ComputeResponseWarningsItem]): Implausibility warnings (empty when inputs are plausible); never
+                affect the math or HTTP status.
+            schema_version (Literal['1']):
+            id (str | Unset): Deterministic content hash of the resolved request
+            ttft_seconds (float | Unset): Time to first token (singleTurn/batched/agentic/kvCache/cost modes)
+            tpot_ms (float | Unset): Time per output token in ms
+            decode_seconds (float | Unset):
+            total_walltime_seconds (float | Unset):
+            effective_throughput_tok_per_sec (float | Unset):
+            prefill_share_pct (float | Unset):
+            decode_share_pct (float | Unset):
+     """
 
     inputs: ComputeResponseInputs
     warnings: list[ComputeResponseWarningsItem]
-    schema_version: Literal["1"]
+    schema_version: Literal['1']
     id: str | Unset = UNSET
     ttft_seconds: float | Unset = UNSET
     tpot_ms: float | Unset = UNSET
@@ -48,13 +56,21 @@ class ComputeResponse:
     decode_share_pct: float | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
+
+
+
+
     def to_dict(self) -> dict[str, Any]:
+        from ..models.compute_response_inputs import ComputeResponseInputs
+        from ..models.compute_response_warnings_item import ComputeResponseWarningsItem
         inputs = self.inputs.to_dict()
 
         warnings = []
         for warnings_item_data in self.warnings:
             warnings_item = warnings_item_data.to_dict()
             warnings.append(warnings_item)
+
+
 
         schema_version = self.schema_version
 
@@ -74,15 +90,14 @@ class ComputeResponse:
 
         decode_share_pct = self.decode_share_pct
 
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update(
-            {
-                "inputs": inputs,
-                "warnings": warnings,
-                "schema_version": schema_version,
-            }
-        )
+        field_dict.update({
+            "inputs": inputs,
+            "warnings": warnings,
+            "schema_version": schema_version,
+        })
         if id is not UNSET:
             field_dict["id"] = id
         if ttft_seconds is not UNSET:
@@ -102,23 +117,30 @@ class ComputeResponse:
 
         return field_dict
 
+
+
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.compute_response_inputs import ComputeResponseInputs
         from ..models.compute_response_warnings_item import ComputeResponseWarningsItem
-
         d = dict(src_dict)
         inputs = ComputeResponseInputs.from_dict(d.pop("inputs"))
 
+
+
+
         warnings = []
         _warnings = d.pop("warnings")
-        for warnings_item_data in _warnings:
+        for warnings_item_data in (_warnings):
             warnings_item = ComputeResponseWarningsItem.from_dict(warnings_item_data)
+
+
 
             warnings.append(warnings_item)
 
-        schema_version = cast(Literal["1"], d.pop("schema_version"))
-        if schema_version != "1":
+
+        schema_version = cast(Literal['1'] , d.pop("schema_version"))
+        if schema_version != '1':
             raise ValueError(f"schema_version must match const '1', got '{schema_version}'")
 
         id = d.pop("id", UNSET)
@@ -150,6 +172,7 @@ class ComputeResponse:
             prefill_share_pct=prefill_share_pct,
             decode_share_pct=decode_share_pct,
         )
+
 
         compute_response.additional_properties = d
         return compute_response

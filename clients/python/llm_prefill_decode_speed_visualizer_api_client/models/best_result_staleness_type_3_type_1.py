@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class BestResultStalenessType3Type1(str, Enum):
     AGING = "aging"
     FRESH = "fresh"

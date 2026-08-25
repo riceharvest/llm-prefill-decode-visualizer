@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class BestListEnvelopeRankedBy(str, Enum):
     COST = "cost"
     DECODE = "decode"

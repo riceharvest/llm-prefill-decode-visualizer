@@ -1,20 +1,27 @@
 from http import HTTPStatus
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 
 import httpx
 
-from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...types import Response, UNSET
+from ... import errors
+
 from ...models.replay_calculation_endpoint import ReplayCalculationEndpoint
-from ...types import UNSET, Response, Unset
+from ...types import UNSET, Unset
+
 
 
 def _get_kwargs(
     id: str,
     *,
     endpoint: ReplayCalculationEndpoint | Unset = ReplayCalculationEndpoint.COMPUTE,
+
 ) -> dict[str, Any]:
+    
+
+    
 
     params: dict[str, Any] = {}
 
@@ -24,17 +31,19 @@ def _get_kwargs(
 
     params["endpoint"] = json_endpoint
 
+
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
+
 
     _kwargs: dict[str, Any] = {
         "method": "get",
-        "url": "/api/calc/{id}".format(
-            id=quote(str(id), safe=""),
-        ),
+        "url": "/api/calc/{id}".format(id=quote(str(id), safe=""),),
         "params": params,
     }
 
+
     return _kwargs
+
 
 
 def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | None:
@@ -64,8 +73,9 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     endpoint: ReplayCalculationEndpoint | Unset = ReplayCalculationEndpoint.COMPUTE,
+
 ) -> Response[Any]:
-    """Replay a computation or recommendation from its deterministic id
+    """ Replay a computation or recommendation from its deterministic id
 
      Ids are content hashes (calc_ + 12 hex chars of sha256 over the normalized request) returned as `id`
     by /api/compute and /api/best. They are not stored anywhere: re-send the original parameters
@@ -82,11 +92,13 @@ def sync_detailed(
 
     Returns:
         Response[Any]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         id=id,
-        endpoint=endpoint,
+endpoint=endpoint,
+
     )
 
     response = client.get_httpx_client().request(
@@ -101,8 +113,9 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     endpoint: ReplayCalculationEndpoint | Unset = ReplayCalculationEndpoint.COMPUTE,
+
 ) -> Response[Any]:
-    """Replay a computation or recommendation from its deterministic id
+    """ Replay a computation or recommendation from its deterministic id
 
      Ids are content hashes (calc_ + 12 hex chars of sha256 over the normalized request) returned as `id`
     by /api/compute and /api/best. They are not stored anywhere: re-send the original parameters
@@ -119,13 +132,18 @@ async def asyncio_detailed(
 
     Returns:
         Response[Any]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         id=id,
-        endpoint=endpoint,
+endpoint=endpoint,
+
     )
 
-    response = await client.get_async_httpx_client().request(**kwargs)
+    response = await client.get_async_httpx_client().request(
+        **kwargs
+    )
 
     return _build_response(client=client, response=response)
+

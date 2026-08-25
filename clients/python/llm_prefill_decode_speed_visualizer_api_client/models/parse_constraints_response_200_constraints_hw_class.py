@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class ParseConstraintsResponse200ConstraintsHwClass(str, Enum):
     CPU_ONLY = "cpu_only"
     DISCRETE_GPU = "discrete_gpu"

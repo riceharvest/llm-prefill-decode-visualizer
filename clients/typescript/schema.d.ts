@@ -756,7 +756,7 @@ export interface components {
             /** @description Implausibility warnings (empty when inputs are plausible); never affect the math or HTTP status. */
             warnings: ({
                 /** @enum {string} */
-                code?: "decode_above_bandwidth_roofline" | "prefill_above_compute_roofline" | "ttft_below_kernel_launch_floor";
+                code?: "decode_above_bandwidth_roofline" | "prefill_above_compute_roofline" | "ttft_below_kernel_launch_floor" | "context_exceeds_model_limit";
                 message?: string;
             } & {
                 [key: string]: unknown;

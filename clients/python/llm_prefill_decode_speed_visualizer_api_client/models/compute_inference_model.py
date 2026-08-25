@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class ComputeInferenceModel(str, Enum):
     AGENTIC = "agentic"
     BATCHED = "batched"

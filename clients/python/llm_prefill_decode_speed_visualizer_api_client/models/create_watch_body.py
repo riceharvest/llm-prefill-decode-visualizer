@@ -1,19 +1,28 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
+from ..types import UNSET, Unset
+from typing import cast
+
+
+
+
+
+
 T = TypeVar("T", bound="CreateWatchBody")
+
 
 
 @_attrs_define
 class CreateWatchBody:
-    """Watched combo. At least one of 'model' / 'hardware' is required; 'quant' optional; 'webhookUrl' must be https when
+    """ Watched combo. At least one of 'model' / 'hardware' is required; 'quant' optional; 'webhookUrl' must be https when
     present.
 
         Attributes:
@@ -21,13 +30,17 @@ class CreateWatchBody:
             hardware (str | Unset): Hardware key or label substring to match
             quant (None | str | Unset): Exact quantization match (optional)
             webhook_url (str | Unset): https-only webhook notified of new matching runs
-    """
+     """
 
     model: str | Unset = UNSET
     hardware: str | Unset = UNSET
     quant: None | str | Unset = UNSET
     webhook_url: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
+
+
+
+
 
     def to_dict(self) -> dict[str, Any]:
         model = self.model
@@ -42,9 +55,11 @@ class CreateWatchBody:
 
         webhook_url = self.webhook_url
 
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({})
+        field_dict.update({
+        })
         if model is not UNSET:
             field_dict["model"] = model
         if hardware is not UNSET:
@@ -55,6 +70,8 @@ class CreateWatchBody:
             field_dict["webhookUrl"] = webhook_url
 
         return field_dict
+
+
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
@@ -72,6 +89,7 @@ class CreateWatchBody:
 
         quant = _parse_quant(d.pop("quant", UNSET))
 
+
         webhook_url = d.pop("webhookUrl", UNSET)
 
         create_watch_body = cls(
@@ -80,6 +98,7 @@ class CreateWatchBody:
             quant=quant,
             webhook_url=webhook_url,
         )
+
 
         create_watch_body.additional_properties = d
         return create_watch_body

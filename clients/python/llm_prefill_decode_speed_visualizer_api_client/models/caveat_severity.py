@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class CaveatSeverity(str, Enum):
     HIGH = "high"
     INFO = "info"

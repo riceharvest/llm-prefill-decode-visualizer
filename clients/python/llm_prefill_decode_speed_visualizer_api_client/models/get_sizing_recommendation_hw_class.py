@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class GetSizingRecommendationHwClass(str, Enum):
     CPU_ONLY = "cpu_only"
     DISCRETE_GPU = "discrete_gpu"

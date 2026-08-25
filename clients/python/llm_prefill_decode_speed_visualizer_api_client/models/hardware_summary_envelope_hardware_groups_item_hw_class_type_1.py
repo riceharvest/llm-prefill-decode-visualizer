@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class HardwareSummaryEnvelopeHardwareGroupsItemHwClassType1(str, Enum):
     CPU_ONLY = "cpu_only"
     DISCRETE_GPU = "discrete_gpu"
