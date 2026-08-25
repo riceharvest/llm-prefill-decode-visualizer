@@ -20,13 +20,16 @@ function fakeStorage(initial = {}) {
 }
 
 test('sanitizeBudgets keeps positive finite values and nulls the rest', () => {
-  assert.deepEqual(sanitizeBudgets({ ttftMs: 400, tpotMs: '30', walltimeSec: 8 }), {
-    ttftMs: 400, tpotMs: 30, walltimeSec: 8
+  assert.deepEqual(sanitizeBudgets({ ttftMs: 400, tpotMs: '30', walltimeSec: 8, loopWalltimeSec: 60 }), {
+    ttftMs: 400, tpotMs: 30, walltimeSec: 8, loopWalltimeSec: 60
   });
   assert.deepEqual(sanitizeBudgets({ ttftMs: 0, tpotMs: -5, walltimeSec: NaN }), {
-    ttftMs: null, tpotMs: null, walltimeSec: null
+    ttftMs: null, tpotMs: null, walltimeSec: null, loopWalltimeSec: null
   });
-  assert.deepEqual(sanitizeBudgets(undefined), { ttftMs: null, tpotMs: null, walltimeSec: null });
+  assert.deepEqual(
+    sanitizeBudgets(undefined),
+    { ttftMs: null, tpotMs: null, walltimeSec: null, loopWalltimeSec: null }
+  );
 });
 
 test('load/save round-trips through storage and recovers from corruption', () => {
@@ -34,7 +37,7 @@ test('load/save round-trips through storage and recovers from corruption', () =>
   assert.deepEqual(loadSloBudgets(store), DEFAULT_SLO_BUDGETS); // nothing stored yet
 
   assert.equal(saveSloBudgets({ ttftMs: 250, tpotMs: 40, walltimeSec: 3 }, store), true);
-  assert.deepEqual(loadSloBudgets(store), { ttftMs: 250, tpotMs: 40, walltimeSec: 3 });
+  assert.deepEqual(loadSloBudgets(store), { ttftMs: 250, tpotMs: 40, walltimeSec: 3, loopWalltimeSec: null });
 
   store.setItem('llmpdv.slo-budgets-v1', '{not json');
   assert.deepEqual(loadSloBudgets(store), DEFAULT_SLO_BUDGETS);
@@ -108,9 +111,38 @@ test('evaluateAgenticSlo flags which turn blows the budget', () => {
   assert.equal(r.turns[0].tpot.pass, true);
 });
 
+test('evaluateAgenticSlo evaluates the whole-loop walltime at its own scope (#682)', () => {
+  // Issue #682 repro shape: every turn ≈ 2.65 s passes the 10 s per-turn
+  // budget, but 20 of them sum to ≈ 53 s — far over the same budget.
+  const breakdown = Array.from({ length: 20 }, (_, i) =>
+    turn({ turn: i + 1, prefillTime: 0.4, decodeTime: 2.25, decodeTokens: 250, turnWalltime: 2.65 })
+  );
+  const r = evaluateAgenticSlo(breakdown, DEFAULT_SLO_BUDGETS);
+  assert.deepEqual(r.failingTurns, []);           // per-turn scope: green
+  assert.ok(Math.abs(r.loopTotal.value - 53) < 1e-9); // loop scope: red
+  assert.equal(r.loopTotal.pass, false);
+});
+
+test('loopWalltimeSec overrides the fallback for the loop-total scope (#682)', () => {
+  const breakdown = [turn({ turnWalltime: 5.3 }), turn({ turn: 2, turnWalltime: 5.3 })];
+  // Per-turn: both turns pass the 10 s budget; the 10.6 s loop total passes a
+  // generous 30 s loop budget but fails a tight 5 s one.
+  const generous = evaluateAgenticSlo(breakdown, { ...DEFAULT_SLO_BUDGETS, loopWalltimeSec: 30 });
+  assert.equal(generous.loopTotal.pass, true);
+  assert.equal(generous.loopTotal.budget, 30);
+
+  const tight = evaluateAgenticSlo(breakdown, { ...DEFAULT_SLO_BUDGETS, loopWalltimeSec: 5 });
+  assert.equal(tight.failingTurns.length, 0);     // turns still green…
+  assert.equal(tight.loopTotal.pass, false);      // …but the loop is red
+  assert.equal(tight.loopTotal.budget, 5);
+});
+
 test('evaluateAgenticSlo handles empty loops and disabled budgets', () => {
-  assert.deepEqual(evaluateAgenticSlo([], DEFAULT_SLO_BUDGETS), { turns: [], failingTurns: [], worstTurn: null });
+  assert.deepEqual(evaluateAgenticSlo([], DEFAULT_SLO_BUDGETS), {
+    turns: [], failingTurns: [], worstTurn: null, loopTotal: null
+  });
   const r = evaluateAgenticSlo([turn()], { ttftMs: null, tpotMs: null, walltimeSec: null });
   assert.deepEqual(r.failingTurns, []);
   assert.equal(r.worstTurn, null);
+  assert.equal(r.loopTotal, null);                // disabled budget → no loop verdict
 });

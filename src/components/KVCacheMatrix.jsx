@@ -57,12 +57,20 @@ export default function KVCacheMatrix({
         <span className="panel-title" style={{ color: toneVar, fontSize: '0.74rem' }}>
           {icon}{title}
         </span>
+        {/* Cached-token count in text (#721): the cached share used to exist
+            only as the inner cached-div's width %. */}
         <span className="hint-text" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', fontVariantNumeric: 'tabular-nums' }}>
           {formatTokens(Math.round(safeProgress))} / {formatTokens(Math.round(safeTotal))} tok
+          {safeCached > 0 && <> · {formatTokens(Math.round(safeCached))} cached</>}
         </span>
       </div>
 
-      <div className="kv-grid" role="img" aria-label={`${title}: ${Math.round(fillFrac * 100)}% of ${KV_ROWS} cache rows written`}>
+      <div
+        className="kv-grid"
+        role="img"
+        aria-label={`${title}: ${Math.round(fillFrac * 100)}% of ${KV_ROWS} cache rows written${safeCached > 0 ? `, ${Math.round(safeCached).toLocaleString()} of ${Math.round(safeProgress).toLocaleString()} tokens prefix-cache hits` : ''}`}
+        data-cached-tokens={String(Math.round(safeCached))}
+      >
         {Array.from({ length: KV_ROWS }, (_, i) => {
           if (variant === 'parallel') {
             // All rows share one fill level — written simultaneously.

@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class DumpRunIndexComparable(str, Enum):
     ALL = "all"
     FALSE = "false"

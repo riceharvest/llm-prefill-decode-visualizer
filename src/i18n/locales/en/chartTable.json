@@ -31,5 +31,8 @@
   "walltimePhase": "Phase",
   "time": "Time",
   "shareOfWalltime": "Share of walltime",
-  "totalWalltimeRow": "Total"
+  "totalWalltimeRow": "Total",
+  "decayCurveCaption": "Context-scaling decay curve data: instantaneous decode speed at sampled generated-token depths",
+  "generatedToken": "Generated token",
+  "decodeSpeed": "Decode speed"
 }

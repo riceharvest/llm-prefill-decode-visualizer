@@ -434,7 +434,7 @@ const COMPUTE_RESULT = {
       items: {
         type: 'object',
         properties: {
-          code: { type: 'string', enum: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor'] },
+          code: { type: 'string', enum: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor', 'context_exceeds_model_limit'] },
           message: { type: 'string' }
         },
         additionalProperties: true
@@ -452,15 +452,18 @@ const COMPUTE_RESULT = {
 };
 
 /** GET /api/compute body: a ComputeResult plus the standard envelope stamp. */
+// Flattened (ComputeResult properties inlined rather than allOf-composed):
+// openapi-python-client cannot process allOf+siblings and dropped both this
+// schema and ComputeResult from the generated client (#1083).
 const COMPUTE_RESPONSE = {
-  allOf: [
-    { $ref: '#/components/schemas/ComputeResult' }
-  ],
   type: 'object',
-  required: ['schema_version'],
+  description: 'Computed inference metrics plus the standard envelope stamp.',
+  required: [...COMPUTE_RESULT.required, 'schema_version'],
   properties: {
+    ...COMPUTE_RESULT.properties,
     schema_version: { type: 'string', const: '1' }
-  }
+  },
+  additionalProperties: true
 };
 
 // Cursor-paginated list envelopes (shared pagination contract: total, items[],
@@ -683,8 +686,11 @@ export default function handler(req, res) {
             { name: 'powerDrawWatts', in: 'query', schema: { type: 'number' }, description: 'cost: whole-rig wall power under load' },
             { name: 'amortizationMonths', in: 'query', schema: { type: 'number' }, description: 'cost: months to spread hardware price over, default 36' },
             { name: 'architecture', in: 'query', schema: { type: 'string', enum: ['llama70b', 'llama8b', 'qwen72b', 'mistral7b'] }, description: 'kvCache preset arch' },
-            { name: 'contextLength', in: 'query', schema: { type: 'integer' }, description: 'kvCache' },
-            { name: 'precisionBytes', in: 'query', schema: { type: 'number', enum: [2, 1, 0.5] }, description: 'kvCache: FP16/FP8/INT4' },
+            { name: 'contextLength', in: 'query', schema: { type: 'integer' }, description: 'kvCache (must be >= 1; checked against the architecture max context — overflow emits a warning plus contextWindow.withinLimit/overflowTokens)' },
+            // No mixed-type enum here: openapi-python-client silently skips
+            // the whole computeInference endpoint when it hits enum [2,1,0.5]
+            // under type:number (#1083) — values documented instead.
+            { name: 'precisionBytes', in: 'query', schema: { type: 'number', description: 'kvCache precision in bytes/value: 2=FP16, 1=FP8, 0.5=INT4' } },
             { name: 'flags', in: 'query', schema: { type: 'string' }, description: 'flagged: comma-separated engine flag ids (flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3). Documented heuristic deltas; response carries a per-flag audit trail.' },
             { name: 'dry_run', in: 'query', schema: { type: 'boolean' }, description: 'Validate + echo parsed params (defaults filled in) without executing any math. Returns { dry_run: true, model, inputs, id?, note }; the id matches the real call. Also applies per-item inside a batch via "dry_run": true in the POST body.' }
           ],
@@ -922,7 +928,27 @@ export default function handler(req, res) {
           operationId: 'createWatch',
           summary: 'Create a watch for a hardware+model combo (#109)',
           description: 'Body: { model?, hardware?, quant?, webhookUrl? } — at least one of model/hardware required; webhookUrl must be https. Returns 201 with watchId + secret (shown exactly once; required to DELETE, sent to your webhook as X-Watch-Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET /api/watch/rss.xml?model=&hardware=&quant=.',
-          requestBody: { required: true, content: { 'application/json': { example: { model: 'Qwen3 32B', hardware: 'RTX 4090', quant: 'q4_k_m', webhookUrl: 'https://example.com/hooks/llm-watch' } } } },
+          // Real schema (was example-only): openapi-python-client silently
+          // skips the whole createWatch endpoint when the requestBody has no
+          // schema (#1083).
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  description: "Watched combo. At least one of 'model' / 'hardware' is required; 'quant' optional; 'webhookUrl' must be https when present.",
+                  properties: {
+                    model: { type: 'string', maxLength: 160, description: 'Model family/name substring to match' },
+                    hardware: { type: 'string', maxLength: 160, description: 'Hardware key or label substring to match' },
+                    quant: { type: ['string', 'null'], maxLength: 60, description: 'Exact quantization match (optional)' },
+                    webhookUrl: { type: 'string', format: 'uri', description: 'https-only webhook notified of new matching runs' }
+                  }
+                },
+                example: { model: 'Qwen3 32B', hardware: 'RTX 4090', quant: 'q4_k_m', webhookUrl: 'https://example.com/hooks/llm-watch' }
+              }
+            }
+          },
           responses: {
             '201': { description: 'Watch created (watchId, secret, rssUrl, matchingExistingRuns preview)' },
             '400': { description: 'Invalid body (code validation_failed with per-field errors)' },

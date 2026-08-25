@@ -1,42 +1,33 @@
 from __future__ import annotations
 
+import datetime
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
-from ..types import UNSET, Unset
-from typing import cast
-import datetime
-
-
-
-
-
-
 T = TypeVar("T", bound="BestRunSummary")
-
 
 
 @_attrs_define
 class BestRunSummary:
-    """ The single fastest measured run inside a group.
+    """The single fastest measured run inside a group.
 
-        Attributes:
-            run_id (int):
-            decode_tok_per_sec (int):
-            model_name (None | str | Unset):
-            hardware (None | str | Unset):
-            engine (None | str | Unset):
-            engine_version (None | str | Unset):
-            quantization (None | str | Unset):
-            prefill_tok_per_sec (int | Unset):
-            created_at (datetime.datetime | None | Unset):
-            source (None | str | Unset): Upstream run page
-     """
+    Attributes:
+        run_id (int):
+        decode_tok_per_sec (int):
+        model_name (None | str | Unset):
+        hardware (None | str | Unset):
+        engine (None | str | Unset):
+        engine_version (None | str | Unset):
+        quantization (None | str | Unset):
+        prefill_tok_per_sec (int | Unset):
+        created_at (datetime.datetime | None | Unset):
+        source (None | str | Unset): Upstream run page
+    """
 
     run_id: int
     decode_tok_per_sec: int
@@ -49,10 +40,6 @@ class BestRunSummary:
     created_at: datetime.datetime | None | Unset = UNSET
     source: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
-
-
-
-
 
     def to_dict(self) -> dict[str, Any]:
         run_id = self.run_id
@@ -105,13 +92,14 @@ class BestRunSummary:
         else:
             source = self.source
 
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-            "runId": run_id,
-            "decodeTokPerSec": decode_tok_per_sec,
-        })
+        field_dict.update(
+            {
+                "runId": run_id,
+                "decodeTokPerSec": decode_tok_per_sec,
+            }
+        )
         if model_name is not UNSET:
             field_dict["modelName"] = model_name
         if hardware is not UNSET:
@@ -131,8 +119,6 @@ class BestRunSummary:
 
         return field_dict
 
-
-
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
@@ -149,7 +135,6 @@ class BestRunSummary:
 
         model_name = _parse_model_name(d.pop("modelName", UNSET))
 
-
         def _parse_hardware(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -158,7 +143,6 @@ class BestRunSummary:
             return cast(None | str | Unset, data)
 
         hardware = _parse_hardware(d.pop("hardware", UNSET))
-
 
         def _parse_engine(data: object) -> None | str | Unset:
             if data is None:
@@ -169,7 +153,6 @@ class BestRunSummary:
 
         engine = _parse_engine(d.pop("engine", UNSET))
 
-
         def _parse_engine_version(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -179,7 +162,6 @@ class BestRunSummary:
 
         engine_version = _parse_engine_version(d.pop("engineVersion", UNSET))
 
-
         def _parse_quantization(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -188,7 +170,6 @@ class BestRunSummary:
             return cast(None | str | Unset, data)
 
         quantization = _parse_quantization(d.pop("quantization", UNSET))
-
 
         prefill_tok_per_sec = d.pop("prefillTokPerSec", UNSET)
 
@@ -202,15 +183,12 @@ class BestRunSummary:
                     raise TypeError()
                 created_at_type_0 = datetime.datetime.fromisoformat(data)
 
-
-
                 return created_at_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(datetime.datetime | None | Unset, data)
 
         created_at = _parse_created_at(d.pop("createdAt", UNSET))
-
 
         def _parse_source(data: object) -> None | str | Unset:
             if data is None:
@@ -220,7 +198,6 @@ class BestRunSummary:
             return cast(None | str | Unset, data)
 
         source = _parse_source(d.pop("source", UNSET))
-
 
         best_run_summary = cls(
             run_id=run_id,
@@ -234,7 +211,6 @@ class BestRunSummary:
             created_at=created_at,
             source=source,
         )
-
 
         best_run_summary.additional_properties = d
         return best_run_summary

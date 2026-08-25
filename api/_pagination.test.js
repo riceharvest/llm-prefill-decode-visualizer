@@ -6,7 +6,9 @@ import {
   parsePagination,
   paginate,
   descNumAscStrCmp,
-  InvalidCursorError
+  paginationScope,
+  InvalidCursorError,
+  CursorScopeMismatchError
 } from './_pagination.js';
 
 // ---------- cursor codec ----------
@@ -159,4 +161,92 @@ test('empty result set paginates to an empty page', () => {
   assert.deepEqual(p.items, []);
   assert.equal(p.has_more, false);
   assert.equal(p.next_cursor, null);
+});
+
+// ---------- cursor fingerprinting (#740 #755) ----------
+
+test('scoped cursors carry a fingerprint member alongside the key', () => {
+  const scope = paginationScope('localmaxxing', { hardware: '4090', snapshot: 'snapshot-2026-08-24-abcd1234' });
+  const c = encodeCursor([100, 'run-1'], scope);
+  const envelope = JSON.parse(Buffer.from(c, 'base64url').toString('utf8'));
+  assert.deepEqual(Object.keys(envelope).sort(), ['k', 's']);
+  assert.deepEqual(envelope.k, [100, 'run-1']);
+  // deterministic: same scope -> same fingerprint
+  assert.equal(encodeCursor([100, 'run-1'], scope), c);
+});
+
+test('paginationScope is order-insensitive and omits empty params', () => {
+  const a = paginationScope('x', { hardware: '4090', model: 'qwen', snapshot: 's1' });
+  const b = paginationScope('x', { snapshot: 's1', model: 'qwen', hardware: '4090', quant: null });
+  assert.equal(a, b);
+  assert.equal(paginationScope('x', {}), 'x');
+});
+
+test('parsePagination accepts a scoped cursor minted under the identical query', () => {
+  const mk = extra => paginationScope('benchmarks', { groupBy: 'hardwareModel', snapshot: 'snap-1', ...extra });
+  const c = encodeCursor([90, 'g'], mk({}));
+  const parsed = parsePagination({ cursor: c }, { defaultLimit: 5, maxLimit: 10, scope: mk({}) });
+  assert.deepEqual(parsed.cursor, [90, 'g']);
+  // different filters under the same endpoint -> rejected
+  assert.throws(
+    () => parsePagination({ cursor: c }, { defaultLimit: 5, maxLimit: 10, scope: mk({ groupBy: 'model' }) }),
+    CursorScopeMismatchError
+  );
+});
+
+test('cross-endpoint cursor reuse is rejected with 400-typed error (#740)', () => {
+  const localCursor = encodeCursor([50, 'run-9'], paginationScope('localmaxxing', { hardware: '4090', snapshot: 's1' }));
+  assert.throws(
+    () => parsePagination({ cursor: localCursor }, {
+      defaultLimit: 25, maxLimit: 200,
+      scope: paginationScope('benchmarks', { groupBy: 'hardwareModel', snapshot: 's1' })
+    }),
+    CursorScopeMismatchError
+  );
+});
+
+test('cross-filter and cross-snapshot cursor reuse is rejected (#740 #755)', () => {
+  const minted = encodeCursor([50, 'run-9'], paginationScope('localmaxxing', { hardware: '4090', model: 'qwen', snapshot: 'snap-a' }));
+  for (const drifted of [
+    { hardware: '4090', model: 'llama', snapshot: 'snap-a' },   // filter changed
+    { hardware: '4090', model: 'qwen', snapshot: 'snap-b' }     // dataset refreshed
+  ]) {
+    assert.throws(
+      () => parsePagination({ cursor: minted }, {
+        defaultLimit: 50, maxLimit: 500,
+        scope: paginationScope('localmaxxing', drifted)
+      }),
+      CursorScopeMismatchError
+    );
+  }
+});
+
+test('legacy fingerprint-less cursors are rejected under a scoped query', () => {
+  const legacy = Buffer.from(JSON.stringify({ k: [50, 'run-9'] })).toString('base64url');
+  assert.throws(
+    () => parsePagination({ cursor: legacy }, {
+      defaultLimit: 5, maxLimit: 10,
+      scope: paginationScope('runs', { format: 'json', comparable: 'all', datasetVersion: 1 })
+    }),
+    CursorScopeMismatchError
+  );
+  // ...and still accepted by unscoped callers (back-compat within this repo's helpers)
+  assert.deepEqual(parsePagination({ cursor: legacy }, { defaultLimit: 5, maxLimit: 10 }).cursor, [50, 'run-9']);
+});
+
+test('paginate mints scoped cursors that validate under the same scope', () => {
+  const runs = makeRuns(6);
+  const scope = paginationScope('agent_benchmarks', { snapshot: 'snap-1' });
+  const p1 = paginate({ items: runs, limit: 3, cursor: null, keyOf, cmp: descNumAscStrCmp, scope });
+  const parsed = parsePagination({ cursor: p1.next_cursor }, { defaultLimit: 3, maxLimit: 10, scope });
+  assert.deepEqual(parsed.cursor, keyOf(runs[2]));
+  const p2 = paginate({ items: runs, limit: 3, cursor: parsed.cursor, keyOf, cmp: descNumAscStrCmp, scope });
+  assert.deepEqual(p2.items.map(r => r.runId), runs.slice(3).map(r => r.runId));
+  assert.equal(p2.has_more, false);
+});
+
+test('oversized cursor blobs are rejected before decoding (app-level length cap)', () => {
+  const junk = 'A'.repeat(2000);
+  assert.equal(decodeCursor(junk), null);
+  assert.throws(() => parsePagination({ cursor: junk }, { defaultLimit: 5, maxLimit: 10 }), InvalidCursorError);
 });

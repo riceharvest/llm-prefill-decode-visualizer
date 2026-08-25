@@ -5,17 +5,20 @@
 ## Docs
 
 - [README](README.md): features, setup and architecture overview
-- [Full API guide (llms.txt)](public/llms.txt): every endpoint with parameters, curl examples, response shapes, statistical caveats, error codes and rate limits
+- [Full API guide (llms.txt)](https://llm-prefill-decode-visualizer.vercel.app/llms.txt): every endpoint with parameters, curl examples, response shapes, statistical caveats, error codes and rate limits
 - [API changelog](CHANGELOG-API.md): schema-versioning policy and endpoint change history
-- [Full documentation (llms-full.txt)](public/llms-full.txt): every agent-facing doc above compiled into one flat markdown file, served at `/llms-full.txt`
+- [Full documentation (llms-full.txt)](https://llm-prefill-decode-visualizer.vercel.app/llms-full.txt): every agent-facing doc above compiled into one flat markdown file, served at `/llms-full.txt`
 
 ## Machine-readable surfaces
 
 - [OpenAPI spec](https://llm-prefill-decode-visualizer.vercel.app/api/spec): derive every endpoint programmatically (identical under `/v1/spec`)
-- [Agent manifest](public/agents.json)
+- [Agent manifest](https://llm-prefill-decode-visualizer.vercel.app/agents.json): machine-readable manifest of every agent-facing endpoint, generated from the route table
+- [Agent endpoint index](https://llm-prefill-decode-visualizer.vercel.app/api/agent/index.json): complete per-endpoint index with request/response shape sketches (sibling of the agent manifest)
 - [MCP server](mcp/server.js): Streamable HTTP JSON-RPC at `/api/mcp`; usage in the [MCP README](mcp/README.md)
-- [Changelog feed](public/changelog.json)
-- [Status page](public/status.html)
+- [Changelog feed](https://llm-prefill-decode-visualizer.vercel.app/changelog.json)
+- [Status page](https://llm-prefill-decode-visualizer.vercel.app/status.html)
+
+These static surfaces send strong `ETag` validators: send `If-None-Match` to revalidate — unchanged content returns `304` with zero bytes.
 
 ## Source map
 
@@ -29,6 +32,6 @@
 
 ## Typical agent workflow
 
-1. Read [the full API guide](public/llms.txt) once — it documents batching, dry-run validation, snapshot pinning and the `/v1/` prefix policy.
+1. Read [the full API guide](https://llm-prefill-decode-visualizer.vercel.app/llms.txt) once — it documents batching, dry-run validation, snapshot pinning and the `/v1/` prefix policy.
 2. `GET /api/spec`, then call `/api/vram?hfId=…&context=…&vramGb=…` for fit checks or `/api/sizing?model=…` for ranked hardware recommendations.
 3. Model request shapes with `GET|POST /api/compute?model=singleTurn|agentic|kvCache|cost|…`.

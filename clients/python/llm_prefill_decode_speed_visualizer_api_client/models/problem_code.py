@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ProblemCode(str, Enum):
     INTERNAL = "INTERNAL"
     INVALID_PARAMS = "INVALID_PARAMS"

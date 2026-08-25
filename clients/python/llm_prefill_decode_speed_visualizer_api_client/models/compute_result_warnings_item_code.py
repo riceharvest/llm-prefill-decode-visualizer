@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ComputeResultWarningsItemCode(str, Enum):
     DECODE_ABOVE_BANDWIDTH_ROOFLINE = "decode_above_bandwidth_roofline"
     PREFILL_ABOVE_COMPUTE_ROOFLINE = "prefill_above_compute_roofline"

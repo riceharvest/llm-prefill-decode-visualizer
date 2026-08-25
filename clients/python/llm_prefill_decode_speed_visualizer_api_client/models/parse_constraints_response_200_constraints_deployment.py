@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ParseConstraintsResponse200ConstraintsDeployment(str, Enum):
     CLOUD = "cloud"
     SELF_HOSTED = "self-hosted"

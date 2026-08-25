@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class BenchmarkGroupListEnvelopeContextBandType3Type1(str, Enum):
     LT1K = "lt1k"
     VALUE_1 = "1k-8k"

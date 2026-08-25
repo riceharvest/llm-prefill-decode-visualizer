@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+import datetime
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
-
-from ..types import UNSET, Unset
 
 from ..models.best_result_hw_class_type_1 import BestResultHwClassType1
 from ..models.best_result_hw_class_type_2_type_1 import BestResultHwClassType2Type1
@@ -15,31 +14,25 @@ from ..models.best_result_staleness_type_1 import BestResultStalenessType1
 from ..models.best_result_staleness_type_2_type_1 import BestResultStalenessType2Type1
 from ..models.best_result_staleness_type_3_type_1 import BestResultStalenessType3Type1
 from ..types import UNSET, Unset
-from typing import cast
-import datetime
 
 if TYPE_CHECKING:
-  from ..models.best_result_context_bands import BestResultContextBands
-  from ..models.best_result_data_quality_type_0 import BestResultDataQualityType0
-  from ..models.best_result_median_decode_ci_95 import BestResultMedianDecodeCi95
-  from ..models.best_result_median_prefill_ci_95 import BestResultMedianPrefillCi95
-  from ..models.best_result_power_type_0 import BestResultPowerType0
-  from ..models.best_result_pricing_type_0 import BestResultPricingType0
-  from ..models.best_result_vram_fit_type_0 import BestResultVramFitType0
-  from ..models.caveat import Caveat
-  from ..models.confidence import Confidence
-
-
-
+    from ..models.best_result_context_bands import BestResultContextBands
+    from ..models.best_result_data_quality_type_0 import BestResultDataQualityType0
+    from ..models.best_result_median_decode_ci_95 import BestResultMedianDecodeCi95
+    from ..models.best_result_median_prefill_ci_95 import BestResultMedianPrefillCi95
+    from ..models.best_result_power_type_0 import BestResultPowerType0
+    from ..models.best_result_pricing_type_0 import BestResultPricingType0
+    from ..models.best_result_vram_fit_type_0 import BestResultVramFitType0
+    from ..models.caveat import Caveat
+    from ..models.confidence import Confidence
 
 
 T = TypeVar("T", bound="BestResult")
 
 
-
 @_attrs_define
 class BestResult:
-    """ One ranked hardware×model recommendation. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel);
+    """One ranked hardware×model recommendation. Medians carry 95% bootstrap CIs (medianXxxCi95 / medianXxxLabel);
     pricing/power/vramFit are estimates anchored on the group's best-measured run and are null when no anchor exists
     (cpu_only, unknown GPUs).
 
@@ -102,7 +95,7 @@ class BestResult:
                 wattage and recommended PSU size; null when no anchor exists.
             explain (None | str | Unset): One-sentence human-readable explanation combining VRAM-fit math with the measured
                 source — pass-through ready for agent chat pipelines
-     """
+    """
 
     hardware_key: None | str
     model_family: str
@@ -130,7 +123,9 @@ class BestResult:
     caveats: list[Caveat] | Unset = UNSET
     newest_run_at: datetime.datetime | None | Unset = UNSET
     newest_age_days: int | None | Unset = UNSET
-    staleness: BestResultStalenessType1 | BestResultStalenessType2Type1 | BestResultStalenessType3Type1 | None | Unset = UNSET
+    staleness: (
+        BestResultStalenessType1 | BestResultStalenessType2Type1 | BestResultStalenessType3Type1 | None | Unset
+    ) = UNSET
     engine_versions: list[str] | Unset = UNSET
     major_release_warnings: list[str] | Unset = UNSET
     engines: list[str] | Unset = UNSET
@@ -152,20 +147,12 @@ class BestResult:
     explain: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
-
-
-
-
     def to_dict(self) -> dict[str, Any]:
-        from ..models.best_result_context_bands import BestResultContextBands
         from ..models.best_result_data_quality_type_0 import BestResultDataQualityType0
-        from ..models.best_result_median_decode_ci_95 import BestResultMedianDecodeCi95
-        from ..models.best_result_median_prefill_ci_95 import BestResultMedianPrefillCi95
         from ..models.best_result_power_type_0 import BestResultPowerType0
         from ..models.best_result_pricing_type_0 import BestResultPricingType0
         from ..models.best_result_vram_fit_type_0 import BestResultVramFitType0
-        from ..models.caveat import Caveat
-        from ..models.confidence import Confidence
+
         hardware_key: None | str
         hardware_key = self.hardware_key
 
@@ -290,8 +277,6 @@ class BestResult:
                 caveats_item = caveats_item_data.to_dict()
                 caveats.append(caveats_item)
 
-
-
         newest_run_at: None | str | Unset
         if isinstance(self.newest_run_at, Unset):
             newest_run_at = UNSET
@@ -322,19 +307,13 @@ class BestResult:
         if not isinstance(self.engine_versions, Unset):
             engine_versions = self.engine_versions
 
-
-
         major_release_warnings: list[str] | Unset = UNSET
         if not isinstance(self.major_release_warnings, Unset):
             major_release_warnings = self.major_release_warnings
 
-
-
         engines: list[str] | Unset = UNSET
         if not isinstance(self.engines, Unset):
             engines = self.engines
-
-
 
         engine_version: None | str | Unset
         if isinstance(self.engine_version, Unset):
@@ -410,17 +389,18 @@ class BestResult:
         else:
             explain = self.explain
 
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-            "hardwareKey": hardware_key,
-            "modelFamily": model_family,
-            "runsInGroup": runs_in_group,
-            "confidence": confidence,
-            "medianPrefillTokPerSec": median_prefill_tok_per_sec,
-            "medianDecodeTokPerSec": median_decode_tok_per_sec,
-        })
+        field_dict.update(
+            {
+                "hardwareKey": hardware_key,
+                "modelFamily": model_family,
+                "runsInGroup": runs_in_group,
+                "confidence": confidence,
+                "medianPrefillTokPerSec": median_prefill_tok_per_sec,
+                "medianDecodeTokPerSec": median_decode_tok_per_sec,
+            }
+        )
         if hardware is not UNSET:
             field_dict["hardware"] = hardware
         if hw_class is not UNSET:
@@ -504,8 +484,6 @@ class BestResult:
 
         return field_dict
 
-
-
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.best_result_context_bands import BestResultContextBands
@@ -517,7 +495,9 @@ class BestResult:
         from ..models.best_result_vram_fit_type_0 import BestResultVramFitType0
         from ..models.caveat import Caveat
         from ..models.confidence import Confidence
+
         d = dict(src_dict)
+
         def _parse_hardware_key(data: object) -> None | str:
             if data is None:
                 return data
@@ -525,15 +505,11 @@ class BestResult:
 
         hardware_key = _parse_hardware_key(d.pop("hardwareKey"))
 
-
         model_family = d.pop("modelFamily")
 
         runs_in_group = d.pop("runsInGroup")
 
         confidence = Confidence.from_dict(d.pop("confidence"))
-
-
-
 
         median_prefill_tok_per_sec = d.pop("medianPrefillTokPerSec")
 
@@ -548,8 +524,9 @@ class BestResult:
 
         hardware = _parse_hardware(d.pop("hardware", UNSET))
 
-
-        def _parse_hw_class(data: object) -> BestResultHwClassType1 | BestResultHwClassType2Type1 | BestResultHwClassType3Type1 | None | Unset:
+        def _parse_hw_class(
+            data: object,
+        ) -> BestResultHwClassType1 | BestResultHwClassType2Type1 | BestResultHwClassType3Type1 | None | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
@@ -559,8 +536,6 @@ class BestResult:
                     raise TypeError()
                 hw_class_type_1 = BestResultHwClassType1(data)
 
-
-
                 return hw_class_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
@@ -568,8 +543,6 @@ class BestResult:
                 if not isinstance(data, str):
                     raise TypeError()
                 hw_class_type_2_type_1 = BestResultHwClassType2Type1(data)
-
-
 
                 return hw_class_type_2_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
@@ -579,15 +552,14 @@ class BestResult:
                     raise TypeError()
                 hw_class_type_3_type_1 = BestResultHwClassType3Type1(data)
 
-
-
                 return hw_class_type_3_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
-            return cast(BestResultHwClassType1 | BestResultHwClassType2Type1 | BestResultHwClassType3Type1 | None | Unset, data)
+            return cast(
+                BestResultHwClassType1 | BestResultHwClassType2Type1 | BestResultHwClassType3Type1 | None | Unset, data
+            )
 
         hw_class = _parse_hw_class(d.pop("hwClass", UNSET))
-
 
         def _parse_gpu(data: object) -> None | str | Unset:
             if data is None:
@@ -598,7 +570,6 @@ class BestResult:
 
         gpu = _parse_gpu(d.pop("gpu", UNSET))
 
-
         def _parse_gpu_count(data: object) -> int | None | Unset:
             if data is None:
                 return data
@@ -607,7 +578,6 @@ class BestResult:
             return cast(int | None | Unset, data)
 
         gpu_count = _parse_gpu_count(d.pop("gpuCount", UNSET))
-
 
         def _parse_vram_gb(data: object) -> float | None | Unset:
             if data is None:
@@ -618,7 +588,6 @@ class BestResult:
 
         vram_gb = _parse_vram_gb(d.pop("vramGb", UNSET))
 
-
         def _parse_effective_vram_gb(data: object) -> float | None | Unset:
             if data is None:
                 return data
@@ -627,7 +596,6 @@ class BestResult:
             return cast(float | None | Unset, data)
 
         effective_vram_gb = _parse_effective_vram_gb(d.pop("effectiveVramGb", UNSET))
-
 
         def _parse_chip(data: object) -> None | str | Unset:
             if data is None:
@@ -638,7 +606,6 @@ class BestResult:
 
         chip = _parse_chip(d.pop("chip", UNSET))
 
-
         def _parse_unified_memory_gb(data: object) -> float | None | Unset:
             if data is None:
                 return data
@@ -647,7 +614,6 @@ class BestResult:
             return cast(float | None | Unset, data)
 
         unified_memory_gb = _parse_unified_memory_gb(d.pop("unifiedMemoryGb", UNSET))
-
 
         def _parse_cpu(data: object) -> None | str | Unset:
             if data is None:
@@ -658,7 +624,6 @@ class BestResult:
 
         cpu = _parse_cpu(d.pop("cpu", UNSET))
 
-
         def _parse_example_model(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -667,7 +632,6 @@ class BestResult:
             return cast(None | str | Unset, data)
 
         example_model = _parse_example_model(d.pop("exampleModel", UNSET))
-
 
         def _parse_quantization(data: object) -> None | str | Unset:
             if data is None:
@@ -678,7 +642,6 @@ class BestResult:
 
         quantization = _parse_quantization(d.pop("quantization", UNSET))
 
-
         def _parse_engine(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -687,7 +650,6 @@ class BestResult:
             return cast(None | str | Unset, data)
 
         engine = _parse_engine(d.pop("engine", UNSET))
-
 
         def _parse_best_decode_tok_per_sec(data: object) -> float | None | Unset:
             if data is None:
@@ -698,16 +660,12 @@ class BestResult:
 
         best_decode_tok_per_sec = _parse_best_decode_tok_per_sec(d.pop("bestDecodeTokPerSec", UNSET))
 
-
         _median_prefill_ci_95 = d.pop("medianPrefillCi95", UNSET)
         median_prefill_ci_95: BestResultMedianPrefillCi95 | Unset
-        if isinstance(_median_prefill_ci_95,  Unset):
+        if isinstance(_median_prefill_ci_95, Unset):
             median_prefill_ci_95 = UNSET
         else:
             median_prefill_ci_95 = BestResultMedianPrefillCi95.from_dict(_median_prefill_ci_95)
-
-
-
 
         def _parse_median_prefill_label(data: object) -> None | str | Unset:
             if data is None:
@@ -718,16 +676,12 @@ class BestResult:
 
         median_prefill_label = _parse_median_prefill_label(d.pop("medianPrefillLabel", UNSET))
 
-
         _median_decode_ci_95 = d.pop("medianDecodeCi95", UNSET)
         median_decode_ci_95: BestResultMedianDecodeCi95 | Unset
-        if isinstance(_median_decode_ci_95,  Unset):
+        if isinstance(_median_decode_ci_95, Unset):
             median_decode_ci_95 = UNSET
         else:
             median_decode_ci_95 = BestResultMedianDecodeCi95.from_dict(_median_decode_ci_95)
-
-
-
 
         def _parse_median_decode_label(data: object) -> None | str | Unset:
             if data is None:
@@ -738,7 +692,6 @@ class BestResult:
 
         median_decode_label = _parse_median_decode_label(d.pop("medianDecodeLabel", UNSET))
 
-
         _caveats = d.pop("caveats", UNSET)
         caveats: list[Caveat] | Unset = UNSET
         if _caveats is not UNSET:
@@ -746,10 +699,7 @@ class BestResult:
             for caveats_item_data in _caveats:
                 caveats_item = Caveat.from_dict(caveats_item_data)
 
-
-
                 caveats.append(caveats_item)
-
 
         def _parse_newest_run_at(data: object) -> datetime.datetime | None | Unset:
             if data is None:
@@ -761,15 +711,12 @@ class BestResult:
                     raise TypeError()
                 newest_run_at_type_0 = datetime.datetime.fromisoformat(data)
 
-
-
                 return newest_run_at_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(datetime.datetime | None | Unset, data)
 
         newest_run_at = _parse_newest_run_at(d.pop("newestRunAt", UNSET))
-
 
         def _parse_newest_age_days(data: object) -> int | None | Unset:
             if data is None:
@@ -780,8 +727,9 @@ class BestResult:
 
         newest_age_days = _parse_newest_age_days(d.pop("newestAgeDays", UNSET))
 
-
-        def _parse_staleness(data: object) -> BestResultStalenessType1 | BestResultStalenessType2Type1 | BestResultStalenessType3Type1 | None | Unset:
+        def _parse_staleness(
+            data: object,
+        ) -> BestResultStalenessType1 | BestResultStalenessType2Type1 | BestResultStalenessType3Type1 | None | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
@@ -791,8 +739,6 @@ class BestResult:
                     raise TypeError()
                 staleness_type_1 = BestResultStalenessType1(data)
 
-
-
                 return staleness_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
@@ -800,8 +746,6 @@ class BestResult:
                 if not isinstance(data, str):
                     raise TypeError()
                 staleness_type_2_type_1 = BestResultStalenessType2Type1(data)
-
-
 
                 return staleness_type_2_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
@@ -811,24 +755,21 @@ class BestResult:
                     raise TypeError()
                 staleness_type_3_type_1 = BestResultStalenessType3Type1(data)
 
-
-
                 return staleness_type_3_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
-            return cast(BestResultStalenessType1 | BestResultStalenessType2Type1 | BestResultStalenessType3Type1 | None | Unset, data)
+            return cast(
+                BestResultStalenessType1 | BestResultStalenessType2Type1 | BestResultStalenessType3Type1 | None | Unset,
+                data,
+            )
 
         staleness = _parse_staleness(d.pop("staleness", UNSET))
 
-
         engine_versions = cast(list[str], d.pop("engineVersions", UNSET))
-
 
         major_release_warnings = cast(list[str], d.pop("majorReleaseWarnings", UNSET))
 
-
         engines = cast(list[str], d.pop("engines", UNSET))
-
 
         def _parse_engine_version(data: object) -> None | str | Unset:
             if data is None:
@@ -838,7 +779,6 @@ class BestResult:
             return cast(None | str | Unset, data)
 
         engine_version = _parse_engine_version(d.pop("engineVersion", UNSET))
-
 
         mixed_engines = d.pop("mixedEngines", UNSET)
 
@@ -851,16 +791,12 @@ class BestResult:
 
         mixed_context_bands = _parse_mixed_context_bands(d.pop("mixedContextBands", UNSET))
 
-
         _context_bands = d.pop("contextBands", UNSET)
         context_bands: BestResultContextBands | Unset
-        if isinstance(_context_bands,  Unset):
+        if isinstance(_context_bands, Unset):
             context_bands = UNSET
         else:
             context_bands = BestResultContextBands.from_dict(_context_bands)
-
-
-
 
         def _parse_data_quality(data: object) -> BestResultDataQualityType0 | None | Unset:
             if data is None:
@@ -872,15 +808,12 @@ class BestResult:
                     raise TypeError()
                 data_quality_type_0 = BestResultDataQualityType0.from_dict(data)
 
-
-
                 return data_quality_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(BestResultDataQualityType0 | None | Unset, data)
 
         data_quality = _parse_data_quality(d.pop("dataQuality", UNSET))
-
 
         ttft_seconds = d.pop("ttftSeconds", UNSET)
 
@@ -903,7 +836,6 @@ class BestResult:
 
         source = _parse_source(d.pop("source", UNSET))
 
-
         def _parse_vram_fit(data: object) -> BestResultVramFitType0 | None | Unset:
             if data is None:
                 return data
@@ -914,15 +846,12 @@ class BestResult:
                     raise TypeError()
                 vram_fit_type_0 = BestResultVramFitType0.from_dict(data)
 
-
-
                 return vram_fit_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(BestResultVramFitType0 | None | Unset, data)
 
         vram_fit = _parse_vram_fit(d.pop("vramFit", UNSET))
-
 
         def _parse_pricing(data: object) -> BestResultPricingType0 | None | Unset:
             if data is None:
@@ -934,15 +863,12 @@ class BestResult:
                     raise TypeError()
                 pricing_type_0 = BestResultPricingType0.from_dict(data)
 
-
-
                 return pricing_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(BestResultPricingType0 | None | Unset, data)
 
         pricing = _parse_pricing(d.pop("pricing", UNSET))
-
 
         def _parse_power(data: object) -> BestResultPowerType0 | None | Unset:
             if data is None:
@@ -954,15 +880,12 @@ class BestResult:
                     raise TypeError()
                 power_type_0 = BestResultPowerType0.from_dict(data)
 
-
-
                 return power_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(BestResultPowerType0 | None | Unset, data)
 
         power = _parse_power(d.pop("power", UNSET))
-
 
         def _parse_explain(data: object) -> None | str | Unset:
             if data is None:
@@ -972,7 +895,6 @@ class BestResult:
             return cast(None | str | Unset, data)
 
         explain = _parse_explain(d.pop("explain", UNSET))
-
 
         best_result = cls(
             hardware_key=hardware_key,
@@ -1022,7 +944,6 @@ class BestResult:
             power=power,
             explain=explain,
         )
-
 
         best_result.additional_properties = d
         return best_result

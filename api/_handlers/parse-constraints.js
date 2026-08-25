@@ -1,4 +1,4 @@
-import { parseConstraints, constraintsToSizingQuery } from '../_parse_constraints.js';
+import { parseConstraints, constraintsToSizingQuery, isCoarseQuantLabel } from '../_parse_constraints.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson } from '../_schema.js';
 import { sendProblem } from '../_errors.js';
@@ -38,7 +38,18 @@ export default function handler(req, res) {
   }
 
   const { input, constraints, ambiguities } = parseConstraints(raw);
+  // #563: a bare-level quant ("Q4") matches no stored benchmark tag, so it
+  // used to 404 the ready-made sizing query on its own canonical example.
+  // constraintsToSizingQuery now omits coarse quants; say so explicitly so
+  // agents know why ?quant= is missing from the emitted query.
+  if (isCoarseQuantLabel(constraints.quantization)) {
+    ambiguities.push({
+      field: 'quantization',
+      message: `"${constraints.quantization}" is a bare level and was omitted from sizingQuery — stored quants are full tags like q4_k_m / iq4_xs, and exact-match filtering on "${constraints.quantization}" returns zero runs. Re-add ?quant= once you know the exact variant.`
+    });
+  }
   const sizingParams = constraintsToSizingQuery(constraints);
+  const sizingQueryString = sizingParams.toString();
 
   return sendJson(res, {
     description: 'Natural-language constraint parsing: canonical constraint struct + explicit ambiguities. Feed sizingQuery to /api/sizing for ranked hardware; resolve each ambiguity before trusting the numbers.',
@@ -46,6 +57,14 @@ export default function handler(req, res) {
     recognizedCount: Object.values(constraints).filter(v => v != null).length,
     constraints,
     ambiguities,
-    ...(sizingParams.toString() ? { sizingQuery: `/api/sizing?${sizingParams.toString()}` } : { sizingQuery: null })
+    ...(sizingQueryString
+      ? {
+          sizingQuery: `/api/sizing?${sizingQueryString}`,
+          // Query-string-only form (#563): sizingQuery keeps its legacy
+          // path-prefixed shape for existing consumers; this field appends
+          // directly to a base URL without double-prefixing.
+          sizingQueryString
+        }
+      : { sizingQuery: null, sizingQueryString: null })
   }, { cacheTtl: 3600 });
 }

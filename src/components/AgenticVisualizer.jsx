@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, FileDown, Copy, Zap, Gauge, FileJson } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, readParamBool, readParam, writeParams } from '../utils/urlState';
+import { shouldCompleteInstantly } from '../utils/simPlayback';
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
+import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { exportNodeAsPng } from '../utils/exportPng';
 import EmbedDialog from './EmbedDialog';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
@@ -16,9 +18,10 @@ import ChartDataTable from './ChartDataTable';
 import Metric from './Metric';
 import Analogy from './Analogy';
 import SloBadge from './SloBadge';
-import { evaluateAgenticSlo, evaluateMetric } from '../utils/slo.js';
+import { evaluateAgenticSlo } from '../utils/slo.js';
 
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
+import { createFrameScheduler, runStateFor } from '../utils/playback';
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { buildAgenticJson, downloadJson } from '../utils/exportJson';
 import { t } from '../i18n/strings';
@@ -226,11 +229,14 @@ export default function AgenticVisualizer({
     if (!checks.length) return null;
     return { pass: checks.every(r => r.pass), marginPct: Math.min(...checks.map(r => r.marginPct)) };
   };
-  // Whole-loop walltime vs the walltime budget (header badge).
-  const evaluateAgenticSloWalltime = evaluateMetric(totalAgentWalltime, sloBudgets?.walltimeSec);
+  // Whole-loop walltime vs the walltime budget (header badge). #682: this is
+  // the same verdict evaluateAgenticSlo produces, so the badge and the banner
+  // can never disagree about the loop-total scope.
+  const evaluateAgenticSloWalltime = agenticSlo.loopTotal;
 
   // Markdown walkthrough export (download + clipboard)
   const [mdCopied, setMdCopied] = useState(false);
+  const [mdCopyFailed, setMdCopyFailed] = useState(false);
   const buildMarkdown = () => buildAgenticMarkdown({
     numTurns,
     basePromptTokens,
@@ -255,13 +261,18 @@ export default function AgenticVisualizer({
   const handleExportJson = () => downloadJson(buildJson(), 'agentic-loop-simulation.json');
   const handleCopyMd = async () => {
     const ok = await copyMarkdownToClipboard(buildMarkdown());
-    if (ok) {
-      setMdCopied(true);
-      setTimeout(() => setMdCopied(false), 2000);
-    }
+    // Issue #401: surface failure explicitly instead of silent no-feedback.
+    setMdCopied(ok);
+    setMdCopyFailed(!ok);
+    setTimeout(() => { setMdCopied(false); setMdCopyFailed(false); }, 2000);
   };
 
-  // Ref for timer
+  // Ref for timer. Ticks run through the shared frame scheduler (#860):
+  // while the tab is hidden the scheduler drives them from a wall-clock
+  // timer so playback advances instead of freezing at the first frame.
+  const framesRef = useRef(null);
+  if (!framesRef.current) framesRef.current = createFrameScheduler();
+  useEffect(() => () => framesRef.current?.dispose(), []);
   const animFrameRef = useRef(null);
   const lastTickRef = useRef(null);
   const simTimeRef = useRef(0);
@@ -293,7 +304,7 @@ export default function AgenticVisualizer({
   // Simulation runner effect
   useEffect(() => {
     if (!isPlaying) {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animFrameRef.current) framesRef.current.cancel(animFrameRef.current);
       lastTickRef.current = null;
       return;
     }
@@ -304,30 +315,34 @@ export default function AgenticVisualizer({
       simTimeRef.current = 0;
     }
 
+    // Complete synchronously when no animation frame is needed (#1079):
+    // instant mode / reduced-motion / degenerate walltime used to jump from
+    // INSIDE the rAF tick, which hidden/background tabs never service —
+    // playback hung forever there. Same completion, before any rAF is armed.
+    if (
+      shouldCompleteInstantly(simSpeedMultiplier, prefersReducedMotion) ||
+      !Number.isFinite(totalAgentWalltime) ||
+      totalAgentWalltime <= 0
+    ) {
+      const last = turnBreakdown[turnBreakdown.length - 1] || { newTokensPrefilled: 0, decodeTokens: 0 };
+      setActiveTurn(numTurns);
+      setCurrentPhase('completed');
+      setPrefillProgress(last.newTokensPrefilled);
+      setDecodeProgress(last.decodeTokens);
+      setElapsedSim(totalAgentWalltime);
+      setIsPlaying(false);
+      return;
+    }
+
     const tick = (now) => {
       if (!lastTickRef.current) {
         lastTickRef.current = now;
-        animFrameRef.current = requestAnimationFrame(tick);
+        animFrameRef.current = framesRef.current.request(tick);
         return;
       }
 
       const realDelta = (now - lastTickRef.current) / 1000;
       lastTickRef.current = now;
-
-      if (simSpeedMultiplier === 'instant' || prefersReducedMotion || !Number.isFinite(totalAgentWalltime) || totalAgentWalltime <= 0) {
-        // Instant mode — or prefers-reduced-motion (issue #63), or a
-        // non-finite/zero walltime (e.g. a speed typed as 0, which would
-        // otherwise hang the loop on turn 1 forever). Reduced-motion users
-        // get the final state in one step instead of a frame-by-frame stream.
-        const last = turnBreakdown[turnBreakdown.length - 1] || { newTokensPrefilled: 0, decodeTokens: 0 };
-        setActiveTurn(numTurns);
-        setCurrentPhase('completed');
-        setPrefillProgress(last.newTokensPrefilled);
-        setDecodeProgress(last.decodeTokens);
-        setElapsedSim(totalAgentWalltime);
-        setIsPlaying(false);
-        return;
-      }
 
       const simDelta = realDelta * simSpeedMultiplier;
       simTimeRef.current += simDelta;
@@ -392,13 +407,13 @@ export default function AgenticVisualizer({
         }
       }
 
-      animFrameRef.current = requestAnimationFrame(tick);
+      animFrameRef.current = framesRef.current.request(tick);
     };
 
-    animFrameRef.current = requestAnimationFrame(tick);
+    animFrameRef.current = framesRef.current.request(tick);
 
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animFrameRef.current) framesRef.current.cancel(animFrameRef.current);
     };
   }, [
     isPlaying,
@@ -464,12 +479,20 @@ export default function AgenticVisualizer({
         : `Agent loop complete in ${formatTime(totalAgentWalltime)} across ${numTurns} turns.`;
 
   return (
-    <div className="stack">
+    <div
+      className="stack"
+      data-state={runStateFor({
+        isPlaying,
+        hasStarted: activeTurn > 0 || currentPhase !== 'idle',
+        hasFinished: currentPhase === 'completed'
+      })}
+      aria-busy={isPlaying || undefined}
+    >
 
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
       {/* Issue #63: live narration of the animated run for screen readers */}
-      <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
+      <div className="visually-hidden" role="status" aria-live="polite" data-testid="run-state">{srSummary}</div>
 
       {/* Top Configuration Card */}
       <section className="panel" aria-label={t('agentic.paramsPanelAria')}>
@@ -481,10 +504,10 @@ export default function AgenticVisualizer({
 
           {/* Prefix Caching Toggle */}
           <button
-            data-tour="prefix-caching"
             onClick={handleTogglePrefixCaching}
             className="btn"
             aria-pressed={enablePrefixCaching}
+            data-testid="prefix-caching-toggle"
             style={enablePrefixCaching
               ? { borderColor: 'var(--decode-border)', color: 'var(--decode)', background: 'var(--decode-dim)' }
               : undefined}
@@ -624,7 +647,12 @@ export default function AgenticVisualizer({
       ))}
 
       {/* Main Agent Loop Simulation Stage */}
-      <section className="panel" aria-label={t('agentic.simStageAria')}>
+      <section
+        className="panel"
+        aria-label={t('agentic.simStageAria')}
+        data-state={phaseToRunState(currentPhase)}
+        aria-busy={runStateToBusy(phaseToRunState(currentPhase))}
+      >
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -687,7 +715,7 @@ export default function AgenticVisualizer({
               aria-label="Copy markdown walkthrough to clipboard"
             >
               <Copy size={15} />
-              {mdCopied ? 'Copied!' : 'Copy MD'}
+              {mdCopied ? 'Copied!' : mdCopyFailed ? 'Copy failed' : 'Copy MD'}
             </button>
           </div>
         </div>
@@ -762,20 +790,53 @@ export default function AgenticVisualizer({
             )}
           </div>
         )}
-        {sloEnabled && agenticSlo.failingTurns.length === 0 && (
-          <div
-            className="panel-inset"
-            style={{
-              borderColor: 'var(--decode-border)',
-              background: 'var(--decode-dim)',
-              marginBottom: '18px',
-              fontSize: '0.8rem',
-              color: 'var(--decode)'
-            }}
-          >
-            {t('slo.agenticAllPass')}
-          </div>
-        )}
+        {/* #682: the all-clear banner consults BOTH scopes — per-turn checks
+            AND the whole-loop walltime. A loop whose turns all pass but whose
+            total walltime overruns the budget gets a scoped warning instead of
+            a false "everything passes". */}
+        {sloEnabled && agenticSlo.failingTurns.length === 0 && (() => {
+          const loopOver = agenticSlo.loopTotal && !agenticSlo.loopTotal.pass;
+          if (!loopOver) {
+            return (
+              <div
+                className="panel-inset"
+                style={{
+                  borderColor: 'var(--decode-border)',
+                  background: 'var(--decode-dim)',
+                  marginBottom: '18px',
+                  fontSize: '0.8rem',
+                  color: 'var(--decode)'
+                }}
+              >
+                {t('slo.agenticAllPass')}
+              </div>
+            );
+          }
+          return (
+            <div
+              className="panel-inset"
+              role="alert"
+              aria-label={t('slo.agenticTurnsPassLoopOver', {
+                value: formatTime(agenticSlo.loopTotal.value),
+                budget: formatTime(agenticSlo.loopTotal.budget)
+              })}
+              style={{
+                borderColor: 'var(--danger)',
+                background: 'rgba(248, 113, 113, 0.08)',
+                marginBottom: '18px',
+                fontSize: '0.8rem',
+                color: 'var(--text-muted)'
+              }}
+            >
+              <strong style={{ color: 'var(--danger)' }}>
+                {t('slo.agenticTurnsPassLoopOver', {
+                  value: formatTime(agenticSlo.loopTotal.value),
+                  budget: formatTime(agenticSlo.loopTotal.budget)
+                })}
+              </strong>
+            </div>
+          );
+        })()}
 
         {/* Live Side-by-Side Prefill vs Decode Stream */}
         <div className="panel-inset" style={{ marginBottom: '20px' }}>

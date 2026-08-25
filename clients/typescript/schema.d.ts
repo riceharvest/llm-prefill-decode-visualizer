@@ -733,6 +733,39 @@ export interface components {
             } & {
                 [key: string]: unknown;
             })[];
+            /** @description Time to first token (singleTurn/batched/agentic/kvCache/cost modes); null when a degenerate input (e.g. zero prefill speed) makes the quantity infinite/undefined — the UI renders this state as ∞ */
+            ttftSeconds?: number | null;
+            /** @description Time per output token in ms; null when degenerate input makes it undefined (∞ in the UI) */
+            tpotMs?: number | null;
+            /** @description Decode walltime; null when the decode speed is zero/negative (∞ in the UI) */
+            decodeSeconds?: number | null;
+            /** @description Prefill + decode walltime; null when any component is undefined (∞ in the UI) */
+            totalWalltimeSeconds?: number | null;
+            /** @description Total tokens / total walltime for the scenario shape; fabricated as 0 (not null) on degenerate inputs where walltime is undefined */
+            effectiveThroughputTokPerSec?: number;
+            /** @description Share of scenario walltime spent prefilling; null when walltime is undefined */
+            prefillSharePct?: number | null;
+            /** @description Share of scenario walltime spent decoding; null when walltime is undefined */
+            decodeSharePct?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Computed inference metrics plus the standard envelope stamp. */
+        ComputeResponse: {
+            /** @description Deterministic content hash of the resolved request */
+            id?: string;
+            /** @description Resolved input parameters (defaults filled in) */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /** @description Implausibility warnings (empty when inputs are plausible); never affect the math or HTTP status. */
+            warnings: ({
+                /** @enum {string} */
+                code?: "decode_above_bandwidth_roofline" | "prefill_above_compute_roofline" | "ttft_below_kernel_launch_floor";
+                message?: string;
+            } & {
+                [key: string]: unknown;
+            })[];
             /** @description Time to first token (singleTurn/batched/agentic/kvCache/cost modes) */
             ttftSeconds?: number;
             /** @description Time per output token in ms */
@@ -742,13 +775,11 @@ export interface components {
             effectiveThroughputTokPerSec?: number;
             prefillSharePct?: number;
             decodeSharePct?: number;
+            /** @constant */
+            schema_version: "1";
         } & {
             [key: string]: unknown;
         };
-        ComputeResponse: {
-            /** @constant */
-            schema_version: "1";
-        } & components["schemas"]["ComputeResult"];
         /** @description Cursor-paginated raw run list, sorted by decode speed desc (runId tiebreak). Follow next_cursor until has_more is false. */
         RunListEnvelope: {
             description?: string;
@@ -877,11 +908,31 @@ export interface components {
              * @enum {string|null}
              */
             contextBand?: "lt1k" | "1k-8k" | "8k-32k" | "32k+" | null;
+            /**
+             * @description Lowercased ?scenario= value as sent, even when unknown (null when unset). An unknown id is ignored with a warnings[] entry.
+             */
+            requestedScenario?: string | null;
             caveats: components["schemas"]["Caveat"][];
-            /** @description Human-readable group-level warnings (mixed engine versions / context bands) */
+            /** @description Human-readable group-level warnings (mixed engine versions / context bands / unknown ?scenario= ids) */
             warnings: string[];
             results: components["schemas"]["BestResult"][];
             rate_limit?: components["schemas"]["RateLimit"];
+            /** @description Resolved workload shape used for walltime projections (by=walltime only). Explicit ?promptTokens/?outputTokens override the ?scenario= preset per axis (#836). */
+            workload?: {
+                promptTokens: number;
+                outputTokens: number;
+                /** @description 'query' (both token axes overridden), 'scenario:<id>' (pure preset), 'mixed:<id>+query' (preset + one axis overridden), 'mixed:default+query' (default chat + one axis overridden), or 'default:chat' */
+                source: string;
+                /** @description Human label of the applied scenario preset (present only when a known ?scenario= was applied) */
+                scenario?: string;
+                /**
+                 * @description Axes taken from explicit query params rather than the preset/default
+                 * @enum {string}
+                 */
+                overrides: ("promptTokens" | "outputTokens")[];
+                /** @description Lowercased ?scenario= value as sent, even when unknown (null when unset) */
+                requestedScenario?: string | null;
+            };
             /** @constant */
             schema_version?: "1";
         };
@@ -962,8 +1013,7 @@ export interface operations {
                 architecture?: "llama70b" | "llama8b" | "qwen72b" | "mistral7b";
                 /** @description kvCache */
                 contextLength?: number;
-                /** @description kvCache: FP16/FP8/INT4 */
-                precisionBytes?: 2 | 1 | 0.5;
+                precisionBytes?: number;
                 /** @description flagged: comma-separated engine flag ids (flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3). Documented heuristic deltas; response carries a per-flag audit trail. */
                 flags?: string;
                 /** @description Validate + echo parsed params (defaults filled in) without executing any math. Returns { dry_run: true, model, inputs, id?, note }; the id matches the real call. Also applies per-item inside a batch via "dry_run": true in the POST body. */
@@ -1426,7 +1476,19 @@ export interface operations {
                  *       "webhookUrl": "https://example.com/hooks/llm-watch"
                  *     }
                  */
-                "application/json": unknown;
+                "application/json": {
+                    /** @description Model family/name substring to match */
+                    model?: string;
+                    /** @description Hardware key or label substring to match */
+                    hardware?: string;
+                    /** @description Exact quantization match (optional) */
+                    quant?: string | null;
+                    /**
+                     * Format: uri
+                     * @description https-only webhook notified of new matching runs
+                     */
+                    webhookUrl?: string;
+                };
             };
         };
         responses: {

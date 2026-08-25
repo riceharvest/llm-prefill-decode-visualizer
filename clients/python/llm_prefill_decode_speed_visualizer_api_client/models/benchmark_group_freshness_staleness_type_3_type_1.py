@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class BenchmarkGroupFreshnessStalenessType3Type1(str, Enum):
     AGING = "aging"
     FRESH = "fresh"

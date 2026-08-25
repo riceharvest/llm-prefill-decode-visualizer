@@ -8,6 +8,10 @@ import {
   estimateImageTokens
 } from '../utils/multimodal';
 import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
+import { phaseToRunState, runStateToBusy } from '../utils/viewState';
+import { createFrameScheduler, runStateFor } from '../utils/playback';
+import { shouldCompleteInstantly } from '../utils/simPlayback';
+import { buildDecayCurveSamples } from '../utils/ctxDecayCurve';
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
@@ -227,7 +231,12 @@ export default function SingleTurnVisualizer({
     "is", "key", "to", "low-latency", "LLM", "inference."
   ];
 
-  // Ref for timer
+  // Ref for timer. Ticks run through the shared frame scheduler (#860):
+  // while the tab is hidden the scheduler drives them from a wall-clock
+  // timer so playback advances instead of freezing at the first frame.
+  const framesRef = useRef(null);
+  if (!framesRef.current) framesRef.current = createFrameScheduler();
+  useEffect(() => () => framesRef.current?.dispose(), []);
   const animFrameRef = useRef(null);
   const lastTickRef = useRef(null);
   const simTimeRef = useRef(0); // simulated seconds elapsed
@@ -257,7 +266,7 @@ export default function SingleTurnVisualizer({
   // Start / Resume simulation
   useEffect(() => {
     if (!isPlaying) {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animFrameRef.current) framesRef.current.cancel(animFrameRef.current);
       lastTickRef.current = null;
       return;
     }
@@ -270,38 +279,37 @@ export default function SingleTurnVisualizer({
       simTimeRef.current = 0;
     }
 
+    // Complete synchronously when no animation frame is needed (#1079):
+    // ?sim=instant and prefers-reduced-motion used to jump-to-final from
+    // INSIDE the rAF tick, which hidden/background tabs never service —
+    // both hatches hung forever there. Same completions, same precedence
+    // order as the tick body had, but before any rAF is armed.
+    if (!Number.isFinite(expectedTotalTime) || expectedTotalTime <= 0) {
+      setCurrentPrefillProgress(Number.isFinite(expectedTTFT) && expectedTTFT >= 0 ? Math.max(0, totalPrefillTokens) : 0);
+      setCurrentDecodeTokens(Number.isFinite(expectedDecodeTime) && expectedDecodeTime >= 0 ? Math.max(0, outputTokens) : 0);
+      setElapsedTime(expectedTotalTime);
+      setPhase('completed');
+      setIsPlaying(false);
+      return;
+    }
+    if (shouldCompleteInstantly(simSpeedMultiplier, prefersReducedMotion)) {
+      setCurrentPrefillProgress(totalPrefillTokens);
+      setCurrentDecodeTokens(safeOutputTokens);
+      setElapsedTime(expectedTotalTime);
+      setPhase('completed');
+      setIsPlaying(false);
+      return;
+    }
+
     const tick = (now) => {
       if (!lastTickRef.current) {
         lastTickRef.current = now;
-        animFrameRef.current = requestAnimationFrame(tick);
+        animFrameRef.current = framesRef.current.request(tick);
         return;
       }
 
       const realDeltaSec = (now - lastTickRef.current) / 1000;
       lastTickRef.current = now;
-
-      // Non-finite walltime (e.g. a speed typed as 0): finish immediately,
-      // showing only the phases that can actually complete.
-      if (!Number.isFinite(expectedTotalTime) || expectedTotalTime <= 0) {
-        setCurrentPrefillProgress(Number.isFinite(expectedTTFT) && expectedTTFT >= 0 ? Math.max(0, totalPrefillTokens) : 0);
-        setCurrentDecodeTokens(Number.isFinite(expectedDecodeTime) && expectedDecodeTime >= 0 ? Math.max(0, outputTokens) : 0);
-        setElapsedTime(expectedTotalTime);
-        setPhase('completed');
-        setIsPlaying(false);
-        return;
-      }
-
-      // Handle instant mode — or prefers-reduced-motion (issue #63): the
-      // streaming animation is JS-driven, so reduced-motion users get the
-      // final state in one step instead of a frame-by-frame stream.
-      if (simSpeedMultiplier === 'instant' || prefersReducedMotion) {
-        setCurrentPrefillProgress(totalPrefillTokens);
-        setCurrentDecodeTokens(safeOutputTokens);
-        setElapsedTime(expectedTotalTime);
-        setPhase('completed');
-        setIsPlaying(false);
-        return;
-      }
 
       const simDeltaSec = realDeltaSec * simSpeedMultiplier;
 
@@ -344,13 +352,13 @@ export default function SingleTurnVisualizer({
         return;
       }
 
-      animFrameRef.current = requestAnimationFrame(tick);
+      animFrameRef.current = framesRef.current.request(tick);
     };
 
-    animFrameRef.current = requestAnimationFrame(tick);
+    animFrameRef.current = framesRef.current.request(tick);
 
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animFrameRef.current) framesRef.current.cancel(animFrameRef.current);
     };
   }, [isPlaying, simSpeedMultiplier, prefersReducedMotion, promptTokens, outputTokens, prefillSpeed, decodeSpeed, effectiveDecodeSpeed, expectedTTFT, expectedTotalTime, totalPrefillTokens, safeOutputTokens, itlSchedule, ctxScaleEnabled, ctxHalfSafe]);
 
@@ -380,12 +388,16 @@ export default function SingleTurnVisualizer({
   const yHi = Math.max(effectiveDecodeSpeed, 1) * 1.05;
   const yLo = Math.max(0, curveEndSpeed - Math.max((curveStartSpeed - curveEndSpeed) * 0.08, effectiveDecodeSpeed * 0.03));
   const yAt = (s) => PAD_T + (1 - (Math.min(Math.max(s, yLo), yHi) - yLo) / Math.max(yHi - yLo, 1e-9)) * innerH;
-  const CURVE_SAMPLES = 96;
-  const curvePoints = Array.from({ length: CURVE_SAMPLES + 1 }, (_, i) => {
-    const g = (i / CURVE_SAMPLES) * chartMaxGen;
-    const s = ctxScaleEnabled ? instantSpeedAt(g) : effectiveDecodeSpeed;
-    return `${xAt(g).toFixed(1)},${yAt(s).toFixed(1)}`;
-  }).join(' ');
+  const curveSamples = buildDecayCurveSamples({
+    maxGen: chartMaxGen,
+    scaleEnabled: ctxScaleEnabled,
+    baseSpeed: effectiveDecodeSpeed,
+    prefillTokens: totalPrefillTokens,
+    ctxHalf: ctxHalfSafe
+  });
+  const curvePoints = curveSamples
+    .map((p) => `${xAt(p.gen).toFixed(1)},${yAt(p.tokps).toFixed(1)}`)
+    .join(' ');
   const probeSpeed = ctxScaleEnabled ? instantSpeedAt(probeGen) : effectiveDecodeSpeed;
   const probePctOfBase = effectiveDecodeSpeed > 0 ? (probeSpeed / effectiveDecodeSpeed) * 100 : 0;
   const decaySvgRef = useRef(null);
@@ -422,6 +434,7 @@ export default function SingleTurnVisualizer({
   const throughputAnchorText = throughputAnchor(throughputNow);
   // Markdown walkthrough export (download + clipboard)
   const [mdCopied, setMdCopied] = useState(false);
+  const [mdCopyFailed, setMdCopyFailed] = useState(false);
   const buildMarkdown = () => buildSingleTurnMarkdown({
     promptTokens,
     outputTokens,
@@ -431,6 +444,13 @@ export default function SingleTurnVisualizer({
     draftTokens,
     acceptance,
     effectiveDecodeSpeed,
+    ctxScaleEnabled,
+    ctxHalf,
+    imagesEnabled,
+    imageCount,
+    imageResId,
+    jitterEnabled,
+    jitterPct,
     deepLink: buildDeepLink('single')
   });
   const handleExportMd = () => downloadMarkdown(buildMarkdown(), 'single-turn-simulation.md');
@@ -443,15 +463,23 @@ export default function SingleTurnVisualizer({
     draftTokens,
     acceptance,
     effectiveDecodeSpeed,
+    ctxScaleEnabled,
+    ctxHalf,
+    imagesEnabled,
+    imageCount,
+    imageResId,
+    jitterEnabled,
+    jitterPct,
     deepLink: buildDeepLink('single')
   });
   const handleExportJson = () => downloadJson(buildJson(), 'single-turn-simulation.json');
   const handleCopyMd = async () => {
     const ok = await copyMarkdownToClipboard(buildMarkdown());
-    if (ok) {
-      setMdCopied(true);
-      setTimeout(() => setMdCopied(false), 2000);
-    }
+    // Issue #401: surface failure explicitly — silent no-feedback on a failed
+    // copy is how agents lose the report without knowing it.
+    setMdCopied(ok);
+    setMdCopyFailed(!ok);
+    setTimeout(() => { setMdCopied(false); setMdCopyFailed(false); }, 2000);
   };
 
   // Token stream windowing: derive the visible words from the real decode
@@ -547,12 +575,20 @@ export default function SingleTurnVisualizer({
 
 
   return (
-    <div className="stack">
+    <div
+      className="stack"
+      data-state={runStateFor({
+        isPlaying,
+        hasStarted: phase !== 'idle',
+        hasFinished: phase === 'completed'
+      })}
+      aria-busy={isPlaying || undefined}
+    >
 
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
       {/* Issue #63: live narration of the animated run for screen readers */}
-      <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
+      <div className="visually-hidden" role="status" aria-live="polite" data-testid="run-state">{srSummary}</div>
 
       {/* Top Parameter Cards */}
       <section className="panel" aria-label={t('singleTurn.paramsPanelAria')}>
@@ -870,6 +906,22 @@ export default function SingleTurnVisualizer({
                   </text>
                 </g>
               </svg>
+              {/* Curve-to-table alternative (#720): the decay curve above is
+                  pure SVG geometry; this sr-only table exposes the same
+                  samples as exact token → tok/s values (every 8th sample). */}
+              <ChartDataTable
+                caption={t('chartTable.decayCurveCaption')}
+                rowHeaderLabel={t('chartTable.generatedToken')}
+                columns={[{ key: 'tokps', label: t('chartTable.decodeSpeed'), numeric: true }]}
+                mode="sr-only"
+                rows={curveSamples
+                  .filter((_, i) => i % 8 === 0)
+                  .map((p) => ({
+                    id: `gen-${p.gen}`,
+                    label: `+${Math.round(p.gen).toLocaleString()}`,
+                    cells: { tokps: `${Math.round(p.tokps).toLocaleString()} tok/s` }
+                  }))}
+              />
               <input
                 type="range"
                 min="0"
@@ -1065,7 +1117,12 @@ export default function SingleTurnVisualizer({
       ))}
 
       {/* Main Visualizer Stage */}
-      <section className="panel" aria-label={t('singleTurn.simStageAria')}>
+      <section
+        className="panel"
+        aria-label={t('singleTurn.simStageAria')}
+        data-state={phaseToRunState(phase)}
+        aria-busy={runStateToBusy(phaseToRunState(phase))}
+      >
 
         {/* Status Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
@@ -1122,7 +1179,7 @@ export default function SingleTurnVisualizer({
               aria-label="Copy markdown walkthrough to clipboard"
             >
               <Copy size={15} />
-              {mdCopied ? 'Copied!' : 'Copy MD'}
+              {mdCopied ? 'Copied!' : mdCopyFailed ? 'Copy failed' : 'Copy MD'}
             </button>
           </div>
         </div>

@@ -1,51 +1,34 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..types import UNSET, Unset
-
-
-
-
-
-
-
 T = TypeVar("T", bound="BestResultVramFitType0")
-
 
 
 @_attrs_define
 class BestResultVramFitType0:
-    """ Estimated fit at the requested context (present with ?fitCheck or ?contextLength): weights + KV cache vs available
+    """Estimated fit at the requested context (present with ?fitCheck or ?contextLength): weights + KV cache vs available
     memory.
 
-     """
+    """
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
-
-
-
-
     def to_dict(self) -> dict[str, Any]:
-        
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
 
         return field_dict
 
-
-
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        best_result_vram_fit_type_0 = cls(
-        )
-
+        best_result_vram_fit_type_0 = cls()
 
         best_result_vram_fit_type_0.additional_properties = d
         return best_result_vram_fit_type_0
