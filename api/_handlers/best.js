@@ -12,7 +12,7 @@ import { confidence } from '../_crosscheck.js';
 import { dataQuality } from '../_unit_audit.js';
 import { sendProblemFromError } from '../_errors.js';
 import { computeCalcId } from '../_calc_id.js';
-import { filterByMaxAge, parseMaxAgeParam } from '../_freshness.js';
+import { filterByMaxAge, parseMaxAgeParam, resolveSnapshotAt } from '../_freshness.js';
 import { parseContextBandParam, filterByContextBand } from '../_contextbands.js';
 import { estimateStreetPrice } from '../../src/utils/streetPricing.js';
 import { explainRecommendation } from '../_explain.js';
@@ -247,12 +247,18 @@ export async function bestBody(query = {}) {
     // param names aren't silently ignored.
     const requestedPowerWatts = q.powerWatts ?? q.powerDrawWatts;
 
-    const snapshotAt = new Date();
     let excludedUnknownVramGb = 0;
     const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
     const contextBand = parseContextBandParam(q.context_band ?? q.contextBand);
 
     const { runs: liveRuns, snapshot } = await resolveRuns(q);
+    // Issue #826: evaluate max_age against the dataset instant the response
+    // describes (snapshot.createdAt = dataset fetch time, frozen for pinned
+    // snapshots), NOT the per-request wall clock. Under ?snapshot= pinning the
+    // rows are frozen but a wall-clock max_age kept shrinking the result set
+    // on every replay day; now the pinned query is reproducible and
+    // `snapshotAt` names the actual basis of the ageDays/freshness fields.
+    const snapshotAt = resolveSnapshotAt(snapshot);
     let runs = liveRuns;
 
     if (q.model) {

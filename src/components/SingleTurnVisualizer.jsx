@@ -43,6 +43,7 @@ import { buildSingleTurnMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownT
 import { buildSingleTurnJson, downloadJson } from '../utils/exportJson';
 import { resolveActiveScenario } from '../utils/scenarioState';
 import { t } from '../i18n/strings';
+import { runStateAttrs, phaseTagClass as phaseTagClassFor } from '../utils/runState';
 
 // Workload slider bounds — shared by the range inputs, the number twins
 // (issue #409: min/max attributes + clamped commit) and the URL loaders.
@@ -551,8 +552,9 @@ export default function SingleTurnVisualizer({
     : phase === 'prefilling' ? t('singleTurn.phasePrefill')
     : phase === 'decoding' ? t('singleTurn.phaseDecode')
     : t('singleTurn.phaseCompleted');
-  const phaseTagClass = phase === 'prefilling' ? 'tag-prefill'
-    : phase === 'decoding' || phase === 'completed' ? 'tag-decode' : '';
+  // Issue #827: completed gets its own tag class — reusing tag-decode made
+  // "running" and "done" indistinguishable in CSS.
+  const phaseTagClass = phaseTagClassFor(phase);
 
   // Screen-reader run summary (issue #63): an aria-live region narrating the
   // simulation for users who can't watch the token stream. Progress is bucket
@@ -1195,7 +1197,7 @@ export default function SingleTurnVisualizer({
         {/* Status Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span className={`tag ${phaseTagClass}`} style={{ fontSize: '0.72rem', padding: '3px 9px' }}>
+            <span className={`tag ${phaseTagClass}`} data-run-state={phase} style={{ fontSize: '0.72rem', padding: '3px 9px' }}>
               {phaseLabel}
             </span>
             <span className="hint-text" style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>

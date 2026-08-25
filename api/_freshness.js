@@ -64,6 +64,17 @@ export function filterByMaxAge(runs, maxAgeDays, now = new Date()) {
   });
 }
 
+/**
+ * Evaluation instant for max-age filtering (#826): the dataset fetch time the
+ * snapshot metadata describes (frozen for pinned snapshots), falling back to
+ * the wall clock only when no metadata exists. Filtering against per-request
+ * `new Date()` made pinned ?snapshot= replays shrink every day.
+ */
+export function resolveSnapshotAt(snapshotMeta, fallback = new Date()) {
+  const d = parseDate(snapshotMeta?.createdAt);
+  return d || fallback;
+}
+
 /** Per-run freshness stamp for raw run payloads. */
 export function decorateRun(run, now = new Date()) {
   const age = ageInDays(run.createdAt, now);

@@ -7,7 +7,7 @@ import { validateSubmission, checkDuplicates, queueSubmission } from '../_submit
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson, applySchemaHeaders } from '../_schema.js';
 import { sendProblem, sendProblemFromError } from '../_errors.js';
-import { decorateRun, filterByMaxAge, groupFreshness, parseMaxAgeParam } from '../_freshness.js';
+import { decorateRun, filterByMaxAge, groupFreshness, parseMaxAgeParam, resolveSnapshotAt } from '../_freshness.js';
 import { parseContextBandParam, filterByContextBand } from '../_contextbands.js';
 
 export const config = { runtime: 'nodejs' };
@@ -117,13 +117,16 @@ export default async function handler(req, res) {
   try {
     const q = req.query || {};
 
-    const snapshotAt = new Date();
     const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
     const contextBand = parseContextBandParam(q.context_band ?? q.contextBand);
 
     const resolved = await resolveRuns(q);
     let runs = resolved.runs;
     const { snapshot } = resolved;
+    // Issue #826: evaluate max_age against the dataset fetch instant
+    // (snapshot.createdAt), not the per-request wall clock — pinned
+    // ?snapshot= replays stay reproducible and snapshotAt names the basis.
+    const snapshotAt = resolveSnapshotAt(snapshot);
 
     // Single-run lookup (#719): ?runId=<id> returns exactly the record the
     // LocalMaxxing wizard applies as its lmx:<id> preset — previously the

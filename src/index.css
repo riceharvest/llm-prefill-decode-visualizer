@@ -319,6 +319,9 @@ a { color: var(--accent); }
 .tag-decode  { color: var(--decode);  border-color: var(--decode-border);  background: var(--decode-dim); }
 .tag-agent   { color: var(--agent);   border-color: var(--agent-border);   background: var(--agent-dim); }
 .tag-accent  { color: var(--accent);  border-color: var(--prefill-border); background: var(--accent-dim); }
+/* Issue #827: completion must be separable from "decoding" in CSS —
+   tag-decode used to cover both, so scrapers had no class-level signal. */
+.tag-complete { color: var(--accent); border-color: var(--border-strong); background: var(--bg-raised); }
 
 /* Inline everyday-analogy chip (issue #84) — sits next to technical terms
    when analogy mode is on. Muted + italic so it reads as an aside, never as
@@ -1295,6 +1298,32 @@ a {
   input[type='range']::-moz-range-thumb {
     width: 28px;
     height: 28px;
+  }
+
+  /* Issue #831: controls outside the original #81 audit ship far below 44px
+     on touch — native selects at ~35px (view switcher, preset pickers, quant/
+     GPU filters), sidebar collapse headers at ~20px, <summary> toggles at
+     ~18px, and dense row links ("View source run") at ~17px tall. */
+  select,
+  .collapse-head,
+  summary {
+    min-height: 44px;
+  }
+
+  summary {
+    box-sizing: border-box;
+  }
+
+  /* Repeated dense text links: expand the hit area with a transparent
+     pseudo-element instead of resizing the link or its row layout. */
+  .source-link {
+    position: relative;
+  }
+
+  .source-link::after {
+    content: '';
+    position: absolute;
+    inset: -13px -8px;
   }
 }
 
