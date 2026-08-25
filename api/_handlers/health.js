@@ -14,8 +14,7 @@
 //   components— per-subsystem view: upstreamCache, watchStore, submitQueue,
 //               so watch/submission outages are visible without blind probes.
 import { getCacheInfo } from '../_localmaxxing.js';
-import { probeWatchStore } from '../_watch.js';
-import { probeSubmitQueue } from '../_submit.js';
+import { sendJson } from '../_schema.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -31,11 +30,10 @@ export function deriveReadiness(upstreamStatus) {
 }
 
 function json(res, body, status = 200) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Preserve the historical no-store policy (sendJson only sets Cache-Control
+  // when asked to, and an already-set header wins).
   res.setHeader('Cache-Control', 'no-store');
-  res.end(JSON.stringify(body, null, 2));
+  return sendJson(res, body, { status });
 }
 
 export default async function handler(req, res) {

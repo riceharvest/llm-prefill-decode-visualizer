@@ -102,9 +102,9 @@ test('enforced endpoints advertise headers + 429 exhaustion shape', () => {
 test('non-enforced endpoints say so instead of implying metering', () => {
   const spec = fetchSpec();
   const unmetered = operations(spec).filter(([, , op]) => !op['x-rate-limit'].enforced);
-  // /api/calc/{id} became metered in #957 (a replay re-runs the same math, so
-  // it must not be an unmetered bypass), leaving vram/sizing/health/snapshots.
-  assert.ok(unmetered.length >= 4, 'expected several unmetered endpoints (vram, sizing, health, …)');
+  // sizing/diff/snapshots joined the metered set (#567); still-unmetered:
+  // vram, health, og, export, …
+  assert.ok(unmetered.length >= 3, 'expected several unmetered endpoints (vram, health, …)');
   for (const [path, method, op] of unmetered) {
     assert.ok(op['x-rate-limit'].note.includes('not metered'), `${method.toUpperCase()} ${path} must state it is unmetered`);
     assert.equal(op['x-rate-limit'].headers, undefined);
