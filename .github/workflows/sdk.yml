@@ -6,6 +6,11 @@ name: Client SDKs
 # code lives in-repo so downstream devs can consume it directly and review
 # API drift in the diff. clients/VERSION is stamped with the spec's
 # info.version so breaking changes are visible at a glance.
+#
+# Supply-chain provenance (issue #1009): both generators are pinned to exact
+# versions and all three actions are SHA-pinned (not tag-pinned), so the bytes
+# committed to /clients are reproducible and the resolved generator versions
+# are recorded in clients/VERSION and the bot commit message.
 
 on:
   push:
@@ -18,34 +23,45 @@ on:
 permissions:
   contents: write
 
+env:
+  OPENAPI_TYPESCRIPT_VERSION: '7.13.0'
+  OPENAPI_PYTHON_CLIENT_VERSION: '0.29.0'
+
 jobs:
   generate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # actions/checkout v4 (SHA-pinned)
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: actions/setup-node@v4
+      # actions/setup-node v4 (SHA-pinned)
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
 
-      - uses: actions/setup-python@v5
+      # actions/setup-python v5 (SHA-pinned)
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
 
       - name: Dump OpenAPI spec
         run: node scripts/dump-openapi.mjs openapi.json
 
-      - name: Stamp schema version
+      - name: Stamp schema version + generator provenance
         run: |
           mkdir -p clients
-          node -e "console.log(JSON.parse(require('fs').readFileSync('openapi.json','utf8')).info.version)" > clients/VERSION
+          {
+            node -e "console.log(JSON.parse(require('fs').readFileSync('openapi.json','utf8')).info.version)"
+            echo "typescript-generator: openapi-typescript@$OPENAPI_TYPESCRIPT_VERSION"
+            echo "python-generator: openapi-python-client==$OPENAPI_PYTHON_CLIENT_VERSION"
+          } > clients/VERSION
 
       - name: Generate TypeScript client
-        run: npx --yes openapi-typescript openapi.json -o clients/typescript/schema.d.ts
+        run: npx --yes openapi-typescript@$OPENAPI_TYPESCRIPT_VERSION openapi.json -o clients/typescript/schema.d.ts
 
       - name: Generate Python client
         run: |
-          pipx install openapi-python-client
+          pipx install "openapi-python-client==$OPENAPI_PYTHON_CLIENT_VERSION"
           openapi-python-client generate --path openapi.json --output-path clients/python --overwrite
 
       - name: Commit generated clients
@@ -56,6 +72,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No client changes to commit"
           else
-            git commit -m "chore: regenerate typed clients from OpenAPI spec (schema v$(cat clients/VERSION))"
+            git commit -m "chore: regenerate typed clients from OpenAPI spec (schema v$(head -1 clients/VERSION); generators: openapi-typescript@$OPENAPI_TYPESCRIPT_VERSION, openapi-python-client==$OPENAPI_PYTHON_CLIENT_VERSION)"
             git push
           fi

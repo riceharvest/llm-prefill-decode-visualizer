@@ -218,8 +218,9 @@ export default function AgenticVisualizer({
 
   // Human-readable summary of a turn's failing checks, e.g.
   // "TTFT 900 ms vs 500 ms (+80% over) · TPOT ∞".
+  // formatSloMs (issue #869): guards Infinity/NaN → '∞' and keeps one
+  // decimal below 100 ms so marginal fails aren't hidden by rounding.
   const fmtPct = (r) => Number.isFinite(r.marginPct) ? `${Math.abs(r.marginPct).toFixed(0)}%` : '∞';
-  const fmtMs = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${Math.round(ms)} ms`);
   const turnSloDetail = (triple) => (
     [
       ['TTFT', triple.ttft],
@@ -228,8 +229,8 @@ export default function AgenticVisualizer({
     ]
       .filter(([, r]) => r && !r.pass)
       .map(([label, r]) => {
-        const val = label === 'TTFT' || label === 'TPOT' ? fmtMs(r.value) : formatTime(r.value);
-        return `${label} ${val} vs ${label === 'TTFT' || label === 'TPOT' ? fmtMs(r.budget) : formatTime(r.budget)} (+${fmtPct(r)} over)`;
+        const val = label === 'TTFT' || label === 'TPOT' ? formatSloMs(r.value) : formatTime(r.value);
+        return `${label} ${val} vs ${label === 'TTFT' || label === 'TPOT' ? formatSloMs(r.budget) : formatTime(r.budget)} (+${fmtPct(r)} over)`;
       })
       .join(' · ')
   );

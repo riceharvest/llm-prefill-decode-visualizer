@@ -12,6 +12,14 @@
 
 export const HISTORY_LIMIT = 100;
 
+// Declared slider ranges (SpeedControls.jsx min/max attributes). Every write
+// path into prefillSpeed/decodeSpeed must land inside these (#850/#1005) so
+// the slider thumb, the number twins, exports and og:image URLs can't drift.
+export const SPEED_RANGES = {
+  prefill: { min: 50, max: 50000 },
+  decode: { min: 2, max: 1000 }
+};
+
 function toNumOrNull(v) {
   if (v === undefined || v === null || v === '') return null;
   const n = Number(v);
