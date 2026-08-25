@@ -256,6 +256,7 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - `preset=<hardware-id>` (global): valid ids are the `hardware[].id` enum from **GET /api/presets** (`rtx4090_exl2`, `dual_rtx3090`, `rtx3090_llamacpp`, `mac_ultra`, `rtx3060_entry`, `groq`, `h100`, `rpi5`, `custom`). A value starting with `lmx:` selects a measured LocalMaxxing run.
 - On the `kvcache` tab: `gpu=` takes a GPU-catalog id (`rtx5090`, `rtx4090`, `rtx3090`, `rx7900xtx`, `rtx5070ti`, `rtx4060ti16`, `rtx4060`, `rtx6000ada`, `l40s`, `a100`, `h100`, `m4max128`, `m2ultra192`) and `wp=` takes one of `fp16`, `q8`, `q4`.
 - **Unknown-id behavior:** an unknown `preset=`, `gpu=` or `wp=` value is never silently swapped for a default and never erased from the URL. The app keeps the original value in the link, shows a visible warning banner, sets `data-invalid-param="<name>=<value>"` on the content root, logs a `console.warn`, and displays default speeds/hardware until you pick a valid id.
+Playback speed is deep-linkable on every animated tab: `sim=instant` completes the animation immediately (<1 s; alias `inst` accepted — both spellings work), and numeric multipliers map to the speed buttons as `sim=1|2|5|20`. Combine with `autoplay=1` to start the run on load, e.g. `/?tab=single&autoplay=1&sim=instant` lands on finished output without waiting through real-time animation.
 
 <!-- tabs-section:start -->
 ### Tab: single — Single-turn
@@ -339,5 +340,18 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Endpoints: none (static explainer content)
 
 <!-- tabs-section:end -->
+
+## Embedding (/embed)
+
+`/embed?tab=<id>&…` serves the chrome-less visualizer for cross-origin `<iframe>` embedding. The frame talks back over `window.postMessage`; every message is a `{ type, … }` object:
+
+- Frame → parent: `{ "type": "llmpdv:ready", "tab": "<id>" }` on mount, and `{ "type": "llmpdv:state", "tab": "<id>", "playing": true|false }` whenever the tab or playback state changes.
+- Parent → frame: `{ "type": "llmpdv:command", "action": "play" | "pause" | "reset" | "setTab", "tab": "<id>" }` (`tab` required only for `setTab`, ignored otherwise). Commands are accepted only from the direct parent window; anything else is dropped.
+
+There is no dedicated completion event yet — start a run (`autoplay=1` or a `play` command) and watch `llmpdv:state` until `playing` flips back to `false`.
+
+## Trust assumptions (subresource integrity)
+
+No `integrity=` SRI pins ship anywhere today. Same-origin bundles under `/assets/` are content-hash-addressed by filename but not pinned in the HTML, and the Google Fonts CSS plus font binaries load cross-origin from `fonts.googleapis.com` / `fonts.gstatic.com` with no integrity attribute (their responses are UA-dependent, so no stable hash exists — self-host/proxy them if you need verifiable subresources). There is also no Content-Security-Policy header yet. This trust assumption applies to every route, including `/embed`.
 
 Source: https://github.com/riceharvest/llm-prefill-decode-visualizer

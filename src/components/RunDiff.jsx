@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { GitCompare } from 'lucide-react';
 import { readParam, writeParams } from '../utils/urlState';
 import { fetchJsonWithTimeout, FetchJsonError } from '../utils/fetchJson';
+import { winnerLabel, WINNER_LEGEND } from '../utils/diffWinner';
 
 // Minimal run-diff panel: two LocalMaxxing run ids in, per-metric deltas,
 // ratios and the API's plain-language summary out. Data comes from
@@ -120,10 +121,13 @@ export default function RunDiff() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--text-muted)' }}>
             {metricRows.map(([label, m, digits]) => (
-              <div key={label} style={{ ...rowStyle, ...rowDivider }}>
+              <div key={label} style={{ ...rowStyle, ...rowDivider }} data-winner={m.winner}>
                 <span>{label}</span>
                 <span style={{ display: 'flex', gap: '12px', alignItems: 'baseline' }}>
+                  {/* #890: the verdict also lives in text (sr-only + row
+                      data-winner), not just the span color — WCAG 1.4.1. */}
                   <span style={{ ...numStyle, color: winColor(m.winner) }}>
+                    <span className="sr-only">{winnerLabel(m.winner)} — </span>
                     {m.a?.toLocaleString?.() ?? '—'} → {m.b?.toLocaleString?.() ?? '—'}
                   </span>
                   {m.deltaPct !== null && (
@@ -144,6 +148,12 @@ export default function RunDiff() {
           <p className="hint-text" style={{ marginTop: '10px' }}>
             Deltas are B − A; ratios are B ÷ A. Time metrics are normalized to a 2048-token prompt / 512-token output.
             Same JSON via <a href={`/api/diff?runA=${encodeURIComponent(runA)}&runB=${encodeURIComponent(runB)}`}>/api/diff</a>.
+          </p>
+
+          {/* #890: visible legend so the color encoding is decodable without
+              prior knowledge of which palette color maps to which run. */}
+          <p className="hint-text" style={{ marginTop: '6px' }} aria-label="Winner color legend">
+            {WINNER_LEGEND}
           </p>
         </>
       )}

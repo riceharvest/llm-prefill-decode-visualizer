@@ -12,6 +12,7 @@ import CurriculumMode from './CurriculumMode';
 import { HARDWARE_PRESETS } from '../utils/presets';
 import { readParam, readParamNum, readParamBool, readSimSpeed, writeParams } from '../utils/urlState';
 import { setLocale, getLocale, getDirection, t } from '../i18n/strings';
+import { EMBED_EVENTS, postEmbedEvent, installEmbedBridge } from '../utils/embedBridge';
 
 // Embeddable widget view (issue #108): served at /embed?tab=…&preset=… it
 // renders the same visualizer the main app shows for that tab, minus all
@@ -24,10 +25,10 @@ const EMBED_TABS = new Set([
 ]);
 
 export default function EmbedApp() {
-  const activeTab = (() => {
+  const [activeTab, setActiveTab] = useState(() => {
     const tab = readParam('tab');
     return EMBED_TABS.has(tab) ? tab : 'single';
-  })();
+  });
 
   // Locale handling mirrors App: ?lang= overrides, direction goes on <html>.
   useEffect(() => {
@@ -46,13 +47,46 @@ export default function EmbedApp() {
   const [simSpeedMultiplier] = useState(() => readSimSpeed());
   // autoplay=1 starts the simulation on load (same convention as demoUrl).
   const [isPlaying, setIsPlaying] = useState(() => readParamBool('autoplay', false));
-  const [resetKey] = useState(0);
+  const [resetKey, bumpReset] = useState(0);
 
   // Keep the embed URL in sync with the visible tab so reloads and
   // copy-the-iframe-src behave like the main app.
   useEffect(() => {
     writeParams({ tab: activeTab });
   }, [activeTab]);
+
+  // #894: window-message bridge so a cross-origin host page can observe state
+  // and drive playback. Outbound: llmpdv:ready on mount, llmpdv:state whenever
+  // tab/playback changes. Inbound: llmpdv:command from the direct parent only.
+  useEffect(() => {
+    postEmbedEvent(window.parent, EMBED_EVENTS.READY, { tab: activeTab });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    postEmbedEvent(window.parent, EMBED_EVENTS.STATE, { tab: activeTab, playing: isPlaying });
+  }, [activeTab, isPlaying]);
+
+  useEffect(() => {
+    return installEmbedBridge({
+      parent: typeof window !== 'undefined' ? window.parent : null,
+      onCommand: (cmd) => {
+        switch (cmd.action) {
+          case 'play': setIsPlaying(true); break;
+          case 'pause': setIsPlaying(false); break;
+          case 'reset':
+            setIsPlaying(false);
+            bumpReset(k => k + 1);
+            break;
+          case 'setTab':
+            if (EMBED_TABS.has(cmd.tab)) setActiveTab(cmd.tab);
+            break;
+          default:
+            break;
+        }
+      }
+    });
+  }, []);
 
   const sloBudgets = {};
 

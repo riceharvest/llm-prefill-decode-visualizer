@@ -27,7 +27,7 @@ export function makeSettings(settings = {}) {
     preset: preset || '',
     prefill: toNumOrNull(prefill),
     decode: toNumOrNull(decode),
-    sim: sim === 'instant' ? 'instant' : (toNumOrNull(sim) ?? 1),
+    sim: (sim === 'instant' || sim === 'inst') ? 'instant' : (toNumOrNull(sim) ?? 1),
     flags: Array.isArray(flags) ? flags.filter(Boolean) : [],
     prompt: toNumOrNull(prompt),
     output: toNumOrNull(output)

@@ -120,7 +120,11 @@ export function parseConstraints(rawText) {
 
   // --- deployment -----------------------------------------------------------
   const selfHosted = /\bself[\s-]?host(?:ed|ing)?\b|\bon[\s-]?prem(ise)?\b|\blocall?y?\b|\bmy (?:own )?(?:machine|server|rig|laptop|desktop)\b/.test(text);
-  const cloud = /\bcloud\b|\bapi\b|\bmanaged\b|\bhosted (?:service|endpoint|provider)\b|\bopenrouter\b|\btogether\.?ai\b|\bgroq\b|\bfireworks\b/.test(text);
+  // #899: `\bapi\b` removed — "having/exposing an API" says nothing about where
+  // inference runs, and asserting `deployment: 'cloud'` from it broke the
+  // ambiguities contract. Real cloud signals (provider names, "cloud",
+  // "hosted service") are unchanged.
+  const cloud = /\bcloud\b|\bmanaged\b|\bhosted (?:service|endpoint|provider)\b|\bopenrouter\b|\btogether\.?ai\b|\bgroq\b|\bfireworks\b/.test(text);
   if (selfHosted && cloud) {
     constraints.deployment = null;
     ambiguities.push({
@@ -183,7 +187,11 @@ export function parseConstraints(rawText) {
   }
 
   // --- hardware budget ----------------------------------------------------------
-  const money = text.match(/(?:under|below|max(?:imum)?(?: of)?|up to|less than|budget of|budget|cap(?:ped)? (?:at|of)|at most|<=?|≤)?\s*\$\s*([\d,]+(?:\.\d+)?)\s*(k|m)?\b/);
+  // #899: the budget-prefix qualifier used to be OPTIONAL, so every "$X" in
+  // the sentence (per-token prices, subscription bills) silently became a
+  // hardware budget cap with an empty ambiguities[]. The qualifier is now
+  // REQUIRED; unqualified money raises an ambiguity and leaves the field null.
+  const money = text.match(/(?:under|below|max(?:imum)?(?: of)?|up to|less than|budget of|budget|cap(?:ped)? (?:at|of)|at most|<=?|≤)\s*\$\s*([\d,]+(?:\.\d+)?)\s*(k|m)?\b/);
   const moneyWords = money ? null : text.match(/(?:under|below|max(?:imum)?(?: of)?|up to|less than|budget of|budget|cap(?:ped)? (?:at|of)|at most)\s*([\d,]+(?:\.\d+)?)\s*(k|m)?\s*(?:usd|dollars|bucks)\b/);
   const budget = money
     ? parseMoney(money[1], money[2])
@@ -199,6 +207,14 @@ export function parseConstraints(rawText) {
         message: `"${moneySrc}" read as a decimal comma (budget ${budget}). If the comma was a thousands separator, restate the amount without it.` // #1061
       });
     }
+  } else {
+    const bareMoney = text.match(/\$\s*([\d,]+(?:\.\d+)?)\s*(k|m)?\b/);
+    if (bareMoney) {
+      ambiguities.push({
+        field: 'budgetUsdMax',
+        message: `"${bareMoney[0].trim()}" found but no budget wording ("under", "max", "budget", "cap"…) — this may be a per-token price or a bill rather than a hardware cap; leaving budgetUsdMax null. Rephrase with explicit budget wording if it is one.` // #890
+      });
+    }
   }
 
   // --- minimum decode speed ------------------------------------------------------
@@ -209,10 +225,25 @@ export function parseConstraints(rawText) {
   if (sm) constraints.minDecodeTokPerSec = parseNumber(sm[1]);
 
   // --- VRAM cap --------------------------------------------------------------------
+  // #899: the (memory|ram) fallback reads SYSTEM memory as a VRAM cap. The
+  // value is still filled in (unified-memory rigs are the common case), but it
+  // now raises an ambiguity so callers know the guess was made.
   let vm = text.match(/\b(\d{1,3})\s*gb?\s*(?:of\s*)?vram\b/) || text.match(/\bvram\s*(?:of|under|max|<=?|≤|budget)?\s*(\d{1,3})\s*gb?\b/);
+  let vramAssumedFromRam = false;
   if (!vm) vm = text.match(/\b(\d{1,3})\s*gb?\s*(?:gpu|graphics card|card)\b/);
-  if (!vm) vm = text.match(/\b(\d{1,3})\s*gb?\s*(?:memory|ram)\b/);
-  if (vm) constraints.maxVramGb = parseNumber(vm[1]);
+  if (!vm) {
+    vm = text.match(/\b(\d{1,3})\s*gb?\s*(?:memory|ram)\b/);
+    vramAssumedFromRam = !!vm;
+  }
+  if (vm) {
+    constraints.maxVramGb = parseNumber(vm[1]);
+    if (vramAssumedFromRam) {
+      ambiguities.push({
+        field: 'maxVramGb',
+        message: `"${vm[0].trim()}" reads as system memory/RAM, not video memory — interpreting it as the VRAM cap. On discrete-GPU rigs VRAM differs from system RAM; state "GB of VRAM" explicitly if that is what you meant.`
+      });
+    }
+  }
 
   // --- hardware class ----------------------------------------------------------------
   if (/\bunified(?:\s*memory)?\b|\bapple silicon\b|\bmac(?:book| mini| studio)?\b|\bm[1-4]\b(?=\s*(?:pro|max|ultra)?\b)/.test(text)) {
