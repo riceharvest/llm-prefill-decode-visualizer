@@ -24,6 +24,7 @@ import { readParam, readSimSpeed, writeParams } from './utils/urlState';
 import {
   findInvalidIdParams, invalidParamAttr, invalidParamLabel, warnInvalidParams
 } from './utils/shareLinkParams';
+import { copyTextToClipboard } from './utils/clipboard';
 import {
   serializeSettings, parseSettings,
   createHistory, recordChange, undo as historyUndo, redo as historyRedo,
@@ -448,30 +449,24 @@ export default function App() {
   // transient keys stripped. Titles stay display-only (#106): document.title
   // derives the readable config name, the link itself stays deterministic.
   const handleShare = async () => {
-    try {
-      const href = buildShareLink({
-        origin: window.location.origin,
-        pathname: window.location.pathname,
-        search: window.location.search,
-        tab: activeTab
-      });
-      await navigator.clipboard.writeText(href);
-    } catch {
-      // clipboard may be unavailable; no-op
-    }
+    // Shared helper (#1034): falls back to execCommand in blocked-clipboard
+    // contexts instead of failing silently.
+    const href = buildShareLink({
+      origin: window.location.origin,
+      pathname: window.location.pathname,
+      search: window.location.search,
+      tab: activeTab
+    });
+    await copyTextToClipboard(href);
   };
 
   // Issue #108: copy a ready-to-paste <iframe> snippet pointing at /embed
   // with the exact same settings query string as the share link, so what the
   // visitor sees embedded matches what the author configured.
   const handleEmbed = async () => {
-    try {
-      const src = `${window.location.origin}/embed${window.location.search}`;
-      const snippet = `<iframe src="${src}" width="100%" height="520" frameborder="0" loading="lazy" title="${t('header.brandTitle')}"></iframe>`;
-      await navigator.clipboard.writeText(snippet);
-    } catch {
-      // clipboard may be unavailable; no-op
-    }
+    const src = `${window.location.origin}/embed${window.location.search}`;
+    const snippet = `<iframe src="${src}" width="100%" height="520" frameborder="0" loading="lazy" title="${t('header.brandTitle')}"></iframe>`;
+    await copyTextToClipboard(snippet);
   };
 
   return (

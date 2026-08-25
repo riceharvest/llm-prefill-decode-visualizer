@@ -6,6 +6,7 @@
 // the export safe to paste into slides, course notes, or homework evidence.
 
 import { formatTime, formatTokens } from './presets.js';
+import { copyTextToClipboard } from './clipboard.js';
 import { calculateAgenticTimeline } from './agenticMath.js';
 import { computeSingleTurnEngineRun } from './exportEngineMath.js';
 import { buildShareLink } from './permalink.js';
@@ -335,31 +336,7 @@ export function downloadMarkdown(markdown, filename = 'simulation.md') {
 }
 
 export async function copyMarkdownToClipboard(markdown) {
-  // Issue #401: when navigator.clipboard exists but writeText REJECTS
-  // (headless drivers, denied permission), that rejection is authoritative —
-  // silently falling through to the deprecated execCommand() path returned
-  // true in headless Chromium while nothing was written, so the UI claimed
-  // "Copied!" over silent data loss. Only use the textarea fallback when the
-  // async Clipboard API is unavailable altogether (older browsers / http).
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(markdown);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  try {
-    const ta = document.createElement('textarea');
-    ta.value = markdown;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand('copy');
-    ta.remove();
-    return ok;
-  } catch {
-    return false;
-  }
+  // Shared helper (#1034): Clipboard API → readOnly execCommand fallback,
+  // boolean success, never throws.
+  return copyTextToClipboard(markdown);
 }

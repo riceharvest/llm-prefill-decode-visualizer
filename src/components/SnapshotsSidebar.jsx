@@ -6,6 +6,7 @@ import {
   exportSnapshots, importSnapshots, mergeSnapshots
 } from '../utils/settingsHistory';
 import { buildShareLink } from '../utils/permalink';
+import { copyTextToClipboard } from '../utils/clipboard';
 
 function makeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -98,19 +99,18 @@ export default function SnapshotsSidebar({ currentQs, activeTab, onRestore, rest
   };
 
   const handleCopy = async (snap) => {
-    try {
-      // Canonical share link (#875): snapshot settings + the active tab, so
-      // opening the link restores both the speeds and the right view.
-      await navigator.clipboard.writeText(buildShareLink({
+    // Shared helper (#1034): execCommand fallback for blocked-clipboard
+    // contexts; only flash "copied" on a successful copy.
+    if (await copyTextToClipboard(
+      buildShareLink({
         origin: window.location.origin,
         pathname: window.location.pathname,
         search: snap.qs ? `?${snap.qs}` : '',
         tab: activeTab
-      }));
+      })
+    )) {
       setCopiedId(snap.id);
       setTimeout(() => setCopiedId(''), 2000);
-    } catch {
-      // clipboard may be unavailable; no-op
     }
   };
 

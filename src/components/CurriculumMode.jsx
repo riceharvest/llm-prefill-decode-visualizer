@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { LESSONS, loadProgress, saveProgress, isComplete, checkAnswer, markAttempted, attemptCount } from '../utils/curriculum';
 import { demoUrl } from '../utils/urlState';
+import { t } from '../i18n/strings';
 
 // Curriculum mode (issue #89): a lesson rail of ordered lessons. Each lesson
 // locks the simulator to a preset scenario, poses a prediction question, and
@@ -72,23 +73,21 @@ export default function CurriculumMode() {
   });
 
   return (
-    <div className="stack" aria-label="Curriculum mode">
+    <div className="stack" aria-label={t('curriculum.ariaLabel')}>
 
       <section className="panel">
         <h2 className="panel-title" style={{ marginBottom: '4px' }} tabIndex={-1} data-panel-heading>
           <GraduationCap size={16} />
-          <span>Curriculum</span>
+          <span>{t('curriculum.title')}</span>
         </h2>
         <p className="hint-text" style={{ marginBottom: '14px' }}>
-          Six ordered lessons. Each one presets the simulator, asks you to predict the outcome,
-          then lets you run it and check yourself. {completedCount} of {LESSONS.length} completed
-          {attemptedTotal > completedCount ? ` · ${attemptedTotal} checked` : ''}.
+          {t('curriculum.intro', { completed: completedCount, total: LESSONS.length })}
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 240px) 1fr', gap: '14px', alignItems: 'start' }}>
 
           {/* Lesson rail */}
-          <nav aria-label="Lesson list" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <nav aria-label={t('curriculum.lessonListAria')} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {LESSONS.map((l, i) => {
               const done = isComplete(progress, l.id);
               const active = i === lessonIdx;
@@ -142,7 +141,7 @@ export default function CurriculumMode() {
           <div className="panel-inset">
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '8px' }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                Lesson {lessonIdx + 1}/{LESSONS.length}
+                {t('curriculum.lessonCounter', { current: lessonIdx + 1, total: LESSONS.length })}
               </span>
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>{lesson.title}</h3>
             </div>
@@ -156,7 +155,7 @@ export default function CurriculumMode() {
               padding: '10px 12px',
               marginBottom: '12px'
             }}>
-              <div className="field-label" style={{ marginBottom: '4px' }}>Preset scenario</div>
+              <div className="field-label" style={{ marginBottom: '4px' }}>{t('curriculum.presetScenario')}</div>
               <p className="hint-text" style={{ marginBottom: '10px' }}>{lesson.setup}</p>
               <a
                 href={demoUrl(lesson.demo)}
@@ -164,16 +163,16 @@ export default function CurriculumMode() {
                 style={{ minHeight: '30px', padding: '5px 12px', fontSize: '0.76rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
               >
                 <Play size={12} />
-                Run this scenario
+                {t('curriculum.runScenario')}
               </a>
               <p className="hint-text" style={{ marginTop: '8px', fontSize: '0.7rem' }}>
-                Opens the {lesson.backendTab === 'kvcache' ? 'KV Cache' : lesson.backendTab === 'agentic' ? 'Agentic Loop' : 'Single-Turn'} simulator preconfigured and autoplaying.
-                {lesson.backendTab !== 'kvcache' ? ' Come back here to check your answer.' : ' Adjust it to test your prediction.'}
+                {t('curriculum.opensSimulator', { simulator: lesson.backendTab === 'kvcache' ? t('curriculum.simulators.kvCache') : lesson.backendTab === 'agentic' ? t('curriculum.simulators.agenticLoop') : t('curriculum.simulators.singleTurn') })}
+                {lesson.backendTab !== 'kvcache' ? t('curriculum.comeBackToCheck') : t('curriculum.adjustToTest')}
               </p>
             </div>
 
             {/* Prediction question */}
-            <div className="field-label" style={{ marginBottom: '8px' }}>Predict: {lesson.question}</div>
+            <div className="field-label" style={{ marginBottom: '8px' }}>{t('curriculum.predict', { question: lesson.question })}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
               {lesson.options.map((opt, idx) => (
                 <button
@@ -220,7 +219,7 @@ export default function CurriculumMode() {
                 style={{ opacity: choice === null ? 0.5 : 1, minHeight: '34px', padding: '6px 14px', fontSize: '0.8rem' }}
               >
                 <CheckCircle2 size={15} />
-                Check answer
+                {t('curriculum.checkAnswer')}
               </button>
             ) : (
               <div style={{
@@ -234,13 +233,13 @@ export default function CurriculumMode() {
                     ? <CheckCircle2 size={16} style={{ color: 'var(--decode)', flexShrink: 0 }} />
                     : <XCircle size={16} style={{ color: 'var(--prefill)', flexShrink: 0 }} />}
                   <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>
-                    {isCorrect ? 'Correct — the simulation agrees.' : 'Not quite — run it and see.'}
+                    {isCorrect ? t('curriculum.correct') : t('curriculum.incorrect')}
                   </strong>
                 </div>
                 <p className="hint-text" style={{ marginBottom: '8px' }}>{lesson.explanation}</p>
                 <p className="hint-text" style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
                   <Lightbulb size={14} style={{ flexShrink: 0, color: 'var(--agent)' }} />
-                  <span><strong style={{ color: 'var(--text-main)' }}>Verify it:</strong> {lesson.verify}</span>
+                  <span><strong style={{ color: 'var(--text-main)' }}>{t('curriculum.verifyIt')}</strong> {lesson.verify}</span>
                 </p>
                 <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
                   {!isCorrect && (
@@ -250,7 +249,7 @@ export default function CurriculumMode() {
                       style={{ minHeight: '30px', padding: '5px 12px', fontSize: '0.76rem' }}
                     >
                       <RotateCcw size={12} />
-                      Try again
+                      {t('curriculum.tryAgain')}
                     </button>
                   )}
                   {!isLast && (
@@ -259,7 +258,7 @@ export default function CurriculumMode() {
                       className="btn btn-accent"
                       style={{ minHeight: '30px', padding: '5px 12px', fontSize: '0.76rem' }}
                     >
-                      {isCorrect ? 'Next lesson' : 'Skip ahead'}
+                      {isCorrect ? t('curriculum.nextLesson') : t('curriculum.skipAhead')}
                       <ChevronRight size={12} />
                     </button>
                   )}
