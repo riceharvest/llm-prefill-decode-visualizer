@@ -106,6 +106,16 @@ test('tab deep links reference real URL params used by App.jsx', () => {
   }
 });
 
+test('llms.txt names the authoritative id sources and unknown-id behavior (#876)', () => {
+  // The deep-link section must point agents at /api/presets for preset= ids,
+  // enumerate the kvcache gpu=/wp= vocabularies, and document that unknown
+  // ids are kept in the URL with a visible signal instead of being swapped.
+  assert.match(llmsTxt, /GET \/api\/presets[^\n]*`rtx4090_exl2`|`preset=<hardware-id>`[^\n]*\/api\/presets/s);
+  assert.match(llmsTxt, /`wp=` takes one of `fp16`, `q8`, `q4`/);
+  assert.match(llmsTxt, /never silently swapped/);
+  assert.match(llmsTxt, /data-invalid-param/);
+});
+
 test('regenerating llms.txt is idempotent (byte-identical output)', () => {
   const before = readFileSync(join(root, 'public', 'llms.txt'), 'utf8');
   execFileSync(process.execPath, [join(root, 'scripts', 'generate-llms-txt.mjs')], {
