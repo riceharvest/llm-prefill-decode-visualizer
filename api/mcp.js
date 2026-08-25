@@ -14,7 +14,21 @@ import { readFileSync } from 'node:fs';
 import { clientKey, rateLimit, RATE_WINDOW_MS } from './_ratelimit.js';
 import { applySchemaHeaders, SCHEMA_VERSION } from './_schema.js';
 
-const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
+// Issue #833: the tools/call proxy used to hardcode the production origin, so
+// every self-hosted deployment silently proxied back to vercel.app — resolve
+// the base from the incoming request's own Host header; production keeps
+// working unchanged.
+const DEFAULT_BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
+
+export function resolveBase(req = null, env = process.env) {
+  const envBase = env.MCP_BASE_URL || env.VISUALIZER_API_URL;
+  if (envBase) return String(envBase).replace(/\/+$/, '');
+  const host = req?.headers?.host;
+  if (!host) return DEFAULT_BASE;
+  const fwdProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const proto = fwdProto || ((host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]')) ? 'http' : 'https');
+  return `${proto}://${host}`;
+}
 
 // MCP resources advertised by /.well-known/mcp.json (#794). The manifest has
 // always listed these two documents; resources/list + resources/read below
@@ -22,13 +36,13 @@ const BASE = 'https://llm-prefill-decode-visualizer.vercel.app';
 // a method-not-found wall after trusting the manifest.
 const RESOURCES = [
   {
-    uri: `${BASE}/llms.txt`,
+    uri: `${DEFAULT_BASE}/llms.txt`,
     name: 'Agent guidance',
     description: 'When-to-use guidance, endpoint list, versioning policy',
     mimeType: 'text/plain',
   },
   {
-    uri: `${BASE}/api/spec`,
+    uri: `${DEFAULT_BASE}/api/spec`,
     name: 'OpenAPI spec',
     description: 'Full machine-readable API schema',
     mimeType: 'application/json',
@@ -483,15 +497,16 @@ function toolToRequest(name, args = {}) {
 }
 
 /** Proxy a tools/call to the internal REST handler via absolute-URL fetch. */
-async function callTool(name, args) {
+async function callTool(name, args, base) {
   const route = toolToRequest(name, args);
   if (!route) {
     return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
   }
   // In-process dispatch would import handlers directly; fetch keeps one code
   // path and works identically on dev and prod. Vercel functions can fetch
-  // their own origin.
-  const url = `${BASE}${route.path}?${route.query.toString()}`;
+  // their own origin (#833: base resolves from the request, not a hardcoded
+  // production origin — self-hosted deployments serve their own data).
+  const url = `${base}${route.path}?${route.query.toString()}`;
   const upstream = await fetch(url, { headers: { accept: 'application/json' } });
   const body = await upstream.text();
   const result = {
@@ -701,7 +716,7 @@ export default async function handler(req, res) {
     case 'tools/call': {
       const { name, arguments: args } = params || {};
       try {
-        const result = await callTool(name, args);
+        const result = await callTool(name, args, resolveBase(req));
         return reply(result);
       } catch (err) {
         return reply({ content: [{ type: 'text', text: `Tool error: ${err.message}` }], isError: true });

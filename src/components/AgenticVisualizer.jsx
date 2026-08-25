@@ -24,6 +24,7 @@ import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { buildAgenticJson, downloadJson } from '../utils/exportJson';
 import { t } from '../i18n/strings';
+import { runStateAttrs } from '../utils/runState';
 
 export default function AgenticVisualizer({
   prefillSpeed,
@@ -879,7 +880,7 @@ export default function AgenticVisualizer({
             <span className="section-label">
               {t('agentic.turnStreamLabel', { turn: activeTurn || '—' })}
             </span>
-            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{phaseStatusText}</span>
+            <span data-run-state={currentPhase} style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{phaseStatusText}</span>
           </div>
 
           {/* Overall agent loop progress: elapsed / total (rAF-driven — no transition) */}

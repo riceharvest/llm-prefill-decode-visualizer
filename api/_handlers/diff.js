@@ -1,4 +1,5 @@
 import { getAllRuns } from '../_localmaxxing.js';
+import { resolveRuns } from '../_snapshots.js';
 import { computeRunDiff, evaluateDiffSlo, REF_PROMPT_TOKENS, REF_OUTPUT_TOKENS } from '../_diff.js';
 import { bestBody } from './best.js';
 import { computeWhatIfDiff } from '../_whatif.js';
@@ -10,6 +11,15 @@ export const config = { runtime: 'nodejs' };
 
 // Shared sender: stamps schema_version + X-Schema-Version on EVERY response
 // body and header, success and error alike (#481 — the spec promises both).
+/**
+ * Issue #834: thread the ?snapshot= pin into a what-if constraint set so both
+ * legs resolve through the same frozen dataset. Exported pure for tests.
+ */
+export function applySnapshotPin(set, q = {}) {
+  const id = q.snapshot ?? q.snapshotId;
+  return id ? { ...set, snapshot: String(id) } : set;
+}
+
 function json(res, body, status = 200, cacheTtl = 300) {
   return sendJson(res, body, { status, cacheTtl });
 }
@@ -181,7 +191,7 @@ export default async function handler(req, res) {
       return problem(res, req, { status: 400, code: 'INVALID_PARAMS', detail: 'runA and runB must be different run ids', error: 'runA and runB must be different run ids' });
     }
 
-    const runs = await getAllRuns();
+    const { runs, snapshot } = await resolveRuns(q);
     // Issue #395: ids are generated lowercase, but agents commonly normalize
     // casing — fall back to a case-insensitive match instead of failing.
     const findRun = id => {
@@ -211,6 +221,7 @@ export default async function handler(req, res) {
 
     return json(res, {
       description: `Diffs two measured runs. Time metrics are normalized to a reference workload (${REF_PROMPT_TOKENS}-token prompt, ${REF_OUTPUT_TOKENS}-token output); delta is B − A, ratio is B ÷ A, winner is from A's point of view. Time metrics (ttft/tpot/walltime) are SECONDS — join with /api/compute by multiplying tpot by 1000 for its tpotMs — throughputs are tok/s, and every deltaPct is a FRACTION (0.25 = 25%).`,
+      ...(snapshot ? { snapshot } : {}),
       runA,
       runB,
       diff: computeRunDiff(runA, runB),
@@ -278,8 +289,8 @@ async function whatIfHandler(q, res, req) {
     ...set,
     limit: Number.isFinite(Number(set.limit)) ? Number(set.limit) : sharedLimit
   });
-  const setA = normalize(constraintsA);
-  const setB = normalize(constraintsB);
+  const setA = applySnapshotPin(normalize(constraintsA), q);
+  const setB = applySnapshotPin(normalize(constraintsB), q);
 
   let bodyA;
   let bodyB;
@@ -321,8 +332,8 @@ async function whatIfHandler(q, res, req) {
     description: WHATIF_DESCRIPTION,
     mode: 'whatif',
     ...(warnings.length ? { warnings } : {}),
-    a: { constraints: setA, ...(ignoredA.length ? { ignoredKeys: ignoredA } : {}), matchedRuns: bodyA.body.matchedRuns, id: bodyA.body.id, resultCount: bodyA.body.results.length },
-    b: { constraints: setB, ...(ignoredB.length ? { ignoredKeys: ignoredB } : {}), matchedRuns: bodyB.body.matchedRuns, id: bodyB.body.id, resultCount: bodyB.body.results.length },
+    a: { constraints: setA, ...(ignoredA.length ? { ignoredKeys: ignoredA } : {}), matchedRuns: bodyA.body.matchedRuns, snapshot: bodyA.body.snapshot, id: bodyA.body.id, resultCount: bodyA.body.results.length },
+    b: { constraints: setB, ...(ignoredB.length ? { ignoredKeys: ignoredB } : {}), matchedRuns: bodyB.body.matchedRuns, snapshot: bodyB.body.snapshot, id: bodyB.body.id, resultCount: bodyB.body.results.length },
     delta: computeWhatIfDiff(bodyA.body.results, bodyB.body.results)
   }, 200, 120);
 }
