@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Target } from 'lucide-react';
-import { DEFAULT_SLO_BUDGETS, loadSloBudgets, saveSloBudgets, sanitizeBudgets } from '../utils/slo.js';
+import { DEFAULT_SLO_BUDGETS, loadSloBudgets, saveSloBudgets, sanitizeBudgets, validateBudgetInput } from '../utils/slo.js';
 import { t } from '../i18n/strings';
 
 /**
@@ -25,10 +25,22 @@ export function useSloBudgets() {
  */
 export default function SloBudgetsPanel({ budgets, onChange }) {
   const [open, setOpen] = useState(false);
+  // Invalid budget input surfaces an error instead of silently disabling the
+  // check (#639) — 0 / negative / garbage used to coerce to null = "Off" with
+  // zero feedback in the panel, console, or any live region.
+  const [invalid, setInvalid] = useState(null); // { key, error } | null
 
   const setField = (key, raw) => {
-    const n = Number(raw);
-    onChange({ ...budgets, [key]: raw === '' || !Number.isFinite(n) ? null : n });
+    const check = validateBudgetInput(raw);
+    if (!check.ok) {
+      setInvalid({ key, error: check.error });
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn(`[slo] invalid ${key} budget rejected:`, check.error);
+      }
+      return; // keep the previous value — never silently disable the check
+    }
+    setInvalid(null);
+    onChange({ ...budgets, [key]: check.value });
   };
 
   const fields = [
@@ -62,6 +74,11 @@ export default function SloBudgetsPanel({ budgets, onChange }) {
 
       {open && (
         <>
+          {invalid && (
+            <p role="alert" className="hint-text" style={{ margin: '8px 0 0', color: 'var(--slo-fail, #FCA5A5)' }}>
+              {invalid.error}
+            </p>
+          )}
           <div className="grid-auto" style={{ '--grid-min': '12.5rem', marginTop: '12px' }}>
             {fields.map(f => (
               <div className="panel-inset field" key={f.key}>

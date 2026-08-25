@@ -7,6 +7,7 @@
 // identity even though the app routes purely through query params.
 
 import { HARDWARE_PRESETS } from './presets.js';
+import { SHARE_SIG_PARAM, signShareParams } from './shareIntegrity.js';
 
 // Tab ids → short human phrases used at the end of generated titles.
 const TAB_TITLE_PHRASES = {
@@ -69,20 +70,42 @@ function hardwareDisplayName({ presetId, hardwareLabel }) {
 //   { modelId: 'Qwen/Qwen3-32B', quantization: 'Q4_K_M',
 //     presetId: 'rtx4090_exl2', promptTokens: 8192, activeTab: 'agentic' }
 //     → "Qwen3 32B Q4 on RTX 4090 24GB, 8K agentic loop"
+//
+// Issue #630: on the Find HW tab the simulator globals describe a rig/model
+// the recipient never sees — the view's actual state is the constraint set
+// (?sd=&sv=&sm=&sq=). When activeTab is 'shortlist' and constraints are
+// supplied, the title describes THOSE instead of the unrelated sim config.
 export function describeConfig({
   presetId,
   hardwareLabel,
   modelId,
   quantization,
   promptTokens,
-  activeTab
+  activeTab,
+  shortlist
 } = {}) {
+  const phrase = TAB_TITLE_PHRASES[activeTab] || '';
+
+  if (activeTab === 'shortlist' && shortlist) {
+    const parts = [];
+    const model = shortModelName(shortlist.model);
+    if (model) parts.push(model);
+    const quant = shortQuant(shortlist.quant);
+    if (quant) parts.push(quant);
+    const minDecode = Number(shortlist.minDecode);
+    if (Number.isFinite(minDecode) && minDecode > 0) {
+      parts.push(`≥${Math.round(minDecode)} tok/s`);
+    }
+    const maxVram = Number(shortlist.maxVramGb);
+    if (Number.isFinite(maxVram) && maxVram > 0) parts.push(`≤${maxVram} GB`);
+    return [parts.join(' · '), phrase].filter(Boolean).join(' · ') || phrase;
+  }
+
   const hw = hardwareDisplayName({ presetId, hardwareLabel });
   const model = shortModelName(modelId);
   const quant = shortQuant(quantization);
   const subject = model ? `${model}${quant ? ` ${quant}` : ''} on ${hw}` : hw;
 
-  const phrase = TAB_TITLE_PHRASES[activeTab] || '';
   const ctx = formatTokenCountShort(promptTokens);
   const workload = [ctx, phrase].filter(Boolean).join(' ');
 
@@ -106,11 +129,16 @@ export function slugifyTitle(title) {
 }
 
 // Full permalink URL: current query state + `title` param + #s/<slug>.
-// `loc` is injected ({ origin, pathname, search }) so this stays unit-testable
-// outside the browser; callers pass window.location.
-export function permalinkHref(loc, title) {
+// Since #917 the link also carries an integrity signature `h=<hex>` (HMAC over
+// the canonicalized params incl. title) that App verifies on load — mutated
+// links surface a "link was modified" banner instead of being accepted
+// verbatim. Async because signing goes through Web Crypto; `loc` is injected
+// ({ origin, pathname, search }) so this stays unit-testable outside the
+// browser; callers pass window.location.
+export async function permalinkHref(loc, title) {
   const p = new URLSearchParams(loc.search || '');
   p.set('title', title);
+  p.set(SHARE_SIG_PARAM, await signShareParams(`?${p.toString()}`));
   const qs = p.toString();
   const base = `${loc.origin}${loc.pathname}`;
   return `${base}?${qs}#s/${slugifyTitle(title)}`;
@@ -123,8 +151,10 @@ export function readPermalinkTitle(search) {
 }
 
 // document.title policy: an opened shared link shows its own encoded title;
-// otherwise the derived config title sits under the site brand.
-export function documentTitleFor(sharedTitle, derivedTitle, brandTitle) {
-  if (sharedTitle) return sharedTitle;
+// otherwise the derived config title sits under the site brand. A tampered
+// link (signature mismatch) is excluded from this preference — its title is
+// attacker-controllable free text and must not masquerade as the app's claim.
+export function documentTitleFor(sharedTitle, derivedTitle, brandTitle, tampered) {
+  if (sharedTitle && !tampered) return sharedTitle;
   return derivedTitle ? `${derivedTitle} · ${brandTitle}` : brandTitle;
 }

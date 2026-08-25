@@ -1,3 +1,4 @@
+import { fmtEn } from './numfmt.js';
 const API_BASE = '/localmaxxing-api';
 
 function positiveNumber(value) {
@@ -53,7 +54,7 @@ export function runLabel(run) {
   const engine = run.engine?.engineName || 'unknown engine';
   const age = runAgeDays(run);
   const ageTag = age === null ? '' : ` · ${age < 90 ? 'fresh' : age < 365 ? 'aging' : 'stale'} ${age}d`;
-  return `${hardwareName(run)} · ${engine}${ageTag} · ${run.tokSPrefill.toLocaleString()} prefill / ${run.tokSOut.toLocaleString()} decode tok/s`;
+  return `${hardwareName(run)} · ${engine}${ageTag} · ${fmtEn(run.tokSPrefill)} prefill / ${fmtEn(run.tokSOut)} decode tok/s`;
 }
 
 // ---------- Freshness (issue #38) ----------
@@ -118,13 +119,13 @@ export function toLocalPreset(run, now = new Date()) {
 
   return {
     id: `lmx:${run.id}`,
-    name: `${hardwareName(run)} (${engine} ${quant} · ${run.tokSPrefill.toLocaleString()} / ${run.tokSOut.toLocaleString()} tok/s)`,
+    name: `${hardwareName(run)} (${engine} ${quant} · ${fmtEn(run.tokSPrefill)} / ${fmtEn(run.tokSOut)} tok/s)`,
     prefillSpeed: run.tokSPrefill,
     decodeSpeed: run.tokSOut,
     icon: '📊',
     badge: 'LocalMaxxing run',
     vramBandwidth: 'Measured community result',
-    description: `${modelName}; ${run.promptTokens || 0} prompt tokens; ${run.outputTokens || 0} output tokens; ${run.contextLength?.toLocaleString() || 'unknown'} context.`,
+    description: `${modelName}; ${run.promptTokens || 0} prompt tokens; ${run.outputTokens || 0} output tokens; ${run.contextLength ? fmtEn(run.contextLength) : 'unknown'} context.`,
     sourceUrl: `https://localmaxxing.com/en/runs/${run.id}`,
     localMaxxing: true,
     hardwareKey: hardwareKey(run),
@@ -138,12 +139,35 @@ export function toLocalPreset(run, now = new Date()) {
   };
 }
 
+/**
+ * Structured provenance for a LocalMaxxing-measured config (#602): lets
+ * exports distinguish community-measured speeds from synthetic preset
+ * numbers and cite the source run with its staleness caveats.
+ * Returns null when the active preset is not an lmx:<runId> one.
+ */
+export function lmxProvenance(presetId, run) {
+  if (!presetId || !presetId.startsWith('lmx:') || !run) return null;
+  const ageDays = runAgeDays(run);
+  return {
+    presetId,
+    runId: run.id,
+    modelId: run.model?.hfId || null,
+    quantization: run.engine?.quantization || null,
+    engine: run.engine?.engineName || null,
+    engineVersion: run.engine?.engineVersion ?? null,
+    measuredAt: run.createdAt || null,
+    ageDays,
+    staleness: stalenessTier(ageDays),
+    sourceUrl: `https://localmaxxing.com/en/runs/${run.id}`,
+    kind: 'community-measured'
+  };
+}
+
 async function fetchJson(path, signal) {
   const response = await fetch(`${API_BASE}${path}`, { signal });
   if (!response.ok) throw new Error(`LocalMaxxing returned ${response.status}`);
   return response.json();
 }
-
 export async function fetchModels(signal) {
   const models = await fetchJson('/models?limit=1000', signal);
   return models

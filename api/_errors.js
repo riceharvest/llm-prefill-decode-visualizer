@@ -20,6 +20,11 @@ export const ERROR_CODES = {
     title: 'Invalid parameters',
     description: 'The request was well-formed but contains invalid or missing parameters. Fix the input and retry without backoff.'
   },
+  INVALID_CURSOR: {
+    status: 400,
+    title: 'Invalid cursor',
+    description: 'The ?cursor= value is malformed or was minted for a different query (endpoint, filters or dataset snapshot changed). Restart the walk from page one of the current query. Do not retry with the same cursor.'
+  },
   NOT_FOUND: {
     status: 404,
     title: 'Not found',
@@ -39,6 +44,11 @@ export const ERROR_CODES = {
     status: 502,
     title: 'Upstream unavailable',
     description: 'Transient failure fetching community benchmark data. Safe to retry with backoff.'
+  },
+  BATCH_ALL_FAILED: {
+    status: 400,
+    title: 'Batch failed',
+    description: 'Every item in the batch failed (issue #707). The `errors` member carries one entry per failed item, each with its own stable `code` and HTTP `status`. Partial batches (at least one ok item) still return 200 with per-item ok/error entries.'
   },
   INTERNAL: {
     status: 500,
@@ -113,18 +123,37 @@ function send(res, status, body) {
 }
 
 /**
+ * RFC 9457 `instance` source URL for a request.
+ *
+ * On the serverless catch-all (api/[...path].js), the platform appends its own
+ * internal routing key — `?...path=<fn-name>` — to req.url. That key is not a
+ * documented API parameter and was never sent by the client, so it must not
+ * leak into the occurrence URI agents use for correlation/retry logs (#1095).
+ */
+export function requestInstance(req) {
+  const raw = String(req?.url || '');
+  const q = raw.indexOf('?');
+  if (q === -1 || !raw.includes('...path=')) return raw;
+  const kept = raw
+    .slice(q + 1)
+    .split('&')
+    .filter(part => part !== '' && !part.startsWith('...path='));
+  return kept.length ? `${raw.slice(0, q)}?${kept.join('&')}` : raw.slice(0, q);
+}
+
+/**
  * Render a problem+json response. `req` is optional and only used to fill the
  * RFC `instance` member (the request path + query).
  */
 export function sendProblem(res, req, { status, code, detail, errors, ...extras } = {}) {
   const body = problemBody({ status, code, detail, errors, ...extras });
-  send(res, body.status, { ...body, instance: body.instance ?? req?.url });
+  send(res, body.status, { ...body, instance: body.instance ?? requestInstance(req) });
 }
 
 /** Render a problem from a thrown value (ApiError keeps its code/status). */
 export function sendProblemFromError(res, req, err) {
   const e = toApiError(err);
-  send(res, e.status, e.toProblem(req?.url));
+  send(res, e.status, e.toProblem(requestInstance(req)));
 }
 
 /**
@@ -135,7 +164,7 @@ export function sendRateLimited(res, req, { detail, retryAfter = 60 } = {}) {
   const body = problemBody({
     code: 'RATE_LIMITED',
     detail: detail || 'Too many requests — slow down.',
-    instance: req?.url
+    instance: requestInstance(req)
   });
   res.setHeader('Retry-After', String(retryAfter));
   send(res, ERROR_CODES.RATE_LIMITED.status, body);

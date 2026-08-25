@@ -8,10 +8,11 @@ import {
   estimateImageTokens
 } from '../utils/multimodal';
 import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
+import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
-import { drawItlSamples, summarizeItl, histogramItl, cumulativeItlSchedule, tokensEmittedBy } from '../utils/itl';
+import { drawItlSamples, summarizeItl, histogramItl, cumulativeItlSchedule, tokensEmittedBy, clampItlTokenCount } from '../utils/itl';
 import {
   DEFAULT_HALF_SPEED_CONTEXT,
   HALF_SPEED_CONTEXT_PRESETS,
@@ -39,6 +40,7 @@ import { evaluateSlo } from '../utils/slo.js';
 import { buildSingleTurnMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { buildSingleTurnJson, downloadJson } from '../utils/exportJson';
 import { t } from '../i18n/strings';
+import { fmtEn } from '../utils/numfmt';
 
 export default function SingleTurnVisualizer({
   prefillSpeed,
@@ -50,7 +52,7 @@ export default function SingleTurnVisualizer({
   sloBudgets
 }) {
   const [promptTokens, setPromptTokens] = useState(() => readParamNum('prompt', 2048));
-  const [outputTokens, setOutputTokens] = useState(() => readParamNum('output', 512));
+  const [outputTokens, setOutputTokens] = useState(() => clampItlTokenCount(readParamNum('output', 512)));
   // Speculative decoding: draft model proposes k tokens per step, target verifies.
   // Effective tok/s ≈ decodeSpeed × (k+1) × acceptance / (1 + k × acceptance × draftCost)
   // where draftCost is draft-model TPOT as a fraction of target TPOT (~0.15-0.3 typical).
@@ -422,6 +424,7 @@ export default function SingleTurnVisualizer({
   const throughputAnchorText = throughputAnchor(throughputNow);
   // Markdown walkthrough export (download + clipboard)
   const [mdCopied, setMdCopied] = useState(false);
+  const [mdCopyFailed, setMdCopyFailed] = useState(false);
   const buildMarkdown = () => buildSingleTurnMarkdown({
     promptTokens,
     outputTokens,
@@ -431,6 +434,13 @@ export default function SingleTurnVisualizer({
     draftTokens,
     acceptance,
     effectiveDecodeSpeed,
+    ctxScaleEnabled,
+    ctxHalf,
+    imagesEnabled,
+    imageCount,
+    imageResId,
+    jitterEnabled,
+    jitterPct,
     deepLink: buildDeepLink('single')
   });
   const handleExportMd = () => downloadMarkdown(buildMarkdown(), 'single-turn-simulation.md');
@@ -443,15 +453,23 @@ export default function SingleTurnVisualizer({
     draftTokens,
     acceptance,
     effectiveDecodeSpeed,
+    ctxScaleEnabled,
+    ctxHalf,
+    imagesEnabled,
+    imageCount,
+    imageResId,
+    jitterEnabled,
+    jitterPct,
     deepLink: buildDeepLink('single')
   });
   const handleExportJson = () => downloadJson(buildJson(), 'single-turn-simulation.json');
   const handleCopyMd = async () => {
     const ok = await copyMarkdownToClipboard(buildMarkdown());
-    if (ok) {
-      setMdCopied(true);
-      setTimeout(() => setMdCopied(false), 2000);
-    }
+    // Issue #401: surface failure explicitly — silent no-feedback on a failed
+    // copy is how agents lose the report without knowing it.
+    setMdCopied(ok);
+    setMdCopyFailed(!ok);
+    setTimeout(() => { setMdCopied(false); setMdCopyFailed(false); }, 2000);
   };
 
   // Token stream windowing: derive the visible words from the real decode
@@ -552,7 +570,7 @@ export default function SingleTurnVisualizer({
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
       {/* Issue #63: live narration of the animated run for screen readers */}
-      <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
+      <div className="visually-hidden" role="status" aria-live="polite" data-testid="run-state">{srSummary}</div>
 
       {/* Top Parameter Cards */}
       <section className="panel" aria-label={t('singleTurn.paramsPanelAria')}>
@@ -774,7 +792,7 @@ export default function SingleTurnVisualizer({
             </button>
             {ctxScaleEnabled && (
               <span className="tag tag-decode">
-                {t('singleTurn.ctxEffectiveTag', { speed: displayDecodeSpeed.toLocaleString() })}
+                {t('singleTurn.ctxEffectiveTag', { speed: fmtEn(displayDecodeSpeed) })}
               </span>
             )}
           </div>
@@ -1040,7 +1058,9 @@ export default function SingleTurnVisualizer({
                 value={outputTokens}
                 aria-label={t('singleTurn.outputValueAria')}
                 onChange={(e) => {
-                  setOutputTokens(Number(e.target.value));
+                  // #938: same ceiling as the slider — unbounded typed/URL
+                  // values froze the tab in O(outputTokens) ITL sampling.
+                  setOutputTokens(clampItlTokenCount(Number(e.target.value)));
                   handleReset();
                 }}
                 style={{ width: '5rem' }}
@@ -1065,7 +1085,12 @@ export default function SingleTurnVisualizer({
       ))}
 
       {/* Main Visualizer Stage */}
-      <section className="panel" aria-label={t('singleTurn.simStageAria')}>
+      <section
+        className="panel"
+        aria-label={t('singleTurn.simStageAria')}
+        data-state={phaseToRunState(phase)}
+        aria-busy={runStateToBusy(phaseToRunState(phase))}
+      >
 
         {/* Status Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
@@ -1122,7 +1147,7 @@ export default function SingleTurnVisualizer({
               aria-label="Copy markdown walkthrough to clipboard"
             >
               <Copy size={15} />
-              {mdCopied ? 'Copied!' : 'Copy MD'}
+              {mdCopied ? 'Copied!' : mdCopyFailed ? 'Copy failed' : 'Copy MD'}
             </button>
           </div>
         </div>
@@ -1413,7 +1438,7 @@ export default function SingleTurnVisualizer({
                 {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms'}
               </Metric>
             </div>
-            <div className="metric-sub">{t('singleTurn.tokensPerSecSub', { speed: displayDecodeSpeed.toLocaleString() })}</div>
+            <div className="metric-sub">{t('singleTurn.tokensPerSecSub', { speed: fmtEn(displayDecodeSpeed) })}</div>
             {tpotAnchorText && <div className="metric-anchor">📖 {tpotAnchorText}</div>}
           </div>
 

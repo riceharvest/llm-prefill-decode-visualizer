@@ -18,6 +18,7 @@ function mockRes() {
     ended: false,
     setHeader(k, v) { this.headers[k] = v; },
     getHeader(k) { return this.headers[k]; },
+    hasHeader(k) { const l = String(k).toLowerCase(); return Object.keys(this.headers).some(h => h.toLowerCase() === l); },
     end(b) { this.ended = true; this.body = b ? JSON.parse(b) : null; }
   };
 }
@@ -94,4 +95,45 @@ test('router serves /api/agent/scenario.json', async () => {
   const { readFileSync } = await import('node:fs');
   const routerSrc = readFileSync(new URL('./[...path].js', import.meta.url), 'utf8');
   assert.match(routerSrc, /case '\/agent\/scenario\.json'/);
+});
+
+// --- #761: nextSteps example speeds must come from a REAL /api/presets rig ---
+
+import { HARDWARE_PRESETS } from '../src/utils/presets.js';
+
+const KNOWN_SPEEDS = new Set(HARDWARE_PRESETS.flatMap(p => [p.prefillSpeed, p.decodeSpeed]));
+
+function nextStepExamples(body) {
+  return (body.nextSteps || []).map(s => s.example || '');
+}
+
+function extractSpeedParams(example) {
+  const prefill = Number(new URLSearchParams(example).get('prefillSpeed'));
+  const decode = Number(new URLSearchParams(example).get('decodeSpeed'));
+  return { prefill, decode };
+}
+
+test('directory-mode nextSteps example uses real preset speeds (#761)', async () => {
+  const { status, body } = await call({});
+  assert.equal(status, 200);
+  const computeExamples = nextStepExamples(body).filter(e => e.includes('/api/compute'));
+  assert.ok(computeExamples.length > 0);
+  for (const ex of computeExamples) {
+    const { prefill, decode } = extractSpeedParams(ex);
+    assert.ok(KNOWN_SPEEDS.has(prefill), `prefillSpeed=${prefill} matches no /api/presets entry`);
+    assert.ok(KNOWN_SPEEDS.has(decode), `decodeSpeed=${decode} matches no /api/presets entry`);
+    assert.notEqual(`${prefill}/${decode}`, '5000/120');
+  }
+});
+
+test('load-mode nextSteps example uses real preset speeds + cites its preset id (#761)', async () => {
+  const { status, body } = await call({ id: 'codegen' });
+  assert.equal(status, 200);
+  const step = (body.nextSteps || []).find(s => (s.example || '').includes('/api/compute'));
+  assert.ok(step, 'expected a compute nextStep');
+  const { prefill, decode } = extractSpeedParams(step.example);
+  assert.ok(KNOWN_SPEEDS.has(prefill));
+  assert.ok(KNOWN_SPEEDS.has(decode));
+  // The note must trace the speeds back to a real preset id.
+  assert.match(step.note, new RegExp(HARDWARE_PRESETS[0].id));
 });

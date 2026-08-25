@@ -15,28 +15,37 @@ import KVCacheCalculator from './components/KVCacheCalculator';
 import TheoryGuide from './components/TheoryGuide';
 import SloBudgetsPanel, { useSloBudgets } from './components/SloBudgetsPanel';
 import { HARDWARE_PRESETS } from './utils/presets';
-import { toLocalPreset, hardwareName } from './utils/localMaxxing';
+import { toLocalPreset, hardwareName, lmxProvenance } from './utils/localMaxxing';
 import {
   describeConfig, permalinkHref, readPermalinkTitle, documentTitleFor
 } from './utils/permalink';
+import { verifyShareLink } from './utils/shareIntegrity';
 import { readParam, writeParams } from './utils/urlState';
 import {
-  serializeSettings, parseSettings,
-  createHistory, recordChange, undo as historyUndo, redo as historyRedo
+  serializeSettings,
+  recordChange, undo as historyUndo, redo as historyRedo,
+  loadHistory, saveHistory, planRestore
 } from './utils/settingsHistory';
 import SnapshotsSidebar from './components/SnapshotsSidebar';
 import { useFocusPanelHeading } from './utils/focus';
-import { setLocale, syncDocument, t } from './i18n/strings';
+import { setLocale, syncDocument, t, isKnownLocale } from './i18n/strings';
 import { installTouchTooltips } from './utils/touchTooltips';
+import CurriculumMode from './components/CurriculumMode';
 
 // Every valid view id, in tab-bar order. Doubled as 1-9 keyboard-shortcut
 // targets and as the allow-list for the `?tab=` query param: an unknown
 // value falls back to 'single' instead of rendering a blank content area.
 const TABS = ['single', 'agentic', 'batching', 'compare', 'ab', 'diff', 'shortlist', 'kvcache', 'theory'];
 
+// ?tab= allow-list (issue #532): the header tabs plus `curriculum`, the
+// guided-lessons quiz view that the /embed shell has always accepted.
+// Both shells now resolve the identical vocabulary so a real view can no
+// longer be reachable on one route and a silent fallback on the other.
+const TAB_PARAM_ALLOWLIST = [...TABS, 'curriculum'];
+
 function readTabParam() {
   const v = readParam('tab');
-  return TABS.includes(v) ? v : 'single';
+  return TAB_PARAM_ALLOWLIST.includes(v) ? v : 'single';
 }
 
 export default function App() {
@@ -46,9 +55,18 @@ export default function App() {
 
   // Locale + touch tooltips: one-time setup. `?lang=` overrides the default
   // locale; direction is applied to <html> so RTL locales flip the layout.
+  // Unsupported lang values are reported (issue #533) instead of silently
+  // staying English: console.warn + data-lang-fallback on <html>.
   useEffect(() => {
     const lang = readParam('lang');
-    if (lang) setLocale(lang);
+    if (lang) {
+      setLocale(lang);
+      if (!isKnownLocale(lang)) {
+        // eslint-disable-next-line no-console
+        console.warn(`[i18n] ?lang=${lang} has no translation catalog — staying in English (known: en, ar)`);
+        document.documentElement.dataset.langFallback = 'true';
+      }
+    }
     syncDocument();
     installTouchTooltips();
   }, []);
@@ -61,12 +79,13 @@ export default function App() {
   })();
   const initialPresetObj = HARDWARE_PRESETS.find(x => x.id === initialPreset) || HARDWARE_PRESETS[0];
   const [selectedPreset, setSelectedPreset] = useState(initialPreset);
+  // Ref mirror of selectedPreset so applySettingsQs (stable deps) can resolve
+  // default-speed anchors without re-creating on every preset change.
+  const selectedPresetRef = useRef(initialPreset);
+  useEffect(() => { selectedPresetRef.current = selectedPreset; }, [selectedPreset]);
   const [prefillSpeed, setPrefillSpeed] = useState(() => Number(readParam('prefill')) || initialPresetObj.prefillSpeed);
   const [decodeSpeed, setDecodeSpeed] = useState(() => Number(readParam('decode')) || initialPresetObj.decodeSpeed);
-  const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => {
-    const v = readParam('sim');
-    return v === 'instant' ? 'instant' : (Number(v) || 1);
-  });
+  const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => readSimMultiplier());
   const [isPlaying, setIsPlaying] = useState(false);
   // Engine flags (issue #70): comma-separated ids persisted in the URL. The
   // picker shows their documented deltas; "Apply to simulation" bakes the
@@ -98,6 +117,13 @@ export default function App() {
   const selectedLmxRun = useMemo(() => (
     localMaxxingContext.runs.find(r => r.id === localMaxxingContext.selectedRunId) || null
   ), [localMaxxingContext]);
+  // Measurement provenance for exports (#602): non-null only while an
+  // lmx:<runId> preset is actually applied, so agents reading exported
+  // JSON/Markdown can tell measured speeds from synthetic preset numbers.
+  const lmxProvenanceBlock = useMemo(
+    () => lmxProvenance(selectedPreset, selectedLmxRun),
+    [selectedPreset, selectedLmxRun]
+  );
   const permalinkTitle = useMemo(() => describeConfig({
     presetId: selectedPreset,
     hardwareLabel: selectedPreset.startsWith('lmx:') && selectedLmxRun
@@ -106,18 +132,52 @@ export default function App() {
     modelId: selectedLmxRun?.model?.hfId || localMaxxingContext.modelId,
     quantization: selectedLmxRun?.engine?.quantization || localMaxxingContext.quantization,
     promptTokens: Number(readParam('prompt')) || undefined,
-    activeTab
+    activeTab,
+    // Issue #630: on Find HW the title must describe the constraint set the
+    // recipient lands on (?sd=&sv=&sm=&sq=), not simulator globals.
+    shortlist: activeTab === 'shortlist'
+      ? {
+          minDecode: readParam('sd'),
+          maxVramGb: readParam('sv'),
+          model: readParam('sm'),
+          quant: readParam('sq')
+        }
+      : undefined
   }), [selectedPreset, selectedLmxRun, localMaxxingContext.modelId, localMaxxingContext.quantization, activeTab]);
 
+  // Share-link tamper-evidence (#917): permalinkHref() signs the params it
+  // shares; a loaded link's signature is checked once on mount. A signed link
+  // whose params or ?title= were mutated surfaces a banner and loses its
+  // ?title= privilege instead of being accepted verbatim. Unsigned links
+  // (in-app navigation, legacy shares) are not flagged — no signature to
+  // contradict.
+  const [shareLinkTampered, setShareLinkTampered] = useState(false);
+  const [shareSigGiven, setShareSigGiven] = useState('');
+  const [shareSigExpected, setShareSigExpected] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    verifyShareLink(window.location.search).then(result => {
+      if (cancelled) return;
+      if (result.status === 'tampered') {
+        setShareLinkTampered(true);
+        setShareSigGiven(result.given);
+        setShareSigExpected(result.expected);
+      }
+    }).catch(() => { /* Web Crypto unavailable: degrade to old unsigned behavior */ });
+    return () => { cancelled = true; };
+  }, []);
+
   // An opened shared link shows its own encoded title; otherwise the derived
-  // config title sits under the site brand.
+  // config title sits under the site brand. On a tampered link (#917) the
+  // encoded title is ignored — it's attacker-controllable free text.
   useEffect(() => {
     document.title = documentTitleFor(
       readPermalinkTitle(window.location.search),
       permalinkTitle,
-      t('header.brandTitle')
+      t('header.brandTitle'),
+      shareLinkTampered
     );
-  }, [permalinkTitle]);
+  }, [permalinkTitle, shareLinkTampered]);
 
   const comparisonPresets = useMemo(() => [
     ...localMaxxingContext.runs.map(run => toLocalPreset(run)),
@@ -128,7 +188,12 @@ export default function App() {
   // settings (preset, prefill, decode, sim multiplier, engine flags) is
   // recorded on an undo stack; snapshots are explicit named restore points
   // serialized to the same URL query format the share button uses.
-  const [settingsHistory, setSettingsHistory] = useState(createHistory);
+  // The undo/redo stack persists to localStorage (#565) so a reload no longer
+  // wipes the whole trail — restored on mount via loadHistory().
+  const [settingsHistory, setSettingsHistory] = useState(loadHistory);
+  useEffect(() => {
+    saveHistory(settingsHistory);
+  }, [settingsHistory]);
   const currentQs = useMemo(() => serializeSettings({
     preset: selectedPreset,
     prefill: prefillSpeed,
@@ -160,19 +225,36 @@ export default function App() {
     setSettingsHistory(h => recordChange(h, previousQs));
   }, [currentQs]);
 
-  // Apply a serialized settings entry (from undo/redo or a snapshot). Unknown
-  // hardware ids fall back like the URL loader instead of blanking the picker.
+  // Apply a serialized settings entry (from undo/redo or a snapshot). Restore
+  // is TOTAL (#569): absent keys reset to the snapshot's preset defaults and
+  // unresolved preset ids are reported instead of silently keeping the
+  // current hardware. Returns a machine-readable report of what was applied.
   const applySettingsQs = useCallback((qs, { record = false } = {}) => {
-    const s = parseSettings(qs);
+    const plan = planRestore(qs, { presets: HARDWARE_PRESETS });
+    const s = plan.settings;
     if (!record) applyingFromHistoryRef.current = true;
-    if (s.preset && (s.preset.startsWith('lmx:') || HARDWARE_PRESETS.some(p => p.id === s.preset))) {
+    if (plan.presetKnown && s.preset) {
       setSelectedPreset(s.preset);
     }
+    // Absent speeds fall back to the resolved preset's own defaults, so the
+    // same snapshot restores to the same state from any starting point.
+    const anchorPreset = HARDWARE_PRESETS.find(p => p.id === s.preset)
+      || HARDWARE_PRESETS.find(p => p.id === selectedPresetRef.current)
+      || HARDWARE_PRESETS[0];
     if (s.prefill !== null) setPrefillSpeed(s.prefill);
+    else setPrefillSpeed(anchorPreset.prefillSpeed);
     if (s.decode !== null) setDecodeSpeed(s.decode);
+    else setDecodeSpeed(anchorPreset.decodeSpeed);
     setSimSpeedMultiplier(s.sim);
     setSelectedFlags(s.flags);
     setIsPlaying(false);
+    const report = {
+      applied: { preset: s.preset || null, prefill: s.prefill, decode: s.decode, sim: s.sim, flags: s.flags },
+      resetToDefaults: plan.resets,
+      unresolvedPreset: plan.unresolvedPreset
+    };
+    window.dispatchEvent(new CustomEvent('llmpdv:settings-restore', { detail: report }));
+    return report;
   }, []);
 
   const handleUndo = useCallback(() => {
@@ -189,8 +271,16 @@ export default function App() {
     setSettingsHistory(res.history);
   }, [settingsHistory, currentQs, applySettingsQs]);
 
+  const [lastRestoreReport, setLastRestoreReport] = useState(null);
   const handleRestoreSnapshot = useCallback((qs) => {
-    applySettingsQs(qs, { record: true });
+    const report = applySettingsQs(qs, { record: true });
+    // Surfaced in the sidebar (#569): absent keys reset to defaults and
+    // unresolved preset ids are visible instead of silently merged.
+    if (report.unresolvedPreset || report.resetToDefaults.length > 0) {
+      setLastRestoreReport(report);
+    } else {
+      setLastRestoreReport(null);
+    }
   }, [applySettingsQs]);
 
   // Keep shareable settings in the URL
@@ -316,7 +406,7 @@ export default function App() {
   // plus the auto-generated human-readable `title` param and #s/<slug>.
   const handleShare = async () => {
     try {
-      const href = permalinkHref({
+      const href = await permalinkHref({
         origin: window.location.origin,
         pathname: window.location.pathname,
         search: window.location.search
@@ -341,7 +431,7 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-testid="app-root">
 
       {/* Navigation Header */}
       <Header
@@ -352,6 +442,22 @@ export default function App() {
         onApplyPreset={handleApplyPreset}
         onShare={handleShare}
       />
+
+      {/* Share-link tamper-evidence (#917): a signed link whose params or
+          ?title= were edited after signing is flagged here instead of being
+          accepted silently — mirrors the loud failure of tampered calc ids. */}
+      {shareLinkTampered && (
+        <div className="share-tamper-banner" role="alert" style={{
+          margin: '0 auto', maxWidth: '72rem', padding: '0.6rem 1rem',
+          border: '1px solid #b45309', borderRadius: 8,
+          background: '#fffbeb', color: '#92400e'
+        }}>
+          <strong>This link was modified.</strong> Its settings no longer match the
+          signature it was shared with, so its title is not shown. Verify any claims
+          by recomputing via /api/calc with a <code>calc_</code> id.
+          {' '}<small>(signature <code>{shareSigGiven}</code> ≠ expected <code>{shareSigExpected}</code>)</small>
+        </div>
+      )}
 
       <main className="app-frame stack" ref={mainRef}>
         <CollapsibleSection id="localmaxxing" title={t('common.localMaxxingTitle') || 'LocalMaxxing measured presets'} badge="LIVE">
@@ -376,6 +482,7 @@ export default function App() {
               isPlaying={isPlaying}
               setIsPlaying={setIsPlaying}
               onReset={handleReset}
+              hideSpeedInputs={activeTab === 'ab'}
             />
 
             {/* Engine flag modeling: documented llama.cpp/vLLM flag deltas */}
@@ -396,6 +503,7 @@ export default function App() {
           <SnapshotsSidebar
             currentQs={currentQs}
             onRestore={handleRestoreSnapshot}
+            restoreReport={lastRestoreReport}
             canUndo={settingsHistory.past.length > 0}
             canRedo={settingsHistory.future.length > 0}
             onUndo={handleUndo}
@@ -418,6 +526,7 @@ export default function App() {
             setIsPlaying={setIsPlaying}
             resetKey={resetKey}
             sloBudgets={sloBudgets}
+            lmxProvenance={lmxProvenanceBlock}
           />
         )}
 
@@ -477,6 +586,12 @@ export default function App() {
 
         {activeTab === 'theory' && (
           <TheoryGuide />
+        )}
+
+        {/* Guided curriculum (issue #532): reachable via ?tab=curriculum on
+            both / and /embed; intentionally absent from the header nav. */}
+        {activeTab === 'curriculum' && (
+          <CurriculumMode />
         )}
       </main>
 

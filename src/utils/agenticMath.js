@@ -50,7 +50,14 @@ export function waterfallGeometry(turns) {
     return {
       leftPercent: hasTotal ? (turnStart / totalWalltime) * 100 : 0,
       widthPercent: hasTotal ? (turn.turnWalltime / totalWalltime) * 100 : 0,
-      prefillPercent: hasTurn ? (turn.prefillTime / turn.turnWalltime) * 100 : 0
+      prefillPercent: hasTurn ? (turn.prefillTime / turn.turnWalltime) * 100 : 0,
+      // Issue #591: absolute time values so the chart is self-describing —
+      // the rendered bars are percent-of-loop only and the total scale used
+      // to live in an unrelated DOM node outside the chart container.
+      startSeconds: Number.isFinite(turnStart) ? turnStart : 0,
+      durationSeconds: hasTurn ? turn.turnWalltime : 0,
+      prefillSeconds: Number.isFinite(turn.prefillTime) ? turn.prefillTime : 0,
+      decodeSeconds: Number.isFinite(turn.decodeTime) ? turn.decodeTime : 0
     };
   });
 }

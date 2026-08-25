@@ -3,6 +3,7 @@ import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, File
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, readParamBool, readParam, writeParams } from '../utils/urlState';
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
+import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { exportNodeAsPng } from '../utils/exportPng';
 import EmbedDialog from './EmbedDialog';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
@@ -16,7 +17,7 @@ import ChartDataTable from './ChartDataTable';
 import Metric from './Metric';
 import Analogy from './Analogy';
 import SloBadge from './SloBadge';
-import { evaluateAgenticSlo, evaluateMetric } from '../utils/slo.js';
+import { evaluateAgenticSlo } from '../utils/slo.js';
 
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
@@ -226,11 +227,14 @@ export default function AgenticVisualizer({
     if (!checks.length) return null;
     return { pass: checks.every(r => r.pass), marginPct: Math.min(...checks.map(r => r.marginPct)) };
   };
-  // Whole-loop walltime vs the walltime budget (header badge).
-  const evaluateAgenticSloWalltime = evaluateMetric(totalAgentWalltime, sloBudgets?.walltimeSec);
+  // Whole-loop walltime vs the walltime budget (header badge). #682: this is
+  // the same verdict evaluateAgenticSlo produces, so the badge and the banner
+  // can never disagree about the loop-total scope.
+  const evaluateAgenticSloWalltime = agenticSlo.loopTotal;
 
   // Markdown walkthrough export (download + clipboard)
   const [mdCopied, setMdCopied] = useState(false);
+  const [mdCopyFailed, setMdCopyFailed] = useState(false);
   const buildMarkdown = () => buildAgenticMarkdown({
     numTurns,
     basePromptTokens,
@@ -255,10 +259,10 @@ export default function AgenticVisualizer({
   const handleExportJson = () => downloadJson(buildJson(), 'agentic-loop-simulation.json');
   const handleCopyMd = async () => {
     const ok = await copyMarkdownToClipboard(buildMarkdown());
-    if (ok) {
-      setMdCopied(true);
-      setTimeout(() => setMdCopied(false), 2000);
-    }
+    // Issue #401: surface failure explicitly instead of silent no-feedback.
+    setMdCopied(ok);
+    setMdCopyFailed(!ok);
+    setTimeout(() => { setMdCopied(false); setMdCopyFailed(false); }, 2000);
   };
 
   // Ref for timer
@@ -469,7 +473,7 @@ export default function AgenticVisualizer({
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
       {/* Issue #63: live narration of the animated run for screen readers */}
-      <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
+      <div className="visually-hidden" role="status" aria-live="polite" data-testid="run-state">{srSummary}</div>
 
       {/* Top Configuration Card */}
       <section className="panel" aria-label={t('agentic.paramsPanelAria')}>
@@ -481,10 +485,10 @@ export default function AgenticVisualizer({
 
           {/* Prefix Caching Toggle */}
           <button
-            data-tour="prefix-caching"
             onClick={handleTogglePrefixCaching}
             className="btn"
             aria-pressed={enablePrefixCaching}
+            data-testid="prefix-caching-toggle"
             style={enablePrefixCaching
               ? { borderColor: 'var(--decode-border)', color: 'var(--decode)', background: 'var(--decode-dim)' }
               : undefined}
@@ -624,7 +628,12 @@ export default function AgenticVisualizer({
       ))}
 
       {/* Main Agent Loop Simulation Stage */}
-      <section className="panel" aria-label={t('agentic.simStageAria')}>
+      <section
+        className="panel"
+        aria-label={t('agentic.simStageAria')}
+        data-state={phaseToRunState(currentPhase)}
+        aria-busy={runStateToBusy(phaseToRunState(currentPhase))}
+      >
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -687,7 +696,7 @@ export default function AgenticVisualizer({
               aria-label="Copy markdown walkthrough to clipboard"
             >
               <Copy size={15} />
-              {mdCopied ? 'Copied!' : 'Copy MD'}
+              {mdCopied ? 'Copied!' : mdCopyFailed ? 'Copy failed' : 'Copy MD'}
             </button>
           </div>
         </div>
@@ -762,20 +771,53 @@ export default function AgenticVisualizer({
             )}
           </div>
         )}
-        {sloEnabled && agenticSlo.failingTurns.length === 0 && (
-          <div
-            className="panel-inset"
-            style={{
-              borderColor: 'var(--decode-border)',
-              background: 'var(--decode-dim)',
-              marginBottom: '18px',
-              fontSize: '0.8rem',
-              color: 'var(--decode)'
-            }}
-          >
-            {t('slo.agenticAllPass')}
-          </div>
-        )}
+        {/* #682: the all-clear banner consults BOTH scopes — per-turn checks
+            AND the whole-loop walltime. A loop whose turns all pass but whose
+            total walltime overruns the budget gets a scoped warning instead of
+            a false "everything passes". */}
+        {sloEnabled && agenticSlo.failingTurns.length === 0 && (() => {
+          const loopOver = agenticSlo.loopTotal && !agenticSlo.loopTotal.pass;
+          if (!loopOver) {
+            return (
+              <div
+                className="panel-inset"
+                style={{
+                  borderColor: 'var(--decode-border)',
+                  background: 'var(--decode-dim)',
+                  marginBottom: '18px',
+                  fontSize: '0.8rem',
+                  color: 'var(--decode)'
+                }}
+              >
+                {t('slo.agenticAllPass')}
+              </div>
+            );
+          }
+          return (
+            <div
+              className="panel-inset"
+              role="alert"
+              aria-label={t('slo.agenticTurnsPassLoopOver', {
+                value: formatTime(agenticSlo.loopTotal.value),
+                budget: formatTime(agenticSlo.loopTotal.budget)
+              })}
+              style={{
+                borderColor: 'var(--danger)',
+                background: 'rgba(248, 113, 113, 0.08)',
+                marginBottom: '18px',
+                fontSize: '0.8rem',
+                color: 'var(--text-muted)'
+              }}
+            >
+              <strong style={{ color: 'var(--danger)' }}>
+                {t('slo.agenticTurnsPassLoopOver', {
+                  value: formatTime(agenticSlo.loopTotal.value),
+                  budget: formatTime(agenticSlo.loopTotal.budget)
+                })}
+              </strong>
+            </div>
+          );
+        })()}
 
         {/* Live Side-by-Side Prefill vs Decode Stream */}
         <div className="panel-inset" style={{ marginBottom: '20px' }}>
@@ -1039,14 +1081,32 @@ export default function AgenticVisualizer({
             </div>
           </div>
 
+          {/* Issue #591: absolute time axis inside the chart — the bars are
+              percent-of-loop only, so without a scale reference inside the
+              chart node a scraper had to find the unrelated total-walltime
+              header elsewhere on the page to convert anything to seconds. */}
+          <div
+            className="waterfall-scale"
+            style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.66rem', color: 'var(--text-subtle)', fontFamily: 'var(--font-mono)', marginBottom: '4px' }}
+            data-total-walltime-seconds={totalAgentWalltime}
+          >
+            <span>0 s</span>
+            <span>% of loop walltime</span>
+            <span>{formatTime(totalAgentWalltime)}</span>
+          </div>
+
           {/* Scrollable strip on narrow viewports (see .waterfall-rows CSS) */}
-          <div className="waterfall-rows">
+          <div className="waterfall-rows" data-total-walltime-seconds={totalAgentWalltime}>
             {turnBreakdown.map((turnItem, turnIndex) => {
               const isCurrentTurn = activeTurn === turnItem.turn;
               const {
                 leftPercent: barLeft,
                 widthPercent: barWidth,
-                prefillPercent: prefillRatio
+                prefillPercent: prefillRatio,
+                startSeconds,
+                durationSeconds,
+                prefillSeconds,
+                decodeSeconds
               } = waterfallLayout[turnIndex];
 
               return (
@@ -1073,7 +1133,14 @@ export default function AgenticVisualizer({
                   </div>
 
                   {/* Waterfall Bar — rows use cumulative left offsets */}
-                  <div style={{ flex: 1, height: '22px', background: 'var(--bg-raised)', borderRadius: 'var(--radius-sm)', position: 'relative', overflow: 'hidden', minWidth: 0 }}>
+                  <div
+                    style={{ flex: 1, height: '22px', background: 'var(--bg-raised)', borderRadius: 'var(--radius-sm)', position: 'relative', overflow: 'hidden', minWidth: 0 }}
+                    data-turn={turnItem.turn}
+                    data-start-seconds={startSeconds}
+                    data-duration-seconds={durationSeconds}
+                    data-prefill-seconds={prefillSeconds}
+                    data-decode-seconds={decodeSeconds}
+                  >
                     <div
                       style={{
                         width: `${barWidth}%`,

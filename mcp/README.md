@@ -1,6 +1,6 @@
 # llm-prefill-decode-visualizer MCP server
 
-MCP server (stdio transport) wrapping the [LLM Prefill & Decode Visualizer API](https://llm-prefill-decode-visualizer.vercel.app/llms.txt). Lets any MCP client run inference math and query community-measured hardware benchmarks without hand-rolling HTTP calls.
+This repo ships a **stdio** MCP server (`mcp/server.js`) that wraps the [LLM Prefill & Decode Visualizer API](https://llm-prefill-decode-visualizer.vercel.app/llms.txt) for local/desktop clients. It is NOT the same surface as the hosted MCP server the site itself serves at `/api/mcp` (Streamable HTTP) — see ["Hosted server"](#hosted-server) below for the 8 hosted tools. Lets any MCP client run inference math and query community-measured hardware benchmarks without hand-rolling HTTP calls.
 
 ## Tools
 
@@ -10,6 +10,28 @@ MCP server (stdio transport) wrapping the [LLM Prefill & Decode Visualizer API](
 | `search_runs` | `GET /api/localmaxxing` | Raw community-measured benchmark runs, filterable by hardware/model/quant |
 | `best_configs` | `GET /api/best` | Ranked hardware×model configs by median measured decode/prefill speed |
 | `compare_hardware` | `GET /api/best` ×2 | A-vs-B rig comparison: per-model-family deltas + verdict |
+
+## Hosted server
+
+The deployed site also runs its own MCP server over **Streamable HTTP** at
+`/api/mcp` (manifest: `/.well-known/mcp.json`). It is a different, larger
+toolset — point a Streamable-HTTP-capable client there instead of running this
+stdio wrapper when you want live access:
+
+| Hosted tool | Wraps |
+|---|---|
+| `compute_single_turn` | `GET /api/compute?model=singleTurn` |
+| `compute_agentic_loop` | `GET /api/compute?model=agentic` |
+| `kv_cache_vram` | KV-cache VRAM math (compute model=kvCache) |
+| `vram_from_hf_id` | VRAM fit from a Hugging Face model id (`/api/vram`) |
+| `hardware_presets` | `GET /api/presets` |
+| `benchmarks` | `GET /api/benchmarks` (grouped medians) |
+| `cost_per_1m` | `GET /api/compute?model=cost` |
+| `engine_flags` | Engine launch-flag deltas + flagged simulation |
+
+The two servers are independent: tool names, argument schemas and transports
+differ, so configure the one your client supports (stdio → this folder,
+Streamable HTTP → `/api/mcp`).
 
 ## Configuration
 

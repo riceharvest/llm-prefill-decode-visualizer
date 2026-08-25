@@ -33,8 +33,8 @@ A `/v1/` prefix is accepted and stripped (`/api/v1/compute` ≡ `/api/compute`).
 ### Inference math
 
 ```
-GET /api/compute?model=singleTurn&promptTokens=2048&outputTokens=512&prefillTps=5000&decodeTps=80
-GET /api/vram?model=llama3.1&contextLength=32768&precision=fp16
+GET /api/compute?model=singleTurn&promptTokens=2048&outputTokens=512&prefillSpeed=5000&decodeSpeed=80
+GET /api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=32768&quant=q4_k_m
 GET /api/diff?a=<calcId>&b=<calcId>
 ```
 
@@ -42,6 +42,12 @@ GET /api/diff?a=<calcId>&b=<calcId>
   `kvCache`. Omit `model` entirely to get a self-describing capability list.
 - `POST /api/compute` with `{"batch": [ …up to 50 parameter sets… ]}` returns
   per-index results.
+- **Partial batch failure recovery**: a failed batch item echoes its input
+  (`inputs`, or `input` for non-object items) and carries a deterministic
+  per-item id plus ApiError extras such as `available[]`. Resend just the
+  failed subset under the same top-level `batchId` string to keep the same
+  response id across attempts (indexes renumber; per-item ids do not), and
+  verify it any time via `GET /api/calc/<id>?batchId=<batchId>`.
 - Every calculation returns an id you can re-fetch later:
   `GET /api/calc/<id>`
 
@@ -79,7 +85,16 @@ GET /api/health
 GET /api/mcp
 ```
 
-`/api/health` is a cheap liveness/readiness probe. `/api/mcp` exposes a Model
+`/api/health` is a cheap liveness probe whose `ok:true` only means the handler
+itself is up. Gate on the readiness fields instead: `readiness`
+(`ready | degraded | starting`) and `degraded` mirror `upstreamFreshness.status`
+(`fresh | stale | empty`), `warming:true` means the dataset has never loaded on
+this instance, and `components` reports `{upstreamCache, watchStore,
+submitQueue}` so watch/submission outages are visible without blind probes.
+Cold-start note: on a fresh serverless instance health answers instantly with
+`warming:true` while the first real data call (`GET /api/runs?limit=1`) blocks
+on a full upstream crawl — warm up with that cheap call and retry on
+`UPSTREAM_UNAVAILABLE`. `/api/mcp` exposes a Model
 Context Protocol endpoint if your agent speaks MCP.
 
 ## 3. Conventions

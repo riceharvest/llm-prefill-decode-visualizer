@@ -6,6 +6,13 @@
   <url><loc>https://llm-prefill-decode-visualizer.vercel.app/api/spec</loc><lastmod>2026-08-23</lastmod></url>
   <url><loc>https://llm-prefill-decode-visualizer.vercel.app/api/agent/index.json</loc><lastmod>2026-08-23</lastmod></url>
   <url><loc>https://llm-prefill-decode-visualizer.vercel.app/.well-known/mcp.json</loc><lastmod>2026-08-23</lastmod></url>
+  <url><loc>https://llm-prefill-decode-visualizer.vercel.app/llms-full.txt</loc><lastmod>2026-08-23</lastmod></url>
+  <url><loc>https://llm-prefill-decode-visualizer.vercel.app/api/mcp</loc><lastmod>2026-08-23</lastmod></url>
+  <url><loc>https://llm-prefill-decode-visualizer.vercel.app/status.html</loc><lastmod>2026-08-23</lastmod></url>
+  <url><loc>https://llm-prefill-decode-visualizer.vercel.app/about.html</loc><lastmod>2026-08-23</lastmod></url>
+  <url><loc>https://llm-prefill-decode-visualizer.vercel.app/contact.html</loc><lastmod>2026-08-23</lastmod></url>
+  <url><loc>https://llm-prefill-decode-visualizer.vercel.app/privacy.html</loc><lastmod>2026-08-23</lastmod></url>
+  <url><loc>https://llm-prefill-decode-visualizer.vercel.app/api/health</loc><lastmod>2026-08-23</lastmod></url>
   <url><loc>https://llm-prefill-decode-visualizer.vercel.app/compare/amd-ryzen-7-9800x3d-vs-h100</loc><lastmod>2026-08-23</lastmod></url>
   <url><loc>https://llm-prefill-decode-visualizer.vercel.app/compare/amd-ryzen-7-9800x3d-vs-rtx-4070-ti-rtx-5080</loc><lastmod>2026-08-23</lastmod></url>
   <url><loc>https://llm-prefill-decode-visualizer.vercel.app/compare/amd-ryzen-7-9800x3d-vs-rtx-5070-ti</loc><lastmod>2026-08-23</lastmod></url>

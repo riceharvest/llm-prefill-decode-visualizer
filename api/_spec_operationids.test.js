@@ -44,10 +44,14 @@ function operationIdMap(spec) {
 // commit as a changelog note in CHANGELOG-API.md).
 const LOCKED_OPERATION_IDS = {
   'GET /api/compute': 'computeInference',
+  'POST /api/compute': 'computeInferenceBatch',
   'GET /api/vram': 'estimateVram',
+  'POST /api/vram': 'estimateVramFromBody',
   'GET /api/calc/{id}': 'replayCalculation',
+  'POST /api/calc/{id}': 'replayCalculationFromBody',
   'GET /api/presets': 'listPresets',
   'GET /api/localmaxxing': 'listBenchmarkRuns',
+  'POST /api/localmaxxing': 'submitBenchmarkRun',
   'GET /api/runs': 'dumpRunIndex',
   'GET /api/watch': 'listWatches',
   'POST /api/watch': 'createWatch',
@@ -59,7 +63,14 @@ const LOCKED_OPERATION_IDS = {
   'GET /api/health': 'getHealth',
   'GET /api/sizing': 'getSizingRecommendation',
   'GET /api/parse-constraints': 'parseConstraints',
-  'GET /api/snapshots': 'listDatasetSnapshots'
+  'GET /api/snapshots': 'listDatasetSnapshots',
+  'GET /api/spec': 'getOpenApiSpec',
+  'GET /api/agent/capabilities.json': 'getAgentCapabilitiesDoc',
+  'GET /api/agent/compute.json': 'getAgentComputeDoc',
+  'GET /api/agent/benchmarks.json': 'getAgentBenchmarksDoc',
+  'GET /api/agent/scenario.json': 'getAgentScenarioDoc',
+  'GET /api/agent/freshness.json': 'getAgentFreshnessDoc',
+  'GET /api/agent/confidence.json': 'getAgentConfidenceDoc'
 };
 
 test('every operation in the spec carries an operationId', () => {

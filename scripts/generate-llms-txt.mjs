@@ -36,6 +36,8 @@ const INTERACTIVE_HEADING = '### Interactive page';
  * label: display label from src/components/Header.jsx MODES.
  * purpose / surfaces: what the tab shows, for agents deciding where to look.
  * endpoints: API endpoints whose data the tab visualizes ([] = pure explainer).
+ * params: deep-link URL params the tab reads and writes back into the share
+ *   link (#399) — optional; only tabs with addressable state list any.
  */
 export const TABS = [
   {
@@ -55,9 +57,18 @@ export const TABS = [
   {
     id: 'batching',
     label: 'Batching',
-    purpose: 'Show concurrent users sharing one accelerator: per-user decode decays roughly B^0.25 with batch size while aggregate throughput climbs.',
+    purpose: 'Show concurrent users sharing one accelerator: per-user decode decays as batchSize^(−decodeDecayExponent) with batch size while aggregate throughput climbs — a heuristic power law with NO saturation point, so it must not be used alone to pick an optimal batch size.',
     surfaces: ['batch-size slider', 'per-user vs aggregate throughput meters', 'shared-compute animation'],
     endpoints: ['GET /api/compute?model=batched'],
+    params: [
+      'breqs=<2–48> — concurrent requests in the batch',
+      'bprompt=<128–32768> — mean prompt tokens per request',
+      'bgen=<32–4096> — mean output tokens per request',
+      'bmax=<1–32> — maximum batch size (concurrent decodes)',
+      'bchunk=<0|128|256|512|1024|2048|4096|8192> — chunked-prefill chunk size; 0 disables chunking. The UI slider is indexed by these stops, so DOM slider position ≠ token value',
+      'barr=<0–2000, ms> — interval between request arrivals',
+      'sim=<1|2|5|20|instant> — playback time-scale multiplier shared by all animated tabs',
+    ],
   },
   {
     id: 'compare',
@@ -77,7 +88,7 @@ export const TABS = [
     id: 'diff',
     label: 'Diff',
     purpose: 'Diff two community benchmark runs (or two constraint sets via what-if mode) and read per-metric deltas plus a plain-language summary.',
-    surfaces: ['run A/B selectors', 'delta table', 'what-if constraint diffing'],
+    surfaces: ['run A/B free-text id inputs', 'per-metric delta rows with ratios', 'plain-language summary', 'deep links (?tab=diff&runA&runB) auto-execute on load'],
     endpoints: ['GET /api/diff?runA=<id>&runB=<id>', 'GET /api/diff?mode=whatif'],
   },
   {
@@ -98,7 +109,7 @@ export const TABS = [
     id: 'theory',
     label: 'Theory',
     purpose: 'Plain-language guide to why prefill is compute-bound and decode is bandwidth-bound, with analogies, glossary and misconception callouts.',
-    surfaces: ['concept walkthrough', 'analogies toggle', 'jargon glossary', 'misconception callouts'],
+    surfaces: ['concept walkthrough', 'plain-language mode via ?plain=1 (off: ?plain=0)', 'analogies via ?analogy=1 (off: ?analogy=0)', 'jargon glossary', 'misconception callouts'],
     endpoints: [],
   },
 ];
@@ -110,6 +121,8 @@ export function renderMetaBlock(tabs = TABS) {
     META_START,
     `Base-URL: ${BASE_URL}`,
     'OpenAPI-Spec: /api/spec',
+    'Agent-Manifest: /agents.json',
+    'Endpoint-Index: /api/agent/index.json',
     `Tabs: ${ids}`,
     'Tab-URL-Template: {Base-URL}/?tab={id}',
     'Tab-Section-Header-Format: ### Tab: {id} — {label}',
@@ -133,6 +146,12 @@ export function renderTabSection(tab) {
     lines.push(`- Endpoints: ${tab.endpoints.join('; ')}`);
   } else {
     lines.push('- Endpoints: none (static explainer content)');
+  }
+  // Issue #399: document deep-link URL params so agents can construct and
+  // verify preconfigured links without reverse-engineering the share link.
+  if (tab.params?.length) {
+    lines.push('- URL params:');
+    for (const p of tab.params) lines.push(`  - ${p}`);
   }
   return lines.join('\n');
 }

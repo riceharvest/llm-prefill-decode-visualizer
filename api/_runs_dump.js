@@ -7,7 +7,7 @@
 //   - ?format=json  → buildRunsJsonPayload(): envelope + structured dictionary
 //   - ?format=csv   → runsCsvPreamble() + toRunsCsv() (RFC 4180, #-preamble)
 
-import { csvEscape } from './_export.js';
+import { CSV_BOM, csvEscape } from './_export.js';
 
 export const RUNS_DATASET_VERSION = 1;
 
@@ -26,7 +26,7 @@ export const RUNS_COLUMNS = [
   { key: 'paramsB', type: 'number', description: 'Total parameter count in billions; empty when unknown' },
   { key: 'hardwareKey', type: 'string', description: 'Canonical hardware group key (groups identical rigs across runs)' },
   { key: 'hardware', type: 'string', description: 'Human-readable hardware group label' },
-  { key: 'hwClass', type: 'string', description: 'Hardware class: discrete_gpu | unified | cpu_only' },
+  { key: 'hwClass', type: 'string', description: 'Hardware class as shipped on this read path: DISCRETE_GPU | UNIFIED | CPU_ONLY (UPPERCASE). Note: POST /api/localmaxxing submission validation accepts the lowercase spellings discrete_gpu | unified | cpu_only — lowercase the value before echoing it back on a submit.' },
   { key: 'gpu', type: 'string', description: 'GPU model name; empty for CPU-only rigs' },
   { key: 'gpuCount', type: 'number', description: 'Number of GPUs in the rig (minimum 1)' },
   { key: 'vramGb', type: 'number', description: 'Total GPU VRAM in GB; empty for unified/CPU rigs' },
@@ -36,23 +36,29 @@ export const RUNS_COLUMNS = [
   { key: 'engine', type: 'string', description: 'Inference engine name (llama.cpp, vLLM, MLX, ...)' },
   { key: 'engineVersion', type: 'string', description: 'Engine version as reported; null when unreported' },
   { key: 'quantization', type: 'string', description: 'Quantization scheme as reported (q4_k_m, 4bit, ...)' },
-  { key: 'prefillTokPerSec', type: 'number', description: 'Measured prompt-processing (prefill) speed, tokens/second, rounded; null when invalid/absent (possible on non-comparable runs)' },
-  { key: 'decodeTokPerSec', type: 'number', description: 'Measured generation (decode) speed, tokens/second, rounded; null when invalid/absent (possible on non-comparable runs)' },
-  { key: 'promptTokens', type: 'number', description: 'Prompt length in tokens for the benchmark run' },
+  { key: 'prefillTokPerSec', type: 'number', description: 'Measured prompt-processing (prefill) speed, tokens/second, rounded; null when invalid/absent (possible on non-comparable runs); 0 when the run was reported with a zero speed — treat 0 as unusable, same as null' },
+  { key: 'decodeTokPerSec', type: 'number', description: 'Measured generation (decode) speed, tokens/second, rounded; null when invalid/absent (possible on non-comparable runs); 0 when the run was reported with a zero speed — treat 0 as unusable, same as null' },
+  { key: 'promptTokens', type: 'number', description: 'Prompt length in tokens for the benchmark run; 0 when unreported (indistinguishable from a true zero-token prompt — do not treat 0 as a measured workload)' },
   { key: 'outputTokens', type: 'number', description: 'Generated length in tokens for the benchmark run' },
   { key: 'contextLength', type: 'number', description: 'Context length used for the run; empty when unreported' },
   { key: 'contextBand', type: 'string', description: 'Context-length band id (lt1k, 1k-8k, 8k-32k, 32k+); null when contextLength is unusable' },
   { key: 'source', type: 'string', description: 'URL of the original run page on localmaxxing.com' }
 ];
 
-/** Serialize full-index run objects to RFC 4180 CSV text (header + rows, CRLF). */
+/**
+ * Serialize full-index run objects to RFC 4180 CSV text (header + rows).
+ * Framing contract matches ./_export.js: LF line endings, trailing terminator
+ * (see toCsv for why LF instead of CRLF). Re-exports CSV_BOM for handlers.
+ */
+export { CSV_BOM };
+
 export function toRunsCsv(rows) {
   const header = RUNS_COLUMNS.map(c => c.key).join(',');
   const lines = [header];
   for (const r of rows) {
     lines.push(RUNS_COLUMNS.map(c => csvEscape(r[c.key])).join(','));
   }
-  return lines.join('\r\n') + '\r\n';
+  return lines.join('\n') + '\n';
 }
 
 /**
@@ -75,7 +81,7 @@ export function runsCsvPreamble(rowCount, generatedAt, { comparableFilter = 'all
   ];
   for (const c of RUNS_COLUMNS) lines.push(`#   ${c.key}: ${c.type} — ${c.description}`);
   lines.push(`# source: https://localmaxxing.com — exported via /api/runs`);
-  return lines.join('\r\n') + '\r\n';
+  return lines.join('\n') + '\n';
 }
 
 function filterTextFallback(mode) {

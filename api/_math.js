@@ -2,6 +2,10 @@
 // Mirrors the formulas the visualizer UI uses — single source of truth so
 // agents get exactly the numbers the page shows.
 
+// SLO evaluation reuses the exact helpers the UI badges use, so the API's
+// pass/marginPct verdicts are identical to what the page renders (#492).
+import { sanitizeBudgets, evaluateMetric, evaluateAgenticSlo } from '../src/utils/slo.js';
+
 // ---- Sanity bounds (issue #44: implausible-output warnings) ---------------
 // Decode is memory-bandwidth bound: one token per step means streaming every
 // model weight from VRAM each forward pass. Even a ~1 TB/s GPU running a
@@ -16,12 +20,34 @@ export const MAX_PLAUSIBLE_PREFILL_TOK_PER_SEC = 500000;
 // framework overhead (~2 ms). A computed TTFT below this floor means the
 // prefill speed / prompt length combination is physically impossible.
 export const MIN_PLAUSIBLE_TTFT_SECONDS = 0.002;
+// Token counts above this are almost certainly a unit bug (bits, bytes or a
+// raw float passed as a token count); below 1 they are non-physical (#550).
+export const MAX_PLAUSIBLE_TOKEN_COUNT = 1e9;
 
 // Non-blocking sanity checks. Returns an array of { code, message } — empty
 // when every input sits inside plausible bounds. Never throws, never alters
 // the math; consumers surface the warnings alongside the results.
-export function sanityWarnings({ promptTokens = 0, prefillSpeed = 0, decodeSpeed = 0 } = {}) {
+export function sanityWarnings({ promptTokens = null, outputTokens = null, prefillSpeed = 0, decodeSpeed = 0 } = {}) {
   const warnings = [];
+
+  // Token-count sanity (#550): the documented promptTokens/outputTokens params
+  // used to flow into the math unvalidated, so negative counts produced
+  // negative TTFT/walltime and ~1e12 counts produced multi-year walltimes —
+  // both with warnings: []. Flag them without changing the math or status.
+  for (const [field, value] of [['promptTokens', promptTokens], ['outputTokens', outputTokens]]) {
+    if (value == null) continue;
+    if (value < 1) {
+      warnings.push({
+        code: 'tokens_implausible',
+        message: `${field}=${value} is not a usable token count (must be ≥ 1) — results are computed anyway but are not physically meaningful. Check for a negative or zero value leaking into your request.`
+      });
+    } else if (value > MAX_PLAUSIBLE_TOKEN_COUNT) {
+      warnings.push({
+        code: 'tokens_implausible',
+        message: `${field}=${value} exceeds any real workload (> ${MAX_PLAUSIBLE_TOKEN_COUNT.toExponential()} tokens) — check for a unit mixup (e.g. bytes or a raw float passed as a token count).`
+      });
+    }
+  }
 
   if (decodeSpeed > MAX_PLAUSIBLE_DECODE_TOK_PER_SEC) {
     warnings.push({
@@ -54,7 +80,7 @@ export function singleTurn({ promptTokens = 2048, outputTokens = 512, prefillSpe
   const total = ttft + decodeTime;
   return {
     inputs: { promptTokens, outputTokens, prefillSpeed, decodeSpeed },
-    warnings: sanityWarnings({ promptTokens, prefillSpeed, decodeSpeed }),
+    warnings: sanityWarnings({ promptTokens, outputTokens, prefillSpeed, decodeSpeed }),
     ttftSeconds: round(ttft),
     tpotMs: round(decodeSpeed > 0 ? 1000 / decodeSpeed : Infinity),
     decodeSeconds: round(decodeTime),
@@ -91,7 +117,7 @@ export function batched({ prefillSpeed = 3800, decodeSpeed = 105, batchSize = 1,
   const decodeTime = outputTokens / perUserDecode;
   return {
     inputs: { prefillSpeed, decodeSpeed, batchSize: b, promptTokens, outputTokens, decodeDecayExponent },
-    warnings: sanityWarnings({ promptTokens, prefillSpeed, decodeSpeed }),
+    warnings: sanityWarnings({ promptTokens, outputTokens, prefillSpeed, decodeSpeed }),
     perUserDecodeTokPerSec: round(perUserDecode),
     aggregateDecodeTokPerSec: round(b * perUserDecode),
     ttftSeconds: round(ttft),
@@ -104,7 +130,10 @@ export function agentic(options = {}) {
   const {
     numTurns = 4, basePromptTokens = 1500, toolOutputTokensPerTurn = 800,
     decodeTokensPerTurn = 250, prefillSpeed = 3800, decodeSpeed = 105,
-    enablePrefixCaching = true
+    enablePrefixCaching = true,
+    // Optional extras (#492 #493) — absent/invalid values disable them.
+    contextWindowTokens = null, sloTtftSec = null, sloTpotMs = null,
+    sloTurnWalltimeSec = null, sloWalltimeSec = null
   } = options;
   const turns = [];
   let cumulativePromptTokens = basePromptTokens;
@@ -141,16 +170,82 @@ export function agentic(options = {}) {
     p += decodeTokensPerTurn + toolOutputTokensPerTurn;
   }
 
+  const warnings = sanityWarnings({ promptTokens: basePromptTokens, prefillSpeed, decodeSpeed });
+
+  // ---- Context-window overflow projection (#493) ---------------------------
+  // A turn "overflows" once the context it would have to ingest (its prompt
+  // plus the tokens it decodes this turn) exceeds the model's window — past
+  // that point the real request errors or truncates rather than just running
+  // slow. Naming mirrors /api/vram's firstContextOverflowTurn.
+  const ctxWindow = positiveFinite(contextWindowTokens);
+  let firstContextOverflowTurn = null;
+  if (ctxWindow !== null) {
+    for (const t of turns) {
+      if (t.totalPromptTokens + decodeTokensPerTurn > ctxWindow) {
+        firstContextOverflowTurn = t.turn;
+        break;
+      }
+    }
+    if (firstContextOverflowTurn !== null) {
+      warnings.push({
+        code: 'context_window_overflow',
+        message: `Loop exceeds the ${ctxWindow}-token context window at turn ${firstContextOverflowTurn} (finalContextTokens ${round(turns[turns.length - 1].totalPromptTokens + decodeTokensPerTurn)}). Past that turn the request errors or truncates instead of merely running slow — shorten the loop or the history.`
+      });
+    }
+  }
+
+  // ---- SLO verdicts (#492) --------------------------------------------------
+  // Same evaluateMetric margin convention as the on-page badges:
+  // marginPct = (budget − actual) ÷ budget × 100. Budget params are seconds
+  // except sloTpotMs; missing/non-positive values disable that check.
+  const budgets = sanitizeBudgets({
+    ttftMs: sloTtftSec !== null ? Number(sloTtftSec) * 1000 : null,
+    tpotMs: sloTpotMs,
+    walltimeSec: sloTurnWalltimeSec
+  });
+  const loopBudgetSec = positiveFinite(sloWalltimeSec);
+  let slo = null;
+  if (budgets.ttftMs || budgets.tpotMs || budgets.walltimeSec || loopBudgetSec) {
+    const evald = evaluateAgenticSlo(turns.map(t => ({
+      turn: t.turn,
+      prefillTime: t.prefillSeconds,
+      decodeTime: t.decodeSeconds,
+      decodeTokens: decodeTokensPerTurn,
+      turnWalltime: t.turnWalltimeSeconds
+    })), budgets);
+    slo = {
+      budgets: { ttftMs: budgets.ttftMs, tpotMs: budgets.tpotMs, walltimeSec: budgets.walltimeSec, walltimeLoopSec: loopBudgetSec },
+      turns: evald.turns,
+      failingTurns: evald.failingTurns,
+      worstTurn: evald.worstTurn
+    };
+    if (loopBudgetSec !== null) slo.loop = evaluateMetric(cumulativeWalltime, loopBudgetSec);
+  }
+
   return {
     inputs: options,
-    warnings: sanityWarnings({ promptTokens: basePromptTokens, prefillSpeed, decodeSpeed }),
+    warnings,
     turns,
+    // Time-to-first-token for the loop: turn 1 has a cold cache, so its
+    // prefill time IS the first-token latency an agent waits on (#473).
+    // Same quantity singleTurn reports as ttftSeconds — same name so agents
+    // can join the two endpoints without guessing that turns[0].
+    // prefillSeconds is it.
+    ttftSeconds: turns.length ? turns[0].prefillSeconds : null,
     finalContextTokens: turns.length ? turns[turns.length - 1].totalPromptTokens + decodeTokensPerTurn : 0,
     totalWalltimeSeconds: round(cumulativeWalltime),
     walltimeWithoutCachingSeconds: round(noCacheTotal),
     cachingSavesSeconds: round(noCacheTotal - cumulativeWalltime),
-    cachingSavesPct: round(noCacheTotal > 0 ? ((noCacheTotal - cumulativeWalltime) / noCacheTotal) * 100 : 0)
+    cachingSavesPct: round(noCacheTotal > 0 ? ((noCacheTotal - cumulativeWalltime) / noCacheTotal) * 100 : 0),
+    ...(ctxWindow !== null ? { contextWindowTokens: ctxWindow, firstContextOverflowTurn } : {}),
+    ...(slo ? { slo } : {})
   };
+}
+
+/** Positive finite number or null — used to gate the optional #492/#493 inputs. */
+function positiveFinite(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 export function cost({
@@ -170,6 +265,11 @@ export function cost({
   const hourlyTotal = hourlyHardware + hourlyElectricity;
   const requestsPerHour = total > 0 ? 3600 / total : 0;
 
+  // $/1M tokens: hourly cost → per-second ($/3600), then ÷ tok/s throughput,
+  // ×1e6 (#868 — the missing hours→seconds conversion inflated this exactly
+  // 3600×; kept consistent with costUsdPerThousandRequests below).
+  const costUsdPerMillionTokens = throughput > 0 ? ((hourlyTotal / 3600) / throughput) * 1e6 : null;
+
   return {
     inputs: {
       hardwarePriceUsd, electricityRatePerKwh, powerDrawWatts, amortizationMonths,
@@ -180,7 +280,7 @@ export function cost({
     hardwareCostUsdPerHour: round(hourlyHardware),
     electricityCostUsdPerHour: round(hourlyElectricity),
     totalCostUsdPerHour: round(hourlyTotal),
-    costUsdPerMillionTokens: round(throughput > 0 ? (hourlyTotal / throughput) * 1e6 : null),
+    costUsdPerMillionTokens: round(costUsdPerMillionTokens),
     costUsdPerThousandRequests: round(requestsPerHour > 0 ? (hourlyTotal / requestsPerHour) * 1000 : null)
   };
 }
@@ -191,6 +291,9 @@ export function kvCache({ numLayers = 80, kvHeads = 8, headDim = 128, contextLen
   return {
     inputs: { numLayers, kvHeads, headDim, contextLength, precisionBytes, batchSize },
     bytesPerToken,
+    // Binary (1024-based) units under historically SI-looking names — declared
+    // explicitly so agents don't convert totalGb with ×1e9 (#738 #866).
+    units: { memory: 'GiB', kbPerToken: 'KiB', totalMb: 'MiB', note: 'all values are binary (÷1024ⁿ), NOT decimal KB/MB/GB' },
     kbPerToken: round(bytesPerToken / 1024),
     totalGb: round(totalBytes / (1024 ** 3)),
     totalMb: round(totalBytes / (1024 ** 2)),

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { GitCompare } from 'lucide-react';
 import { readParam, writeParams } from '../utils/urlState';
+import { fetchJsonWithTimeout, FetchJsonError } from '../utils/fetchJson';
 
 // Minimal run-diff panel: two LocalMaxxing run ids in, per-metric deltas,
 // ratios and the API's plain-language summary out. Data comes from
@@ -11,6 +12,7 @@ export default function RunDiff() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const autoRanRef = useRef(false);
 
   const runDiff = async () => {
     if (!runA.trim() || !runB.trim()) {
@@ -20,18 +22,40 @@ export default function RunDiff() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/diff?runA=${encodeURIComponent(runA.trim())}&runB=${encodeURIComponent(runB.trim())}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || `API returned ${res.status}`);
+      // Shared helper (#723): bounded by a timeout (the button can no longer
+      // stick on "Diffing…" forever) and guarded against non-JSON responses
+      // (WAF challenge HTML no longer surfaces as a SyntaxError).
+      const json = await fetchJsonWithTimeout(
+        `/api/diff?runA=${encodeURIComponent(runA.trim())}&runB=${encodeURIComponent(runB.trim())}`
+      );
       setResult(json);
       writeParams({ tab: 'diff', runA: runA.trim(), runB: runB.trim() });
     } catch (e) {
       setResult(null);
-      setError(String(e.message || e));
+      setError(
+        e instanceof FetchJsonError
+          ? e.kind === 'http'
+            ? `${e.message} (HTTP ${e.status})`
+            : e.message
+          : String(e.message || e)
+      );
     } finally {
       setLoading(false);
     }
   };
+
+  // Deep-link auto-exec: ?tab=diff&runA=<id>&runB=<id> computes the diff on
+  // load instead of waiting for a click, so shared links and headless agents
+  // get a rendered result (or a real error) without any interaction.
+  useEffect(() => {
+    const a = readParam('runA');
+    const b = readParam('runB');
+    if (!a || !b || autoRanRef.current) return;
+    autoRanRef.current = true;
+    runDiff();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only; reads the URL params the inputs were seeded from
+  }, []);
+
 
   const rowStyle = { display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '0.82rem' };
   const rowDivider = { paddingTop: '8px', borderTop: '1px solid var(--border)' };
@@ -79,6 +103,13 @@ export default function RunDiff() {
         <div className="panel-inset" role="alert" style={{ borderColor: 'var(--danger)', color: 'var(--danger)', fontSize: '0.78rem', marginBottom: '14px' }}>
           {error}
         </div>
+      )}
+
+      {!loading && !result && !error && (
+        <p className="hint-text" style={{ marginBottom: '14px' }}>
+          Enter two run ids and press “Diff runs” to compute per-metric deltas — or open
+          <code>?tab=diff&amp;runA=&lt;id&gt;&amp;runB=&lt;id&gt;</code> to compute it automatically on load.
+        </p>
       )}
 
       {result && (

@@ -26,6 +26,7 @@ function fetchSpec() {
     statusCode: 200,
     setHeader(k, v) { headers[k] = v; },
     getHeader(k) { return headers[k]; },
+    hasHeader(k) { return Object.keys(headers).some(h => h.toLowerCase() === String(k).toLowerCase()); },
     end(body) { res.body = body; }
   };
   specHandler({ headers: {}, url: '/api/spec' }, res);
@@ -60,7 +61,14 @@ const HANDLER_FILE = {
   '/api/health': '_handlers/health.js',
   '/api/sizing': '_handlers/sizing.js',
   '/api/parse-constraints': '_handlers/parse-constraints.js',
-  '/api/snapshots': '_handlers/snapshots.js'
+  '/api/snapshots': '_handlers/snapshots.js',
+  '/api/spec': '_handlers/spec.js',
+  '/api/agent/capabilities.json': '_handlers/capabilities.js',
+  '/api/agent/compute.json': '_handlers/agent_compute.js',
+  '/api/agent/benchmarks.json': '_handlers/agent_benchmarks.js',
+  '/api/agent/scenario.json': '_handlers/agent_scenario.js',
+  '/api/agent/freshness.json': '_handlers/agent_freshness.js',
+  '/api/agent/confidence.json': '_handlers/agent_freshness.js'
 };
 
 test('every OpenAPI operation carries an x-rate-limit object', () => {
@@ -101,7 +109,9 @@ test('enforced endpoints advertise headers + 429 exhaustion shape', () => {
 test('non-enforced endpoints say so instead of implying metering', () => {
   const spec = fetchSpec();
   const unmetered = operations(spec).filter(([, , op]) => !op['x-rate-limit'].enforced);
-  assert.ok(unmetered.length >= 5, 'expected several unmetered endpoints (vram, sizing, health, …)');
+  // /api/calc/{id} became metered in #957 (a replay re-runs the same math, so
+  // it must not be an unmetered bypass), leaving vram/sizing/health/snapshots.
+  assert.ok(unmetered.length >= 4, 'expected several unmetered endpoints (vram, sizing, health, …)');
   for (const [path, method, op] of unmetered) {
     assert.ok(op['x-rate-limit'].note.includes('not metered'), `${method.toUpperCase()} ${path} must state it is unmetered`);
     assert.equal(op['x-rate-limit'].headers, undefined);

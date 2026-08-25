@@ -14,6 +14,16 @@ export const ANALOGY_CHANGE_EVENT = 'llmpd-analogy-change';
 export const ANALOGY_TERMS = ['prefill', 'decode', 'prefixCaching', 'kvCache'];
 
 export function getAnalogyMode() {
+  // URL override first (#638): ?analogy=1 / ?analogy=true forces the variant
+  // on, ?analogy=0 / ?analogy=false forces it off — link-addressable for
+  // agents and share links, no localStorage or script injection required.
+  try {
+    const v = new URLSearchParams(window.location.search).get('analogy');
+    if (v === '1' || v === 'true') return true;
+    if (v === '0' || v === 'false') return false;
+  } catch {
+    // no window (tests/SSR) — fall through to storage
+  }
   try {
     return localStorage.getItem(STORAGE_KEY) === '1';
   } catch {

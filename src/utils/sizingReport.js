@@ -8,6 +8,11 @@
 // One canonical data object feeds all three formats (JSON / YAML / Markdown),
 // so the formats can never disagree about the numbers.
 
+// Community-submitted strings (system names, GPU labels, engine, model id from
+// localmaxxing.com run submissions) must not carry Markdown structure into the
+// export (#896) — same discipline as escapeHtmlAttr for the HTML variants.
+import { escapeMarkdownText as esc } from './embedSnippet.js';
+
 // ---------------------------------------------------------------------------
 // Canonical report object
 // ---------------------------------------------------------------------------
@@ -36,6 +41,14 @@ export function buildSizingReport({
   return {
     schema: 'sizing-report',
     version: 1,
+    // Additive unification fields (#762): same canonical spellings the
+    // simulation exports and /api/export use, so one consumer check
+    // (payload.schemaVersion / payload.generatorId / payload.exportType)
+    // recognizes every JSON export artifact. Legacy schema/version/generator
+    // fields are kept for existing consumers.
+    schemaVersion: 1,
+    generatorId: 'llm-prefill-decode-visualizer',
+    exportType: 'sizing-report',
     generatedAt: generatedAt || null,
     generator: 'LLM Prefill & Decode Visualizer',
     deepLink: deepLink || null,
@@ -221,8 +234,8 @@ export function buildSizingReportMarkdown(report) {
   lines.push('');
   lines.push('| Parameter | Value |');
   lines.push('| --- | --- |');
-  lines.push(`| Model | ${s.modelId || '—'} |`);
-  lines.push(`| Quantization | ${s.quantization || '—'} |`);
+  lines.push(`| Model | ${esc(s.modelId || '—')} |`);
+  lines.push(`| Quantization | ${esc(s.quantization || '—')} |`);
   lines.push(`| Context length | ${(s.contextTokens ?? 0).toLocaleString()} tok |`);
   lines.push(`| Target output | ${(s.outputTokens ?? 0).toLocaleString()} tok |`);
   lines.push(`| Concurrency | ${s.concurrency}× |`);
@@ -231,12 +244,12 @@ export function buildSizingReportMarkdown(report) {
   lines.push('## Systems');
   lines.push('');
   for (const sys of report.systems) {
-    lines.push(`### ${sys.name}`);
+    lines.push(`### ${esc(sys.name)}`);
     lines.push('');
     lines.push('| Property | Value |');
     lines.push('| --- | --- |');
     if (sys.engine) {
-      lines.push(`| Engine | ${sys.engineVersion ? `${sys.engine} ${sys.engineVersion}` : sys.engine} |`);
+      lines.push(`| Engine | ${sys.engineVersion ? `${esc(sys.engine)} ${esc(sys.engineVersion)}` : esc(sys.engine)} |`);
     }
     if (sys.measuredAt) {
       const ageTag = sys.staleness ? ` (${sys.staleness})` : '';
@@ -252,14 +265,15 @@ export function buildSizingReportMarkdown(report) {
     lines.push(`| Decode time | ${fmtDur(sys.latency.decodeSeconds)} |`);
     lines.push(`| Total walltime | **${fmtDur(sys.latency.totalWalltimeSeconds)}** |`);
     const v = sys.vramBreakdown;
-    const vramBits = [v.gpuName, v.gpuCount > 1 ? `×${v.gpuCount}` : null,
+    const vramBits = [esc(v.gpuName), v.gpuCount > 1 ? `×${v.gpuCount}` : null,
       v.totalVramGb != null ? `${v.totalVramGb} GB VRAM` : null,
       v.unifiedMemoryGb != null ? `${v.unifiedMemoryGb} GB unified` : null].filter(Boolean);
-    lines.push(`| Memory | ${vramBits.length ? vramBits.join(' ') : (v.note || '—')} |`);
+    lines.push(`| Memory | ${vramBits.length ? vramBits.join(' ') : esc(v.note || '—')} |`);
     if (sys.cost.streetPriceUsd != null) {
       const range = sys.cost.streetPriceRangeUsd ? ` ($${sys.cost.streetPriceRangeUsd[0].toLocaleString()}–$${sys.cost.streetPriceRangeUsd[1].toLocaleString()})` : '';
       lines.push(`| Street price | $${sys.cost.streetPriceUsd.toLocaleString()}${range} |`);
     }
+    if (sys.cost.priceSourceUrl) lines.push(`| Price source | ${sys.cost.priceSourceUrl} |`);
     if (sys.cost.perRequestUsd != null) lines.push(`| Cost per request | $${sys.cost.perRequestUsd.toFixed(4)} |`);
     lines.push('');
   }
@@ -268,7 +282,7 @@ export function buildSizingReportMarkdown(report) {
     lines.push('## Verdicts');
     lines.push('');
     for (const v of report.verdicts) {
-      lines.push(`- **[${v.status.toUpperCase()}]** ${v.check} — ${v.detail}`);
+      lines.push(`- **[${v.status.toUpperCase()}]** ${esc(v.check)} — ${esc(v.detail)}`);
     }
     lines.push('');
   }
@@ -276,7 +290,7 @@ export function buildSizingReportMarkdown(report) {
   if (report.recommendation) {
     lines.push('## Recommended hardware');
     lines.push('');
-    lines.push(`${report.recommendation.name} — ${report.recommendation.reason}.`);
+    lines.push(`${esc(report.recommendation.name)} — ${esc(report.recommendation.reason)}.`);
     lines.push('');
   }
 
@@ -285,12 +299,13 @@ export function buildSizingReportMarkdown(report) {
     lines.push('');
     lines.push('| Item | Value |');
     lines.push('| --- | --- |');
-    if (report.tco.localRigName) lines.push(`| Local rig | ${report.tco.localRigName} |`);
+    if (report.tco.localRigName) lines.push(`| Local rig | ${esc(report.tco.localRigName)} |`);
     if (report.tco.wattsUnderLoad != null) lines.push(`| Wattage under load | ${report.tco.wattsUnderLoad} W |`);
     if (report.tco.electricityUsdPerKwh != null) lines.push(`| Electricity | $${report.tco.electricityUsdPerKwh}/kWh |`);
     if (report.tco.localMarginalUsdPerMtok != null) lines.push(`| Local marginal cost | $${report.tco.localMarginalUsdPerMtok}/Mtok |`);
     if (report.tco.cloudUsdPerMtok != null) lines.push(`| Cloud price | $${report.tco.cloudUsdPerMtok}/Mtok |`);
     if (report.tco.monthlyElectricityUsd != null) lines.push(`| Electricity (24/7) | $${report.tco.monthlyElectricityUsd.toFixed(2)}/mo |`);
+    if (report.tco.monthlyCapexUsd != null) lines.push(`| Capex (amortized) | $${report.tco.monthlyCapexUsd.toFixed(2)}/mo |`);
     if (report.tco.breakEvenTokensPerMonth != null) {
       lines.push(`| Break-even volume | ${report.tco.breakEvenTokensPerMonth.toLocaleString()} tok/mo |`);
     } else if (report.tco.cloudUsdPerMtok != null) {
@@ -302,7 +317,7 @@ export function buildSizingReportMarkdown(report) {
   if (report.notes.length) {
     lines.push('## Notes');
     lines.push('');
-    for (const n of report.notes) lines.push(`- ${n}`);
+    for (const n of report.notes) lines.push(`- ${esc(n)}`);
     lines.push('');
   }
 

@@ -1,5 +1,5 @@
 import { getAllRuns } from '../_localmaxxing.js';
-import { csvEscape, toCsv, csvPreamble, buildJsonPayload, COLUMNS, DATASET_VERSION } from '../_export.js';
+import { csvEscape, toCsv, csvPreamble, buildJsonPayload, COLUMNS, DATASET_VERSION, CSV_BOM } from '../_export.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -25,11 +25,16 @@ export default async function handler(req, res) {
 
     if (format === 'json') {
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(JSON.stringify(buildJsonPayload(runs, generatedAt), null, 2));
+      // Trailing newline matches src/utils/exportJson.js serializeJson() so
+      // every JSON exporter in this repo agrees on the final byte.
+      res.end(JSON.stringify(buildJsonPayload(runs, generatedAt), null, 2) + '\n');
       return;
     }
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    // UTF-8 BOM first so Excel decodes the em-dashes in the `#` preamble
+    // correctly; preamble + table are LF-terminated (see toCsv contract).
+    res.write(CSV_BOM);
     res.write(csvPreamble(runs.length, generatedAt));
     res.write(toCsv(runs));
     res.end();
