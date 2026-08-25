@@ -27,6 +27,7 @@ import {
   loadHistory, saveHistory, planRestore
 } from './utils/settingsHistory';
 import SnapshotsSidebar from './components/SnapshotsSidebar';
+import KeyboardShortcutsDialog from './components/KeyboardShortcutsDialog';
 import { useFocusPanelHeading } from './utils/focus';
 import { setLocale, syncDocument, t } from './i18n/strings';
 import { installTouchTooltips } from './utils/touchTooltips';
@@ -43,6 +44,13 @@ function readTabParam() {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(readTabParam);
+  // Shortcuts help dialog (#843): the `?` key toggles this; llms.txt and the
+  // footer document the shortcut, so the dialog must actually mount.
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // Last tab written to the URL (#830). A tab change pushes a history entry
+  // so Back restores the previous view; settings-only changes keep using
+  // replaceState so tweaking speeds doesn't spam history.
+  const lastWrittenTabRef = useRef(activeTab);
 
 
 
@@ -250,8 +258,12 @@ export default function App() {
     }
   }, [applySettingsQs]);
 
-  // Keep shareable settings in the URL
+  // Keep shareable settings in the URL. A view switch (#830) pushes a history
+  // entry so browser Back returns to the previous view; every other change
+  // rewrites in place with replaceState as before.
   useEffect(() => {
+    const tabChanged = activeTab !== lastWrittenTabRef.current;
+    lastWrittenTabRef.current = activeTab;
     writeParams({
       tab: activeTab,
       preset: selectedPreset,
@@ -259,8 +271,26 @@ export default function App() {
       decode: decodeSpeed,
       sim: simSpeedMultiplier === 'instant' ? 'instant' : simSpeedMultiplier,
       flags: selectedFlags.length > 0 ? selectedFlags.join(',') : null
-    });
+    }, { push: tabChanged });
   }, [activeTab, selectedPreset, prefillSpeed, decodeSpeed, simSpeedMultiplier, selectedFlags]);
+
+  // URL -> state sync (#830): Back/Forward and any same-document navigation
+  // (popstate also fires for hash changes) re-read `?tab=` and the shareable
+  // settings from the location, so a programmatic pushState/replaceState of
+  // ?tab=<valid> updates the rendered view instead of desyncing from it.
+  // lastWrittenTabRef is advanced first so the URL-write effect treats this
+  // as an in-place rewrite rather than pushing a duplicate history entry.
+  useEffect(() => {
+    const onPopState = () => {
+      const tab = readTabParam();
+      lastWrittenTabRef.current = tab;
+      applySettingsQs(window.location.search);
+      setActiveTab(tab);
+      setIsPlaying(false);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [applySettingsQs]);
 
   // OG chart image (#105): point the og:image / twitter:image meta tags at
   // /api/og with the current config so shared links preview the actual chart.
@@ -348,6 +378,9 @@ export default function App() {
         return;
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // While the shortcuts dialog is open only undo/redo stay live (#843):
+      // the modal owns focus and plain-key shortcuts must not act behind it.
+      if (shortcutsOpen) return;
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
       if (e.key === '?') {
@@ -366,7 +399,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, shortcutsOpen]);
 
   // Issue #106: share a titled permalink — the current query-string state
   // (which already encodes preset, speeds, flags and every tab's sim inputs)
@@ -410,9 +443,6 @@ export default function App() {
         onShare={handleShare}
       />
 
-      {/* Share-link tamper-evidence (#917): a signed link whose params or
-          ?title= were edited after signing is flagged here instead of being
-          accepted silently — mirrors the loud failure of tampered calc ids. */}
       {shareLinkTampered && (
         <div className="share-tamper-banner" role="alert" style={{
           margin: '0 auto', maxWidth: '72rem', padding: '0.6rem 1rem',
@@ -426,7 +456,9 @@ export default function App() {
         </div>
       )}
 
-      <main className="app-frame stack" ref={mainRef}>
+      {/* data-view (#839): machine-readable active-view marker so a static
+          HTML scrape can identify the rendered view without JS evaluation. */}
+      <main className="app-frame stack" ref={mainRef} data-view={activeTab}>
         <CollapsibleSection id="localmaxxing" title={t('common.localMaxxingTitle') || 'LocalMaxxing measured presets'} badge="LIVE">
           <LocalMaxxingPresetPicker
             selectedPreset={selectedPreset}
@@ -558,6 +590,11 @@ export default function App() {
       {/* First-run guided tour overlay */}
 
       
+      {/* Keyboard-shortcuts help dialog (#76/#843): opened with `?` */}
+      {shortcutsOpen && (
+        <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />
+      )}
+
       <footer className="site-footer" style={{ padding: '12px 0' }}>
         <p style={{ fontSize: '0.72rem', color: 'var(--text-subtle)' }}>
           {t('header.brandTitle')} · <a href="/llms.txt">API</a> · <a href="/api/spec">OpenAPI</a> · <kbd>Space</kbd> play · <kbd>R</kbd> reset

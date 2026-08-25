@@ -42,7 +42,11 @@ export function writeParams(updates) {
   }
   const qs = p.toString();
   const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
-  window.history.replaceState(null, '', url);
+  if (push) {
+    window.history.pushState(null, '', url);
+  } else {
+    window.history.replaceState(null, '', url);
+  }
 }
 
 // Build a shareable "try it" URL for a demo: sets the given params and marks
