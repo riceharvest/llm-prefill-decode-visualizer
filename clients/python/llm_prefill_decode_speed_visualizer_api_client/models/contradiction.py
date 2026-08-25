@@ -1,29 +1,21 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
-
-from ..types import UNSET, Unset
 
 from ..models.contradiction_kind import ContradictionKind
 from ..models.contradiction_metric import ContradictionMetric
 from ..types import UNSET, Unset
 
-
-
-
-
-
 T = TypeVar("T", bound="Contradiction")
-
 
 
 @_attrs_define
 class Contradiction:
-    """ A multi-GPU rig whose numbers contradict the single-GPU baseline on the same model/quant — likely a misconfigured
+    """A multi-GPU rig whose numbers contradict the single-GPU baseline on the same model/quant — likely a misconfigured
     run.
 
         Attributes:
@@ -36,7 +28,7 @@ class Contradiction:
             delta_pct (float | Unset):
             per_gpu_scaling_pct (float | Unset):
             note (str | Unset):
-     """
+    """
 
     kind: ContradictionKind
     metric: ContradictionMetric
@@ -48,10 +40,6 @@ class Contradiction:
     per_gpu_scaling_pct: float | Unset = UNSET
     note: str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
-
-
-
-
 
     def to_dict(self) -> dict[str, Any]:
         kind = self.kind.value
@@ -72,13 +60,14 @@ class Contradiction:
 
         note = self.note
 
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-            "kind": kind,
-            "metric": metric,
-        })
+        field_dict.update(
+            {
+                "kind": kind,
+                "metric": metric,
+            }
+        )
         if vs is not UNSET:
             field_dict["vs"] = vs
         if gpu_count is not UNSET:
@@ -96,20 +85,12 @@ class Contradiction:
 
         return field_dict
 
-
-
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
         kind = ContradictionKind(d.pop("kind"))
 
-
-
-
         metric = ContradictionMetric(d.pop("metric"))
-
-
-
 
         vs = d.pop("vs", UNSET)
 
@@ -136,7 +117,6 @@ class Contradiction:
             per_gpu_scaling_pct=per_gpu_scaling_pct,
             note=note,
         )
-
 
         contradiction.additional_properties = d
         return contradiction

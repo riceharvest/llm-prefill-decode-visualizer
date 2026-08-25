@@ -1,38 +1,31 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
-from ..types import UNSET, Unset
-from typing import cast
-
 if TYPE_CHECKING:
-  from ..models.benchmark_group_context_bands import BenchmarkGroupContextBands
-  from ..models.benchmark_group_data_quality_type_0 import BenchmarkGroupDataQualityType0
-  from ..models.benchmark_group_freshness import BenchmarkGroupFreshness
-  from ..models.benchmark_group_outliers_item import BenchmarkGroupOutliersItem
-  from ..models.best_run_summary import BestRunSummary
-  from ..models.caveat import Caveat
-  from ..models.confidence import Confidence
-  from ..models.cross_check import CrossCheck
-  from ..models.speed_stats import SpeedStats
-
-
-
+    from ..models.benchmark_group_context_bands import BenchmarkGroupContextBands
+    from ..models.benchmark_group_data_quality_type_0 import BenchmarkGroupDataQualityType0
+    from ..models.benchmark_group_freshness import BenchmarkGroupFreshness
+    from ..models.benchmark_group_outliers_item import BenchmarkGroupOutliersItem
+    from ..models.best_run_summary import BestRunSummary
+    from ..models.caveat import Caveat
+    from ..models.confidence import Confidence
+    from ..models.cross_check import CrossCheck
+    from ..models.speed_stats import SpeedStats
 
 
 T = TypeVar("T", bound="BenchmarkGroup")
 
 
-
 @_attrs_define
 class BenchmarkGroup:
-    """ Aggregated speeds for one group (hardware×model-family by default; regroup with ?groupBy=). Medians are outlier-
+    """Aggregated speeds for one group (hardware×model-family by default; regroup with ?groupBy=). Medians are outlier-
     resistant and carry 95% bootstrap CIs.
 
         Attributes:
@@ -63,7 +56,7 @@ class BenchmarkGroup:
             context_bands (BenchmarkGroupContextBands | Unset): Context-length band mix inside the group — speeds depend on
                 context, so a mixed group blends regimes.
             freshness (BenchmarkGroupFreshness | Unset): Recency of the runs backing this group.
-     """
+    """
 
     key: str
     runs: int
@@ -87,20 +80,9 @@ class BenchmarkGroup:
     freshness: BenchmarkGroupFreshness | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
-
-
-
-
     def to_dict(self) -> dict[str, Any]:
-        from ..models.benchmark_group_context_bands import BenchmarkGroupContextBands
         from ..models.benchmark_group_data_quality_type_0 import BenchmarkGroupDataQualityType0
-        from ..models.benchmark_group_freshness import BenchmarkGroupFreshness
-        from ..models.benchmark_group_outliers_item import BenchmarkGroupOutliersItem
-        from ..models.best_run_summary import BestRunSummary
-        from ..models.caveat import Caveat
-        from ..models.confidence import Confidence
-        from ..models.cross_check import CrossCheck
-        from ..models.speed_stats import SpeedStats
+
         key = self.key
 
         runs = self.runs
@@ -113,13 +95,9 @@ class BenchmarkGroup:
         if not isinstance(self.model_families, Unset):
             model_families = self.model_families
 
-
-
         engines: list[str] | Unset = UNSET
         if not isinstance(self.engines, Unset):
             engines = self.engines
-
-
 
         mixed_engines = self.mixed_engines
 
@@ -143,8 +121,6 @@ class BenchmarkGroup:
             for caveats_item_data in self.caveats:
                 caveats_item = caveats_item_data.to_dict()
                 caveats.append(caveats_item)
-
-
 
         confidence: dict[str, Any] | Unset = UNSET
         if not isinstance(self.confidence, Unset):
@@ -173,8 +149,6 @@ class BenchmarkGroup:
                 outliers_item = outliers_item_data.to_dict()
                 outliers.append(outliers_item)
 
-
-
         context_bands: dict[str, Any] | Unset = UNSET
         if not isinstance(self.context_bands, Unset):
             context_bands = self.context_bands.to_dict()
@@ -183,15 +157,16 @@ class BenchmarkGroup:
         if not isinstance(self.freshness, Unset):
             freshness = self.freshness.to_dict()
 
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-            "key": key,
-            "runs": runs,
-            "prefill": prefill,
-            "decode": decode,
-        })
+        field_dict.update(
+            {
+                "key": key,
+                "runs": runs,
+                "prefill": prefill,
+                "decode": decode,
+            }
+        )
         if model_families is not UNSET:
             field_dict["modelFamilies"] = model_families
         if engines is not UNSET:
@@ -227,8 +202,6 @@ class BenchmarkGroup:
 
         return field_dict
 
-
-
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.benchmark_group_context_bands import BenchmarkGroupContextBands
@@ -240,6 +213,7 @@ class BenchmarkGroup:
         from ..models.confidence import Confidence
         from ..models.cross_check import CrossCheck
         from ..models.speed_stats import SpeedStats
+
         d = dict(src_dict)
         key = d.pop("key")
 
@@ -247,19 +221,11 @@ class BenchmarkGroup:
 
         prefill = SpeedStats.from_dict(d.pop("prefill"))
 
-
-
-
         decode = SpeedStats.from_dict(d.pop("decode"))
-
-
-
 
         model_families = cast(list[str], d.pop("modelFamilies", UNSET))
 
-
         engines = cast(list[str], d.pop("engines", UNSET))
-
 
         mixed_engines = d.pop("mixedEngines", UNSET)
 
@@ -272,7 +238,6 @@ class BenchmarkGroup:
 
         mixed_context_bands = _parse_mixed_context_bands(d.pop("mixedContextBands", UNSET))
 
-
         def _parse_data_quality(data: object) -> BenchmarkGroupDataQualityType0 | None | Unset:
             if data is None:
                 return data
@@ -283,15 +248,12 @@ class BenchmarkGroup:
                     raise TypeError()
                 data_quality_type_0 = BenchmarkGroupDataQualityType0.from_dict(data)
 
-
-
                 return data_quality_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(BenchmarkGroupDataQualityType0 | None | Unset, data)
 
         data_quality = _parse_data_quality(d.pop("dataQuality", UNSET))
-
 
         _caveats = d.pop("caveats", UNSET)
         caveats: list[Caveat] | Unset = UNSET
@@ -300,40 +262,28 @@ class BenchmarkGroup:
             for caveats_item_data in _caveats:
                 caveats_item = Caveat.from_dict(caveats_item_data)
 
-
-
                 caveats.append(caveats_item)
-
 
         _confidence = d.pop("confidence", UNSET)
         confidence: Confidence | Unset
-        if isinstance(_confidence,  Unset):
+        if isinstance(_confidence, Unset):
             confidence = UNSET
         else:
             confidence = Confidence.from_dict(_confidence)
 
-
-
-
         _cross_check = d.pop("crossCheck", UNSET)
         cross_check: CrossCheck | Unset
-        if isinstance(_cross_check,  Unset):
+        if isinstance(_cross_check, Unset):
             cross_check = UNSET
         else:
             cross_check = CrossCheck.from_dict(_cross_check)
 
-
-
-
         _best_run = d.pop("bestRun", UNSET)
         best_run: BestRunSummary | Unset
-        if isinstance(_best_run,  Unset):
+        if isinstance(_best_run, Unset):
             best_run = UNSET
         else:
             best_run = BestRunSummary.from_dict(_best_run)
-
-
-
 
         runs_in_stats = d.pop("runsInStats", UNSET)
 
@@ -350,30 +300,21 @@ class BenchmarkGroup:
             for outliers_item_data in _outliers:
                 outliers_item = BenchmarkGroupOutliersItem.from_dict(outliers_item_data)
 
-
-
                 outliers.append(outliers_item)
-
 
         _context_bands = d.pop("contextBands", UNSET)
         context_bands: BenchmarkGroupContextBands | Unset
-        if isinstance(_context_bands,  Unset):
+        if isinstance(_context_bands, Unset):
             context_bands = UNSET
         else:
             context_bands = BenchmarkGroupContextBands.from_dict(_context_bands)
 
-
-
-
         _freshness = d.pop("freshness", UNSET)
         freshness: BenchmarkGroupFreshness | Unset
-        if isinstance(_freshness,  Unset):
+        if isinstance(_freshness, Unset):
             freshness = UNSET
         else:
             freshness = BenchmarkGroupFreshness.from_dict(_freshness)
-
-
-
 
         benchmark_group = cls(
             key=key,
@@ -397,7 +338,6 @@ class BenchmarkGroup:
             context_bands=context_bands,
             freshness=freshness,
         )
-
 
         benchmark_group.additional_properties = d
         return benchmark_group

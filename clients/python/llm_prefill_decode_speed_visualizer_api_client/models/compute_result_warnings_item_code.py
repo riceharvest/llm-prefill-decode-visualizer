@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ComputeResultWarningsItemCode(str, Enum):
     CONTEXT_EXCEEDS_MODEL_LIMIT = "context_exceeds_model_limit"
     DECODE_ABOVE_BANDWIDTH_ROOFLINE = "decode_above_bandwidth_roofline"

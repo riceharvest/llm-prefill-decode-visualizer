@@ -1,21 +1,16 @@
 from http import HTTPStatus
-from typing import Any, cast
-from urllib.parse import quote
+from typing import Any
 
 import httpx
 
-from ...client import AuthenticatedClient, Client
-from ...types import Response, UNSET
 from ... import errors
-
+from ...client import AuthenticatedClient, Client
 from ...models.best_list_envelope import BestListEnvelope
 from ...models.get_best_configs_by import GetBestConfigsBy
 from ...models.get_best_configs_context_band import GetBestConfigsContextBand
 from ...models.get_best_configs_hw_class import GetBestConfigsHwClass
 from ...models.get_best_configs_response_429 import GetBestConfigsResponse429
-from ...types import UNSET, Unset
-from typing import cast
-
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
@@ -39,11 +34,7 @@ def _get_kwargs(
     batch_size: int | Unset = 1,
     limit: int | Unset = 10,
     snapshot: str | Unset = UNSET,
-
 ) -> dict[str, Any]:
-    
-
-    
 
     params: dict[str, Any] = {}
 
@@ -97,9 +88,7 @@ def _get_kwargs(
 
     params["snapshot"] = snapshot
 
-
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
 
     _kwargs: dict[str, Any] = {
         "method": "get",
@@ -107,23 +96,19 @@ def _get_kwargs(
         "params": params,
     }
 
-
     return _kwargs
 
 
-
-def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> BestListEnvelope | GetBestConfigsResponse429 | None:
+def _parse_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> BestListEnvelope | GetBestConfigsResponse429 | None:
     if response.status_code == 200:
         response_200 = BestListEnvelope.from_dict(response.json())
-
-
 
         return response_200
 
     if response.status_code == 429:
         response_429 = GetBestConfigsResponse429.from_dict(response.json())
-
-
 
         return response_429
 
@@ -133,7 +118,9 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
         return None
 
 
-def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[BestListEnvelope | GetBestConfigsResponse429]:
+def _build_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[BestListEnvelope | GetBestConfigsResponse429]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -164,9 +151,8 @@ def sync_detailed(
     batch_size: int | Unset = 1,
     limit: int | Unset = 10,
     snapshot: str | Unset = UNSET,
-
 ) -> Response[BestListEnvelope | GetBestConfigsResponse429]:
-    """ Ranked answers: fastest or cheapest rigs for given constraints
+    """Ranked answers: fastest or cheapest rigs for given constraints
 
      Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median
     decode speed. by=cost ranks by cost-efficiency instead. Medians carry 95% bootstrap CIs
@@ -200,30 +186,28 @@ def sync_detailed(
 
     Returns:
         Response[BestListEnvelope | GetBestConfigsResponse429]
-     """
-
+    """
 
     kwargs = _get_kwargs(
         by=by,
-price=price,
-electricity_rate=electricity_rate,
-power_watts=power_watts,
-amortization_months=amortization_months,
-prompt_tokens=prompt_tokens,
-output_tokens=output_tokens,
-model=model,
-max_params_b=max_params_b,
-quant=quant,
-hw_class=hw_class,
-hardware=hardware,
-context_band=context_band,
-fit_check=fit_check,
-context_length=context_length,
-precision_bytes=precision_bytes,
-batch_size=batch_size,
-limit=limit,
-snapshot=snapshot,
-
+        price=price,
+        electricity_rate=electricity_rate,
+        power_watts=power_watts,
+        amortization_months=amortization_months,
+        prompt_tokens=prompt_tokens,
+        output_tokens=output_tokens,
+        model=model,
+        max_params_b=max_params_b,
+        quant=quant,
+        hw_class=hw_class,
+        hardware=hardware,
+        context_band=context_band,
+        fit_check=fit_check,
+        context_length=context_length,
+        precision_bytes=precision_bytes,
+        batch_size=batch_size,
+        limit=limit,
+        snapshot=snapshot,
     )
 
     response = client.get_httpx_client().request(
@@ -231,6 +215,7 @@ snapshot=snapshot,
     )
 
     return _build_response(client=client, response=response)
+
 
 def sync(
     *,
@@ -254,9 +239,8 @@ def sync(
     batch_size: int | Unset = 1,
     limit: int | Unset = 10,
     snapshot: str | Unset = UNSET,
-
 ) -> BestListEnvelope | GetBestConfigsResponse429 | None:
-    """ Ranked answers: fastest or cheapest rigs for given constraints
+    """Ranked answers: fastest or cheapest rigs for given constraints
 
      Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median
     decode speed. by=cost ranks by cost-efficiency instead. Medians carry 95% bootstrap CIs
@@ -290,32 +274,31 @@ def sync(
 
     Returns:
         BestListEnvelope | GetBestConfigsResponse429
-     """
-
+    """
 
     return sync_detailed(
         client=client,
-by=by,
-price=price,
-electricity_rate=electricity_rate,
-power_watts=power_watts,
-amortization_months=amortization_months,
-prompt_tokens=prompt_tokens,
-output_tokens=output_tokens,
-model=model,
-max_params_b=max_params_b,
-quant=quant,
-hw_class=hw_class,
-hardware=hardware,
-context_band=context_band,
-fit_check=fit_check,
-context_length=context_length,
-precision_bytes=precision_bytes,
-batch_size=batch_size,
-limit=limit,
-snapshot=snapshot,
-
+        by=by,
+        price=price,
+        electricity_rate=electricity_rate,
+        power_watts=power_watts,
+        amortization_months=amortization_months,
+        prompt_tokens=prompt_tokens,
+        output_tokens=output_tokens,
+        model=model,
+        max_params_b=max_params_b,
+        quant=quant,
+        hw_class=hw_class,
+        hardware=hardware,
+        context_band=context_band,
+        fit_check=fit_check,
+        context_length=context_length,
+        precision_bytes=precision_bytes,
+        batch_size=batch_size,
+        limit=limit,
+        snapshot=snapshot,
     ).parsed
+
 
 async def asyncio_detailed(
     *,
@@ -339,9 +322,8 @@ async def asyncio_detailed(
     batch_size: int | Unset = 1,
     limit: int | Unset = 10,
     snapshot: str | Unset = UNSET,
-
 ) -> Response[BestListEnvelope | GetBestConfigsResponse429]:
-    """ Ranked answers: fastest or cheapest rigs for given constraints
+    """Ranked answers: fastest or cheapest rigs for given constraints
 
      Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median
     decode speed. by=cost ranks by cost-efficiency instead. Medians carry 95% bootstrap CIs
@@ -375,37 +357,34 @@ async def asyncio_detailed(
 
     Returns:
         Response[BestListEnvelope | GetBestConfigsResponse429]
-     """
-
+    """
 
     kwargs = _get_kwargs(
         by=by,
-price=price,
-electricity_rate=electricity_rate,
-power_watts=power_watts,
-amortization_months=amortization_months,
-prompt_tokens=prompt_tokens,
-output_tokens=output_tokens,
-model=model,
-max_params_b=max_params_b,
-quant=quant,
-hw_class=hw_class,
-hardware=hardware,
-context_band=context_band,
-fit_check=fit_check,
-context_length=context_length,
-precision_bytes=precision_bytes,
-batch_size=batch_size,
-limit=limit,
-snapshot=snapshot,
-
+        price=price,
+        electricity_rate=electricity_rate,
+        power_watts=power_watts,
+        amortization_months=amortization_months,
+        prompt_tokens=prompt_tokens,
+        output_tokens=output_tokens,
+        model=model,
+        max_params_b=max_params_b,
+        quant=quant,
+        hw_class=hw_class,
+        hardware=hardware,
+        context_band=context_band,
+        fit_check=fit_check,
+        context_length=context_length,
+        precision_bytes=precision_bytes,
+        batch_size=batch_size,
+        limit=limit,
+        snapshot=snapshot,
     )
 
-    response = await client.get_async_httpx_client().request(
-        **kwargs
-    )
+    response = await client.get_async_httpx_client().request(**kwargs)
 
     return _build_response(client=client, response=response)
+
 
 async def asyncio(
     *,
@@ -429,9 +408,8 @@ async def asyncio(
     batch_size: int | Unset = 1,
     limit: int | Unset = 10,
     snapshot: str | Unset = UNSET,
-
 ) -> BestListEnvelope | GetBestConfigsResponse429 | None:
-    """ Ranked answers: fastest or cheapest rigs for given constraints
+    """Ranked answers: fastest or cheapest rigs for given constraints
 
      Example: /api/best?by=decode&maxParamsB=8&quant=q4_k_m → top rigs for ≤8B models at Q4_K_M by median
     decode speed. by=cost ranks by cost-efficiency instead. Medians carry 95% bootstrap CIs
@@ -465,29 +443,29 @@ async def asyncio(
 
     Returns:
         BestListEnvelope | GetBestConfigsResponse429
-     """
+    """
 
-
-    return (await asyncio_detailed(
-        client=client,
-by=by,
-price=price,
-electricity_rate=electricity_rate,
-power_watts=power_watts,
-amortization_months=amortization_months,
-prompt_tokens=prompt_tokens,
-output_tokens=output_tokens,
-model=model,
-max_params_b=max_params_b,
-quant=quant,
-hw_class=hw_class,
-hardware=hardware,
-context_band=context_band,
-fit_check=fit_check,
-context_length=context_length,
-precision_bytes=precision_bytes,
-batch_size=batch_size,
-limit=limit,
-snapshot=snapshot,
-
-    )).parsed
+    return (
+        await asyncio_detailed(
+            client=client,
+            by=by,
+            price=price,
+            electricity_rate=electricity_rate,
+            power_watts=power_watts,
+            amortization_months=amortization_months,
+            prompt_tokens=prompt_tokens,
+            output_tokens=output_tokens,
+            model=model,
+            max_params_b=max_params_b,
+            quant=quant,
+            hw_class=hw_class,
+            hardware=hardware,
+            context_band=context_band,
+            fit_check=fit_check,
+            context_length=context_length,
+            precision_bytes=precision_bytes,
+            batch_size=batch_size,
+            limit=limit,
+            snapshot=snapshot,
+        )
+    ).parsed

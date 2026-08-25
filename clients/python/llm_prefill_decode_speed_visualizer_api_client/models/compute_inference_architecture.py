@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ComputeInferenceArchitecture(str, Enum):
     LLAMA70B = "llama70b"
     LLAMA8B = "llama8b"

@@ -1,16 +1,12 @@
 from http import HTTPStatus
-from typing import Any, cast
-from urllib.parse import quote
+from typing import Any
 
 import httpx
 
-from ...client import AuthenticatedClient, Client
-from ...types import Response, UNSET
 from ... import errors
-
+from ...client import AuthenticatedClient, Client
 from ...models.get_sizing_recommendation_hw_class import GetSizingRecommendationHwClass
-from ...types import UNSET, Unset
-
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
@@ -29,11 +25,7 @@ def _get_kwargs(
     quant: str | Unset = UNSET,
     hw_class: GetSizingRecommendationHwClass | Unset = UNSET,
     limit: int | Unset = 5,
-
 ) -> dict[str, Any]:
-    
-
-    
 
     params: dict[str, Any] = {}
 
@@ -69,9 +61,7 @@ def _get_kwargs(
 
     params["limit"] = limit
 
-
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
 
     _kwargs: dict[str, Any] = {
         "method": "get",
@@ -79,9 +69,7 @@ def _get_kwargs(
         "params": params,
     }
 
-
     return _kwargs
-
 
 
 def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | None:
@@ -120,9 +108,8 @@ def sync_detailed(
     quant: str | Unset = UNSET,
     hw_class: GetSizingRecommendationHwClass | Unset = UNSET,
     limit: int | Unset = 5,
-
 ) -> Response[Any]:
-    """ Hardware sizing recommendation for a workload spec (VRAM fit + expected TTFT/TPOT)
+    """Hardware sizing recommendation for a workload spec (VRAM fit + expected TTFT/TPOT)
 
      One canonical query for deployment planning: pass a workload spec, get ranked rigs with required-
     VRAM math (weights + KV cache at target context × concurrency + overhead) and expected TTFT/TPOT
@@ -152,25 +139,23 @@ def sync_detailed(
 
     Returns:
         Response[Any]
-     """
-
+    """
 
     kwargs = _get_kwargs(
         model=model,
-context_length=context_length,
-concurrency=concurrency,
-prompt_tokens=prompt_tokens,
-output_tokens=output_tokens,
-max_ttft_seconds=max_ttft_seconds,
-max_tpot_ms=max_tpot_ms,
-max_vram_gb=max_vram_gb,
-num_layers=num_layers,
-kv_heads=kv_heads,
-head_dim=head_dim,
-quant=quant,
-hw_class=hw_class,
-limit=limit,
-
+        context_length=context_length,
+        concurrency=concurrency,
+        prompt_tokens=prompt_tokens,
+        output_tokens=output_tokens,
+        max_ttft_seconds=max_ttft_seconds,
+        max_tpot_ms=max_tpot_ms,
+        max_vram_gb=max_vram_gb,
+        num_layers=num_layers,
+        kv_heads=kv_heads,
+        head_dim=head_dim,
+        quant=quant,
+        hw_class=hw_class,
+        limit=limit,
     )
 
     response = client.get_httpx_client().request(
@@ -197,9 +182,8 @@ async def asyncio_detailed(
     quant: str | Unset = UNSET,
     hw_class: GetSizingRecommendationHwClass | Unset = UNSET,
     limit: int | Unset = 5,
-
 ) -> Response[Any]:
-    """ Hardware sizing recommendation for a workload spec (VRAM fit + expected TTFT/TPOT)
+    """Hardware sizing recommendation for a workload spec (VRAM fit + expected TTFT/TPOT)
 
      One canonical query for deployment planning: pass a workload spec, get ranked rigs with required-
     VRAM math (weights + KV cache at target context × concurrency + overhead) and expected TTFT/TPOT
@@ -229,30 +213,25 @@ async def asyncio_detailed(
 
     Returns:
         Response[Any]
-     """
-
+    """
 
     kwargs = _get_kwargs(
         model=model,
-context_length=context_length,
-concurrency=concurrency,
-prompt_tokens=prompt_tokens,
-output_tokens=output_tokens,
-max_ttft_seconds=max_ttft_seconds,
-max_tpot_ms=max_tpot_ms,
-max_vram_gb=max_vram_gb,
-num_layers=num_layers,
-kv_heads=kv_heads,
-head_dim=head_dim,
-quant=quant,
-hw_class=hw_class,
-limit=limit,
-
+        context_length=context_length,
+        concurrency=concurrency,
+        prompt_tokens=prompt_tokens,
+        output_tokens=output_tokens,
+        max_ttft_seconds=max_ttft_seconds,
+        max_tpot_ms=max_tpot_ms,
+        max_vram_gb=max_vram_gb,
+        num_layers=num_layers,
+        kv_heads=kv_heads,
+        head_dim=head_dim,
+        quant=quant,
+        hw_class=hw_class,
+        limit=limit,
     )
 
-    response = await client.get_async_httpx_client().request(
-        **kwargs
-    )
+    response = await client.get_async_httpx_client().request(**kwargs)
 
     return _build_response(client=client, response=response)
-

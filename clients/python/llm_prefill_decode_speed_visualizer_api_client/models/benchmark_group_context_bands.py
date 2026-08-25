@@ -1,37 +1,30 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
-from ..types import UNSET, Unset
-from typing import cast
-
 if TYPE_CHECKING:
-  from ..models.benchmark_group_context_bands_bands_item import BenchmarkGroupContextBandsBandsItem
-
-
-
+    from ..models.benchmark_group_context_bands_bands_item import BenchmarkGroupContextBandsBandsItem
 
 
 T = TypeVar("T", bound="BenchmarkGroupContextBands")
 
 
-
 @_attrs_define
 class BenchmarkGroupContextBands:
-    """ Context-length band mix inside the group — speeds depend on context, so a mixed group blends regimes.
+    """Context-length band mix inside the group — speeds depend on context, so a mixed group blends regimes.
 
-        Attributes:
-            bands (list[BenchmarkGroupContextBandsBandsItem] | Unset):
-            unknown_runs (int | Unset): Runs reporting no usable contextLength
-            distinct_bands (int | Unset):
-            mixed (bool | Unset):
-     """
+    Attributes:
+        bands (list[BenchmarkGroupContextBandsBandsItem] | Unset):
+        unknown_runs (int | Unset): Runs reporting no usable contextLength
+        distinct_bands (int | Unset):
+        mixed (bool | Unset):
+    """
 
     bands: list[BenchmarkGroupContextBandsBandsItem] | Unset = UNSET
     unknown_runs: int | Unset = UNSET
@@ -39,12 +32,7 @@ class BenchmarkGroupContextBands:
     mixed: bool | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
-
-
-
-
     def to_dict(self) -> dict[str, Any]:
-        from ..models.benchmark_group_context_bands_bands_item import BenchmarkGroupContextBandsBandsItem
         bands: list[dict[str, Any]] | Unset = UNSET
         if not isinstance(self.bands, Unset):
             bands = []
@@ -52,19 +40,15 @@ class BenchmarkGroupContextBands:
                 bands_item = bands_item_data.to_dict()
                 bands.append(bands_item)
 
-
-
         unknown_runs = self.unknown_runs
 
         distinct_bands = self.distinct_bands
 
         mixed = self.mixed
 
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-        })
+        field_dict.update({})
         if bands is not UNSET:
             field_dict["bands"] = bands
         if unknown_runs is not UNSET:
@@ -76,11 +60,10 @@ class BenchmarkGroupContextBands:
 
         return field_dict
 
-
-
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.benchmark_group_context_bands_bands_item import BenchmarkGroupContextBandsBandsItem
+
         d = dict(src_dict)
         _bands = d.pop("bands", UNSET)
         bands: list[BenchmarkGroupContextBandsBandsItem] | Unset = UNSET
@@ -89,10 +72,7 @@ class BenchmarkGroupContextBands:
             for bands_item_data in _bands:
                 bands_item = BenchmarkGroupContextBandsBandsItem.from_dict(bands_item_data)
 
-
-
                 bands.append(bands_item)
-
 
         unknown_runs = d.pop("unknownRuns", UNSET)
 
@@ -106,7 +86,6 @@ class BenchmarkGroupContextBands:
             distinct_bands=distinct_bands,
             mixed=mixed,
         )
-
 
         benchmark_group_context_bands.additional_properties = d
         return benchmark_group_context_bands

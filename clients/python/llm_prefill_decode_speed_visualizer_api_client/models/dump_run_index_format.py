@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class DumpRunIndexFormat(str, Enum):
     CSV = "csv"
     JSON = "json"

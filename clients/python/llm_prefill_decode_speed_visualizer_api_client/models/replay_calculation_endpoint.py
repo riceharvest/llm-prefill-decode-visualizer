@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ReplayCalculationEndpoint(str, Enum):
     BEST = "best"
     COMPUTE = "compute"

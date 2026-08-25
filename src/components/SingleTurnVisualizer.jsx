@@ -8,6 +8,7 @@ import {
   estimateImageTokens
 } from '../utils/multimodal';
 import { readParamNum, readParam, readParamBool, consumeAutoplay, writeParams } from '../utils/urlState';
+import { shouldCompleteInstantly } from '../utils/simPlayback';
 import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
@@ -320,6 +321,28 @@ export default function SingleTurnVisualizer({
       simTimeRef.current = 0;
     }
 
+    // Complete synchronously when no animation frame is needed (#1079):
+    // ?sim=instant and prefers-reduced-motion used to jump-to-final from
+    // INSIDE the rAF tick, which hidden/background tabs never service —
+    // both hatches hung forever there. Same completions, same precedence
+    // order as the tick body had, but before any rAF is armed.
+    if (!Number.isFinite(expectedTotalTime) || expectedTotalTime <= 0) {
+      setCurrentPrefillProgress(Number.isFinite(expectedTTFT) && expectedTTFT >= 0 ? Math.max(0, totalPrefillTokens) : 0);
+      setCurrentDecodeTokens(Number.isFinite(expectedDecodeTime) && expectedDecodeTime >= 0 ? Math.max(0, outputTokens) : 0);
+      setElapsedTime(expectedTotalTime);
+      setPhase('completed');
+      setIsPlaying(false);
+      return;
+    }
+    if (shouldCompleteInstantly(simSpeedMultiplier, prefersReducedMotion)) {
+      setCurrentPrefillProgress(totalPrefillTokens);
+      setCurrentDecodeTokens(safeOutputTokens);
+      setElapsedTime(expectedTotalTime);
+      setPhase('completed');
+      setIsPlaying(false);
+      return;
+    }
+
     const tick = (now) => {
       if (!lastTickRef.current) {
         lastTickRef.current = now;
@@ -329,29 +352,6 @@ export default function SingleTurnVisualizer({
 
       const realDeltaSec = (now - lastTickRef.current) / 1000;
       lastTickRef.current = now;
-
-      // Non-finite walltime (e.g. a speed typed as 0): finish immediately,
-      // showing only the phases that can actually complete.
-      if (!Number.isFinite(expectedTotalTime) || expectedTotalTime <= 0) {
-        setCurrentPrefillProgress(Number.isFinite(expectedTTFT) && expectedTTFT >= 0 ? Math.max(0, totalPrefillTokens) : 0);
-        setCurrentDecodeTokens(Number.isFinite(expectedDecodeTime) && expectedDecodeTime >= 0 ? Math.max(0, outputTokens) : 0);
-        setElapsedTime(expectedTotalTime);
-        setPhase('completed');
-        setIsPlaying(false);
-        return;
-      }
-
-      // Handle instant mode — or prefers-reduced-motion (issue #63): the
-      // streaming animation is JS-driven, so reduced-motion users get the
-      // final state in one step instead of a frame-by-frame stream.
-      if (simSpeedMultiplier === 'instant' || prefersReducedMotion) {
-        setCurrentPrefillProgress(totalPrefillTokens);
-        setCurrentDecodeTokens(safeOutputTokens);
-        setElapsedTime(expectedTotalTime);
-        setPhase('completed');
-        setIsPlaying(false);
-        return;
-      }
 
       const simDeltaSec = realDeltaSec * simSpeedMultiplier;
 

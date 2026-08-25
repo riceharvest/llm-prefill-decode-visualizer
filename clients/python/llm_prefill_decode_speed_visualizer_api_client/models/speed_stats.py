@@ -1,41 +1,34 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
-from ..types import UNSET, Unset
-from typing import cast
-
 if TYPE_CHECKING:
-  from ..models.speed_stats_ci_95 import SpeedStatsCi95
-
-
-
+    from ..models.speed_stats_ci_95 import SpeedStatsCi95
 
 
 T = TypeVar("T", bound="SpeedStats")
 
 
-
 @_attrs_define
 class SpeedStats:
-    """ Outlier-resistant distribution stats for one metric within a group.
+    """Outlier-resistant distribution stats for one metric within a group.
 
-        Attributes:
-            median (float | None):
-            q1 (float | None | Unset): First quartile
-            q3 (float | None | Unset): Third quartile
-            min_ (float | None | Unset):
-            max_ (float | None | Unset):
-            ci95 (SpeedStatsCi95 | Unset): 95% percentile bootstrap confidence interval (2,000 resamples). Overlapping
-                intervals across groups mean they are statistically tied.
-            label (None | str | Unset): Rendered as "median [lo–hi]" Example: 105 [101–110].
-     """
+    Attributes:
+        median (float | None):
+        q1 (float | None | Unset): First quartile
+        q3 (float | None | Unset): Third quartile
+        min_ (float | None | Unset):
+        max_ (float | None | Unset):
+        ci95 (SpeedStatsCi95 | Unset): 95% percentile bootstrap confidence interval (2,000 resamples). Overlapping
+            intervals across groups mean they are statistically tied.
+        label (None | str | Unset): Rendered as "median [lo–hi]" Example: 105 [101–110].
+    """
 
     median: float | None
     q1: float | None | Unset = UNSET
@@ -46,12 +39,7 @@ class SpeedStats:
     label: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
-
-
-
-
     def to_dict(self) -> dict[str, Any]:
-        from ..models.speed_stats_ci_95 import SpeedStatsCi95
         median: float | None
         median = self.median
 
@@ -89,12 +77,13 @@ class SpeedStats:
         else:
             label = self.label
 
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-            "median": median,
-        })
+        field_dict.update(
+            {
+                "median": median,
+            }
+        )
         if q1 is not UNSET:
             field_dict["q1"] = q1
         if q3 is not UNSET:
@@ -110,19 +99,18 @@ class SpeedStats:
 
         return field_dict
 
-
-
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.speed_stats_ci_95 import SpeedStatsCi95
+
         d = dict(src_dict)
+
         def _parse_median(data: object) -> float | None:
             if data is None:
                 return data
             return cast(float | None, data)
 
         median = _parse_median(d.pop("median"))
-
 
         def _parse_q1(data: object) -> float | None | Unset:
             if data is None:
@@ -133,7 +121,6 @@ class SpeedStats:
 
         q1 = _parse_q1(d.pop("q1", UNSET))
 
-
         def _parse_q3(data: object) -> float | None | Unset:
             if data is None:
                 return data
@@ -142,7 +129,6 @@ class SpeedStats:
             return cast(float | None | Unset, data)
 
         q3 = _parse_q3(d.pop("q3", UNSET))
-
 
         def _parse_min_(data: object) -> float | None | Unset:
             if data is None:
@@ -153,7 +139,6 @@ class SpeedStats:
 
         min_ = _parse_min_(d.pop("min", UNSET))
 
-
         def _parse_max_(data: object) -> float | None | Unset:
             if data is None:
                 return data
@@ -163,16 +148,12 @@ class SpeedStats:
 
         max_ = _parse_max_(d.pop("max", UNSET))
 
-
         _ci95 = d.pop("ci95", UNSET)
         ci95: SpeedStatsCi95 | Unset
-        if isinstance(_ci95,  Unset):
+        if isinstance(_ci95, Unset):
             ci95 = UNSET
         else:
             ci95 = SpeedStatsCi95.from_dict(_ci95)
-
-
-
 
         def _parse_label(data: object) -> None | str | Unset:
             if data is None:
@@ -183,7 +164,6 @@ class SpeedStats:
 
         label = _parse_label(d.pop("label", UNSET))
 
-
         speed_stats = cls(
             median=median,
             q1=q1,
@@ -193,7 +173,6 @@ class SpeedStats:
             ci95=ci95,
             label=label,
         )
-
 
         speed_stats.additional_properties = d
         return speed_stats

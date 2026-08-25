@@ -1,26 +1,17 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..types import UNSET, Unset
-
-
-
-
-
-
-
 T = TypeVar("T", bound="RateLimit")
-
 
 
 @_attrs_define
 class RateLimit:
-    """ Machine-readable rate-limit state — the same numbers the X-RateLimit-* headers carry, for clients that only parse
+    """Machine-readable rate-limit state — the same numbers the X-RateLimit-* headers carry, for clients that only parse
     bodies.
 
         Attributes:
@@ -29,7 +20,7 @@ class RateLimit:
             reset (int): Unix epoch seconds when the current window resets
             window_seconds (int): Window length in seconds
             policy (str): Limiting policy, e.g. fixed-window per client IP
-     """
+    """
 
     limit: int
     remaining: int
@@ -37,10 +28,6 @@ class RateLimit:
     window_seconds: int
     policy: str
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
-
-
-
-
 
     def to_dict(self) -> dict[str, Any]:
         limit = self.limit
@@ -53,20 +40,19 @@ class RateLimit:
 
         policy = self.policy
 
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-            "limit": limit,
-            "remaining": remaining,
-            "reset": reset,
-            "window_seconds": window_seconds,
-            "policy": policy,
-        })
+        field_dict.update(
+            {
+                "limit": limit,
+                "remaining": remaining,
+                "reset": reset,
+                "window_seconds": window_seconds,
+                "policy": policy,
+            }
+        )
 
         return field_dict
-
-
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
@@ -88,7 +74,6 @@ class RateLimit:
             window_seconds=window_seconds,
             policy=policy,
         )
-
 
         rate_limit.additional_properties = d
         return rate_limit

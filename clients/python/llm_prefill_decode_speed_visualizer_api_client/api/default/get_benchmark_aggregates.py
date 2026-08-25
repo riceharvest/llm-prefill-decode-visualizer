@@ -1,21 +1,16 @@
 from http import HTTPStatus
-from typing import Any, cast
-from urllib.parse import quote
+from typing import Any
 
 import httpx
 
-from ...client import AuthenticatedClient, Client
-from ...types import Response, UNSET
 from ... import errors
-
+from ...client import AuthenticatedClient, Client
 from ...models.benchmark_group_list_envelope import BenchmarkGroupListEnvelope
 from ...models.get_benchmark_aggregates_context_band import GetBenchmarkAggregatesContextBand
 from ...models.get_benchmark_aggregates_group_by import GetBenchmarkAggregatesGroupBy
 from ...models.get_benchmark_aggregates_hw_class import GetBenchmarkAggregatesHwClass
 from ...models.get_benchmark_aggregates_response_429 import GetBenchmarkAggregatesResponse429
-from ...types import UNSET, Unset
-from typing import cast
-
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
@@ -29,11 +24,7 @@ def _get_kwargs(
     limit: int | Unset = 25,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
-
 ) -> dict[str, Any]:
-    
-
-    
 
     params: dict[str, Any] = {}
 
@@ -67,9 +58,7 @@ def _get_kwargs(
 
     params["snapshot"] = snapshot
 
-
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
 
     _kwargs: dict[str, Any] = {
         "method": "get",
@@ -77,23 +66,19 @@ def _get_kwargs(
         "params": params,
     }
 
-
     return _kwargs
 
 
-
-def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> BenchmarkGroupListEnvelope | GetBenchmarkAggregatesResponse429 | None:
+def _parse_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> BenchmarkGroupListEnvelope | GetBenchmarkAggregatesResponse429 | None:
     if response.status_code == 200:
         response_200 = BenchmarkGroupListEnvelope.from_dict(response.json())
-
-
 
         return response_200
 
     if response.status_code == 429:
         response_429 = GetBenchmarkAggregatesResponse429.from_dict(response.json())
-
-
 
         return response_429
 
@@ -103,7 +88,9 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
         return None
 
 
-def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[BenchmarkGroupListEnvelope | GetBenchmarkAggregatesResponse429]:
+def _build_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[BenchmarkGroupListEnvelope | GetBenchmarkAggregatesResponse429]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -124,9 +111,8 @@ def sync_detailed(
     limit: int | Unset = 25,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
-
 ) -> Response[BenchmarkGroupListEnvelope | GetBenchmarkAggregatesResponse429]:
-    r""" Aggregated speeds: median + IQR + 95% bootstrap CI per group
+    r"""Aggregated speeds: median + IQR + 95% bootstrap CI per group
 
      Outlier-resistant stats per hardware×model-family group (default). Each median carries a 95%
     percentile bootstrap confidence interval (2,000 resamples) in ci95 {lo, hi}, plus a \"median
@@ -153,20 +139,18 @@ def sync_detailed(
 
     Returns:
         Response[BenchmarkGroupListEnvelope | GetBenchmarkAggregatesResponse429]
-     """
-
+    """
 
     kwargs = _get_kwargs(
         group_by=group_by,
-hardware=hardware,
-model=model,
-quant=quant,
-hw_class=hw_class,
-context_band=context_band,
-limit=limit,
-cursor=cursor,
-snapshot=snapshot,
-
+        hardware=hardware,
+        model=model,
+        quant=quant,
+        hw_class=hw_class,
+        context_band=context_band,
+        limit=limit,
+        cursor=cursor,
+        snapshot=snapshot,
     )
 
     response = client.get_httpx_client().request(
@@ -174,6 +158,7 @@ snapshot=snapshot,
     )
 
     return _build_response(client=client, response=response)
+
 
 def sync(
     *,
@@ -187,9 +172,8 @@ def sync(
     limit: int | Unset = 25,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
-
 ) -> BenchmarkGroupListEnvelope | GetBenchmarkAggregatesResponse429 | None:
-    r""" Aggregated speeds: median + IQR + 95% bootstrap CI per group
+    r"""Aggregated speeds: median + IQR + 95% bootstrap CI per group
 
      Outlier-resistant stats per hardware×model-family group (default). Each median carries a 95%
     percentile bootstrap confidence interval (2,000 resamples) in ci95 {lo, hi}, plus a \"median
@@ -216,22 +200,21 @@ def sync(
 
     Returns:
         BenchmarkGroupListEnvelope | GetBenchmarkAggregatesResponse429
-     """
-
+    """
 
     return sync_detailed(
         client=client,
-group_by=group_by,
-hardware=hardware,
-model=model,
-quant=quant,
-hw_class=hw_class,
-context_band=context_band,
-limit=limit,
-cursor=cursor,
-snapshot=snapshot,
-
+        group_by=group_by,
+        hardware=hardware,
+        model=model,
+        quant=quant,
+        hw_class=hw_class,
+        context_band=context_band,
+        limit=limit,
+        cursor=cursor,
+        snapshot=snapshot,
     ).parsed
+
 
 async def asyncio_detailed(
     *,
@@ -245,9 +228,8 @@ async def asyncio_detailed(
     limit: int | Unset = 25,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
-
 ) -> Response[BenchmarkGroupListEnvelope | GetBenchmarkAggregatesResponse429]:
-    r""" Aggregated speeds: median + IQR + 95% bootstrap CI per group
+    r"""Aggregated speeds: median + IQR + 95% bootstrap CI per group
 
      Outlier-resistant stats per hardware×model-family group (default). Each median carries a 95%
     percentile bootstrap confidence interval (2,000 resamples) in ci95 {lo, hi}, plus a \"median
@@ -274,27 +256,24 @@ async def asyncio_detailed(
 
     Returns:
         Response[BenchmarkGroupListEnvelope | GetBenchmarkAggregatesResponse429]
-     """
-
+    """
 
     kwargs = _get_kwargs(
         group_by=group_by,
-hardware=hardware,
-model=model,
-quant=quant,
-hw_class=hw_class,
-context_band=context_band,
-limit=limit,
-cursor=cursor,
-snapshot=snapshot,
-
+        hardware=hardware,
+        model=model,
+        quant=quant,
+        hw_class=hw_class,
+        context_band=context_band,
+        limit=limit,
+        cursor=cursor,
+        snapshot=snapshot,
     )
 
-    response = await client.get_async_httpx_client().request(
-        **kwargs
-    )
+    response = await client.get_async_httpx_client().request(**kwargs)
 
     return _build_response(client=client, response=response)
+
 
 async def asyncio(
     *,
@@ -308,9 +287,8 @@ async def asyncio(
     limit: int | Unset = 25,
     cursor: str | Unset = UNSET,
     snapshot: str | Unset = UNSET,
-
 ) -> BenchmarkGroupListEnvelope | GetBenchmarkAggregatesResponse429 | None:
-    r""" Aggregated speeds: median + IQR + 95% bootstrap CI per group
+    r"""Aggregated speeds: median + IQR + 95% bootstrap CI per group
 
      Outlier-resistant stats per hardware×model-family group (default). Each median carries a 95%
     percentile bootstrap confidence interval (2,000 resamples) in ci95 {lo, hi}, plus a \"median
@@ -337,19 +315,19 @@ async def asyncio(
 
     Returns:
         BenchmarkGroupListEnvelope | GetBenchmarkAggregatesResponse429
-     """
+    """
 
-
-    return (await asyncio_detailed(
-        client=client,
-group_by=group_by,
-hardware=hardware,
-model=model,
-quant=quant,
-hw_class=hw_class,
-context_band=context_band,
-limit=limit,
-cursor=cursor,
-snapshot=snapshot,
-
-    )).parsed
+    return (
+        await asyncio_detailed(
+            client=client,
+            group_by=group_by,
+            hardware=hardware,
+            model=model,
+            quant=quant,
+            hw_class=hw_class,
+            context_band=context_band,
+            limit=limit,
+            cursor=cursor,
+            snapshot=snapshot,
+        )
+    ).parsed

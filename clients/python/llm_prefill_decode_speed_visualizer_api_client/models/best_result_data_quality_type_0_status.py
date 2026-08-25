@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class BestResultDataQualityType0Status(str, Enum):
     FLAGGED = "flagged"
     OK = "ok"
