@@ -13,7 +13,11 @@ const QUANT_TABLE = [
   [/^q5[_ ]?k/, 5.67, 'q5_k_m'],
   [/^q5[_ ]?[01]?$/, 5.54, 'q5_0'],
   [/^q4[_ ]?k/, 4.85, 'q4_k_m'],
-  [/^q4[_ ]?1?$/, 4.55, 'q4_0'],
+  // q4_0 and q4_1 are distinct advertised tags (llms.txt) at the same ~4.55
+  // bpw average — the old single /^q4[_ ]?1?$/ row could never match 'q4_0'
+  // and mislabeled every q4_1 request as 'q4_0' (#882).
+  [/^q4[_ ]?0?$/, 4.55, 'q4_0'],
+  [/^q4[_ ]?1$/, 4.55, 'q4_1'],
   [/^iq4/, 4.5, 'iq4_nl'],
   [/^q3[_ ]?k?_?l?$/, 4.27, 'q3_k_l'],
   [/^q3[_ ]?k?_?m?$|^q3[_ ]?0?$/, 3.91, 'q3_k_m'],
@@ -31,6 +35,12 @@ export function resolveQuant(quant) {
       return { key, bpw, bytesPerParam: bpw / 8, assumed: false };
     }
   }
-  // Unknown tag: assume ~4-bit and say so, rather than failing the call.
+  // Unknown tag: assume Q4_K_M-class ~4.85 bpw and flag it via `assumed: true`,
+  // rather than failing the call. (The value matches the q4_k_m table row on
+  // purpose — distinguish assumed tags only via the quantAssumed flag.)
   return { key: q, bpw: 4.85, bytesPerParam: 4.85 / 8, assumed: true };
 }
+
+// Canonical quant tags the table resolves without guessing — exposed as the
+// machine-readable vocabulary on /api/spec's /api/vram `quant` param (#882).
+export const QUANT_ENUM = [...new Set(QUANT_TABLE.map(([, , key]) => key))];

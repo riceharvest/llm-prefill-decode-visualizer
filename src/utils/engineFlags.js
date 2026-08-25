@@ -91,11 +91,31 @@ function clampSpeed(x) {
   return Math.max(1, x);
 }
 
+// Normalize any accepted multi-value `flags=` encoding into a clean id
+// array (#932): a comma-separated string ('flash-attn,kv-q8'), a
+// repeated-key array (['flash-attn', 'kv-q8'] — what Vercel's req.query
+// yields for ?flags=a&flags=b), or a mix (array elements that themselves
+// contain commas). Whitespace around ids is trimmed and empty parts are
+// dropped, so both standard encodings produce identical results instead
+// of collapsing into a garbage 'a,b' string.
+export function normalizeFlagIds(flags) {
+  const raw = Array.isArray(flags) ? flags : [flags];
+  const ids = [];
+  for (const item of raw) {
+    if (item === null || item === undefined) continue;
+    for (const part of String(item).split(',')) {
+      const id = part.trim();
+      if (id) ids.push(id);
+    }
+  }
+  return ids;
+}
+
 // Apply engine flags to base speeds. Unknown or duplicate ids are ignored
 // (reported in `warnings`) so a bad URL param can never corrupt the model.
 // Returns adjusted speeds plus a per-flag audit trail.
 export function applyEngineFlags({ prefillSpeed = 3800, decodeSpeed = 105, kvBits = 16, flags = [] } = {}) {
-  const ids = Array.isArray(flags) ? flags : String(flags).split(',');
+  const ids = normalizeFlagIds(flags);
   const adjustments = [];
   const warnings = [];
   const seen = new Set();

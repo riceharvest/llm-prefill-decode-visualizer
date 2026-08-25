@@ -4,6 +4,8 @@
 > the llms.txt capability index, README, full API guide (/llms.txt), API
 > changelog and MCP server docs, concatenated in one flat markdown file.
 > Individual sources are marked with `<!-- source: <path> -->` comments.
+> Links to files served at the site root point at their deployed URLs;
+> links to repository-only files are shown as plain `repo/path` text.
 
 <!-- source: llms.txt -->
 
@@ -13,32 +15,33 @@
 
 ## Docs
 
-- [README](README.md): features, setup and architecture overview
-- [Full API guide (llms.txt)](public/llms.txt): every endpoint with parameters, curl examples, response shapes, statistical caveats, error codes and rate limits
-- [API changelog](CHANGELOG-API.md): schema-versioning policy and endpoint change history
-- [Full documentation (llms-full.txt)](public/llms-full.txt): every agent-facing doc above compiled into one flat markdown file, served at `/llms-full.txt`
+- README (`README.md`): features, setup and architecture overview
+- [Full API guide (llms.txt)](https://llm-prefill-decode-visualizer.vercel.app/llms.txt): every endpoint with parameters, curl examples, response shapes, statistical caveats, error codes and rate limits
+- API changelog (`CHANGELOG-API.md`): schema-versioning policy and endpoint change history
+- [Full documentation (llms-full.txt)](https://llm-prefill-decode-visualizer.vercel.app/llms-full.txt): every agent-facing doc above compiled into one flat markdown file, served at `/llms-full.txt`
 
 ## Machine-readable surfaces
 
 - [OpenAPI spec](https://llm-prefill-decode-visualizer.vercel.app/api/spec): derive every endpoint programmatically (identical under `/v1/spec`)
-- [Agent manifest](public/agents.json)
-- [MCP server](mcp/server.js): Streamable HTTP JSON-RPC at `/api/mcp`; usage in the [MCP README](mcp/README.md)
-- [Changelog feed](public/changelog.json)
-- [Status page](public/status.html)
+- [Agent manifest](https://llm-prefill-decode-visualizer.vercel.app/agents.json): machine-readable manifest of every agent-facing endpoint, generated from the route table
+- [Agent endpoint index](https://llm-prefill-decode-visualizer.vercel.app/api/agent/index.json): complete per-endpoint index with request/response shape sketches (sibling of the agent manifest)
+- MCP server (`mcp/server.js`): Streamable HTTP JSON-RPC at `/api/mcp`; usage in the MCP README (`mcp/README.md`)
+- [Changelog feed](https://llm-prefill-decode-visualizer.vercel.app/changelog.json)
+- [Status page](https://llm-prefill-decode-visualizer.vercel.app/status.html)
 
 ## Source map
 
-- [Frontend app](src/App.jsx): React UI with nine tabs — single-turn, agentic loop, batching, compare, A/B replay, run diff, hardware shortlist, KV-cache calculator, theory
-- [Standalone compare page](compare.html)
-- [Serverless API](api/_router.js): all `/api/*` routes and handlers (compute simulators, vram fit, best/sizing recommendations, localmaxxing benchmarks, watch feeds, snapshots)
-- [Shared math library](lib/)
-- [Python client](clients/python/pyproject.toml)
-- [TypeScript schema types](clients/typescript/schema.d.ts)
-- [Build & codegen scripts](scripts/generate-sitemap.mjs)
+- Frontend app (`src/App.jsx`): React UI with nine tabs — single-turn, agentic loop, batching, compare, A/B replay, run diff, hardware shortlist, KV-cache calculator, theory
+- [Standalone compare page](/compare.html)
+- Serverless API (`api/_router.js`): all `/api/*` routes and handlers (compute simulators, vram fit, best/sizing recommendations, localmaxxing benchmarks, watch feeds, snapshots)
+- Shared math library (`lib/`)
+- Python client (`clients/python/pyproject.toml`)
+- TypeScript schema types (`clients/typescript/schema.d.ts`)
+- Build & codegen scripts (`scripts/generate-sitemap.mjs`)
 
 ## Typical agent workflow
 
-1. Read [the full API guide](public/llms.txt) once — it documents batching, dry-run validation, snapshot pinning and the `/v1/` prefix policy.
+1. Read [the full API guide](https://llm-prefill-decode-visualizer.vercel.app/llms.txt) once — it documents batching, dry-run validation, snapshot pinning and the `/v1/` prefix policy.
 2. `GET /api/spec`, then call `/api/vram?hfId=…&context=…&vramGb=…` for fit checks or `/api/sizing?model=…` for ranked hardware recommendations.
 3. Model request shapes with `GET|POST /api/compute?model=singleTurn|agentic|kvCache|cost|…`.
 
@@ -153,6 +156,8 @@ An interactive tool for understanding LLM inference performance: prefill (comput
 <!-- agent-parseable:meta -->
 Base-URL: https://llm-prefill-decode-visualizer.vercel.app
 OpenAPI-Spec: /api/spec
+Agent-Manifest: /agents.json
+Endpoint-Index: /api/agent/index.json
 Tabs: single,agentic,batching,compare,ab,diff,shortlist,kvcache,theory
 Tab-URL-Template: {Base-URL}/?tab={id}
 Tab-Section-Header-Format: ### Tab: {id} — {label}
@@ -354,6 +359,8 @@ Every `/api/*` response carries rate-limit headers so agents can self-throttle:
 
 Budget: 120 requests/min per client IP. Note this is enforced best-effort **per serverless instance**: Vercel functions share no memory across invocations, so concurrent warm instances each allow 120/min and cold starts reset counters — treat the limit as a floor on good behavior, not a hard global cap.
 
+Concurrency vs budget (HTTP/2): the transport layer advertises up to **160 concurrent streams** per connection (`MAX_CONCURRENT_STREAMS` in the server's h2 SETTINGS frame), but that is wire capacity only — the application budget above still binds first. A full-width parallel burst exhausts its 120 req/min window mid-flight and eats RATE_LIMITED responses. Size fan-out from `X-RateLimit-Remaining`, not from stream count; whichever limit is smaller for your remaining window is the one that binds.
+
 Every JSON response body also carries the same numbers as a machine-readable `rate_limit` object (`limit`, `remaining`, `reset`, `window_seconds`, `policy`) for clients that only parse bodies. See CHANGELOG-API.md and api/_ratelimit.js for the full contract.
 
 ### Schema versioning
@@ -407,9 +414,17 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 
 - Tab-ID: batching
 - URL: /?tab=batching
-- Purpose: Show concurrent users sharing one accelerator: per-user decode decays roughly B^0.25 with batch size while aggregate throughput climbs.
+- Purpose: Show concurrent users sharing one accelerator: per-user decode decays as batchSize^(−decodeDecayExponent) with batch size while aggregate throughput climbs — a heuristic power law with NO saturation point, so it must not be used alone to pick an optimal batch size.
 - Surfaces: batch-size slider; per-user vs aggregate throughput meters; shared-compute animation
 - Endpoints: GET /api/compute?model=batched
+- URL params:
+  - breqs=<2–48> — concurrent requests in the batch
+  - bprompt=<128–32768> — mean prompt tokens per request
+  - bgen=<32–4096> — mean output tokens per request
+  - bmax=<1–32> — maximum batch size (concurrent decodes)
+  - bchunk=<0|128|256|512|1024|2048|4096|8192> — chunked-prefill chunk size; 0 disables chunking. The UI slider is indexed by these stops, so DOM slider position ≠ token value
+  - barr=<0–2000, ms> — interval between request arrivals
+  - sim=<1|2|5|20|instant> — playback time-scale multiplier shared by all animated tabs
 
 ### Tab: compare — Compare
 
@@ -432,7 +447,7 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Tab-ID: diff
 - URL: /?tab=diff
 - Purpose: Diff two community benchmark runs (or two constraint sets via what-if mode) and read per-metric deltas plus a plain-language summary.
-- Surfaces: run A/B selectors; delta table; what-if constraint diffing
+- Surfaces: run A/B free-text id inputs; per-metric delta rows with ratios; plain-language summary; deep links (?tab=diff&runA&runB) auto-execute on load
 - Endpoints: GET /api/diff?runA=<id>&runB=<id>; GET /api/diff?mode=whatif
 
 ### Tab: shortlist — Find HW
@@ -548,6 +563,20 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- `GET|POST /api/compute?model=kvCache` input validation fix: non-numeric or
+  non-positive `numLayers` / `kvHeads` / `headDim` / `contextLength` /
+  `batchSize` now return `400 INVALID_PARAMS` instead of being silently
+  defaulted (or worse, multiplied through — doubly-negative ctx × batch used
+  to cancel signs into a plausible-looking positive `totalGb`). `precisionBytes`
+  now enforces its documented enum `[2, 1, 0.5]`, and unknown `architecture`
+  values are rejected with the available list. Every kvCache result now always
+  carries the required `warnings` array (empty when inputs are plausible), and
+  requests whose `contextLength` exceeds the architecture max emit a
+  `context_exceeds_model_limit` warning plus a `contextWindow` block
+  (`maxPositionEmbeddings` / `requested` / `withinLimit` / `overflowTokens`)
+  mirroring `/api/vram`. Behavior change: previously-accepted invalid inputs
+  now fail with 400; valid-request response shapes only gain fields.
+- Affected endpoints: `/api/compute` (`model=kvCache`).
 - `/api/spec` now annotates every operation with a machine-readable
   `x-rate-limit` extension: `{ enforced, limit, windowSeconds, keying, scope }`
   plus, for metered endpoints, the `X-RateLimit-*` header names and the 429

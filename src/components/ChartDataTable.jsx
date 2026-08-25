@@ -1,6 +1,7 @@
 import React, { useId, useState } from 'react';
 import { Table2 } from 'lucide-react';
 import { t } from '../i18n/strings';
+import { chartTableTestId } from '../utils/testids';
 
 /**
  * ChartDataTable (#75) — accessible data-table alternative for charts.
@@ -41,8 +42,11 @@ export default function ChartDataTable({
   defaultOpen = false
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  // `useId()` stays ONLY for internal aria wiring (button ↔ region ids) — it
+  // is never exposed to agents. The agent-facing hook below is a build-stable
+  // slug of the English caption (#641): mount order and React versions can
+  // no longer renumber it.
   const idPrefix = useId();
-  const tableId = `${idPrefix}-table`;
 
   if (!caption || rows.length === 0) return null;
 
@@ -110,7 +114,7 @@ export default function ChartDataTable({
         {open ? t('chartTable.hideTable') : t('chartTable.viewAsTable')}
       </button>
       {open && (
-        <div id={regionId} role="group" aria-label={caption} style={{ marginTop: '10px' }} data-chart-data-table={tableId}>
+        <div id={regionId} role="group" aria-label={caption} style={{ marginTop: '10px' }} data-testid={chartTableTestId(caption)} data-chart-data-table={chartTableTestId(caption)}>
           {table}
         </div>
       )}

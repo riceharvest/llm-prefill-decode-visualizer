@@ -9,6 +9,8 @@
 
 import { normalizeModelId } from './_normalize.js';
 import { readGgufMetadata, architectureFromGguf } from './_gguf.js';
+import { ApiError } from './_errors.js';
+import { fetchWithTimeout, UPSTREAM_TIMEOUTS } from './_upstream_timeout.js';
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const cache = new Map(); // hfId -> { data, at }
@@ -16,6 +18,16 @@ const cache = new Map(); // hfId -> { data, at }
 function httpError(status, message) {
   return Object.assign(new Error(message), { status });
 }
+
+// HF repo ids are "org/model" — letters/digits plus ".", "_" or "-" per
+// segment. Anything else (spaces, "?", "#", "%", "/") would flow raw into
+// the outbound huggingface.co URLs below and could inject query strings,
+// fragments or extra path segments into a server-side request (#691), so
+// reject it before any fetch is built.
+const HF_ID_RE = /^[\w.-]+\/[\w.-]+$/;
+
+/** "org/model" → "org%2Fmodel"-style per-segment encoding for URL paths. */
+const encodeHfIdPath = id => id.split('/').map(encodeURIComponent).join('/');
 
 /** Merge top-level fields into a nested text_config (multimodal repos). */
 function textConfig(cfg) {
@@ -37,8 +49,13 @@ function pickTopLevel(cfg) {
 async function fetchJson(url, whatFor) {
   let res;
   try {
-    res = await fetch(url, { headers: { accept: 'application/json' }, redirect: 'follow' });
+    res = await fetchWithTimeout(
+      url,
+      { headers: { accept: 'application/json' }, redirect: 'follow' },
+      UPSTREAM_TIMEOUTS.hfConfig
+    );
   } catch (err) {
+    if (err instanceof ApiError) throw err; // already a problem+json shape (e.g. UPSTREAM_TIMEOUT)
     throw httpError(502, `could not reach huggingface.co for ${whatFor}: ${err.message}`);
   }
   if (res.status === 404 || res.status === 401 || res.status === 403) return null;
@@ -119,6 +136,9 @@ export async function resolveModel(hfIdRaw, { quant } = {}) {
   if (!hfId || !hfId.includes('/')) {
     throw httpError(400, 'hfId must look like "org/model" or a full huggingface.co URL');
   }
+  if (!HF_ID_RE.test(hfId)) {
+    throw httpError(400, `invalid hfId "${hfId}" — use "org/model" (letters, digits, ".", "_", "-" only) or a full huggingface.co URL`);
+  }
 
   // GGUF weight-size selection depends on the requested quant, so keep
   // separate cache slots per quant tag.
@@ -134,7 +154,7 @@ export async function resolveModel(hfIdRaw, { quant } = {}) {
 async function resolveUncached(hfId, quant) {
   const notes = [];
   const [cfg, info] = await Promise.all([
-    fetchJson(`https://huggingface.co/${hfId}/resolve/main/config.json`, `${hfId}/config.json`),
+    fetchJson(`https://huggingface.co/${encodeHfIdPath(hfId)}/resolve/main/config.json`, `${hfId}/config.json`),
     fetchJson(
       `https://huggingface.co/api/models/${hfId.split('/').map(encodeURIComponent).join('/')}?blobs=true`,
       `${hfId} model metadata`
@@ -183,7 +203,7 @@ async function resolveUncached(hfId, quant) {
       `"${hfId}" is gated/private or has no config.json and no .gguf files — architecture cannot be resolved automatically. Try an ungated mirror of the same model.`);
   }
 
-  const url = `https://huggingface.co/${hfId}/resolve/main/${gguf.name.split('/').map(encodeURIComponent).join('/')}`;
+  const url = `https://huggingface.co/${encodeHfIdPath(hfId)}/resolve/main/${gguf.name.split('/').map(encodeURIComponent).join('/')}`;
   const meta = await readGgufMetadata(url);
   const arch = architectureFromGguf(meta);
   if (!arch) {

@@ -12,7 +12,21 @@ async function callHandler(url, headers = {}) {
     statusCode: 0,
     headers: {},
     setHeader(k, v) { this.headers[k] = v; },
-    getHeader(k) { return this.headers[String(k).toLowerCase()]; },
+    getHeader(k) {
+      // Case-insensitive like Node's ServerResponse.getHeader.
+      const lk = String(k).toLowerCase();
+      for (const [hk, hv] of Object.entries(this.headers)) {
+        if (hk.toLowerCase() === lk) return hv;
+      }
+      return undefined;
+    },
+    hasHeader(k) {
+      const lk = String(k).toLowerCase();
+      for (const hk of Object.keys(this.headers)) {
+        if (hk.toLowerCase() === lk) return true;
+      }
+      return false;
+    },
     end(body) {
       captured.status = this.statusCode;
       captured.body = body;
