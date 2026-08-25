@@ -70,7 +70,7 @@ export const ROUTES = [
   {
     path: '/export',
     methods: ['GET'],
-    description: 'One-click full-dataset export at ?format=csv|json with an accompanying data dictionary.',
+    description: 'One-click full-dataset export at ?format=csv|json with an accompanying data dictionary. Comparable runs (the subset feeding /api/best) are also listed at /api/runs?comparable=true.',
     returns: 'text/csv',
     sinceVersion: '1.0.0',
   },
@@ -166,7 +166,7 @@ export const ROUTES = [
   {
     path: '/runs',
     methods: ['GET'],
-    description: 'One-shot machine-readable dump of the FULL run index (comparable AND batched/non-comparable runs). ?format=json|csv; ?comparable=all|true|false. JSON envelope carries schemaVersion, generatedAt, rowCount, totalRunCount and a structured dataDictionary; CSV is RFC 4180 with a #-comment preamble.',
+    description: 'Legacy alias of /api/export. One-shot machine-readable dump of the FULL run index (comparable AND batched/non-comparable runs). ?format=json|csv; ?comparable=all|true|false. JSON envelope carries schemaVersion, generatedAt, rowCount, totalRunCount and a structured dataDictionary; CSV is RFC 4180 with a #-comment preamble.',
     returns: 'JSON envelope { schemaVersion, generatedAt, rowCount, totalRunCount, comparableCount, dataDictionary[], runs[] } or RFC 4180 CSV text with a #-comment preamble.',
     returns: 'application/json or text/csv',
     sinceVersion: '2.6.0',
