@@ -11,7 +11,25 @@ import { normalizeModelId } from './_normalize.js';
 import { readGgufMetadata, architectureFromGguf } from './_gguf.js';
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
+// Bound the in-memory cache (#608): warm instances resolve attacker-controlled
+// ?hfId= values, and an unbounded Map grows without limit. 500 entries × a few
+// KB each is plenty for legitimate batched agent loops.
+const CACHE_MAX_ENTRIES = 500;
 const cache = new Map(); // hfId -> { data, at }
+
+/** Number of cached entries (exported for tests/observability). */
+export function hfconfigCacheSize() {
+  return cache.size;
+}
+
+function cacheSet(key, value) {
+  cache.set(key, value);
+  // Map preserves insertion order — evict the oldest entries first.
+  while (cache.size > CACHE_MAX_ENTRIES) {
+    const oldest = cache.keys().next().value;
+    cache.delete(oldest);
+  }
+}
 
 function httpError(status, message) {
   return Object.assign(new Error(message), { status });
@@ -140,7 +158,7 @@ export async function resolveModel(hfIdRaw, { quant } = {}) {
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.data;
 
   const data = await resolveUncached(hfId, quant);
-  cache.set(cacheKey, { data, at: Date.now() });
+  cacheSet(cacheKey, { data, at: Date.now() });
   return data;
 }
 

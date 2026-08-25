@@ -56,14 +56,21 @@ server.tool(
   'compute_inference',
   'Run LLM inference math against the visualizer: TTFT, TPOT, walltime, effective throughput, KV-cache VRAM. Scenarios: singleTurn (prompt/output tokens at given prefill/decode speeds), speculative (draft-token acceptance math), batched (concurrent streams), agentic (multi-turn with optional prefix caching), kvCache (VRAM for a given architecture/context/precision). Omit `model` to get a self-describing capability list.',
   {
-    model: z.enum(['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache']).optional()
+    // #614: kept in sync with /api/compute — agentic workload params
+    // (basePromptTokens, toolOutputTokensPerTurn, decodeTokensPerTurn) were
+    // silently ignored, and the `flagged` + `cost` models were unreachable.
+    model: z.enum(['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost']).optional()
       .describe('Scenario to compute. Omit for a capability list.'),
-    promptTokens: z.number().optional().describe('singleTurn/batched/agentic'),
-    outputTokens: z.number().optional().describe('singleTurn/batched/agentic'),
+    promptTokens: z.number().optional().describe('singleTurn/batched/agentic/cost'),
+    outputTokens: z.number().optional().describe('singleTurn/batched/agentic/cost'),
     prefillSpeed: z.number().optional().describe('tok/s'),
     decodeSpeed: z.number().optional().describe('tok/s'),
     numTurns: z.number().int().optional().describe('agentic: turns per session'),
+    basePromptTokens: z.number().int().optional().describe('agentic: prompt tokens of the first turn'),
+    toolOutputTokensPerTurn: z.number().int().optional().describe('agentic: tool-output tokens fed back each turn'),
+    decodeTokensPerTurn: z.number().int().optional().describe('agentic: tokens decoded per turn (default = outputTokens)'),
     enablePrefixCaching: z.boolean().optional().describe('agentic'),
+    flags: z.string().optional().describe("flagged: comma-separated engine flags, e.g. 'flash-attn,kv-q8'"),
     batchSize: z.number().int().optional().describe('batched/kvCache: concurrent streams'),
     draftTokens: z.number().int().optional().describe('speculative: draft tokens per step'),
     acceptanceRate: z.number().optional().describe('speculative: 0..1'),
@@ -71,6 +78,10 @@ server.tool(
       .describe('kvCache: model architecture preset'),
     contextLength: z.number().int().optional().describe('kvCache: context length in tokens'),
     precisionBytes: z.number().optional().describe('kvCache: KV element size — 2 (FP16), 1 (FP8), 0.5 (INT4)'),
+    hardwarePriceUsd: z.number().optional().describe('cost: hardware purchase price (USD)'),
+    electricityRatePerKwh: z.number().optional().describe('cost: $/kWh'),
+    powerDrawWatts: z.number().optional().describe('cost: whole-rig inference wattage'),
+    amortizationMonths: z.number().optional().describe('cost: months to spread the hardware price over'),
   },
   async (args) => jsonResult(await apiGet('/api/compute', args))
 );

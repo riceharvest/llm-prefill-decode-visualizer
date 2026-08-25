@@ -13,11 +13,25 @@
  */
 
 const MARKDOWN_RE = /text\/markdown|application\/markdown/i;
+// ?format=md / ?format=markdown is the query-param spelling of the same
+// negotiation (#604): AGENT-QUICKSTART has advertised it, but only the Accept
+// header was honored and ?format=md was silently ignored.
+const FORMAT_MD_RE = /^(md|markdown)$/i;
 
-/** True when the request's Accept header asks for markdown. */
+/** Read ?format= off a request URL without relying on req.query being set. */
+function formatParam(req) {
+  try {
+    return new URL(req?.url || '', 'http://localhost').searchParams.get('format') || '';
+  } catch {
+    return '';
+  }
+}
+
+/** True when the request's Accept header (or ?format=) asks for markdown. */
 export function wantsMarkdown(req) {
   const accept = req?.headers?.accept || '';
-  return MARKDOWN_RE.test(accept);
+  if (MARKDOWN_RE.test(accept)) return true;
+  return FORMAT_MD_RE.test(formatParam(req));
 }
 
 /** Escape pipe characters so table cells don't break. */

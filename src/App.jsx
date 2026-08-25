@@ -14,6 +14,7 @@ import HardwareShortlist from './components/HardwareShortlist';
 import KVCacheCalculator from './components/KVCacheCalculator';
 import TheoryGuide from './components/TheoryGuide';
 import SloBudgetsPanel, { useSloBudgets } from './components/SloBudgetsPanel';
+import { sanitizeBudgets } from './utils/slo';
 import { HARDWARE_PRESETS } from './utils/presets';
 import { copyTextToClipboard } from './utils/clipboard';
 import { toLocalPreset, hardwareName } from './utils/localMaxxing';
@@ -275,7 +276,7 @@ export default function App() {
   }, [settingsHistory, currentQs, applySettingsQs]);
 
   const [lastRestoreReport, setLastRestoreReport] = useState(null);
-  const handleRestoreSnapshot = useCallback((qs) => {
+  const handleRestoreSnapshot = useCallback((qs, budgets) => {
     const report = applySettingsQs(qs, { record: true });
     // Surfaced in the sidebar (#569): absent keys reset to defaults and
     // unresolved preset ids are visible instead of silently merged.
@@ -284,7 +285,10 @@ export default function App() {
     } else {
       setLastRestoreReport(null);
     }
-  }, [applySettingsQs]);
+    // #613: a snapshot re-judges configs against the budgets that were active
+    // at save time, not whatever happens to be set right now.
+    if (budgets && typeof budgets === 'object') setSloBudgets(sanitizeBudgets(budgets));
+  }, [applySettingsQs, setSloBudgets]);
 
   // Keep shareable settings in the URL. A view switch (#830) pushes a history
   // entry so browser Back returns to the previous view; every other change
@@ -555,6 +559,7 @@ export default function App() {
           <SnapshotsSidebar
             currentQs={currentQs}
             activeTab={activeTab}
+            budgets={sloBudgets}
             onRestore={handleRestoreSnapshot}
             restoreReport={lastRestoreReport}
             canUndo={settingsHistory.past.length > 0}

@@ -94,7 +94,8 @@ test('sizing query maps only mappable non-null constraints', () => {
   assert.equal(qs.get('model'), 'qwen');
   assert.equal(qs.get('quant'), 'q4_k_m');
   assert.equal(qs.get('concurrency'), '10');
-  assert.equal(qs.get('maxVramGb'), null, 'budgetUsdMax has no sizing param');
+  assert.equal(qs.get('maxVramGb'), null);
+  assert.equal(qs.get('budgetUsdMax'), '1500', 'budgetUsdMax maps onto /api/sizing (#607)');
   assert.equal(qs.get('contextLength'), null);
 });
 
