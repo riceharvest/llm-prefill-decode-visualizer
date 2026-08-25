@@ -49,6 +49,8 @@ export default async function handler(req, res) {
       ageSeconds,
       ttlSeconds: Math.round(c.ttlMs / 1000),
       rowCount: c.rowCount,
+      crawlComplete: c.crawlComplete,
+      upstreamRows: c.upstreamRows,
       source: c.upstream
     };
     const { readiness, degraded } = deriveReadiness(upstreamFreshness.status);
