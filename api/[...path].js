@@ -38,6 +38,7 @@ import { sendJson, withConditionalGet, applyStableBodyMode } from './_schema.js'
 import { sendProblem, sendProblemFromError } from './_errors.js';
 import { applyDeprecationForPath } from './_schema.js';
 import { sendPreflight } from './_cors.js';
+import { applyServerTiming } from './_server_timing.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -195,6 +196,8 @@ export default async function handler(req, res) {
   // Opt-in byte-stable bodies (#697): ?stable=1 omits the volatile
   // rate_limit block from JSON bodies (headers still carry the quota).
   applyStableBodyMode(req, res);
+  // In-band latency + Vary: Origin on every /api/* reply (issues #914/#916).
+  applyServerTiming(res);
   const pathname = (req.url || '').split('?')[0].replace(/^\/api\/?/, '/');
   // Version trust (issue #685): if the request targets a deprecated URL
   // prefix, stamp Deprecation/Sunset/Link headers centrally — handlers never

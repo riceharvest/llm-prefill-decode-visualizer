@@ -1,0 +1,6 @@
+# RFC 9116 security.txt — machine-readable security/contact surface (#915).
+Contact: https://github.com/riceharvest/llm-prefill-decode-visualizer/security/advisories/new
+Policy: https://github.com/riceharvest/llm-prefill-decode-visualizer/security/policy
+Canonical: https://llm-prefill-decode-visualizer.vercel.app/.well-known/security.txt
+Expires: 2026-12-31T23:59:59Z
+# Do NOT open public GitHub issues for security vulnerabilities (see /contact.html).

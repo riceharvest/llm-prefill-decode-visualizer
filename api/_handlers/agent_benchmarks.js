@@ -18,6 +18,7 @@
 // ?snapshot= parameters.
 import { resolveRuns } from '../_snapshots.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError, paginationScope } from '../_pagination.js';
+import { normalizeQueryModel } from '../_normalize.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson } from '../_schema.js';
 import { sendProblem, sendProblemFromError } from '../_errors.js';
@@ -72,7 +73,7 @@ export default async function handler(req, res) {
     const q = req.query || {};
 
     const hardware = q.hardware ? String(q.hardware).toLowerCase() : null;
-    const model = q.model ? String(q.model).toLowerCase() : null;
+    const model = q.model ? normalizeQueryModel(q.model) : null;
     const quant = q.quant ? String(q.quant).toLowerCase() : null;
 
     const snapshotAt = new Date();

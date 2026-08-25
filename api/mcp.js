@@ -574,7 +574,14 @@ function json(res, body, status = 200) {
   res.end(JSON.stringify(body));
 }
 
+// mcp.js wins Vercel file-routing over the catch-all dispatcher, so shared
+// middleware from [...path].js must be imported explicitly here.
+import { applyServerTiming } from './_server_timing.js';
+
 export default async function handler(req, res) {
+  // mcp.js wins Vercel file-routing over the catch-all, so wire response
+  // telemetry here too (Server-Timing + Vary: Origin — issues #914/#916).
+  applyServerTiming(res);
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     res.setHeader('Access-Control-Allow-Origin', '*');
