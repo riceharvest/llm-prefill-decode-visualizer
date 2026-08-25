@@ -14,6 +14,7 @@ import { createHash } from 'node:crypto';
 import { ImageResponse } from '@vercel/og';
 import { HARDWARE_PRESETS, SCENARIO_PRESETS } from '../../src/utils/presets.js';
 import { sendProblemFromError } from '../_errors.js';
+import { enforceRateLimit } from '../_ratelimit.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -239,6 +240,11 @@ async function renderPng(cfg) {
 }
 
 export default async function handler(req, res) {
+  // Rate-limit every /api/og request (incl. OPTIONS and 405 paths): each
+  // unique param combination forces a full satori PNG render on cache miss,
+  // so unthrottled access is a free CPU farm (#921). Same per-instance
+  // fixed-window budget and X-RateLimit-* headers as every other endpoint.
+  if (!enforceRateLimit(req, res)) return;
   try {
     if (req.method === 'OPTIONS') {
       res.statusCode = 204;
