@@ -1,6 +1,8 @@
 import { getAllRuns } from '../_localmaxxing.js';
 import { csvEscape, toCsv, csvPreamble, buildJsonPayload, COLUMNS, DATASET_VERSION, CSV_BOM } from '../_export.js';
 import { problemBody } from '../_errors.js';
+import { requireEnum } from '../_params.js';
+import { sendProblemFromError } from '../_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -13,7 +15,10 @@ export const config = { runtime: 'nodejs' };
  */
 export default async function handler(req, res) {
   try {
-    const format = req.query?.format === 'json' ? 'json' : 'csv';
+    // Same strict enum contract as /api/runs (see _params.js requireEnum):
+    // an unknown ?format is a 400 problem+json, never a silent CSV fallback
+    // (#728). Case-insensitive + whitespace-tolerant ("JSON", "json ").
+    const format = requireEnum(req.query?.format, ['json', 'csv'], 'format', 'csv');
     const runs = await getAllRuns();
     const generatedAt = new Date().toISOString();
     const dateTag = generatedAt.slice(0, 10).replaceAll('-', '');
@@ -39,12 +44,12 @@ export default async function handler(req, res) {
     res.write(csvPreamble(runs.length, generatedAt));
     res.write(toCsv(runs));
     res.end();
-  } catch {
-    // Unify with the API-wide RFC 9457 error contract (#687): serve a fixed
-    // INTERNAL problem+json instead of leaking `String(err.message)` as
-    // application/json.
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/problem+json');
+  } catch (err) {
+    // Invalid ?format renders as a 400 problem+json (INVALID_PARAMS);
+    // genuine upstream failures keep the legacy JSON 502 shape.
+    if (err && err.code === 'INVALID_PARAMS') return sendProblemFromError(res, req, err);
+    res.statusCode = 502;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'no-store');
     res.end(JSON.stringify(problemBody({ code: 'INTERNAL', instance: req.url })));

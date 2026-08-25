@@ -17,6 +17,7 @@ import { parseContextBandParam, filterByContextBand } from '../_contextbands.js'
 import { estimateStreetPrice } from '../../src/utils/streetPricing.js';
 import { explainRecommendation } from '../_explain.js';
 import { estimatePower } from '../../src/utils/powerThermal.js';
+import { parseBool, boolWarnings } from '../_params.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -172,8 +173,11 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  * ?quant=q4_k_m                   exact quantization match (case-insensitive)
  * ?hwClass=discrete_gpu|unified|cpu_only
  * ?hardware=<substr>              restrict rigs by name substring
- * ?fitCheck=true                  exclude rigs whose memory can't hold the model
- * ?contextLength=N                context for fitCheck (default 32768; implies fitCheck)
+ * ?fitCheck=true|false            exclude rigs whose memory can't hold the model
+ *                                 (1/true/yes/on vs 0/false/no/off; explicit
+ *                                 false wins over contextLength)
+ * ?contextLength=N                context for fitCheck (default 32768; implies
+ *                                 fitCheck unless fitCheck=false)
  * ?precisionBytes=2               KV cache dtype for fitCheck (fp16 default)
  * ?batchSize=1                    KV cache batch for fitCheck
  * ?engine=<substr>                restrict to engine name/version tag substring (e.g. llama.cpp, b4523)
@@ -267,8 +271,13 @@ export async function bestBody(query = {}) {
 
     // VRAM-fit filter: drop rigs whose memory can't hold the model weights
     // plus KV cache at the requested context. Estimates only — see _vramfit.js.
+    // fitCheck is a real tri-state (#713): an explicit false/0/no/off wins
+    // over contextLength (the off state is reachable); absent + contextLength>0
+    // implies ON; absent alone is OFF. Unrecognized values warn instead of
+    // being silently ignored (#688).
     const fitCtx = Number(q.contextLength);
-    const fitCheck = q.fitCheck === 'true' || (Number.isFinite(fitCtx) && fitCtx > 0);
+    const fitCheckExplicit = parseBool(q.fitCheck);
+    const fitCheck = fitCheckExplicit !== null ? fitCheckExplicit : (Number.isFinite(fitCtx) && fitCtx > 0);
     const fitContextLength = Math.min(1e6, Math.max(256, fitCtx > 0 ? Math.round(fitCtx) : 32768));
     const fitPrecisionBytes = Number(q.precisionBytes) > 0 ? Number(q.precisionBytes) : 2;
     const fitBatchSize = Math.max(1, Math.round(Number(q.batchSize)) || 1);
@@ -414,6 +423,7 @@ export async function bestBody(query = {}) {
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
     warnings.push(...groups.filter(g => g.mixedContextBands)
       .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
+    warnings.push(...boolWarnings([['fitCheck', q.fitCheck]]));
 
     // Unknown ?scenario= ids are silently ignored by resolveWorkload (#840) —
     // name the rejected id in warnings[] so a typo'd preset is visible.
@@ -498,6 +508,7 @@ export async function bestBody(query = {}) {
       maxAgeDays: maxAgeDays || null,
       contextBand: contextBand || null,
       requestedScenario: workload.requestedScenario,
+      fitCheck,
       matchedRuns: runs.length,
       // #780: surface constraint-elimination telemetry. excludedRuns is the
       // field the OpenAPI spec already declares (present only with fitCheck);

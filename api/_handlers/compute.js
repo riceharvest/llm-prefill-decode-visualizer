@@ -14,6 +14,7 @@ import { ApiError, sendProblemFromError, ERROR_CODES, problemType } from '../_er
 import { computeCalcId } from '../_calc_id.js';
 import { normalizeParams } from '../_calc_id.js';
 import { annotate, THEORETICAL } from '../_basis.js';
+import { parseBool, BOOL_WORDS, isUnrecognizedBool } from '../_params.js';
 import { empiricalDecayExponentCaveat, heuristicFlagDeltasCaveat } from '../_caveats.js';
 import { ROUTES } from '../_route_table.js';
 
@@ -83,10 +84,17 @@ function withId(model, inputs, result, dryRun = false) {
   return { status: 200, body: { id, ...result } };
 }
 
-// dry_run=true (or 1 / dryRun alias): validate + echo, never execute (#17).
+// dry_run: validate + echo, never execute (#17). Accepts the shared boolean
+// vocabulary (1/true/yes/on — see _params.js) plus the dryRun alias, in GET
+// query or POST body form. Fail-CLOSED (#704): a present-but-unrecognized
+// value is a 400 INVALID_PARAMS — it must NEVER fall through to a silent
+// real execution.
 export function isDryRun(params = {}) {
-  const v = params.dry_run ?? params.dryRun;
-  return v === true || v === 'true' || v === '1' || v === 1;
+  const raw = params.dry_run ?? params.dryRun;
+  if (isUnrecognizedBool(raw)) {
+    throw new ApiError('INVALID_PARAMS', `dry_run must be one of ${BOOL_WORDS}, got "${raw}"`);
+  }
+  return parseBool(raw) === true;
 }
 
 function dryRunBody(model, inputs, id) {
@@ -337,7 +345,7 @@ function capabilityList() {
       example: '/api/compute?model=singleTurn&promptTokens=64&prefillSpeed=900000&decodeSpeed=5000'
     },
     dryRun: {
-      description: 'Add &dry_run=true (or "dry_run": true in a POST body) to validate a request and echo the parsed parameters (defaults filled in, numbers coerced) WITHOUT executing any math — a cheap sanity check for agents debugging malformed payloads. Works on GET and POST, and applies per-item inside a batch. The response carries the same deterministic id the real call would return. Unknown models and malformed batches fail exactly as they would for a real call.',
+      description: 'Add &dry_run=true (or "dry_run": true in a POST body) to validate a request and echo the parsed parameters (defaults filled in, numbers coerced) WITHOUT executing any math — a cheap sanity check for agents debugging malformed payloads. Accepted values (case-insensitive): 1/true/yes/on; 0/false/no/off explicitly disable it; any OTHER value is rejected with 400 INVALID_PARAMS rather than silently executing the computation (#704). Works on GET and POST, and applies per-item inside a batch. The response carries the same deterministic id the real call would return. Unknown models and malformed batches fail exactly as they would for a real call.',
       response: '{ dry_run: true, model, inputs, id?, note }',
       example: '/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true&dry_run=true'
     },

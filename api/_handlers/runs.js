@@ -4,6 +4,7 @@ import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson } from '../_schema.js';
 import { ApiError, sendProblem, sendProblemFromError } from '../_errors.js';
 import { parsePagination, paginate, paginationScope, InvalidCursorError } from '../_pagination.js';
+import { requireEnum } from '../_params.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -54,14 +55,12 @@ export default async function handler(req, res) {
   if (!enforceRateLimit(req, res)) return;
 
   try {
-    const formatParam = req.query?.format ?? 'json';
-    if (formatParam !== 'json' && formatParam !== 'csv') {
-      throw new ApiError('INVALID_PARAMS', `format must be "json" or "csv", got "${formatParam}"`);
-    }
-    const mode = req.query?.comparable ?? 'all';
-    if (!COMPARABLE_MODES.includes(mode)) {
-      throw new ApiError('INVALID_PARAMS', `comparable must be one of ${COMPARABLE_MODES.join('|')}, got "${mode}"`);
-    }
+    // Shared strict enum contract (see _params.js requireEnum): unknown
+    // values are a 400 problem+json on BOTH dataset endpoints — /api/export
+    // no longer silently coerces them to CSV (#728). Case-insensitive +
+    // whitespace-tolerant, so "JSON" or "json " still work.
+    const formatParam = requireEnum(req.query?.format, ['json', 'csv'], 'format', 'json');
+    const mode = requireEnum(req.query?.comparable, COMPARABLE_MODES, 'comparable', 'all');
 
     // Cursors carry a fingerprint of format + comparable filter + schema
     // version (#740 #755), so stale/mismatched reuse fails loudly instead of
