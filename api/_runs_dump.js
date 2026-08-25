@@ -7,7 +7,7 @@
 //   - ?format=json  → buildRunsJsonPayload(): envelope + structured dictionary
 //   - ?format=csv   → runsCsvPreamble() + toRunsCsv() (RFC 4180, #-preamble)
 
-import { csvEscape } from './_export.js';
+import { CSV_BOM, csvEscape } from './_export.js';
 
 export const RUNS_DATASET_VERSION = 1;
 
@@ -45,14 +45,20 @@ export const RUNS_COLUMNS = [
   { key: 'source', type: 'string', description: 'URL of the original run page on localmaxxing.com' }
 ];
 
-/** Serialize full-index run objects to RFC 4180 CSV text (header + rows, CRLF). */
+/**
+ * Serialize full-index run objects to RFC 4180 CSV text (header + rows).
+ * Framing contract matches ./_export.js: LF line endings, trailing terminator
+ * (see toCsv for why LF instead of CRLF). Re-exports CSV_BOM for handlers.
+ */
+export { CSV_BOM };
+
 export function toRunsCsv(rows) {
   const header = RUNS_COLUMNS.map(c => c.key).join(',');
   const lines = [header];
   for (const r of rows) {
     lines.push(RUNS_COLUMNS.map(c => csvEscape(r[c.key])).join(','));
   }
-  return lines.join('\r\n') + '\r\n';
+  return lines.join('\n') + '\n';
 }
 
 /**
@@ -75,7 +81,7 @@ export function runsCsvPreamble(rowCount, generatedAt, { comparableFilter = 'all
   ];
   for (const c of RUNS_COLUMNS) lines.push(`#   ${c.key}: ${c.type} — ${c.description}`);
   lines.push(`# source: https://localmaxxing.com — exported via /api/runs`);
-  return lines.join('\r\n') + '\r\n';
+  return lines.join('\n') + '\n';
 }
 
 function filterTextFallback(mode) {

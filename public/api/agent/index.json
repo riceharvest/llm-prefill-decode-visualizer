@@ -151,8 +151,14 @@
     {
       "method": "GET",
       "path": "/api/version",
-      "description": "Machine-readable version report: service name, app version (package.json), schemaVersion (wire schema_version), generatedAt and links to /api/spec, CHANGELOG-API.md and CHANGELOG.json.",
-      "responseSchema": "{ service, version, schemaVersion, generatedAt, links{} }"
+      "description": "Machine-readable version report: service name, app version (package.json), the wire schema_version stamped on every JSON response (single spelling), generatedAt and links to /api/versions, /api/spec, CHANGELOG-API.md and CHANGELOG.json.",
+      "responseSchema": "{ service, version, generatedAt, links{} } + universal schema_version stamp"
+    },
+    {
+      "method": "GET",
+      "path": "/api/versions",
+      "description": "Version discovery: every served URL prefix (/api, /v1) with its wire schema_version, lifecycle status (current|deprecated), canonical flag, deprecatedAt and sunset. Deprecated prefixes carry Deprecation/Sunset headers on every response.",
+      "responseSchema": "{ description, generatedAt, current, versions[]{prefix, schema_version, status, canonical, deprecatedAt, sunset}, links{} }"
     },
     {
       "method": "GET",

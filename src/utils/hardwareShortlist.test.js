@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildShortlist, effectiveVramGb } from './hardwareShortlist.js';
+import { buildShortlist, effectiveVramGb, fetchHardwareShortlist } from './hardwareShortlist.js';
 
 function run(overrides = {}) {
   return {
@@ -65,4 +65,48 @@ test('groups rig × model pairs and ranks by median decode with source links', (
   assert.equal(list[0].medianDecodeTokPerSec, 35); // median of 30 & 40
   assert.equal(list[0].runsInGroup, 2);
   assert.match(list[0].source, /\/runs\/a$/); // links to the fastest run
+});
+
+// ---- Issue #832: a quant filter must yield the quant-specific median ------
+
+test('buildShortlist with a quant filter reports the quant-specific median (#832)', () => {
+  // Same rig × model at three quants: the all-quant median (667) must never be
+  // reported when Q4_K_M is selected.
+  const runs = [
+    { ...run(), runId: 'q4', quantization: 'Q4_K_M', decodeTokPerSec: 600 },
+    { ...run(), runId: 'f16', quantization: 'F16', decodeTokPerSec: 700 },
+    { ...run(), runId: 'q8', quantization: 'Q8_0', decodeTokPerSec: 734 }
+  ];
+  const out = buildShortlist(runs, { minDecode: 0, quant: 'Q4_K_M' });
+  assert.equal(out.length, 1);
+  assert.equal(out[0].quantization, 'Q4_K_M');
+  assert.equal(out[0].medianDecodeTokPerSec, 600, 'Q4_K_M median, not the all-quant median');
+  assert.equal(out[0].runsInGroup, 1, 'counts runs AT the selected quant only');
+});
+
+test('fetchHardwareShortlist sends constraints server-side (#832)', async () => {
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (path) => {
+    calls.push(String(path));
+    if (String(path).startsWith('/api/best')) {
+      return { ok: true, json: async () => ({ matchedRuns: 10, results: [{ hardwareKey: 'gpu|3090|1', modelFamily: 'llama-3', medianDecodeTokPerSec: 600 }] }) };
+    }
+    return { ok: true, json: async () => ({ runs: [] }) };
+  };
+  try {
+    const { results, source } = await fetchHardwareShortlist(
+      { minDecode: 15, quant: 'Q4_K_M', maxVramGb: 24, model: 'llama' },
+      undefined
+    );
+    assert.equal(source, 'api');
+    assert.equal(results.length, 1);
+    const bestCall = calls.find(c => c.startsWith('/api/best'));
+    assert.ok(bestCall.includes('quant=Q4_K_M'), `quant sent server-side, got: ${bestCall}`);
+    assert.ok(bestCall.includes('minDecode=15'));
+    assert.ok(bestCall.includes('maxVramGb=24'));
+    assert.ok(bestCall.includes('model=llama'));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

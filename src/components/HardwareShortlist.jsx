@@ -15,15 +15,9 @@ import { readParam, readParamNum, writeParams } from '../utils/urlState';
 // community run metadata (totalPowerWatts/hardwareCost are almost always null
 // upstream), so those inputs are deliberately absent rather than fake-filtered.
 
-const FETCH_DEBOUNCE_MS = 250;
+import { fetchHardwareShortlist } from '../utils/hardwareShortlist';
 
-function effectiveVramGb(row) {
-  // Discrete GPUs report vramGb, unified-memory systems report total
-  // unifiedMemoryGb; CPU-only rigs have neither and can't honor a VRAM budget.
-  if (Number.isFinite(row.vramGb)) return row.vramGb;
-  if (Number.isFinite(row.unifiedMemoryGb)) return row.unifiedMemoryGb;
-  return null;
-}
+const FETCH_DEBOUNCE_MS = 250;
 
 function rigLabel(row) {
   const hwClass = (row.hwClass || '').toLowerCase();
@@ -69,11 +63,17 @@ export default function HardwareShortlist() {
       try {
         setStatus('loading');
         setError(null);
-        const params = new URLSearchParams({ by: 'decode', limit: '50' });
-        if (model.trim()) params.set('model', model.trim());
-        const res = await fetch(`/api/best?${params.toString()}`, { signal: controller.signal });
-        if (!res.ok) throw new Error(`/api/best returned ${res.status}`);
-        const data = await res.json();
+        // Issue #832: send ALL constraints to /api/best (quant, minDecode,
+        // maxVramGb via fetchHardwareShortlist) so every displayed median is
+        // the group's median AT the selected quant — filtering the global
+        // top-50 client-side showed all-quant medians next to a quant label
+        // and could never surface qualifying rigs outside that top 50.
+        const data = await fetchHardwareShortlist({
+          minDecode: minDecode === '' ? null : Number(minDecode),
+          quant: quant.trim(),
+          maxVramGb: maxVram === '' ? null : Number(maxVram),
+          model: model.trim()
+        }, controller.signal);
         setRows(data.results || []);
         setMatchedRuns(data.matchedRuns || 0);
         setStatus('ready');
@@ -88,7 +88,7 @@ export default function HardwareShortlist() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [model]);
+  }, [model, minDecode, maxVram, quant]);
 
   // Distinct quantizations seen in the corpus, most common first.
   const quantOptions = useMemo(() => {
@@ -102,15 +102,10 @@ export default function HardwareShortlist() {
       .map(([q]) => q);
   }, [rows]);
 
-  const shortlist = useMemo(() => rows.filter(row => {
-    if (minDecode !== '' && row.medianDecodeTokPerSec < Number(minDecode)) return false;
-    if (quant && (row.quantization || 'Unknown') !== quant) return false;
-    if (maxVram !== '') {
-      const vram = effectiveVramGb(row);
-      if (vram === null || vram > Number(maxVram)) return false;
-    }
-    return true;
-  }), [rows, minDecode, maxVram, quant]);
+  // Issue #832: constraints are applied server-side now (or by the client-side
+  // fallback aggregator inside fetchHardwareShortlist), so the ranked rows ARE
+  // the shortlist — no second client-side filter on top.
+  const shortlist = rows;
 
   const rowStyle = { display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '0.82rem' };
   const numStyle = { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 };
@@ -265,7 +260,7 @@ export default function HardwareShortlist() {
                     <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <span style={numStyle}>{row.runsInGroup}</span>
                       {row.source && (
-                        <a href={row.source} target="_blank" rel="noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <a href={row.source} target="_blank" rel="noreferrer" className="source-link" style={{ fontSize: '0.72rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                           View source run <ExternalLink size={11} />
                         </a>
                       )}

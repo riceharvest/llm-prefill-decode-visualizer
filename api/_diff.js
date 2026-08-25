@@ -14,6 +14,8 @@ const round = (x, places = 4) => (Number.isFinite(x) ? Math.round(x * 10 ** plac
  * higherIsBetter=true for throughputs (tok/s), false for times (s).
  * Returns { a, b, delta, deltaPct, ratio, winner } where winner is
  * 'A' | 'B' | 'tie' from A's point of view, or null when incomputable.
+ * delta is rounded to 8 decimals so sub-millisecond time metrics keep
+ * usable precision (#561); the relative measures stay 4-decimal.
  */
 export function diffMetric(valueA, valueB, { higherIsBetter = true } = {}) {
   const a = Number(valueA);
@@ -22,7 +24,7 @@ export function diffMetric(valueA, valueB, { higherIsBetter = true } = {}) {
     return { a: valueA ?? null, b: valueB ?? null, delta: null, deltaPct: null, ratio: null, winner: null };
   }
 
-  const delta = round(b - a);
+  const delta = round(b - a, 8);
   const deltaPct = a !== 0 ? round((b - a) / Math.abs(a)) : null;
   const ratio = a > 0 ? round(b / a) : null;
 
@@ -43,15 +45,78 @@ export function derivedTimes(run) {
   const walltimeSeconds = prefill > 0 && decode > 0
     ? REF_PROMPT_TOKENS / prefill + REF_OUTPUT_TOKENS / decode
     : null;
+  // 8 decimals ≈ 10 ns granularity — fast runs must not quantize down to
+  // literal 0 and lose their deltaPct/ratio/winner signal (#561).
   return {
-    ttftSeconds: round(ttftSeconds),
-    tpotSeconds: round(tpotSeconds),
-    walltimeSeconds: round(walltimeSeconds)
+    ttftSeconds: round(ttftSeconds, 8),
+    tpotSeconds: round(tpotSeconds, 8),
+    walltimeSeconds: round(walltimeSeconds, 8)
   };
 }
 
 function fmt(x, digits = 1) {
   return Number.isFinite(x) ? Number(x).toLocaleString('en-US', { maximumFractionDigits: digits }) : '?';
+}
+
+// ---------------------------------------------------------------------------
+// SLO budget evaluation (#560): the Compare/Diff UI shows ✓/✗ badges against
+// user budgets, but no API surface returned a pass/fail verdict. Optional
+// ?sloTtftMs= / ?sloTpotMs= / ?sloWalltimeSec= on /api/diff now attach an
+// additive `slo` block evaluating BOTH runs against the budgets, using the
+// same margin convention as src/utils/slo.js: marginPct = (budget − actual)
+// ÷ budget × 100 (positive = headroom left). A disabled/absent budget yields
+// null for that metric; passA/passB are null when nothing is enabled.
+// ---------------------------------------------------------------------------
+
+const positiveFinite = v => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+function sloCheck(value, budget) {
+  if (budget == null || value == null || !Number.isFinite(value)) return null;
+  return {
+    value,
+    budget,
+    pass: value <= budget,
+    marginPct: Math.round((budget - value) / budget * 10000) / 100
+  };
+}
+
+/**
+ * Evaluate both diffed runs against optional SLO budgets.
+ * `budgets` may carry ttftMs / tpotMs / walltimeSec (positive numbers;
+ * anything else disables that check). Times come from derivedTimes() so the
+ * evaluation matches the diff's own reference-workload metrics.
+ */
+export function evaluateDiffSlo(runA, runB, budgets = {}) {
+  const b = {
+    ttftMs: positiveFinite(budgets.ttftMs),
+    tpotMs: positiveFinite(budgets.tpotMs),
+    walltimeSec: positiveFinite(budgets.walltimeSec)
+  };
+  const side = run => {
+    const t = derivedTimes(run);
+    return {
+      ttft: sloCheck(t.ttftSeconds == null ? null : t.ttftSeconds * 1000, b.ttftMs),
+      tpot: sloCheck(t.tpotSeconds == null ? null : t.tpotSeconds * 1000, b.tpotMs),
+      walltime: sloCheck(t.walltimeSeconds, b.walltimeSec)
+    };
+  };
+  const overall = checks => {
+    const active = Object.values(checks).filter(c => c !== null);
+    if (!active.length) return null;
+    return active.every(c => c.pass);
+  };
+  const aChecks = side(runA);
+  const bChecks = side(runB);
+  return {
+    budgets: b,
+    passA: overall(aChecks),
+    passB: overall(bChecks),
+    a: aChecks,
+    b: bChecks
+  };
 }
 
 /**

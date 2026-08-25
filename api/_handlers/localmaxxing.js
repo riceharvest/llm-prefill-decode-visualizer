@@ -2,12 +2,12 @@ import { getAllRuns } from '../_localmaxxing.js';
 import { runsCaveats } from '../_caveats.js';
 import { resolveRuns, listSnapshots } from '../_snapshots.js';
 import { normalizeModelId, normalizeQueryModel } from '../_normalize.js';
-import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from '../_pagination.js';
+import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError, paginationScope } from '../_pagination.js';
 import { validateSubmission, checkDuplicates, queueSubmission } from '../_submit.js';
 import { enforceRateLimit } from '../_ratelimit.js';
-import { sendJson } from '../_schema.js';
+import { sendJson, applySchemaHeaders } from '../_schema.js';
 import { sendProblem, sendProblemFromError } from '../_errors.js';
-import { decorateRun, filterByMaxAge, groupFreshness, parseMaxAgeParam } from '../_freshness.js';
+import { decorateRun, filterByMaxAge, groupFreshness, parseMaxAgeParam, resolveSnapshotAt } from '../_freshness.js';
 import { parseContextBandParam, filterByContextBand } from '../_contextbands.js';
 
 export const config = { runtime: 'nodejs' };
@@ -35,7 +35,16 @@ async function handlePost(req, res) {
   const { ok, errors, submission } = validateSubmission(body);
 
   if (!ok) {
-    return json(res, { error: 'validation_failed', errors }, 400);
+    // RFC 9457 problem+json (#570); legacy flat members (error, errors)
+    // preserved so existing clients keep parsing the response.
+    applySchemaHeaders(res);
+    return sendProblem(res, req, {
+      status: 400,
+      code: 'INVALID_PARAMS',
+      detail: 'validation_failed: one or more submitted fields are invalid (see the errors member).',
+      error: 'validation_failed',
+      errors
+    });
   }
 
   // Duplicate / near-duplicate detection against the existing dataset.
@@ -108,13 +117,16 @@ export default async function handler(req, res) {
   try {
     const q = req.query || {};
 
-    const snapshotAt = new Date();
     const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
     const contextBand = parseContextBandParam(q.context_band ?? q.contextBand);
 
     const resolved = await resolveRuns(q);
     let runs = resolved.runs;
     const { snapshot } = resolved;
+    // Issue #826: evaluate max_age against the dataset fetch instant
+    // (snapshot.createdAt), not the per-request wall clock — pinned
+    // ?snapshot= replays stay reproducible and snapshotAt names the basis.
+    const snapshotAt = resolveSnapshotAt(snapshot);
 
     const hardware = q.hardware ? String(q.hardware).toLowerCase() : null;
     const model = q.model ? normalizeQueryModel(q.model) : null;
@@ -162,12 +174,21 @@ export default async function handler(req, res) {
       });
     }
 
-    let { limit, cursor } = parsePagination(q, { defaultLimit: 50, maxLimit: 500 });
+    // Cursors are fingerprinted to this exact query (#740 #755): endpoint,
+    // every row-shaping filter and the resolved snapshot id — reuse under a
+    // different query fails with 400 INVALID_CURSOR instead of wrong pages.
+    const scope = paginationScope('localmaxxing', {
+      hardware, model, quant,
+      maxAgeDays: maxAgeDays ?? '',
+      contextBand: contextBand ?? '',
+      snapshot: snapshot?.id ?? ''
+    });
+    let { limit, cursor } = parsePagination(q, { defaultLimit: 50, maxLimit: 500, scope });
 
     // Stable total order: fastest decode first, runId as unique tiebreak
     runs.sort((a, b) => descNumAscStrCmp(RUN_KEY(a), RUN_KEY(b)));
 
-    const page = paginate({ items: runs, limit, cursor, keyOf: RUN_KEY, cmp: descNumAscStrCmp });
+    const page = paginate({ items: runs, limit, cursor, keyOf: RUN_KEY, cmp: descNumAscStrCmp, scope });
 
     return json(res, {
       description: 'Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false. Each run carries createdAt/ageDays/staleness, engineVersion and its contextBand (<1k, 1k–8k, 8k–32k or 32k+; null when the run reports no context length).',

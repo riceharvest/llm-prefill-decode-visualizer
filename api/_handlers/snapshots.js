@@ -1,13 +1,12 @@
 import { listSnapshots, ensureSnapshot } from '../_snapshots.js';
+import { applySchemaHeaders, sendJson } from '../_schema.js';
+import { sendProblem } from '../_errors.js';
+import { enforceRateLimit } from '../_ratelimit.js';
 
 export const config = { runtime: 'nodejs' };
 
-function json(res, body, status = 200, cacheTtl = 60) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', `public, max-age=${cacheTtl}`);
-  res.end(JSON.stringify(body, null, 2));
+function json(res, body, status = 200) {
+  return sendJson(res, body, { status, cacheTtl: 60 });
 }
 
 /**
@@ -17,6 +16,7 @@ function json(res, body, status = 200, cacheTtl = 60) {
  * at least one snapshot instead of returning an empty list.
  */
 export default async function handler(req, res) {
+  if (!enforceRateLimit(req, res)) return;
   try {
     const { snapshot: current } = await ensureSnapshot();
     const snapshots = listSnapshots();
@@ -27,6 +27,9 @@ export default async function handler(req, res) {
       snapshots
     });
   } catch (err) {
-    return json(res, { error: String(err.message || err) }, 502);
+    // RFC 9457 problem+json (#570); legacy `error` field preserved.
+    const detail = String(err.message || err);
+    applySchemaHeaders(res);
+    return sendProblem(res, req, { status: 502, code: 'UPSTREAM_UNAVAILABLE', detail, error: detail });
   }
 }
