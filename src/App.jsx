@@ -22,8 +22,11 @@ import {
 import { verifyShareLink } from './utils/shareIntegrity';
 import { readParam, writeParams } from './utils/urlState';
 import {
-  serializeSettings,
-  recordChange, undo as historyUndo, redo as historyRedo,
+  findInvalidIdParams, invalidParamAttr, invalidParamLabel, warnInvalidParams
+} from './utils/shareLinkParams';
+import {
+  serializeSettings, parseSettings,
+  createHistory, recordChange, undo as historyUndo, redo as historyRedo,
   loadHistory, saveHistory, planRestore
 } from './utils/settingsHistory';
 import SnapshotsSidebar from './components/SnapshotsSidebar';
@@ -64,16 +67,30 @@ export default function App() {
   }, []);
   // Preset from the URL drives both the dropdown label AND the default speeds,
   // unless explicit prefill/decode params override them.
-  const initialPreset = (() => {
-    const p = readParam('preset');
-    if (p?.startsWith('lmx:')) return p;
-    return HARDWARE_PRESETS.find(x => x.id === p) ? p : 'rtx4090_exl2';
-  })();
+  // Issue #876: an unknown ?preset= id is NOT silently swapped for
+  // rtx4090_exl2 — the original value stays in state (and therefore in the
+  // URL, since writeParams echoes it back), speeds fall back to the default
+  // preset via `|| HARDWARE_PRESETS[0]` below, and an invalid-param notice +
+  // data-invalid-param attribute + console.warn signal the mistake instead of
+  // rewriting the link into a self-consistent-looking wrong config.
+  const presetParam = readParam('preset');
+  const presetParamValid = (p) => p?.startsWith('lmx:') || HARDWARE_PRESETS.some(x => x.id === p);
+  const initialPreset = presetParamValid(presetParam) ? presetParam : 'rtx4090_exl2';
+  const invalidShareParams = useMemo(() => findInvalidIdParams([
+    { name: 'preset', value: presetParam, isValid: presetParamValid }
+  ]) , [] /* read once on mount; the URL is not re-parsed */); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    warnInvalidParams(invalidShareParams);
+  }, [invalidShareParams]);
   const initialPresetObj = HARDWARE_PRESETS.find(x => x.id === initialPreset) || HARDWARE_PRESETS[0];
-  const [selectedPreset, setSelectedPreset] = useState(initialPreset);
+  // Keep an unknown id verbatim in state so the URL is never rewritten (#876);
+  // only a missing param boots the default preset.
+  const [selectedPreset, setSelectedPreset] = useState(
+    () => (presetParam ? presetParam : initialPreset)
+  );
   // Ref mirror of selectedPreset so applySettingsQs (stable deps) can resolve
   // default-speed anchors without re-creating on every preset change.
-  const selectedPresetRef = useRef(initialPreset);
+  const selectedPresetRef = useRef(selectedPreset);
   useEffect(() => { selectedPresetRef.current = selectedPreset; }, [selectedPreset]);
   const [prefillSpeed, setPrefillSpeed] = useState(() => Number(readParam('prefill')) || initialPresetObj.prefillSpeed);
   const [decodeSpeed, setDecodeSpeed] = useState(() => Number(readParam('decode')) || initialPresetObj.decodeSpeed);
@@ -456,9 +473,25 @@ export default function App() {
         </div>
       )}
 
+      {invalidShareParams.length > 0 && (
+        <div className="invalid-param-notice" role="alert" style={{
+          border: '1px solid var(--warn, #f59e0b)',
+          background: 'rgba(245, 158, 11, 0.10)',
+          color: 'var(--warn, #f59e0b)',
+          borderRadius: '8px',
+          padding: '10px 14px',
+          fontSize: '0.85rem'
+        }}>
+          Unknown share-link parameter{invalidShareParams.length > 1 ? 's' : ''}:{' '}
+          <code>{invalidParamLabel(invalidShareParams)}</code> — kept in the URL but not
+          applied; default speeds are shown instead. Valid <code>preset</code> ids are listed
+          in <a href="/llms.txt">/llms.txt</a> and served by <code>/api/presets</code>.
+        </div>
+      )}
+
       {/* data-view (#839): machine-readable active-view marker so a static
           HTML scrape can identify the rendered view without JS evaluation. */}
-      <main className="app-frame stack" ref={mainRef} data-view={activeTab}>
+      <main className="app-frame stack" ref={mainRef} data-view={activeTab} data-invalid-param={invalidShareParams.length > 0 ? invalidParamAttr(invalidShareParams) : undefined}>
         <CollapsibleSection id="localmaxxing" title={t('common.localMaxxingTitle') || 'LocalMaxxing measured presets'} badge="LIVE">
           <LocalMaxxingPresetPicker
             selectedPreset={selectedPreset}

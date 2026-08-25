@@ -240,6 +240,12 @@ The machine-readable registry also lives in `/api/spec` (`x-error-codes` + the `
 
 The human-facing UI is this same site. Deep links carry state via URL params: `?tab=<id>`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
 
+**Deep-link id vocabularies (authoritative sources):**
+
+- `preset=<hardware-id>` (global): valid ids are the `hardware[].id` enum from **GET /api/presets** (`rtx4090_exl2`, `dual_rtx3090`, `rtx3090_llamacpp`, `mac_ultra`, `rtx3060_entry`, `groq`, `h100`, `rpi5`, `custom`). A value starting with `lmx:` selects a measured LocalMaxxing run.
+- On the `kvcache` tab: `gpu=` takes a GPU-catalog id (`rtx5090`, `rtx4090`, `rtx3090`, `rx7900xtx`, `rtx5070ti`, `rtx4060ti16`, `rtx4060`, `rtx6000ada`, `l40s`, `a100`, `h100`, `m4max128`, `m2ultra192`) and `wp=` takes one of `fp16`, `q8`, `q4`.
+- **Unknown-id behavior:** an unknown `preset=`, `gpu=` or `wp=` value is never silently swapped for a default and never erased from the URL. The app keeps the original value in the link, shows a visible warning banner, sets `data-invalid-param="<name>=<value>"` on the content root, logs a `console.warn`, and displays default speeds/hardware until you pick a valid id.
+
 <!-- tabs-section:start -->
 ### Tab: single — Single-turn
 

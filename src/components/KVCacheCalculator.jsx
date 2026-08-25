@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { HardDrive, Cpu, Gauge } from 'lucide-react';
 import { formatTokens } from '../utils/presets';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import {
+  findInvalidIdParams, invalidParamAttr, invalidParamLabel, warnInvalidParams
+} from '../utils/shareLinkParams';
 import { DEFAULT_OVERHEAD_FRACTION, vramBudget } from '../../api/_math.js';
 import { GPU_CATALOG, WEIGHT_PRECISIONS, gpuById, parseParamsB, weightsGiB } from '../utils/vramPlanner';
 import Metric from './Metric';
@@ -254,13 +257,23 @@ export default function KVCacheCalculator() {
   });
 
   // VRAM budget planner state (issue #45)
-  const [weightPrecisionId, setWeightPrecisionId] = useState(() => {
-    const id = readParam('wp');
-    return WEIGHT_PRECISIONS.some(p => p.id === id) ? id : 'fp16';
-  });
+  // Issue #876: unknown ?gpu= / ?wp= ids are NOT silently swapped for
+  // rtx4090/fp16 — the raw value stays in state so writeParams keeps it in
+  // the URL, math falls back to the defaults below, and an invalid-param
+  // notice + data-invalid-param attribute + console.warn signal the mistake.
+  const gpuParam = readParam('gpu');
+  const wpParam = readParam('wp');
+  const invalidShareParams = useMemo(() => findInvalidIdParams([
+    { name: 'gpu', value: gpuParam, isValid: v => Boolean(gpuById(v)) },
+    { name: 'wp', value: wpParam, isValid: v => WEIGHT_PRECISIONS.some(p => p.id === v) }
+  ]), [] /* read once on mount; the URL is not re-parsed */); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    warnInvalidParams(invalidShareParams);
+  }, [invalidShareParams]);
+  const [weightPrecisionId, setWeightPrecisionId] = useState(() => readParam('wp') || 'fp16');
   const [gpuId, setGpuId] = useState(() => {
     const g = readParam('gpu');
-    return gpuById(g) ? g : 'rtx4090';
+    return g || 'rtx4090';
   });
   const [overheadPct, setOverheadPct] = useState(() =>
     Math.min(40, Math.max(0, readParamNum('oh', DEFAULT_OVERHEAD_FRACTION * 100)))
@@ -336,7 +349,24 @@ export default function KVCacheCalculator() {
   const segPct = gb => `${Math.min(100, (gb / barScaleGb) * 100)}%`;
 
   return (
-    <div className="stack">
+    <div className="stack" data-invalid-param={invalidShareParams.length > 0 ? invalidParamAttr(invalidShareParams) : undefined}>
+
+      {/* Issue #876: visible signal for unknown share-link ids — the URL
+          keeps the original values, this notice explains the fallback. */}
+      {invalidShareParams.length > 0 && (
+        <div className="invalid-param-notice" role="alert" style={{
+          border: '1px solid var(--warn, #f59e0b)',
+          background: 'rgba(245, 158, 11, 0.10)',
+          color: 'var(--warn, #f59e0b)',
+          borderRadius: '8px',
+          padding: '10px 14px',
+          fontSize: '0.85rem'
+        }}>
+          Unknown share-link parameter{invalidShareParams.length > 1 ? 's' : ''}:{' '}
+          <code>{invalidParamLabel(invalidShareParams)}</code> — kept in the URL but not applied;
+          default GPU/precision are shown instead.
+        </div>
+      )}
 
       <section className="panel" aria-label={t('kvCache.panelAria')}>
         <h2 className="panel-title" style={{ marginBottom: '12px' }} tabIndex={-1} data-panel-heading>
