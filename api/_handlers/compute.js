@@ -74,9 +74,15 @@ function positiveIntParam(params, name, fallback) {
 
 // Thin wrapper over the shared sender so every response carries
 // schema_version + X-Schema-Version (see _schema.js / CHANGELOG-API.md).
-function json(res, body, status = 200) {
-  return sendJson(res, body, { status });
+function json(res, body, status = 200, cacheTtl) {
+  return sendJson(res, body, { status, cacheTtl });
 }
+
+// Successful GET responses are pure deterministic math keyed by a stable
+// content-hash id — safe to cache at the edge/browser like the sibling
+// endpoints (agent/compute.json uses 600, calc replay 3600). POST (batch)
+// bodies and error problem+json stay uncacheable (#579).
+const COMPUTE_CACHE_TTL_SECONDS = 600;
 
 // Stamp a deterministic calc_<hash> id derived from the RESOLVED inputs,
 // so omitting an explicit default yields the identical id (#68).
@@ -620,7 +626,8 @@ export default function handler(req, res) {
 
   try {
     const { status, body } = computeBody(params);
-    return json(res, body, status);
+    return json(res, body, status,
+      req.method === 'GET' && status === 200 ? COMPUTE_CACHE_TTL_SECONDS : undefined);
   } catch (err) {
     return sendProblemFromError(res, req, err);
   }

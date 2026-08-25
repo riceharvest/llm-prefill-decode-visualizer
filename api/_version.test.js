@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import handler from './_handlers/version.js';
+import handler, { resolveAppVersion } from './_handlers/version.js';
 import { SCHEMA_VERSION } from './_schema.js';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -30,7 +30,9 @@ test('GET /api/version returns 200 with service, version', () => {
   const body = JSON.parse(res.endedBody);
   assert.equal(res.statusCode, 200);
   assert.equal(body.service, 'llm-prefill-decode-visualizer');
-  assert.match(body.version, /^[\w.-]+$/); // package.json semver-ish or 'unknown'
+  assert.match(body.version, /^[\w.-]+$/); // resolved semver-ish or 'unknown'
+  // #700 (merged later) standardized on ONE snake_case spelling.
+  assert.equal(body.schema_version, SCHEMA_VERSION);
   assert.ok(!Number.isNaN(Date.parse(body.generatedAt)), 'generatedAt is ISO');
 });
 
@@ -60,13 +62,44 @@ test('/api/version links to spec and both changelog surfaces', () => {
   assert.equal(links.changelogJson, '/CHANGELOG.json');
 });
 
-test('reported app version matches package.json (or unknown fallback)', () => {
+test('reported app version matches package.json — or the clients/VERSION fallback when package.json is a placeholder (#575)', () => {
   const res = mockRes();
   handler({}, res);
   const body = JSON.parse(res.endedBody);
-  let expected = 'unknown';
+  let pkgVersion = null;
   try {
-    expected = JSON.parse(readFileSync(`${repoRoot}package.json`, 'utf8')).version;
-  } catch { /* keep fallback */ }
-  assert.equal(body.version, expected ?? 'unknown');
+    pkgVersion = JSON.parse(readFileSync(`${repoRoot}package.json`, 'utf8')).version;
+  } catch { /* keep null */ }
+  if (pkgVersion && pkgVersion !== '0.0.0') {
+    assert.equal(body.version, pkgVersion);
+    assert.equal(body.packageVersion, undefined, 'no packageVersion echo when it equals version');
+  } else {
+    // Placeholder/unreadable package.json: fall back to the API release
+    // version so the endpoint never reports a useless 0.0.0.
+    let expected = 'unknown';
+    try {
+      // The handler takes the FIRST LINE of clients/VERSION (the file also
+      // carries generator-tool annotation lines that are not a version).
+      expected = readFileSync(`${repoRoot}clients/VERSION`, 'utf8').split('\n')[0].trim() || 'unknown';
+    } catch { /* keep fallback */ }
+    assert.equal(body.version, expected);
+    if (pkgVersion) assert.equal(body.packageVersion, pkgVersion, 'raw package.json field echoed as packageVersion');
+  }
+});
+
+test('resolveAppVersion prefers package.json when it is a real version', () => {
+  const { version, packageVersion } = resolveAppVersion();
+  assert.ok(version, 'version always resolves');
+  if (packageVersion && packageVersion !== '0.0.0') {
+    assert.equal(version, packageVersion);
+  }
+});
+
+test('resolveAppVersion falls back past placeholder package versions', () => {
+  // Fake repo root with a placeholder package.json and no clients/VERSION:
+  // version must degrade to 'unknown' rather than '0.0.0'.
+  const fakeRoot = { href: 'file:///nonexistent-repo/' };
+  const { version, packageVersion } = resolveAppVersion(fakeRoot);
+  assert.equal(version, 'unknown');
+  assert.equal(packageVersion, null);
 });

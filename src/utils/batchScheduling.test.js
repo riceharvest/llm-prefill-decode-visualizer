@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { generateRequests, simulateBatching, simulateStaticBatching } from './batchScheduling.js';
+import { generateRequests, simulateBatching, simulateStaticBatching, resolveChunkStopIndex, CHUNK_STOPS, DEFAULT_CHUNK_STOP_INDEX } from './batchScheduling.js';
 
 const PARAMS = {
   prefillSpeed: 5000,  // tok/s
@@ -155,3 +155,99 @@ test('normal workloads are unaffected by the caps', () => {
   const reqs = workload({ numRequests: 48 });
   assert.equal(reqs.length, 48);
 });
+
+// --- #572: large in-range workloads must not blow the call stack ---
+test('summarize survives ~200k ITL samples without a RangeError (issue #572)', () => {
+  // breqs=48 × bgen≈3072–4096 (all within their sliders' maxima) used to
+  // crash Math.max(...itls) with "Maximum call stack size exceeded".
+  const reqs = generateRequests({
+    numRequests: 48,
+    meanPromptTokens: 2000,
+    meanOutputTokens: 4096,
+    arrivalIntervalMs: 150,
+    seed: 42
+  });
+  const sim = simulateBatching({ requests: reqs, maxBatchSize: 32, chunkSize: 512, ...PARAMS });
+  const itlSamples = sim.requests.reduce((acc, r) => acc + r.itls.length, 0);
+  assert.ok(itlSamples > 100000, `expected >100k ITL samples to exercise the old spread, got ${itlSamples}`);
+  assert.ok(Number.isFinite(sim.summary.maxITL), 'maxITL is finite');
+  assert.ok(Number.isFinite(sim.summary.avgITL));
+  assert.ok(sim.summary.maxITL >= sim.summary.avgITL);
+});
+
+// --- #574: silent MAX_STEPS truncation must be machine-readable ---
+test('step-cap truncation is flagged in summary instead of passing as final (#574)', () => {
+  const reqs = generateRequests({
+    numRequests: 48,
+    meanPromptTokens: 2000,
+    meanOutputTokens: 4096,
+    arrivalIntervalMs: 150,
+    seed: 42
+  });
+  // bmax=1 needs far more than the 20k-step safety cap.
+  const sim = simulateBatching({ requests: reqs, maxBatchSize: 1, chunkSize: 512, ...PARAMS });
+  assert.equal(sim.summary.truncated, true, 'summary.truncated set when the cap hits');
+  assert.ok(sim.summary.unfinishedRequests > 0, 'unfinished count reported');
+  assert.ok(sim.summary.stepsUsed <= sim.summary.maxSteps, 'stepsUsed vs cap exposed');
+  const finished = sim.requests.filter(r => r.finishTime !== null).length;
+  assert.equal(sim.summary.unfinishedRequests, reqs.length - finished);
+  // Unserved requests carry null queueWait rather than fake numbers.
+  for (const r of sim.requests) {
+    if (r.finishTime === null && r.firstTokenTime === null && r.itls.length === 0) {
+      // may or may not have started prefill; just ensure type sanity
+      assert.ok(r.queueWait === null || Number.isFinite(r.queueWait));
+    }
+  }
+});
+
+test('runs that finish normally are NOT marked truncated (#574)', () => {
+  const sim = simulateBatching({ requests: workload(), maxBatchSize: 8, chunkSize: 512, ...PARAMS });
+  assert.equal(sim.summary.truncated, false);
+  assert.equal(sim.summary.unfinishedRequests, 0);
+  assert.equal(sim.summary.unfinishedRequests, sim.requests.filter(r => r.finishTime === null).length);
+});
+
+// --- #576: queue wait exists as data ---
+test('queue-wait metrics are aggregated and per-request values are sane (#576)', () => {
+  const reqs = generateRequests({
+    numRequests: 24,
+    meanPromptTokens: 4000,
+    meanOutputTokens: 256,
+    arrivalIntervalMs: 0, // all arrive at once → real queueing pressure
+    seed: 11
+  });
+  const sim = simulateBatching({ requests: reqs, maxBatchSize: 2, chunkSize: 512, ...PARAMS });
+  const { avgQueueWait, maxQueueWait } = sim.summary;
+  assert.ok(Number.isFinite(avgQueueWait) && avgQueueWait > 0, 'avg queue wait positive');
+  assert.ok(maxQueueWait >= avgQueueWait - 1e-12, 'max ≥ avg');
+  let checked = 0;
+  for (const r of sim.requests) {
+    if (r.queueWait !== null) {
+      checked++;
+      assert.ok(r.queueWait >= 0, 'queue wait non-negative');
+      if (Number.isFinite(r.ttft)) {
+        // Queue wait ends when prefill starts; TTFT additionally covers prefill.
+        assert.ok(r.ttft >= r.queueWait - 1e-9, `req ${r.id}: ttft ${r.ttft} ≥ queueWait ${r.queueWait}`);
+      }
+    }
+  }
+  assert.ok(checked > 0, 'at least one served request carries queueWait');
+});
+
+// --- #580: invalid ?bchunk= falls back to the DEFAULT stop, not index 5 ---
+test('resolveChunkStopIndex maps invalid values to the 512 default (#580)', () => {
+  assert.equal(DEFAULT_CHUNK_STOP_INDEX, CHUNK_STOPS.indexOf(512));
+  // Valid stops pass through.
+  for (let i = 0; i < CHUNK_STOPS.length; i++) {
+    assert.equal(resolveChunkStopIndex(CHUNK_STOPS[i]), i);
+  }
+  // No param / valid default.
+  assert.equal(resolveChunkStopIndex(512), CHUNK_STOPS.indexOf(512));
+  // Garbage previously landed on stop index 5 (=2048); it must now match
+  // exactly what an omitted param produces.
+  for (const bad of [999, 300, 1e9, NaN, 'abc', undefined, null, -5]) {
+    assert.equal(resolveChunkStopIndex(bad), CHUNK_STOPS.indexOf(512),
+      `invalid bchunk=${bad} resolves to the same stop as no param`);
+  }
+});
+

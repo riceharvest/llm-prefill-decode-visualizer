@@ -13,24 +13,36 @@ import { sendJson } from '../_schema.js';
 
 export const config = { runtime: 'nodejs' };
 
-/** App version from package.json; 'unknown' if unreadable (e.g. a deploy
- *  bundle without it) so the endpoint never 500s over metadata. */
-function appVersion() {
+/** Resolve the app release version with a fallback chain (#575): package.json
+ *  first, then clients/VERSION, then 'unknown'. Exported so the version test
+ *  can pin the exact resolution contract. Never throws. */
+export function resolveAppVersion(repoRoot = new URL('../../', import.meta.url)) {
+  let packageVersion = null;
   try {
-    const pkg = JSON.parse(
-      readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
-    );
-    return pkg.version || 'unknown';
-  } catch {
-    return 'unknown';
+    packageVersion = JSON.parse(readFileSync(new URL('package.json', repoRoot), 'utf8')).version || null;
+  } catch { /* keep null */ }
+  if (packageVersion && packageVersion !== '0.0.0') {
+    return { version: packageVersion, packageVersion };
   }
+  try {
+    const clientsVersion = readFileSync(new URL('clients/VERSION', repoRoot), 'utf8').split('\n')[0].trim();
+    if (clientsVersion) return { version: clientsVersion, packageVersion };
+  } catch { /* keep fallback */ }
+  return { version: packageVersion || 'unknown', packageVersion };
+}
+
+/** App version; 'unknown' if unreadable so the endpoint never 500s over metadata. */
+function appVersion() {
+  return resolveAppVersion().version;
 }
 
 export default function handler(req, res) {
+  const { version, packageVersion } = resolveAppVersion();
   return sendJson(res, {
-    description: 'Version report: app release version plus the wire schema_version stamped on every /api/* JSON response (single spelling — see /api/versions for per-prefix discovery). Breaking schema changes bump schema_version (see CHANGELOG-API.md policy).',
+    description: 'Version report: app release version plus the wire schema_version stamped on every /api/* JSON response (single spelling — see /api/versions for per-prefix discovery). Breaking schema changes bump schema_version (see CHANGELOG-API.md policy). `version` falls back to the API release version (clients/VERSION) when package.json carries an unset placeholder; packageVersion echoes the raw package.json field (#575).',
     service: 'llm-prefill-decode-visualizer',
-    version: appVersion(),
+    version,
+    ...(packageVersion && packageVersion !== version ? { packageVersion } : {}),
     generatedAt: new Date().toISOString(),
     links: {
       spec: '/api/spec',

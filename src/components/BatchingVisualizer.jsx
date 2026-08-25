@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Layers, Play, Pause, RotateCcw, FileDown, Copy, FileJson } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
-import { generateRequests, simulateBatching, simulateStaticBatching } from '../utils/batchScheduling';
+import { generateRequests, simulateBatching, simulateStaticBatching, resolveChunkStopIndex, CHUNK_STOPS } from '../utils/batchScheduling';
 import { clockToRunState, runStateToBusy } from '../utils/viewState';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import Metric from './Metric';
@@ -14,8 +14,8 @@ import { buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../uti
 import { downloadJson } from '../utils/exportJson';
 import { buildBatchingMarkdown, buildBatchingJson } from '../utils/exportBatching';
 
-// Chunk-size slider stops. 0 = chunked prefill OFF (whole prompt per step).
-const CHUNK_STOPS = [0, 128, 256, 512, 1024, 2048, 4096, 8192];
+// Chunk-size slider stops come from batchScheduling.js so URL resolution and
+// the slider share one source of truth. 0 = chunked prefill OFF.
 
 export default function BatchingVisualizer({
   prefillSpeed,
@@ -634,6 +634,28 @@ export default function BatchingVisualizer({
           </div>
         )}
 
+        {/* Truncation warning (#574): never present a capped partial run as final */}
+        {summary.truncated && (
+          <div
+            className="panel-inset"
+            role="alert"
+            style={{
+              borderColor: 'var(--warn-border, var(--warn))',
+              background: 'var(--warn-dim, rgba(255, 170, 0, 0.08))',
+              marginBottom: '18px',
+              fontSize: '0.82rem',
+              color: 'var(--warn)'
+            }}
+          >
+            <strong>{t('batching.truncatedBannerTitle')}</strong>{' '}
+            {t('batching.truncatedBannerBody', {
+              finished: numRequests - summary.unfinishedRequests,
+              total: numRequests,
+              steps: summary.stepsUsed
+            })}
+          </div>
+        )}
+
         {/* Headline metrics */}
         <div className="grid-auto" style={{ '--grid-min': '10.625rem', marginBottom: '20px' }}>
           <Metric term="batchMakespan" substitution={`${numRequests} requests · max batch ${maxBatchSize}`}>
@@ -657,6 +679,10 @@ export default function BatchingVisualizer({
           <Metric term="batchOccupancy" substitution={`avg running seqs ÷ ${maxBatchSize} slots`}>
             <strong style={{ color: 'var(--text-main)', fontSize: '1rem' }}>{summary.occupancyPct.toFixed(0)}%</strong>
             <div className="metric-sub">{t('batching.metricOccupancySub', { max: maxBatchSize })}</div>
+          </Metric>
+          <Metric term="batchQueueWait" substitution={`arrival → first prefill chunk · worst ${formatTime(summary.maxQueueWait)}`}>
+            <strong style={{ color: 'var(--text-main)', fontSize: '1rem' }}>{formatTime(summary.avgQueueWait)}</strong>
+            <div className="metric-sub">{t('batching.metricQueueWaitSub', { worst: formatTime(summary.maxQueueWait) })}</div>
           </Metric>
         </div>
 
@@ -722,6 +748,7 @@ export default function BatchingVisualizer({
                           background: 'repeating-linear-gradient(45deg, transparent, transparent 4px, var(--bg-panel) 4px, var(--bg-panel) 8px)'
                         }}
                         data-tooltip={t('batching.rowTooltipQueue', { id: req.id, time: formatTime(rowSegments.get(req.id)[0].tStart - req.arrivalTime) })}
+                        aria-label={t('batching.rowTooltipQueue', { id: req.id, time: formatTime(rowSegments.get(req.id)[0].tStart - req.arrivalTime) })}
                       />
                     )}
                     {/* Prefill chunks + decode runs */}
