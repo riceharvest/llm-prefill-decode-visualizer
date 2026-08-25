@@ -306,6 +306,146 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spec": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * This OpenAPI document
+         * @description Machine-readable OpenAPI 3.1 description of the live API. Derive clients from this document; it is the authoritative endpoint contract alongside /agents.json and /api/agent/index.json.
+         */
+        get: operations["getOpenApiSpec"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/capabilities.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agent capability index
+         * @description Self-describing capability manifest for agents: service description, base URL, auth (none), CORS and rate-limit policy, versioning policy, docs links, and a surfaces[] list describing every API surface. Also available at /.well-known/ai-plugin.json-adjacent discovery paths; see /agents.json.
+         */
+        get: operations["getAgentCapabilitiesDoc"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/compute.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compute endpoint agent guide
+         * @description Flat self-describing guide to GET/POST /api/compute: parameter reference per model, dry_run usage, caveats and related endpoints. Same math as /api/compute and the MCP compute tools.
+         */
+        get: operations["getAgentComputeDoc"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/benchmarks.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Flat community run search
+         * @description One flat record per measured community run (same data as GET /api/localmaxxing): filters mirror it (?hardware=/?model=/?quant= substring/exact plus ?context_band=, ?max_age=, ?limit=, ?cursor=, ?snapshot=). Sorted fastest decode first.
+         */
+        get: operations["getAgentBenchmarksDoc"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/scenario.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Scenario presets doc
+         * @description Machine-readable scenario preset catalog (chat, codegen, summarization, RAG, vision) with token workloads and related endpoints; unknown ?scenario= ids return 400 with availableIds[].
+         */
+        get: operations["getAgentScenarioDoc"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/freshness.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dataset freshness report
+         * @description Per-group freshness tiers for the community dataset (fresh <90d | aging <1y | stale ≥1y), newest measurement ages and dataset snapshot metadata, so agents can judge data staleness before citing medians.
+         */
+        get: operations["getAgentFreshnessDoc"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/confidence.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Confidence grades report
+         * @description Confidence-grade view of the same report served at /api/agent/freshness.json (alias route): how well-measured each group is, for agents deciding how much to trust a median.
+         */
+        get: operations["getAgentConfidenceDoc"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2011,6 +2151,132 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description {current, snapshots[]} */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getOpenApiSpec: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description This document as application/json */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAgentCapabilitiesDoc: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {ok, service, description, base_url, auth, cors, rateLimit, versioning, docs, surfaceCount, surfaces[]} */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAgentComputeDoc: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {description, openapiSpec, relatedEndpoints, ...model docs} */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAgentBenchmarksDoc: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {description, snapshot, filters, total, count, runs[], has_more, next_cursor, caveats, relatedEndpoints} */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAgentScenarioDoc: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {description, scenarios[], relatedEndpoints, nextSteps[]} */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAgentFreshnessDoc: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {description, snapshot, generatedAt, groups[], caveats} */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAgentConfidenceDoc: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Same shape as /api/agent/freshness.json */
             200: {
                 headers: {
                     [name: string]: unknown;
