@@ -86,6 +86,34 @@
       "destination": "/api/:path*"
     },
     {
+      "source": "/api/agent/capabilities.json",
+      "destination": "/api/agent/capabilities"
+    },
+    {
+      "source": "/api/agent/compute.json",
+      "destination": "/api/agent/compute"
+    },
+    {
+      "source": "/api/agent/benchmarks.json",
+      "destination": "/api/agent/benchmarks"
+    },
+    {
+      "source": "/api/agent/scenario.json",
+      "destination": "/api/agent/scenario"
+    },
+    {
+      "source": "/api/agent/freshness.json",
+      "destination": "/api/agent/freshness"
+    },
+    {
+      "source": "/api/agent/confidence.json",
+      "destination": "/api/agent/confidence"
+    },
+    {
+      "source": "/api/watch/rss.xml",
+      "destination": "/api/watch/rss"
+    },
+    {
       "source": "/localmaxxing-api/:path*",
       "destination": "https://www.localmaxxing.com/api/:path*"
     },
