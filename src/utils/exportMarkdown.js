@@ -11,6 +11,34 @@ import { calculateAgenticTimeline } from './agenticMath.js';
 import { computeSingleTurnEngineRun } from './exportEngineMath.js';
 import { buildShareLink } from './permalink.js';
 
+import { evaluateSlo } from './slo.js';
+
+// ---------------------------------------------------------------------------
+// SLO budgets section (#425): mirrors the on-page ✓/✗ badges in exports.
+// Returns '' when no budget is active so existing output is byte-identical.
+// ---------------------------------------------------------------------------
+
+const sloVerdict = (label, r, fmt) => r
+  ? `| ${label} | ${fmt(r.value)} | ${fmt(r.budget)} | ${r.pass ? '✓ pass' : '✗ fail'} | ${Number.isFinite(r.marginPct) ? `${r.marginPct.toFixed(1)}%` : '∞'} |`
+  : '';
+
+function buildSloMarkdownSection(ttftSec, tpotMsValue, walltimeSecValue, budgets) {
+  const r = evaluateSlo({ ttftSec, tpotMs: tpotMsValue, walltimeSec: walltimeSecValue }, budgets);
+  const rows = [
+    sloVerdict('TTFT', r.ttft, (ms) => `${Math.round(ms)} ms`),
+    sloVerdict('TPOT', r.tpot, (ms) => `${Math.round(ms)} ms`),
+    sloVerdict('Walltime', r.walltime, (sec) => formatTime(sec))
+  ].filter(Boolean);
+  if (rows.length === 0) return '';
+  return `
+## SLO budgets
+
+| Metric | Value | Budget | Verdict | Margin |
+| --- | --- | --- | --- | --- |
+${rows.join('\n')}
+`;
+}
+
 // ---------------------------------------------------------------------------
 // Deep links
 // ---------------------------------------------------------------------------
@@ -50,7 +78,8 @@ export function buildSingleTurnMarkdown({
   jitterEnabled,
   jitterPct,
   deepLink,
-  provenance
+  provenance,
+  sloBudgets = null
 }) {
   // Engine features (#698): attached images, context scaling and ITL jitter
   // are applied here exactly like the on-page simulation, via the shared
@@ -202,7 +231,7 @@ Note: the formulas above substitute feature-aware values (attached images extend
 | Total chat walltime | ${formatTime(total)} |
 | Effective throughput | ${throughput.toFixed(1)} tok/s |
 | Walltime split | Prefill ${prefillPct.toFixed(1)}% · Decode ${decodePct.toFixed(1)}% |
-
+${buildSloMarkdownSection(ttft, tpotMs, total, sloBudgets)}
 ## Reproduce this run
 
 Open this URL — it encodes the exact configuration above:
@@ -225,7 +254,8 @@ export function buildAgenticMarkdown({
   enablePrefixCaching,
   prefillSpeed,
   decodeSpeed,
-  deepLink
+  deepLink,
+  sloBudgets = null
 }) {
   const turns = calculateAgenticTimeline({
     numTurns,
@@ -257,6 +287,7 @@ export function buildAgenticMarkdown({
 
   const first = turns[0];
   const cachedTurn = turns.find(t => t.isCached);
+  const decodeTurns = turns.filter(t => t.decodeTokens > 0);
 
   const waterfallRows = turns.map(t => [
     `T${t.turn}`,
@@ -326,7 +357,7 @@ ${waterfallTable}
 | Average throughput | ${throughput.toFixed(1)} tok/s |
 | Without prefix caching | ${formatTime(noCacheWalltime)} |
 | Caching savings | ${enablePrefixCaching ? `${formatTime(saved)} (${savedPct.toFixed(0)}%)` : '— (caching off)'} |
-
+${buildSloMarkdownSection(first.prefillTime, decodeTurns.length > 0 ? decodeTurns.reduce((sum, t) => sum + (1000 * t.decodeTime) / t.decodeTokens, 0) / decodeTurns.length : Infinity, totalWalltime, sloBudgets)}
 ## Reproduce this run
 
 Open this URL — it encodes the exact configuration above:

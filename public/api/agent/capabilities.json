@@ -1,0 +1,182 @@
+{
+  "ok": true,
+  "service": "llm-prefill-decode-visualizer",
+  "description": "LLM inference performance math (TTFT, TPOT, walltime, KV-cache VRAM, cost) plus community-measured hardware benchmarks. All JSON endpoints are CORS-enabled, require no auth, and are also served under the versioned /v1/ prefix.",
+  "base_url": "https://llm-prefill-decode-visualizer.vercel.app",
+  "auth": "none",
+  "cors": true,
+  "rateLimit": {
+    "limitPerMinutePerInstance": 120,
+    "note": "Best-effort per serverless instance; responses carry X-RateLimit-Limit/-Remaining/-Reset, exhaustion returns 429 with Retry-After."
+  },
+  "versioning": {
+    "schema_version": "1",
+    "versionedPrefix": "/v1/",
+    "policy": "Additive changes do not bump the version; breaking changes bump the major and keep the previous version ≥90 days. See CHANGELOG-API.md."
+  },
+  "docs": {
+    "openapi": "/api/spec",
+    "guide": "/llms.txt",
+    "changelog": "/CHANGELOG-API.md"
+  },
+  "surfaceCount": 19,
+  "surfaces": [
+    {
+      "path": "/api/agent/capabilities.json",
+      "methods": [
+        "GET"
+      ],
+      "kind": "doc",
+      "description": "This document — all agent-facing surfaces in one machine-readable list."
+    },
+    {
+      "path": "/api/spec",
+      "methods": [
+        "GET"
+      ],
+      "kind": "doc",
+      "description": "Full OpenAPI 3.1 spec; derive every endpoint from this."
+    },
+    {
+      "path": "/llms.txt",
+      "methods": [
+        "GET"
+      ],
+      "kind": "doc",
+      "description": "Human-and-machine quick-start guide with worked examples per endpoint."
+    },
+    {
+      "path": "/agents.json",
+      "methods": [
+        "GET"
+      ],
+      "kind": "doc",
+      "description": "Agent-provider manifest listing the primary JSON endpoints."
+    },
+    {
+      "path": "/api/compute",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "kind": "json-api",
+      "description": "Run any inference math (TTFT, TPOT, walltime, VRAM, cost) via ?model=singleTurn|speculative|batched|agentic|kvCache|flagged|cost; POST accepts {\"batch\": [...]} of up to 50 parameter sets."
+    },
+    {
+      "path": "/api/vram",
+      "methods": [
+        "GET"
+      ],
+      "kind": "json-api",
+      "description": "Model + KV-cache + context VRAM from just an hfId; architecture resolved from the Hugging Face config."
+    },
+    {
+      "path": "/api/presets",
+      "methods": [
+        "GET"
+      ],
+      "kind": "json-api",
+      "description": "Built-in hardware speed presets and workload scenarios to feed /api/compute."
+    },
+    {
+      "path": "/api/calc/{id}",
+      "methods": [
+        "GET"
+      ],
+      "kind": "json-api",
+      "description": "Replay any computation deterministically from its calc_<hex> id; stamps verified: true."
+    },
+    {
+      "path": "/api/localmaxxing",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "kind": "json-api",
+      "description": "Community-measured single-stream benchmark runs; GET filters by hardware/model/quant, POST submits a run for review (202 = queued, never instant-publish)."
+    },
+    {
+      "path": "/api/benchmarks",
+      "methods": [
+        "GET"
+      ],
+      "kind": "json-api",
+      "description": "Aggregated median + IQR speeds per hardware×model group with confidence blocks and caveats."
+    },
+    {
+      "path": "/api/best",
+      "methods": [
+        "GET"
+      ],
+      "kind": "json-api",
+      "description": "Ranked rig recommendations (?by=decode&maxParamsB=8&quant=q4_k_m) with VRAM-fit, pricing and power context."
+    },
+    {
+      "path": "/api/sizing",
+      "methods": [
+        "GET"
+      ],
+      "kind": "json-api",
+      "description": "One-call hardware sizing recommendation from a workload spec with meetsSlo flags."
+    },
+    {
+      "path": "/api/snapshots",
+      "methods": [
+        "GET"
+      ],
+      "kind": "json-api",
+      "description": "Versioned dataset snapshot IDs; all data endpoints accept ?snapshot=<id> for reproducible results."
+    },
+    {
+      "path": "/api/watch/rss.xml",
+      "methods": [
+        "GET"
+      ],
+      "kind": "feed",
+      "description": "RSS feed of new matching benchmark runs — poll it in any feed reader, no registration."
+    },
+    {
+      "path": "/api/watch",
+      "methods": [
+        "POST",
+        "GET",
+        "DELETE"
+      ],
+      "kind": "json-api",
+      "description": "Subscribe to a hardware+model combo: webhook on new runs plus the RSS URL; DELETE needs the one-time secret."
+    },
+    {
+      "path": "/api/mcp",
+      "methods": [
+        "POST"
+      ],
+      "kind": "mcp",
+      "description": "MCP Streamable HTTP server (JSON-RPC): initialize, tools/list, tools/call, ping — tools proxy to the REST endpoints."
+    },
+    {
+      "path": "/.well-known/mcp.json",
+      "methods": [
+        "GET"
+      ],
+      "kind": "mcp",
+      "description": "MCP server manifest pointing at /api/mcp."
+    },
+    {
+      "path": "/api/health",
+      "methods": [
+        "GET"
+      ],
+      "kind": "json-api",
+      "description": "Liveness + upstream data freshness (fresh/stale/empty) for status checks."
+    },
+    {
+      "path": "/api/og",
+      "methods": [
+        "GET"
+      ],
+      "kind": "image",
+      "description": "Renders a 1200x630 PNG Open Graph chart card from URL params (binary image, not JSON)."
+    }
+  ],
+  "schema_version": "1"
+}

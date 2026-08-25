@@ -96,6 +96,31 @@ export default function SnapshotsSidebar({ currentQs, activeTab, budgets, onRest
     setImportNote({ ok: true, count: res.snapshots.length, skipped: res.skipped });
   };
 
+  // #427: download the whole snapshot set as a versioned JSON document.
+  const handleExport = () => {
+    downloadJson(buildSnapshotExport(snapshots), 'llmpdv-snapshots.json');
+  };
+
+  // #427: merge an exported document back in; colliding ids get fresh ids so
+  // nothing already stored is overwritten, invalid files are flagged inline.
+  const handleImportFile = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    file.text().then((text) => {
+      const parsed = parseSnapshotImport(text, snapshots.map(s => s.id));
+      if (!parsed || parsed.snapshots.length === 0) {
+        setImportInvalid(true);
+        setTimeout(() => setImportInvalid(false), 3000);
+        return;
+      }
+      persist([...parsed.snapshots, ...snapshots]);
+    }).catch(() => {
+      setImportInvalid(true);
+      setTimeout(() => setImportInvalid(false), 3000);
+    });
+  };
+
   const handleSave = () => {
     persist([{
       id: makeId(),

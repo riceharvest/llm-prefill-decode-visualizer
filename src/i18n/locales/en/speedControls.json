@@ -12,5 +12,7 @@
   "decodeHint": "Token generation — 1 token per step (TPOT = {tpot} ms/tok)",
   "timeScale": "Time Scale",
   "timeScaleAria": "Visual time scale",
+  "startChatAria": "Start chat simulation",
+  "pauseChatAria": "Pause chat simulation",
   "resetTooltip": "Reset visualizer"
 }

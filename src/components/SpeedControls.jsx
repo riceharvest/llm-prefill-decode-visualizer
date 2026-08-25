@@ -177,6 +177,7 @@ export default function SpeedControls({
               className={`btn ${isPlaying ? 'btn-warn' : 'btn-accent'}`}
               data-testid={TESTIDS.simToggle}
               style={{ flex: 1 }}
+              aria-label={isPlaying ? t('speedControls.pauseChatAria') : t('speedControls.startChatAria')}
             >
               {isPlaying ? <Pause size={16} /> : <Play size={16} />}
               <span>{isPlaying ? t('common.pauseSimulation') : t('common.startSimulation')}</span>

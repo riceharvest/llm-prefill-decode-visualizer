@@ -30,9 +30,63 @@
 import { calculateAgenticTimeline } from './agenticMath.js';
 import { computeSingleTurnEngineRun } from './exportEngineMath.js';
 import { DEFAULT_HALF_SPEED_CONTEXT } from './contextScaling.js';
+import { evaluateSlo, evaluateAgenticSlo } from './slo.js';
 
 export const EXPORT_JSON_VERSION = 1;
 export const GENERATOR_ID = 'llm-prefill-decode-visualizer';
+
+// Hard cap on the optional per-token series (#426) so a runaway ?output=
+// value cannot balloon the export payload. The cap mirrors the UI slider
+// ceiling order-of-magnitude; tokens beyond it are truncated.
+export const MAX_SERIES_TOKENS = 10000;
+
+/**
+ * Build the additive `slo` export block (#425): the active budgets plus the
+ * same pass/fail verdicts the ✓/✗ badges show on the page. All values use one
+ * canonical unit (milliseconds). Returns undefined when no budget is active,
+ * so exports without SLO budgets stay byte-identical to their previous shape.
+ */
+export function buildSloExport(ttftSec, tpotMsValue, walltimeSecValue, budgets) {
+  const r = evaluateSlo(
+    { ttftSec, tpotMs: tpotMsValue, walltimeSec: walltimeSecValue },
+    budgets
+  );
+  const results = [];
+  if (r.ttft) results.push({ metric: 'ttft', valueMs: r.ttft.value, budgetMs: r.ttft.budget, pass: r.ttft.pass, marginPct: roundTo(r.ttft.marginPct, 2) });
+  if (r.tpot) results.push({ metric: 'tpot', valueMs: r.tpot.value, budgetMs: r.tpot.budget, pass: r.tpot.pass, marginPct: roundTo(r.tpot.marginPct, 2) });
+  if (r.walltime) results.push({ metric: 'walltime', valueMs: r.walltime.value, budgetMs: r.walltime.budget, pass: r.walltime.pass, marginPct: roundTo(r.walltime.marginPct, 2) });
+  if (results.length === 0) return undefined;
+  return {
+    budgets: {
+      ttftMs: budgets?.ttftMs ?? null,
+      tpotMs: budgets?.tpotMs ?? null,
+      walltimeMs: budgets?.walltimeSec != null ? budgets.walltimeSec * 1000 : null
+    },
+    results
+  };
+}
+
+/**
+ * Build the optional per-token decode timeline (#426). `scheduleMs` is the
+ * cumulative per-token emission schedule in ms since decode start (jittered
+ * when ITL jitter is on, constant otherwise); `prefillEndMs` anchors token 0
+ * at the TTFT instant. Deterministic by construction — the schedule comes
+ * from the seeded drawItlSamples distribution. Returns undefined when no
+ * schedule is available so default exports stay unchanged.
+ */
+export function buildSeriesExport(prefillEndMs, scheduleMs) {
+  if (!Array.isArray(scheduleMs) || scheduleMs.length === 0) return undefined;
+  const prefillEnd = Number.isFinite(prefillEndMs) ? prefillEndMs : 0;
+  const n = Math.min(scheduleMs.length, MAX_SERIES_TOKENS);
+  let prev = 0;
+  const tokens = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const tMs = prefillEnd + (Number(scheduleMs[i]) || 0);
+    tokens[i] = { i, tMs: roundTo(tMs, 2), itlMs: i === 0 ? null : roundTo(tMs - prev, 2) };
+    prev = tMs;
+  }
+  return { prefillEndMs: roundTo(prefillEnd, 2), tokenCount: scheduleMs.length, tokens };
+}
 
 /** Round to `digits` decimals; non-finite input passes through unchanged. */
 export function roundTo(value, digits = 4) {
@@ -77,7 +131,10 @@ export function buildSingleTurnJson({
   images,
   contextScaling,
   sloBudgets,
-  sloResults
+  sloResults,
+    includeSeries = false,  // ?series=1 -> per-token decode timeline
+  prefillEndMs = 0,       // TTFT instant anchoring the series
+  itlScheduleMs = null    // cumulative per-token emission schedule (ms)
 }) {
   const run = computeSingleTurnEngineRun({
     promptTokens,
@@ -144,7 +201,7 @@ export function buildSingleTurnJson({
     metrics.itlP99Ms = roundTo(itlSummary.p99);
   }
 
-  return {
+  const payload = {
     schemaVersion: EXPORT_JSON_VERSION,
     generator: GENERATOR_ID,
     exportType: 'single-turn-chat',
@@ -187,6 +244,13 @@ export function buildSingleTurnJson({
     },
     metrics
   };
+  const slo = buildSloExport(ttftSeconds, tpotMs, totalWalltimeSeconds, sloBudgets);
+  if (slo) payload.slo = slo;
+  if (includeSeries) {
+    const series = buildSeriesExport(prefillEndMs || ttftSeconds * 1000, itlScheduleMs);
+    if (series) payload.series = series;
+  }
+  return payload;
 }
 
 // ---------------------------------------------------------------------------
@@ -206,7 +270,8 @@ export function buildAgenticJson({
   prefillSpeed,
   decodeSpeed,
   deepLink,
-  generatedAt = new Date().toISOString()
+  generatedAt = new Date().toISOString(),
+  sloBudgets = null // #425: active SLO budgets → `slo` verdict block
 }) {
   const turns = calculateAgenticTimeline({
     numTurns,
@@ -256,7 +321,7 @@ export function buildAgenticJson({
     throughputTokPerSec: summary.avgThroughputTokPerSec
   };
 
-  return {
+  const payload = {
     schemaVersion: EXPORT_JSON_VERSION,
     generator: GENERATOR_ID,
     exportType: 'agentic-tool-loop',
@@ -289,6 +354,21 @@ export function buildAgenticJson({
     summary,
     metrics
   };
+  // #425: mirror the per-turn ✓/✗ badges — whole-loop verdicts plus the
+  // failing-turn list the UI's offender banner names.
+  if (sloBudgets && (sloBudgets.ttftMs || sloBudgets.tpotMs || sloBudgets.walltimeSec)) {
+    const first = turns[0] || { prefillTime: 0 };
+    const decodeTurns = turns.filter(t => t.decodeTokens > 0);
+    const avgTpotMs = decodeTurns.length > 0
+      ? decodeTurns.reduce((sum, t) => sum + (1000 * t.decodeTime) / t.decodeTokens, 0) / decodeTurns.length
+      : Infinity;
+    const slo = buildSloExport(first.prefillTime, avgTpotMs, totalWalltimeSeconds, sloBudgets);
+    if (slo) {
+      const agentic = evaluateAgenticSlo(turns, sloBudgets);
+      payload.slo = { ...slo, failingTurns: agentic.failingTurns, worstTurn: agentic.worstTurn };
+    }
+  }
+  return payload;
 }
 
 // ---------------------------------------------------------------------------
