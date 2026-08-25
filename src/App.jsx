@@ -20,7 +20,7 @@ import {
   describeConfig, buildShareLink, readPermalinkTitle, documentTitleFor
 } from './utils/permalink';
 import { verifyShareLink } from './utils/shareIntegrity';
-import { readParam, writeParams } from './utils/urlState';
+import { readParam, readSimSpeed, writeParams } from './utils/urlState';
 import {
   findInvalidIdParams, invalidParamAttr, invalidParamLabel, warnInvalidParams
 } from './utils/shareLinkParams';
@@ -94,7 +94,7 @@ export default function App() {
   useEffect(() => { selectedPresetRef.current = selectedPreset; }, [selectedPreset]);
   const [prefillSpeed, setPrefillSpeed] = useState(() => Number(readParam('prefill')) || initialPresetObj.prefillSpeed);
   const [decodeSpeed, setDecodeSpeed] = useState(() => Number(readParam('decode')) || initialPresetObj.decodeSpeed);
-  const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => readSimMultiplier());
+  const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => readSimSpeed());
   const [isPlaying, setIsPlaying] = useState(false);
   // Engine flags (issue #70): comma-separated ids persisted in the URL. The
   // picker shows their documented deltas; "Apply to simulation" bakes the

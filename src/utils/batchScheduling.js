@@ -24,6 +24,10 @@
 //   early finishers waste slots and later arrivals idle in queue.
 
 const MAX_STEPS = 20000; // safety cap: malformed params can't hang the tab
+// Hard ceiling on generated workloads: a crafted ?breqs=99999999 share link
+// must not allocate an O(n) request array during render (#1059). The UI range
+// is 2–48; 10000 leaves generous headroom for future use.
+const MAX_REQUESTS = 10000;
 
 // Deterministic PRNG (mulberry32) so a given seed always renders the same
 // workload — shareable URLs and screenshots stay reproducible.
@@ -50,6 +54,11 @@ export function generateRequests({
   arrivalIntervalMs,
   seed = 42
 }) {
+  // Guard the allocation loop: absurd numRequests from crafted URLs or an
+  // unclamped number input must not OOM the tab (#1059). Non-positive values
+  // simply yield an empty workload.
+  if (!Number.isFinite(numRequests)) numRequests = 0;
+  numRequests = Math.min(numRequests, MAX_REQUESTS);
   const rand = mulberry32(seed);
   const vary = (mean) => Math.max(1, Math.round(mean * (0.6 + 0.8 * rand())));
   const requests = [];
@@ -79,6 +88,9 @@ export function simulateBatching({
   prefillSpeed,
   decodeSpeed
 }) {
+  // A non-positive batch size can never admit a request, so the step loop
+  // would spin forever on the first queued arrival (#1078). Floor to 1 slot.
+  maxBatchSize = Number.isFinite(maxBatchSize) ? Math.max(1, Math.floor(maxBatchSize)) : 1;
   const decodeStepTime = decodeSpeed > 0 ? 1 / decodeSpeed : Infinity; // seconds
   const chunkingOn = Number.isFinite(chunkSize) && chunkSize > 0;
 
@@ -204,6 +216,9 @@ export function simulateBatching({
  * for). Used only for the comparison banner; shares the timing model above.
  */
 export function simulateStaticBatching({ requests, maxBatchSize, prefillSpeed, decodeSpeed }) {
+  // Non-positive cohort size would make the `start += maxBatchSize` walk loop
+  // forever (#1078). Floor to 1 slot.
+  maxBatchSize = Number.isFinite(maxBatchSize) ? Math.max(1, Math.floor(maxBatchSize)) : 1;
   const decodeStepTime = decodeSpeed > 0 ? 1 / decodeSpeed : Infinity; // seconds
   const steps = [];
   const enriched = [];

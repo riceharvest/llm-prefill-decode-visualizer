@@ -24,16 +24,18 @@ export default function BatchingVisualizer({
   resetKey
 }) {
   // --- Workload & scheduler parameters (shareable via URL) ---
-  const [numRequests, setNumRequests] = useState(() => readParamNum('breqs', 12));
-  const [meanPromptTokens, setMeanPromptTokens] = useState(() => readParamNum('bprompt', 2000));
-  const [meanOutputTokens, setMeanOutputTokens] = useState(() => readParamNum('bgen', 256));
-  const [maxBatchSize, setMaxBatchSize] = useState(() => readParamNum('bmax', 8));
+  // Bounds mirror the on-page controls so a crafted share link can't push the
+  // scheduler into pathological territory (#1059, #1078).
+  const [numRequests, setNumRequests] = useState(() => readParamNum('breqs', 12, 2, 48));
+  const [meanPromptTokens, setMeanPromptTokens] = useState(() => readParamNum('bprompt', 2000, 128, 32768));
+  const [meanOutputTokens, setMeanOutputTokens] = useState(() => readParamNum('bgen', 256, 32, 4096));
+  const [maxBatchSize, setMaxBatchSize] = useState(() => readParamNum('bmax', 8, 1, 32));
   const [chunkStopIndex, setChunkStopIndex] = useState(() => {
     const v = readParamNum('bchunk', 512);
     const idx = CHUNK_STOPS.indexOf(v);
     return idx >= 0 ? idx : 5;
   });
-  const [arrivalIntervalMs, setArrivalIntervalMs] = useState(() => readParamNum('barr', 150));
+  const [arrivalIntervalMs, setArrivalIntervalMs] = useState(() => readParamNum('barr', 150, 0, 2000));
   // Workload PRNG seed (issue #692): ?bseed= makes the ±40% length/arrival
   // jitter reproducible and lets agents sample different draws. Same default
   // (42) as generateRequests so existing links render identically.
