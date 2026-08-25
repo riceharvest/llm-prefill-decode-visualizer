@@ -1,6 +1,7 @@
 import { getAllRuns, aggregate } from '../_localmaxxing.js';
 import { kvCache } from '../_math.js';
 import { explainRecommendation } from '../_explain.js';
+import { locateQuantComponent } from '../_quant_tag.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -17,6 +18,43 @@ function num(v, fallback) {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+// SLO caps accept any finite value ≥ 0 — 0 is a valid (maximally strict) cap,
+// not "unset" (#731).
+function numSloCap(v) {
+  const n = Number(v);
+  return v != null && Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/**
+ * #525: sizing silently rewrites unusable inputs to defaults. Detect every
+ * workload field that was supplied but substituted/clamped, so the response
+ * can carry a machine-readable warnings[] like /api/compute does.
+ */
+function inputWarnings(params, workload) {
+  const raws = {
+    contextLength: params.contextLength,
+    concurrency: params.concurrency ?? params.batchSize,
+    promptTokens: params.promptTokens,
+    outputTokens: params.outputTokens
+  };
+  const out = [];
+  for (const [field, raw] of Object.entries(raws)) {
+    if (raw == null || String(raw).trim() === '') continue;
+    const used = workload[field];
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0 || Math.round(n) !== used) {
+      out.push({
+        code: 'input_substituted',
+        field,
+        requested: raw,
+        used,
+        message: `?${field}=${raw} is not usable as a positive integer — computed with ${used} instead`
+      });
+    }
+  }
+  return out.sort((a, b) => a.field.localeCompare(b.field));
+}
+
 /**
  * Estimate bits-per-weight from a quantization label (q4_k_m → ~4.25,
  * q8_0 → 8.25-ish is wrong so plain digits win: 8 + 0.25 only for _k quants).
@@ -26,9 +64,23 @@ export function bitsPerWeight(quantization) {
   const q = String(quantization || '').toLowerCase();
   const m = q.match(/^q(\d+(?:\.\d+)?)(?:[_-](\d+))?/);
   if (m) return Number(m[1]) + (m[2] !== undefined ? Number(m[2]) / 100 : /k/.test(q.slice(m[0].length)) ? 0.25 : 0);
-  if (/^(fp|bf)?16|f16$/.test(q)) return 16;
-  if (/^(fp|bf)?8|f8$/.test(q)) return 8;
-  if (/int?4|^q4/.test(q)) return 4;
+  if (/^(fp|bf)?16$|^f16$/.test(q)) return 16;
+  if (/^(fp|bf)?8$|^f8$/.test(q)) return 8;
+  if (/^int?4$|^q4$|^q4(?=[_-])/.test(q)) return 4;
+
+  // Composite/mixed tags (#1071): the whole-string rules above only anchor at
+  // the start, so a tag like 'GPTQ-INT4-G64-sym-local+DFlash-BF16-local' used
+  // to fall through to unanchored substring latching that disagreed with
+  // _vramfit.js. Resolve via the shared anchored scanner instead: both fit
+  // paths now pick the SAME weight-storage component (earliest in tag order).
+  const comp = locateQuantComponent(q);
+  if (comp && comp.text !== q) {
+    if (comp.kind === 'int') return Number(comp.bitBase) === 4 ? 4 : 4.25; // sizing table has no int8 row
+    if (comp.kind === 'f16') return 16;
+    if (comp.kind === 'f8') return 8;
+    if (comp.kind === 'gguf') return bitsPerWeight(comp.text); // reuse leading-q math on 'q4_k_m' etc.
+    // mlx: sizing's plain-digits table has no effective-rate rows — fallback
+  }
   return 4.25;
 }
 
@@ -64,6 +116,11 @@ function confidenceLevel(runs) {
  * ?maxTtftSeconds=1          SLO cap on expected TTFT
  * ?maxTpotMs=40              SLO cap on expected TPOT
  * ?maxVramGb=48              budget cap: rig memory must fit under this
+ *
+ * Units (#738 #866): every memory figure — maxVramGb, memoryGb and the whole
+ * vramFit block — is GiB (binary, 1024-based), not decimal GB. The response
+ * states this in its top-level `units` block.
+ *
  * ?numLayers=&kvHeads=&headDim=   explicit KV arch (skips the estimate)
  * ?quant=q4_k_m&hwClass=…    same filters as /api/best
  * ?limit=N                   default 5, max 25
@@ -93,8 +150,10 @@ export default async function handler(req, res) {
       outputTokens: Math.round(num(params.outputTokens, 512))
     };
     const slo = {
-      maxTtftSeconds: params.maxTtftSeconds != null ? num(params.maxTtftSeconds, null) : null,
-      maxTpotMs: params.maxTpotMs != null ? num(params.maxTpotMs, null) : null
+      // #731: explicit 0 caps are honored (every rig fails the SLO) instead of
+      // silently dropping the constraint.
+      maxTtftSeconds: params.maxTtftSeconds != null ? numSloCap(params.maxTtftSeconds) : null,
+      maxTpotMs: params.maxTpotMs != null ? numSloCap(params.maxTpotMs) : null
     };
 
     // Explicit arch overrides, else estimated per group below.
@@ -108,16 +167,24 @@ export default async function handler(req, res) {
     runs = runs.filter(r => r.modelFamily.includes(workload.model.toLowerCase()) || r.modelId?.toLowerCase().includes(workload.model.toLowerCase()));
     if (params.quant) runs = runs.filter(r => r.quantization?.toLowerCase() === String(params.quant).toLowerCase());
     if (params.hwClass) runs = runs.filter(r => r.hwClass?.toLowerCase() === String(params.hwClass).toLowerCase());
-    // Budget cap: rig memory (VRAM or unified) must fit under it
+    // Budget cap: rig memory (VRAM or unified) must fit under it.
+    // Unknown-memory rigs are EXCLUDED once a cap is requested (#632): a
+    // null memoryGb can't be shown to fit a budget, so recommending it as
+    // "under budget" is wrong. The drop count is echoed back additively.
     const maxVramGb = Number(params.maxVramGb);
-    if (Number.isFinite(maxVramGb)) {
-      runs = runs.filter(r => { const mem = r.vramGb ?? r.unifiedMemoryGb; return mem == null || mem <= maxVramGb; });
+    const hasBudgetCap = Number.isFinite(maxVramGb);
+    let excludedUnknownMemoryRuns = 0;
+    if (hasBudgetCap) {
+      excludedUnknownMemoryRuns = runs.filter(r => (r.vramGb ?? r.unifiedMemoryGb) == null).length;
+      runs = runs.filter(r => { const mem = r.vramGb ?? r.unifiedMemoryGb; return mem != null && mem <= maxVramGb; });
     }
+    const budgetCap = hasBudgetCap ? { maxVramGb, excludedUnknownMemoryRuns } : undefined;
 
     if (!runs.length) {
       return json(res, {
         error: `No comparable benchmark runs match model='${workload.model}'. Try a broader substring (e.g. 'qwen' instead of an exact hfId).`,
-        workload
+        workload,
+        ...(budgetCap ? { budgetCap } : {})
       }, 404);
     }
 
@@ -156,6 +223,14 @@ export default async function handler(req, res) {
       const meetsTpot = slo.maxTpotMs != null && tpotMs != null ? tpotMs <= slo.maxTpotMs : null;
       const fitsVram = headroomGb != null ? headroomGb >= 0 : null;
 
+      // #523: `all` historically reads true when nothing explicitly failed —
+      // including criteria that were never evaluated. Keep `all` (sort order
+      // and existing consumers depend on it) but expose which verdicts are
+      // real so `meetsSlo.all === true` can be qualified with allEvaluated.
+      const criteria = { ttft: meetsTtft, tpot: meetsTpot, vram: fitsVram };
+      const evaluated = Object.keys(criteria).filter(k => criteria[k] !== null);
+      const unevaluated = Object.keys(criteria).filter(k => criteria[k] === null);
+
       return {
         hardware: s.hardware,
         hardwareKey: s.hardwareKey,
@@ -184,8 +259,11 @@ export default async function handler(req, res) {
           tpotMs,
           perUserDecodeTokPerSec: Math.round(perUserDecode * 10) / 10,
           aggregateDecodeTokPerSec: Math.round(perUserDecode * b * 10) / 10,
-          ttftIqr: [g.prefill.q1, g.prefill.q3].map(v => v != null && workload.promptTokens ? Math.round((workload.promptTokens / v) * 1e4) / 1e4 : null),
-          tpotIqrMs: [g.decode.q1, g.decode.q3].map(v => v != null ? Math.round((1000 / (v * Math.pow(b, -0.25))) * 100) / 100 : null),
+          // (#763) IQR bounds are ordered ascending [p25, p75] as named.
+          // Speeds' q3 (fast) maps to the 25th-percentile time and q1 (slow)
+          // to the 75th — so times come out [q3→lo, q1→hi], never descending.
+          ttftIqr: [g.prefill.q3, g.prefill.q1].map(v => v != null && workload.promptTokens ? Math.round((workload.promptTokens / v) * 1e4) / 1e4 : null),
+          tpotIqrMs: [g.decode.q3, g.decode.q1].map(v => v != null ? Math.round((1000 / (v * Math.pow(b, -0.25))) * 100) / 100 : null),
           measuredSingleStream: true,
           note: b > 1 ? 'measured speeds are single-stream; per-user decode decayed ~B^-0.25 for concurrency' : undefined
         },
@@ -194,7 +272,16 @@ export default async function handler(req, res) {
           level: confidenceLevel(g.runs),
           note: g.runs < 3 ? 'fewer than 3 runs — medians may not generalize' : undefined
         },
-        meetsSlo: { ttft: meetsTtft, tpot: meetsTpot, vram: fitsVram, all: [meetsTtft, meetsTpot, fitsVram].every(v => v !== false) },
+        meetsSlo: {
+          ttft: meetsTtft,
+          tpot: meetsTpot,
+          vram: fitsVram,
+          all: [meetsTtft, meetsTpot, fitsVram].every(v => v !== false),
+          // #523: distinguish "passed" from "never checked".
+          evaluated,
+          unevaluated,
+          allEvaluated: unevaluated.length === 0
+        },
         // One-sentence human-readable explanation (#73): fit math + measured
         // source, pass-through ready for agent chat pipelines.
         explain: explainRecommendation({
@@ -220,14 +307,20 @@ export default async function handler(req, res) {
       .slice(0, limit);
 
     return json(res, {
-      description: 'Ranked hardware sizing for a workload spec. VRAM fit = weights + KV cache at target context × concurrency + overhead. Expected TTFT/TPOT come from aggregated benchmark medians (single-stream); confidence reflects sample count.',
+      description: 'Ranked hardware sizing for a workload spec. VRAM fit = weights + KV cache at target context × concurrency + overhead. Expected TTFT/TPOT come from aggregated benchmark medians (single-stream); confidence reflects sample count. All memory figures (memoryGb/maxVramGb and the vramFit block) are GiB — binary, 1024-based, not decimal GB (#738 #866).',
+      units: { memory: 'GiB', note: 'all memory figures are GiB — binary, 1024-based, NOT decimal GB' },
       workload,
       slo,
+      // #525: machine-readable signal whenever an unusable input was
+      // substituted with a default (empty when every supplied value was used).
+      warnings: inputWarnings(params, workload),
       matchedRuns: runs.length,
+      ...(budgetCap ? { budgetCap } : {}),
       assumptions: {
         kvArchitecture: explicitArch || 'estimated from parameter count (exposed per recommendation in vramFit)',
         precisionBytes: 2,
         overheadGb: 1.5,
+        memoryUnits: 'GiB — every memory figure (overheadGb, vramFit) is binary GiB, not decimal GB',
         quantBitsFallback: 'unparseable quantization labels assume 4.25 bits-per-weight'
       },
       recommendations

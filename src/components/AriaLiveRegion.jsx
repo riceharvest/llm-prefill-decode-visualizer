@@ -9,7 +9,7 @@ import { t } from '../i18n/strings';
  */
 export default function AriaLiveRegion({ message }) {
   return (
-    <div className="sr-only" role="status" aria-live="polite" aria-atomic="true" aria-label={t('a11y.liveRegionLabel')}>
+    <div className="sr-only" role="status" aria-live="polite" aria-atomic="true" data-testid="live-region" aria-label={t('a11y.liveRegionLabel')}>
       {message}
     </div>
   );

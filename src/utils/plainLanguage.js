@@ -32,6 +32,18 @@ export const PLAIN_TERMS = [
   'bandwidthBound'
 ];
 
+/**
+ * Stable DOM id for one glossary entry (#583): `#glossary-prefill` style
+ * anchors so individual definitions are deep-linkable and citable. Slugs are
+ * lowercase, non-alphanumerics collapsed to '-' (kvCache → glossary-kvcache).
+ */
+export function glossaryTermId(term) {
+  return 'glossary-' + String(term || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 export function getPlainMode() {
   try {
     return localStorage.getItem(STORAGE_KEY) === '1';

@@ -29,6 +29,18 @@ test('generateRequests is deterministic for a given seed and respects counts', (
   }
 });
 
+test('different seeds draw different workloads (#692)', () => {
+  // The seed was previously an unreachable parameter — the UI could never
+  // re-roll the ±40% jitter. Pin that seeds actually select distinct draws.
+  const seen = new Set();
+  for (const seed of [1, 2, 3, 42, 99, 12345]) {
+    const reqs = workload({ seed });
+    const fingerprint = JSON.stringify(reqs.map(r => [r.promptTokens, r.outputTokens, r.arrivalTime]));
+    seen.add(fingerprint);
+  }
+  assert.equal(seen.size, 6, 'each seed should yield its own workload');
+});
+
 test('continuous batching never exceeds max batch size', () => {
   const sim = simulateBatching({ requests: workload(), maxBatchSize: 4, chunkSize: 512, ...PARAMS });
   for (const step of sim.steps) {

@@ -14,7 +14,12 @@
   "@type": "WebPage",
   "name": "Status — LLM Prefill & Decode Speed Visualizer",
   "url": "https://llm-prefill-decode-visualizer.vercel.app/status.html",
-  "description": "Live service status: API availability, upstream data freshness and cache age. Auto-refreshes every 60 seconds."
+  "description": "Live service status: API availability, upstream data freshness and cache age. Auto-refreshes every 60 seconds. Machine-readable equivalent: /api/health.",
+  "mainEntity": {
+    "@type": "WebAPI",
+    "name": "Health API",
+    "url": "https://llm-prefill-decode-visualizer.vercel.app/api/health"
+  }
 }
 </script>
 <style>
@@ -73,10 +78,21 @@
     </table>
   </div>
 
+  <noscript>
+    <div class="card">
+      <p>This page needs JavaScript to render live values. Machine-readable status:</p>
+      <ul>
+        <li><a href="/api/health"><code>/api/health</code></a> — availability, upstream freshness, cache age</li>
+        <li><a href="/api/agent/freshness.json"><code>/api/agent/freshness.json</code></a> — per-group freshness/confidence report</li>
+      </ul>
+    </div>
+  </noscript>
+
   <footer>
     Auto-refreshes every 60s ·
     Data source: <a href="https://www.localmaxxing.com" rel="noopener">localmaxxing.com</a> ·
-    Machine-readable endpoint: <a href="/api/health"><code>/api/health</code></a>
+    Machine-readable endpoint: <a href="/api/health"><code>/api/health</code></a> ·
+    Freshness report: <a href="/api/agent/freshness.json"><code>/api/agent/freshness.json</code></a>
   </footer>
 </main>
 
@@ -85,6 +101,9 @@
   'use strict';
 
   var REFRESH_MS = 60000;
+  // Last-known-good health payload, retained so a transient failed poll
+  // never erases the last successful sync values (#918).
+  var lastGood = null;
 
   function el(id) { return document.getElementById(id); }
 
@@ -97,9 +116,30 @@
     return h + 'h ' + (m % 60) + 'm';
   }
 
-  function fmtTime(iso) {
-    if (!iso) return 'never';
-    try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+  // Locale-INDEPENDENT formatting (issue #663): this page is advertised to
+  // agents (llms.txt) as well as humans, so every timestamp renders as a
+  // UTC ISO-8601 string (kept machine-parseable in the <time datetime> /
+  // data-iso attribute too) instead of the visitor-locale locale-formatted
+  // string, whose output flips with the visitor's OS locale ("24.8.2026,
+  // "8/24/2026, 9:38:00 PM"). Counts render ungrouped via String(n).
+  function setIsoTime(id, iso) {
+    var node = el(id);
+    if (!iso) { node.textContent = 'never'; return; }
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) { node.textContent = iso; return; }
+    var text = d.toISOString();
+    // Machine-readable ISO kept on a <time> element when the DOM supports
+    // element creation; minimal test/mock DOMs get plain ISO text.
+    if (typeof document.createElement === 'function' && node.appendChild) {
+      while (node.firstChild) node.removeChild(node.firstChild);
+      var t = document.createElement('time');
+      t.setAttribute('datetime', text);
+      t.setAttribute('data-iso', text);
+      t.textContent = text;
+      node.appendChild(t);
+    } else {
+      node.textContent = text;
+    }
   }
 
   function setState(dotClass, headline) {
@@ -115,10 +155,10 @@
     var fl = freshLabel[f.status] || freshLabel.empty;
     el('freshness').innerHTML = '<span style="color:' + fl[0] + '">' + fl[1] + '</span>';
 
-    el('last-sync').textContent = fmtTime(f.fetchedAt);
+    setIsoTime('last-sync', f.fetchedAt);
     el('cache-age').textContent = f.ageSeconds != null ? fmtAge(f.ageSeconds) + ' ago' : '—';
-    el('row-count').textContent = f.rowCount != null ? f.rowCount.toLocaleString() : '—';
-    el('checked-at').textContent = fmtTime(data.time);
+    el('row-count').textContent = f.rowCount != null ? String(f.rowCount) : '—';
+    setIsoTime('checked-at', data.time);
 
     if (!data.ok) setState('bad', 'API error');
     else if (f.status === 'stale') setState('warn', 'Degraded — upstream data is stale');
@@ -126,14 +166,48 @@
     else setState('ok', 'All systems operational');
   }
 
+  // API responded with a non-2xx status. Show the failure as an API error —
+  // NOT as upstream "No data yet" cold start — and keep last-known-good
+  // freshness/sync values in place rather than rewriting them (#918).
+  function renderApiError(status) {
+    el('api-status').innerHTML = '<span style="color:var(--bad)">Error' + (status != null ? ' (HTTP ' + status + ')' : '') + '</span>';
+    el('freshness').innerHTML = '<span style="color:var(--bad)">Unknown — API error</span>';
+
+    var f = (lastGood && lastGood.upstreamFreshness) || {};
+    // First-poll failure (no last-known-good yet): '—', never a false "never
+    // synced" (#918).
+    if (f.fetchedAt) setIsoTime('last-sync', f.fetchedAt);
+    else el('last-sync').textContent = '—';
+    el('cache-age').textContent = f.ageSeconds != null ? fmtAge(f.ageSeconds) + ' ago' : '—';
+    el('row-count').textContent = f.rowCount != null ? String(f.rowCount) : '—';
+    el('checked-at').textContent = new Date().toISOString();
+
+    setState('bad', 'API error');
+  }
+
   function check() {
     document.body.classList.add('refreshing');
     fetch('/api/health', { cache: 'no-store' })
-      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
-      .then(function (r) { render(r.ok ? r.body : { ok: false }); })
+      .then(function (r) {
+        // Read as text and parse defensively: WAF/challenge layers may answer
+        // with HTML, which must surface as an API error, not as
+        // "unreachable" (#918 mode 3).
+        return r.text().then(function (t) {
+          var body = null;
+          try { body = JSON.parse(t); } catch (e) {}
+          return { ok: r.ok, status: r.status, body: body };
+        });
+      })
+      .then(function (r) {
+        if (r.ok && r.body) { lastGood = r.body; render(r.body); }
+        else renderApiError(r.ok ? null : r.status);
+      })
       .catch(function () {
+        // Network-level failure: keep every detail row at its last-known-good
+        // value, only flag the headline + API row (#918 mode 2).
+        el('api-status').innerHTML = '<span style="color:var(--bad)">Unreachable</span>';
         setState('bad', 'Unreachable — could not reach the API');
-        el('checked-at').textContent = new Date().toLocaleString();
+        el('checked-at').textContent = new Date().toISOString();
       })
       .finally(function () { document.body.classList.remove('refreshing'); });
   }

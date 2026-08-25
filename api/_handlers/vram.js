@@ -14,10 +14,17 @@
 //   /api/vram?hfId=...&context=...&vramGb=24            → fits + max context
 //   /api/vram?hfId=...&numTurns=40&tokensPerTurn=1200   → per-turn KV growth
 //                                                          with overflow turns
+//
+// Units (#738 #866): every memory figure in the response is GiB (binary,
+// 1024-based), never decimal GB. The response states this explicitly in its
+// top-level `units` block so agents budgeting against spec-sheet decimal-GB
+// numbers can't mis-read it.
 
 import { resolveModel } from '../_hfconfig.js';
 import { resolveQuant } from '../_quant.js';
 import { lookupHfArch, guessArchFromName } from '../_hflookup.js';
+import { enforceRateLimit } from '../_ratelimit.js';
+import { problemBody } from '../_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -27,8 +34,38 @@ function json(res, body, status = 200) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, max-age=600');
+  // #516: only successful estimates are CDN-cacheable. Error bodies depend on
+  // the caller's query string and must never be stored by shared caches —
+  // sibling endpoints already send no-store on their error paths.
+  res.setHeader('Cache-Control', status === 200 ? 'public, max-age=600' : 'no-store');
   res.end(JSON.stringify(body, null, 2));
+}
+
+/**
+ * RFC 9457 problem+json error shape (#514): every /api/vram validation and
+ * upstream failure carries type/title/status/code so agents can branch on the
+ * stable code. Legacy flat members (`error`, `params`, `examples`) are kept
+ * alongside as back-compat extras so existing clients keep working.
+ */
+function problem(res, req, status, code, detail, extras = {}) {
+  const body = {
+    ...problemBody({ status, code, detail, instance: (req?.url || '').split('?')[0] }),
+    error: detail,
+    ...extras
+  };
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'application/problem+json');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(JSON.stringify(body, null, 2));
+}
+
+/** Map an upstream failure status to a stable ERROR_CODES registry entry. */
+function errorCodeForStatus(status) {
+  if (status === 404) return 'NOT_FOUND';
+  if (status === 502 || status === 503 || status === 504) return 'UPSTREAM_UNAVAILABLE';
+  if (status === 400) return 'INVALID_PARAMS';
+  return 'INTERNAL';
 }
 
 function num(v, fallback) {
@@ -52,11 +89,13 @@ async function estimate(params) {
   if (!hfId) {
     return {
       status: 400,
-      body: {
-        error: 'missing hfId — pass ?hfId=org/model (e.g. meta-llama/Llama-3.1-8B-Instruct)',
+      problem: true,
+      detail: "missing hfId — pass ?hfId=org/model (e.g. meta-llama/Llama-3.1-8B-Instruct)",
+      extras: {
         params: ['hfId (required)', 'context (tokens, default 32768)', 'quant (default q4_k_m)',
-          'batchSize (default 1)', 'kvPrecisionBytes (default 2 = FP16)', 'vramGb (optional budget)',
+          'batchSize (default 1)', 'kvPrecisionBytes (default 2 = FP16)', 'vramGb (optional budget, GiB)',
           'numTurns + tokensPerTurn (optional per-turn KV projection)'],
+        units: 'all memory figures are GiB (binary, 1024-based), not decimal GB',
         examples: [
           '/api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m',
           '/api/vram?hfId=Qwen/Qwen2.5-32B&context=131072&quant=q4_k_m&vramGb=24'
@@ -166,6 +205,15 @@ async function estimate(params) {
     projection = {
       tokensPerTurn,
       numTurns: turns.length,
+      // (#651) Echo what was asked and flag the silent 200-turn window cap so
+      // a "no overflow" verdict can't be read as covering an unprojected tail.
+      requestedNumTurns: numTurns,
+      ...(numTurns > turns.length
+        ? {
+            truncated: true,
+            note: `projection window capped at ${turns.length} of ${numTurns} requested turns — first*OverflowTurn verdicts cover only the projected window`
+          }
+        : {}),
       perTurnKvGb: round((bytesPerToken * tokensPerTurn * batchSize) / GB),
       turns,
       firstContextOverflowTurn,
@@ -176,6 +224,11 @@ async function estimate(params) {
   return {
     status: 200,
     body: {
+      units: {
+        memory: 'GiB',
+        note: 'all memory figures (weights, KV cache, totals, headroom, vramGb budgets) are GiB — binary, 1024-based, NOT decimal GB',
+        kvRate: 'bytes/token'
+      },
       inputs: {
         hfId: resolved.hfId, context, quant: params.quant ?? 'q4_k_m',
         resolvedQuant: quant.key, quantAssumed: quant.assumed,
@@ -222,13 +275,18 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
+  // Self-throttling signal on every response incl. validation failures (#515).
+  if (!enforceRateLimit(req, res)) return;
+
   const params = req.method === 'POST' ? (req.body || {}) : req.query;
 
   try {
-    const { status, body } = await estimate(params);
+    const { status, problem: isProblem, detail, extras, body } = await estimate(params);
+    if (isProblem) return problem(res, req, status, 'INVALID_PARAMS', detail, extras);
     return json(res, body, status);
   } catch (err) {
     const status = Number.isInteger(err.status) ? err.status : 500;
-    return json(res, { error: String(err.message || err) }, status);
+    const detail = String(err.message || err);
+    return problem(res, req, status, errorCodeForStatus(status), detail);
   }
 }

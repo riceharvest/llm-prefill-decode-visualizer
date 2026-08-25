@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RUNS_COLUMNS, RUNS_DATASET_VERSION, toRunsCsv, runsCsvPreamble, buildRunsJsonPayload } from './_runs_dump.js';
+import { RUNS_COLUMNS, RUNS_DATASET_VERSION, toRunsCsv, runsCsvPreamble, buildRunsJsonPayload, CSV_BOM } from './_runs_dump.js';
 
 // A full-index row as produced by getAllRunsRaw(): slim run + comparable tag.
 const comparableRow = {
@@ -51,9 +51,10 @@ test('RUNS_COLUMNS covers every key on a full-index row', () => {
 
 test('toRunsCsv emits header plus one row per run with matching cell counts', () => {
   const csv = toRunsCsv([comparableRow, nonComparableRow]);
-  const lines = csv.split('\r\n');
+  assert.ok(!csv.includes('\r'), 'CSV must be LF-only (see toCsv framing contract)');
+  const lines = csv.split('\n');
   assert.equal(lines[0], RUNS_COLUMNS.map(c => c.key).join(','));
-  assert.ok(csv.endsWith('\r\n'));
+  assert.ok(csv.endsWith('\n'));
   for (const line of lines.slice(1, 3)) {
     assert.equal(line.split(',').length, RUNS_COLUMNS.length);
   }
@@ -69,7 +70,9 @@ test('toRunsCsv escapes CSV-special values per RFC 4180', () => {
 
 test('runsCsvPreamble is all #-comments and documents metadata + dictionary', () => {
   const preamble = runsCsvPreamble(9, '2026-08-23T00:00:00.000Z');
-  const lines = preamble.split('\r\n').filter(Boolean);
+  assert.ok(!preamble.includes('\r'));
+  assert.equal(CSV_BOM, '\ufeff');
+  const lines = preamble.split('\n').filter(Boolean);
   assert.ok(lines.every(l => l.startsWith('#')));
   assert.ok(preamble.includes(`schema_version: ${RUNS_DATASET_VERSION}`));
   assert.ok(preamble.includes('rows: 9'));

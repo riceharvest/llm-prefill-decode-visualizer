@@ -16,8 +16,79 @@
  */
 
 import { rateLimitBody } from './_ratelimit.js';
+import { createHash } from 'node:crypto';
 
 export const SCHEMA_VERSION = '1';
+
+/** Instance boot time — Last-Modified floor for generated bodies (#615).
+ *  The spec/presets documents change only on deploy, so any request that
+ *  arrives after this instance booted with an If-Modified-Since at/after
+ *  boot can be answered 304 when the ETag also matches (or is absent). */
+const BOOT_TIME = new Date();
+
+/** Strong ETag for a generated body: content hash of the exact object the
+ *  handler would serialize (pre-schema_version-stamp, pre-rate_limit — both
+ *  vary per call and must not destabilize the validator). */
+function etagFor(body) {
+  return '"' + createHash('sha256').update(JSON.stringify(body)).digest('hex').slice(0, 32) + '"';
+}
+
+/** RFC 7232 If-None-Match matching: comma-separated list, weak prefix ignored. */
+function matchesEtag(headerValue, etag) {
+  return String(headerValue)
+    .split(',')
+    .map(s => s.trim().replace(/^W\//i, ''))
+    .includes(etag);
+}
+
+function writeNotModified(res) {
+  res.statusCode = 304;
+  if (!res.getHeader('Access-Control-Allow-Origin')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  applySchemaHeaders(res);
+  res.end(); // 304 responses carry headers only, never a body
+}
+
+/**
+ * Conditional-request support for cacheable generated bodies (#615).
+ *
+ * Stamps a strong `ETag` (content hash of the body) plus `Last-Modified` on
+ * the response, then answers `If-None-Match` / `If-Modified-Since` with a
+ * bare 304 when the client already has the current representation. Call it
+ * BEFORE sendJson with the same body/cacheTtl; returns true when a 304 was
+ * written so the caller can return without sending a payload.
+ *
+ * @param {object} req
+ * @param {object} res
+ * @param {object} body           response payload (pre-sendJson stamping)
+ * @param {object} [opts]
+ * @param {number} [opts.cacheTtl] seconds; sets Cache-Control on 200 AND 304
+ * @returns {boolean} true when a 304 was written
+ */
+export function conditionalGet(req, res, body, { cacheTtl } = {}) {
+  const etag = etagFor(body);
+  res.setHeader('ETag', etag);
+  res.setHeader('Last-Modified', BOOT_TIME.toUTCString());
+  if (cacheTtl != null && !res.getHeader('Cache-Control')) {
+    res.setHeader('Cache-Control', `public, max-age=${cacheTtl}`);
+  }
+  const inm = req?.headers?.['if-none-match'];
+  if (inm && matchesEtag(inm, etag)) {
+    writeNotModified(res);
+    return true;
+  }
+  const ims = req?.headers?.['if-modified-since'];
+  if (!inm && ims) {
+    const t = new Date(String(ims));
+    const bootSec = Math.floor(BOOT_TIME.getTime() / 1000);
+    if (!Number.isNaN(t.getTime()) && bootSec <= Math.floor(t.getTime() / 1000)) {
+      writeNotModified(res);
+      return true;
+    }
+  }
+  return false;
+}
 
 /** Stamp the schema version onto a response body without mutating it.
  *  The stamp always reflects the current SCHEMA_VERSION, even if the body
@@ -40,8 +111,38 @@ export function applySchemaHeaders(res) {
       .map(s => s.trim())
       .filter(Boolean)
   );
-  for (const h of ['X-Schema-Version', 'Deprecation', 'Sunset']) expose.add(h);
+  for (const h of ['X-Schema-Version', 'Deprecation', 'Sunset', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset']) expose.add(h);
   res.setHeader('Access-Control-Expose-Headers', [...expose].join(', '));
+}
+
+/**
+ * Opt-in byte-stable response bodies (issue #697).
+ *
+ * By default sendJson() embeds the caller's live rate-limit counter
+ * (`rate_limit.remaining`) in every body, so two identical requests never
+ * hash to the same bytes — breaking agent-side replay memoization and
+ * content-addressed caching. When the request passes `?stable=1` (or
+ * `stable=true`), this helper flags the response and the volatile
+ * `rate_limit` block is omitted from the body; quota accounting stays fully
+ * available via the X-RateLimit-Limit/-Remaining/-Reset headers, which are
+ * CORS-exposed for browser agents.
+ *
+ * Additive: the default wire format is unchanged.
+ */
+export function applyStableBodyMode(req, res) {
+  let raw;
+  try {
+    const url = req?.url || '';
+    raw = new URL(url, 'http://x').searchParams.get('stable');
+  } catch {
+    return false;
+  }
+  if (raw == null) return false;
+  if (['1', 'true'].includes(String(raw).toLowerCase())) {
+    res.stableBody = true;
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -97,7 +198,10 @@ export function sendJson(res, body, { status = 200, cacheTtl } = {}) {
   // headers): present whenever the handler ran enforceRateLimit before
   // sending. Additive field — does not bump schema_version. See AGENTS.md,
   // "Rate limits".
-  const rl = rateLimitBody(res);
+  const rl = res.stableBody === true ? null : rateLimitBody(res);
   if (rl && payload.rate_limit === undefined) payload.rate_limit = rl;
-  res.end(JSON.stringify(payload, null, 2));
+  // Trailing newline: POSIX-text-friendly final byte, matching the client
+  // exporter (src/utils/exportJson.js serializeJson) so every JSON surface in
+  // this repo agrees on the framing.
+  res.end(JSON.stringify(payload, null, 2) + '\n');
 }

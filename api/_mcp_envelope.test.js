@@ -76,6 +76,8 @@ test('tools/call returns a valid CallToolResult envelope on success', async t =>
   assert.equal(result.isError, false, 'successful upstream call is not an error');
   // The single text block carries the upstream REST payload verbatim.
   assert.deepEqual(JSON.parse(result.content[0].text), UPSTREAM_BODY);
+  // Structured output: the parsed payload is also exposed as structuredContent.
+  assert.deepEqual(result.structuredContent, UPSTREAM_BODY);
 });
 
 test('tools/call marks upstream failures with isError:true but same envelope', async t => {
@@ -91,6 +93,8 @@ test('tools/call marks upstream failures with isError:true but same envelope', a
   assert.equal(status, 200);
   const result = assertToolEnvelope(body, 'str-id-1'); // string ids echoed too
   assert.equal(result.isError, true);
+  // Error paths keep prose-only content: no structuredContent on isError.
+  assert.equal(result.structuredContent, undefined);
 });
 
 test('unknown tool still gets a valid error envelope', async () => {
@@ -124,6 +128,9 @@ test('tools/list result carries a well-formed tool array', async () => {
     assert.ok(tool.description.length > 0);
     assert.equal(tool.inputSchema?.type, 'object');
     assert.equal(typeof tool.inputSchema.properties, 'object');
+    // Structured output contract (#796): every tool declares an outputSchema.
+    assert.equal(tool.outputSchema?.type, 'object', `${tool.name} must declare an outputSchema`);
+    assert.equal(typeof tool.outputSchema.properties, 'object');
   }
 });
 
@@ -137,7 +144,9 @@ test('ping replies with an empty result under the same JSON-RPC envelope', async
 
 test('JSON-RPC errors keep the envelope: code + message, echoed id', async () => {
   const { status, body } = await rpc({ jsonrpc: '2.0', id: 13, method: 'resources/list' });
-  assert.equal(status, 404);
+  // #870: JSON-RPC application errors ride in an HTTP 200 body — non-2xx is
+  // reserved for transport failures and SDK clients discard non-2xx bodies.
+  assert.equal(status, 200);
   assert.equal(body.jsonrpc, '2.0');
   assert.equal(body.id, 13);
   assert.equal(typeof body.error.code, 'number');
