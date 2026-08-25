@@ -5,7 +5,7 @@ import { normalizeModelId, normalizeQueryModel } from '../_normalize.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError, paginationScope } from '../_pagination.js';
 import { validateSubmission, checkDuplicates, queueSubmission } from '../_submit.js';
 import { enforceRateLimit } from '../_ratelimit.js';
-import { sendJson } from '../_schema.js';
+import { sendJson, applySchemaHeaders } from '../_schema.js';
 import { sendProblem, sendProblemFromError } from '../_errors.js';
 import { decorateRun, filterByMaxAge, groupFreshness, parseMaxAgeParam } from '../_freshness.js';
 import { parseContextBandParam, filterByContextBand } from '../_contextbands.js';
@@ -35,7 +35,16 @@ async function handlePost(req, res) {
   const { ok, errors, submission } = validateSubmission(body);
 
   if (!ok) {
-    return json(res, { error: 'validation_failed', errors }, 400);
+    // RFC 9457 problem+json (#570); legacy flat members (error, errors)
+    // preserved so existing clients keep parsing the response.
+    applySchemaHeaders(res);
+    return sendProblem(res, req, {
+      status: 400,
+      code: 'INVALID_PARAMS',
+      detail: 'validation_failed: one or more submitted fields are invalid (see the errors member).',
+      error: 'validation_failed',
+      errors
+    });
   }
 
   // Duplicate / near-duplicate detection against the existing dataset.

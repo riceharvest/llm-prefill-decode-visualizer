@@ -2,15 +2,22 @@ import { getAllRuns } from '../_localmaxxing.js';
 import { computeRunDiff, evaluateDiffSlo, REF_PROMPT_TOKENS, REF_OUTPUT_TOKENS } from '../_diff.js';
 import { bestBody } from './best.js';
 import { computeWhatIfDiff } from '../_whatif.js';
+import { applySchemaHeaders, sendJson } from '../_schema.js';
+import { sendProblem } from '../_errors.js';
+import { enforceRateLimit } from '../_ratelimit.js';
 
 export const config = { runtime: 'nodejs' };
 
 function json(res, body, status = 200, cacheTtl = 300) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', `public, max-age=${cacheTtl}`);
-  res.end(JSON.stringify(body, null, 2));
+  return sendJson(res, body, { status, cacheTtl });
+}
+
+// RFC 9457 problem+json error renderer (#570). Legacy flat members (error,
+// hint, example, …) ride along as extra problem members so existing clients
+// that branch on `error` keep working.
+function problem(res, req, { status, code, detail, ...legacy }) {
+  applySchemaHeaders(res);
+  return sendProblem(res, req, { status, code, detail, ...legacy });
 }
 
 /**
@@ -142,66 +149,47 @@ export function statusFromError(err) {
 }
 
 export default async function handler(req, res) {
+  if (!enforceRateLimit(req, res)) return;
   try {
     const body = await readJsonBody(req);
-    if (body === undefined) return json(res, { error: 'request body is not valid JSON' }, 400);
+    if (body === undefined) {
+      return problem(res, req, { status: 400, code: 'INVALID_PARAMS', detail: 'request body is not valid JSON', error: 'request body is not valid JSON' });
+    }
     const q = { ...(req.query || {}), ...(body && typeof body === 'object' ? body : {}) };
 
     if (String(q.mode || '').toLowerCase() === 'whatif') {
-      return await whatIfHandler(q, res, parseWhatIfQuery(req.url));
+      return await whatIfHandler(q, res, req);
     }
 
     const idA = q.runA ?? q.a;
     const idB = q.runB ?? q.b;
 
     if (!idA || !idB) {
-      return json(res, {
-        error: 'missing parameters',
+      return problem(res, req, {
+        status: 400,
+        code: 'INVALID_PARAMS',
         detail: 'Provide two run ids: /api/diff?runA=<id>&runB=<id> (aliases a/b accepted), or two constraint sets for what-if mode: /api/diff?mode=whatif&a=<constraints>&b=<constraints>.',
-        example: '/api/diff?runA=cmsxu9zyi0ck7ms01v41wipnd&runB=cmrpa80mz05aolg011rjzkfvk'
-      }, 400);
+        error: 'missing parameters',
+        example: '/api/diff?runA=1234&runB=5678'
+      });
     }
     if (String(idA) === String(idB)) {
-      return json(res, { error: 'runA and runB must be different run ids' }, 400);
+      return problem(res, req, { status: 400, code: 'INVALID_PARAMS', detail: 'runA and runB must be different run ids', error: 'runA and runB must be different run ids' });
     }
 
     const runs = await getAllRuns();
-    // Issue #395: ids are generated lowercase, but agents commonly normalize
-    // casing — fall back to a case-insensitive match instead of failing.
-    const findRun = id => {
-      const wanted = String(id);
-      return runs.find(r => String(r.runId) === wanted)
-        || runs.find(r => String(r.runId).toLowerCase() === wanted.toLowerCase());
-    };
-    const missing = [];
-    const runA = findRun(idA);
-    if (!runA) missing.push(String(idA));
-    const runB = findRun(idB);
-    if (!runB) missing.push(String(idB));
-    // Issue #395: report EVERY unknown id in one response so an agent fixing
-    // two bad ids needs one round-trip, not one per mistake.
-    if (missing.length === 1) {
-      return json(res, { error: `run ${missing[0]} not found`, hint: 'browse ids via /api/localmaxxing' }, 404);
-    }
-    if (missing.length > 1) {
-      return json(res, { error: `runs ${missing.join(' and ')} not found`, hint: 'browse ids via /api/localmaxxing' }, 404);
-    }
-
-    // Optional SLO budgets (#560): present-but-invalid values fail loudly
-    // instead of silently disabling the check (same policy as sizing's SLO caps).
-    const SLO_PARAM_NAMES = ['sloTtftMs', 'sloTpotMs', 'sloWalltimeSec'];
-    for (const name of SLO_PARAM_NAMES) {
-      const raw = q[name];
-      if (raw === undefined || raw === null || String(raw).trim() === '') continue;
-      const n = Number(raw);
-      if (!Number.isFinite(n) || n <= 0) {
-        return json(res, { error: `invalid SLO budget ${name}=${raw}`, detail: `${name} must be a positive number (e.g. ${name}=400), or omit it to disable that check.` }, 400);
-      }
-    }
-    const hasBudgets = SLO_PARAM_NAMES.some(name => {
-      const v = q[name];
-      return v !== undefined && v !== null && String(v).trim() !== '';
+    const findRun = id => runs.find(r => String(r.runId) === String(id));
+    const notFound = id => problem(res, req, {
+      status: 404,
+      code: 'NOT_FOUND',
+      detail: `run ${id} not found`,
+      error: `run ${id} not found`,
+      hint: 'browse ids via /api/localmaxxing'
     });
+    const runA = findRun(idA);
+    if (!runA) return notFound(idA);
+    const runB = findRun(idB);
+    if (!runB) return notFound(idB);
 
     return json(res, {
       description: `Diffs two measured runs. Time metrics are normalized to a reference workload (${REF_PROMPT_TOKENS}-token prompt, ${REF_OUTPUT_TOKENS}-token output); delta is B − A, ratio is B ÷ A, winner is from A's point of view.`,
@@ -211,9 +199,16 @@ export default async function handler(req, res) {
       ...(hasBudgets ? { slo: evaluateDiffSlo(runA, runB, { ttftMs: q.sloTtftMs, tpotMs: q.sloTpotMs, walltimeSec: q.sloWalltimeSec }) } : {})
     });
   } catch (err) {
-    // Honor client-input error statuses so agents don't retry non-retryable
-    // input as if it were an upstream failure (#747).
-    return json(res, { error: String(err.message || err) }, statusFromError(err));
+    // Malformed request bodies carry statusCode 400 (#747); everything else
+    // is treated as an upstream/data failure.
+    const status = err?.statusCode === 400 ? 400 : 502;
+    const detail = String(err.message || err);
+    return problem(res, req, {
+      status,
+      code: status === 400 ? 'INVALID_PARAMS' : 'UPSTREAM_UNAVAILABLE',
+      detail,
+      error: detail
+    });
   }
 }
 
@@ -221,14 +216,19 @@ export default async function handler(req, res) {
  * What-if mode (#71): resolve both constraint sets through the same
  * decision engine /api/best uses, then report only the deltas.
  */
-async function whatIfHandler(q, res, rawSets = null) {
+async function whatIfHandler(q, res, req) {
   let constraintsA;
   let constraintsB;
   try {
     constraintsA = parseConstraintSet(q.a);
     constraintsB = parseConstraintSet(q.b);
   } catch (err) {
-    return json(res, { error: 'invalid constraint set', detail: String(err.message || err) }, 400);
+    return problem(res, req, {
+      status: 400,
+      code: 'INVALID_PARAMS',
+      detail: String(err.message || err),
+      error: 'invalid constraint set'
+    });
   }
   // The documented `?a=k=v&k=v&b=k=v` form loses every key after the first
   // to top-level query parsing (#556); prefer the raw-query segmentation
@@ -242,11 +242,13 @@ async function whatIfHandler(q, res, rawSets = null) {
     }
   }
   if (!constraintsA || !constraintsB) {
-    return json(res, {
-      error: 'missing parameters',
+    return problem(res, req, {
+      status: 400,
+      code: 'INVALID_PARAMS',
       detail: 'What-if mode needs two constraint sets: /api/diff?mode=whatif&a=<constraints>&b=<constraints>.',
+      error: 'missing parameters',
       example: '/api/diff?mode=whatif&a=fitCheck=true&contextLength=8192&model=qwen&b=fitCheck=true&contextLength=65536&model=qwen'
-    }, 400);
+    });
   }
 
   // Compare like with like: same ranking basis and, unless the caller set
@@ -265,10 +267,27 @@ async function whatIfHandler(q, res, rawSets = null) {
   try {
     [bodyA, bodyB] = await Promise.all([bestBody(setA), bestBody(setB)]);
   } catch (err) {
-    return json(res, { error: 'failed to resolve constraint sets', detail: String(err.message || err) }, 502);
+    const detail = String(err.message || err);
+    return problem(res, req, { status: 502, code: 'UPSTREAM_UNAVAILABLE', detail, error: 'failed to resolve constraint sets' });
   }
-  if (bodyA.status !== 200) return json(res, { error: 'constraint set a failed', detail: bodyA.body }, bodyA.status);
-  if (bodyB.status !== 200) return json(res, { error: 'constraint set b failed', detail: bodyB.body }, bodyB.status);
+  if (bodyA.status !== 200) {
+    return problem(res, req, {
+      status: bodyA.status,
+      code: bodyA.status === 404 ? 'NOT_FOUND' : 'INVALID_PARAMS',
+      detail: `constraint set a failed with HTTP ${bodyA.status} (see the upstream problem in the "a" member's constraints)`,
+      error: 'constraint set a failed',
+      upstream: bodyA.body
+    });
+  }
+  if (bodyB.status !== 200) {
+    return problem(res, req, {
+      status: bodyB.status,
+      code: bodyB.status === 404 ? 'NOT_FOUND' : 'INVALID_PARAMS',
+      detail: `constraint set b failed with HTTP ${bodyB.status} (see the upstream problem in the "b" member's constraints)`,
+      error: 'constraint set b failed',
+      upstream: bodyB.body
+    });
+  }
 
   // Surface constraint keys /api/best silently ignored instead of letting a
   // full-dataset diff masquerade as a filtered one (#558).

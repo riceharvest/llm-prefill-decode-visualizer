@@ -1,16 +1,23 @@
-import { getAllRuns, aggregate } from '../_localmaxxing.js';
+import { aggregate } from '../_localmaxxing.js';
 import { kvCache } from '../_math.js';
 import { explainRecommendation } from '../_explain.js';
-import { locateQuantComponent } from '../_quant_tag.js';
+import { ensureSnapshot } from '../_snapshots.js';
+import { applySchemaHeaders, sendJson } from '../_schema.js';
+import { sendProblem } from '../_errors.js';
+import { enforceRateLimit } from '../_ratelimit.js';
 
 export const config = { runtime: 'nodejs' };
 
 function json(res, body, status = 200) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, max-age=600');
-  res.end(JSON.stringify(body, null, 2));
+  return sendJson(res, body, { status, cacheTtl: 600 });
+}
+
+// RFC 9457 problem+json error renderer (#570). Legacy flat members (error,
+// example, workload, …) ride along as extra problem members so existing
+// clients that branch on `error` keep working.
+function problem(res, req, { status, code, detail, ...legacy }) {
+  applySchemaHeaders(res);
+  return sendProblem(res, req, { status, code, detail, ...legacy });
 }
 
 function num(v, fallback) {
@@ -101,15 +108,19 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     return res.status(204).end();
   }
+  if (!enforceRateLimit(req, res)) return;
 
   try {
     const params = req.method === 'POST' ? (req.body || {}) : (req.query || {});
     const model = params.model || params.m || '';
     if (!String(model).trim()) {
-      return json(res, {
+      return problem(res, req, {
+        status: 400,
+        code: 'INVALID_PARAMS',
+        detail: "Missing required 'model' parameter — sizing is meaningless without knowing which model family to size for.",
         error: "Missing required 'model' parameter — sizing is meaningless without knowing which model family to size for.",
         example: '/api/sizing?model=qwen&contextLength=32768&concurrency=4&maxTtftSeconds=2&maxTpotMs=50'
-      }, 400);
+      });
     }
 
     const workload = {
@@ -131,7 +142,10 @@ export default async function handler(req, res) {
       ? { numLayers: Math.round(Number(params.numLayers)), kvHeads: Math.round(Number(params.kvHeads)), headDim: Math.round(Number(params.headDim)) }
       : null;
 
-    let runs = await getAllRuns();
+    // Snapshot metadata (#567): the documented universal envelope — every
+    // data endpoint response carries a `snapshot` object.
+    const { snapshot, runs: allRuns } = await ensureSnapshot();
+    let runs = allRuns;
 
     // Same filters as /api/best
     runs = runs.filter(r => r.modelFamily.includes(workload.model.toLowerCase()) || r.modelId?.toLowerCase().includes(workload.model.toLowerCase()));
@@ -151,11 +165,13 @@ export default async function handler(req, res) {
     const budgetCap = hasBudgetCap ? { maxVramGb, excludedUnknownMemoryRuns } : undefined;
 
     if (!runs.length) {
-      return json(res, {
+      return problem(res, req, {
+        status: 404,
+        code: 'NOT_FOUND',
+        detail: `No comparable benchmark runs match model='${workload.model}'. Try a broader substring (e.g. 'qwen' instead of an exact hfId).`,
         error: `No comparable benchmark runs match model='${workload.model}'. Try a broader substring (e.g. 'qwen' instead of an exact hfId).`,
-        workload,
-        ...(budgetCap ? { budgetCap } : {})
-      }, 404);
+        workload
+      });
     }
 
     const limit = Math.min(25, Math.max(1, Number(params.limit) || 5));
@@ -265,7 +281,7 @@ export default async function handler(req, res) {
       workload,
       slo,
       matchedRuns: runs.length,
-      ...(budgetCap ? { budgetCap } : {}),
+      snapshot,
       assumptions: {
         kvArchitecture: explicitArch || 'estimated from parameter count (exposed per recommendation in vramFit)',
         precisionBytes: 2,
@@ -276,6 +292,7 @@ export default async function handler(req, res) {
       recommendations
     });
   } catch (err) {
-    return json(res, { error: String(err.message || err) }, 502);
+    const detail = String(err.message || err);
+    return problem(res, req, { status: 502, code: 'UPSTREAM_UNAVAILABLE', detail, error: detail });
   }
 }

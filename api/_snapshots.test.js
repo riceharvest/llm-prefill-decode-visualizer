@@ -135,6 +135,7 @@ function mockRes() {
     headers: {},
     body: undefined,
     setHeader(k, v) { this.headers[k] = v; },
+    getHeader(k) { return this.headers[k]; },
     end(payload) { if (payload !== undefined) this.body = payload; }
   };
 }

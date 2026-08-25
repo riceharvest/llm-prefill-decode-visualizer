@@ -429,7 +429,10 @@ function runBatch(rawItems, dryRun = false) {
     // indexes (which renumber when only the failed subset is resent).
     const itemId = computeCalcId('compute', { model: item.model || item.m || '', ...item });
     try {
-      const { status, body } = computeOne(item, dryRun);
+      // Per-item dry_run (#562): llms.txt documents that dry-run "also applies
+      // per-item inside a batch" — honor an item-level dry_run/dryRun flag the
+      // same way a top-level one is honored, instead of executing the math.
+      const { status, body } = computeOne(item, dryRun || isDryRun(item));
       // Stamp schema_version + the same deterministic calc id an individual
       // call would get, so batch results match standalone calls (#68).
       // Stamp schema_version + the same deterministic calc id an individual

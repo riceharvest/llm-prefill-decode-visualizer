@@ -14,6 +14,8 @@ const round = (x, places = 4) => (Number.isFinite(x) ? Math.round(x * 10 ** plac
  * higherIsBetter=true for throughputs (tok/s), false for times (s).
  * Returns { a, b, delta, deltaPct, ratio, winner } where winner is
  * 'A' | 'B' | 'tie' from A's point of view, or null when incomputable.
+ * delta is rounded to 8 decimals so sub-millisecond time metrics keep
+ * usable precision (#561); the relative measures stay 4-decimal.
  */
 export function diffMetric(valueA, valueB, { higherIsBetter = true } = {}) {
   const a = Number(valueA);
@@ -22,7 +24,7 @@ export function diffMetric(valueA, valueB, { higherIsBetter = true } = {}) {
     return { a: valueA ?? null, b: valueB ?? null, delta: null, deltaPct: null, ratio: null, winner: null };
   }
 
-  const delta = round(b - a);
+  const delta = round(b - a, 8);
   const deltaPct = a !== 0 ? round((b - a) / Math.abs(a)) : null;
   const ratio = a > 0 ? round(b / a) : null;
 
@@ -43,10 +45,12 @@ export function derivedTimes(run) {
   const walltimeSeconds = prefill > 0 && decode > 0
     ? REF_PROMPT_TOKENS / prefill + REF_OUTPUT_TOKENS / decode
     : null;
+  // 8 decimals ≈ 10 ns granularity — fast runs must not quantize down to
+  // literal 0 and lose their deltaPct/ratio/winner signal (#561).
   return {
-    ttftSeconds: round(ttftSeconds),
-    tpotSeconds: round(tpotSeconds),
-    walltimeSeconds: round(walltimeSeconds)
+    ttftSeconds: round(ttftSeconds, 8),
+    tpotSeconds: round(tpotSeconds, 8),
+    walltimeSeconds: round(walltimeSeconds, 8)
   };
 }
 
