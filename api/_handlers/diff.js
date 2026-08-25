@@ -241,6 +241,17 @@ async function whatIfHandler(q, res, req) {
       constraintsB = rawSets.b;
     }
   }
+  // The documented `?a=k=v&k=v&b=k=v` form loses every key after the first
+  // to top-level query parsing (#556); prefer the raw-query segmentation
+  // when it recovered a fuller set.
+  if (rawSets) {
+    if (rawSets.a && (!constraintsA || Object.keys(rawSets.a).length > Object.keys(constraintsA).length)) {
+      constraintsA = rawSets.a;
+    }
+    if (rawSets.b && (!constraintsB || Object.keys(rawSets.b).length > Object.keys(constraintsB).length)) {
+      constraintsB = rawSets.b;
+    }
+  }
   if (!constraintsA || !constraintsB) {
     return problem(res, req, {
       status: 400,
