@@ -29,7 +29,10 @@ test('bchunk entry notes that slider position ≠ token value', () => {
   assert.match(chunkLine, /slider/i);
 });
 
-test('other tabs stay byte-stable (no URL params block when none declared)', () => {
-  const single = TABS.find(t => t.id === 'single');
-  assert.doesNotMatch(renderTabSection(single), /URL params:/);
+test('tabs without declared params stay byte-stable (no URL params block)', () => {
+  // #490 gave the single-turn tab a full param table, so tabs that DO declare
+  // params render them; tabs without any remain block-free.
+  const compare = TABS.find(t => t.id === 'compare' && !t.params?.length);
+  if (!compare) return; // all tabs declare params now
+  assert.doesNotMatch(renderTabSection(compare), /URL params:/);
 });

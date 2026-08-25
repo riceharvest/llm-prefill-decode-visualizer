@@ -6,6 +6,7 @@ import { computeWhatIfDiff } from '../_whatif.js';
 import { applySchemaHeaders, sendJson } from '../_schema.js';
 import { sendProblem } from '../_errors.js';
 import { enforceRateLimit } from '../_ratelimit.js';
+import { computeCalcId } from '../_calc_id.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -239,6 +240,48 @@ export default async function handler(req, res) {
       error: detail
     });
   }
+}
+
+/**
+ * Run-vs-run diff as a pure body function (#502): mints the same style of
+ * deterministic content-hash id /api/compute and /api/best carry, so a
+ * comparison result can be cited and re-derived via /api/calc/<id>.
+ */
+export async function diffRunsBody(q = {}) {
+  const idA = q.runA ?? q.a;
+  const idB = q.runB ?? q.b;
+
+  if (!idA || !idB) {
+    return { status: 400, body: {
+      error: 'missing parameters',
+      detail: 'Provide two run ids: /api/diff?runA=<id>&runB=<id> (aliases a/b accepted), or two constraint sets for what-if mode: /api/diff?mode=whatif&a=<constraints>&b=<constraints>.',
+      example: '/api/diff?runA=1234&runB=5678'
+    } };
+  }
+  if (String(idA) === String(idB)) {
+    return { status: 400, body: { error: 'runA and runB must be different run ids' } };
+  }
+
+  // Deterministic citation id over the canonical id pair (aliases collapse:
+  // ?a=/&b= mint the same id as the runA/runB spelling).
+  const id = computeCalcId('diff', { runA: String(idA), runB: String(idB) });
+  const replay = `/api/calc/${id}?endpoint=diff&runA=${encodeURIComponent(String(idA))}&runB=${encodeURIComponent(String(idB))}`;
+
+  const runs = await getAllRuns();
+  const findRun = rid => runs.find(r => String(r.runId) === String(rid));
+  const runA = findRun(idA);
+  if (!runA) return { status: 404, body: { error: `run ${idA} not found`, hint: 'browse ids via /api/localmaxxing' } };
+  const runB = findRun(idB);
+  if (!runB) return { status: 404, body: { error: `run ${idB} not found`, hint: 'browse ids via /api/localmaxxing' } };
+
+  return { status: 200, body: {
+    id,
+    replay,
+    description: `Diffs two measured runs. Time metrics are normalized to a reference workload (${REF_PROMPT_TOKENS}-token prompt, ${REF_OUTPUT_TOKENS}-token output); delta is B − A, ratio is B ÷ A, winner is from A's point of view.`,
+    runA,
+    runB,
+    diff: computeRunDiff(runA, runB)
+  } };
 }
 
 /**

@@ -101,6 +101,37 @@ async function fetchJson(path, signal) {
 }
 
 /**
+ * Normalize the per-rig quality signals /api/best attaches (#503): confidence
+ * grade + sample size, data-quality flags and per-row caveats. The UI renders
+ * these so a flagged or n=1 group is never presented as a confident top pick,
+ * and agents scraping the DOM get the same signal the API sends.
+ */
+export function qualitySignals(row = {}) {
+  const confidence = row.confidence && typeof row.confidence === 'object' ? row.confidence : {};
+  const grade = typeof confidence.grade === 'string' ? confidence.grade : null;
+  const runs = Number.isFinite(confidence.runs) ? confidence.runs : null;
+  const dataQuality = row.dataQuality && typeof row.dataQuality === 'object' ? row.dataQuality : {};
+  const flagged = dataQuality.status === 'flagged';
+  const flagCodes = [...new Set((dataQuality.flagged || [])
+    .flatMap(f => (Array.isArray(f.codes) ? f.codes : []))
+    .filter(c => typeof c === 'string'))];
+  const caveats = (Array.isArray(row.caveats) ? row.caveats : [])
+    .filter(c => c && c.code)
+    .map(c => ({ code: c.code, severity: c.severity || 'warning', summary: c.summary || c.code }));
+  const newestAgeDays = Number.isFinite(row.newestAgeDays) ? row.newestAgeDays : null;
+  return { grade, runs, flagged, flagCodes, caveats, newestAgeDays };
+}
+
+/** One-line human/machine-readable quality verdict for a shortlist card. */
+export function qualitySummaryText(signals) {
+  const parts = [];
+  if (signals.grade) parts.push(`confidence: ${signals.grade}${signals.runs != null ? ` (n=${signals.runs})` : ''}`);
+  if (signals.flagged) parts.push(`flagged${signals.flagCodes.length ? ` (${signals.flagCodes.join(', ')})` : ''}`);
+  for (const c of signals.caveats) parts.push(c.summary);
+  return parts.join(' · ');
+}
+
+/**
  * Query the ranked-shortlist endpoints. Tries /api/best with constraint
  * params; enriches each ranked entry with a verified-run count from
  * /api/localmaxxing. If the serverless endpoints aren't available, falls

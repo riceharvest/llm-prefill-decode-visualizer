@@ -125,3 +125,31 @@ test('regenerating llms.txt is idempotent (byte-identical output)', () => {
   const after = readFileSync(join(root, 'public', 'llms.txt'), 'utf8');
   assert.equal(after, before, 're-running generate-llms-txt.mjs changed llms.txt');
 });
+
+// ---- #490: the deep-link docs must list the FULL single-turn param set
+
+test('llms.txt documents every single-turn deep-link param the app honors (#490)', () => {
+  // Params read by SingleTurnVisualizer's state initializers (source of truth).
+  for (const param of ['ctx', 'ctxHalf', 'img', 'imgN', 'imgRes', 'jit', 'jitPct', 'autoplay']) {
+    assert.match(
+      llmsTxt,
+      new RegExp(`^\\| \\\`${param}\\\` \\|`, 'm'),
+      `single-turn deep-link param '${param}' missing from llms.txt deep-link docs`,
+    );
+  }
+});
+
+test('llms.txt single-turn param doc values match the component clamps (#490)', () => {
+  const vizSrc = readFileSync(join(root, 'src', 'components', 'SingleTurnVisualizer.jsx'), 'utf8');
+  // imgN clamps to [1,8]
+  assert.match(vizSrc, /Math\.min\(8, Math\.max\(1,/);
+  // jitPct clamps to [5,60] in steps of 5
+  assert.match(vizSrc, /Math\.min\(60, Math\.max\(5,/);
+  // ctxHalf floor is 1024
+  assert.match(vizSrc, /Math\.max\(1024,/);
+  // imgRes presets come from multimodal.js — all four ids documented
+  const mmSrc = readFileSync(join(root, 'src', 'utils', 'multimodal.js'), 'utf8');
+  for (const id of [...mmSrc.matchAll(/id:\s*'(\w+)'/g)].map(m => m[1])) {
+    assert.ok(llmsTxt.includes(`\`${id}\``), `image resolution preset '${id}' not in llms.txt`);
+  }
+});

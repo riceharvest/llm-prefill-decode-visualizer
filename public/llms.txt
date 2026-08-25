@@ -275,6 +275,26 @@ Both hatches produce the identical final DOM state as a full-speed run; completi
 - Purpose: Animate one chat request end to end: prompt ingestion (prefill) sets TTFT, then token-by-token generation (decode) sets TPOT and total walltime.
 - Surfaces: request timeline animation; speed controls + hardware presets; TTFT/TPOT/walltime metrics; chart + data table; SLO budget checks
 - Endpoints: GET /api/compute?model=singleTurn; GET /api/presets
+- URL params:
+  - ctx=<1024–1048576> — context length (tokens)
+  - ctxHalf=<1024–1048576> — cache depth at half speed (C½) for context-scaling decay
+  - img=<0|1> — attached images on/off
+  - imgN=<1–8> — number of attached images
+  - imgRes=`720p`|`1080p`|`1440p`|`4k`> — per-image resolution preset (from multimodal.js IMAGE_PRESETS)
+  - jit=<0|1> — ITL jitter on/off
+  - jitPct=<5–60, step 5> — jitter percentage
+  - autoplay=1|0 — start the simulation automatically on load
+
+| Param | Meaning |
+| --- | --- |
+| `ctx` | ctx=<1024–1048576> — context length (tokens) |
+| `ctxHalf` | ctxHalf=<1024–1048576> — cache depth at half speed (C½) for context-scaling decay |
+| `img` | img=<0|1> — attached images on/off |
+| `imgN` | imgN=<1–8> — number of attached images |
+| `imgRes` | imgRes=`720p`|`1080p`|`1440p`|`4k`> — per-image resolution preset (from multimodal.js IMAGE_PRESETS) |
+| `jit` | jit=<0|1> — ITL jitter on/off |
+| `jitPct` | jitPct=<5–60, step 5> — jitter percentage |
+| `autoplay` | autoplay=1|0 — start the simulation automatically on load |
 
 ### Tab: agentic — Agentic loop
 

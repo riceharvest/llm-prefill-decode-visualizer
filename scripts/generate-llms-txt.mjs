@@ -46,6 +46,17 @@ export const TABS = [
     purpose: 'Animate one chat request end to end: prompt ingestion (prefill) sets TTFT, then token-by-token generation (decode) sets TPOT and total walltime.',
     surfaces: ['request timeline animation', 'speed controls + hardware presets', 'TTFT/TPOT/walltime metrics', 'chart + data table', 'SLO budget checks'],
     endpoints: ['GET /api/compute?model=singleTurn', 'GET /api/presets'],
+    paramTable: true,
+    params: [
+      'ctx=<1024–1048576> — context length (tokens)',
+      'ctxHalf=<1024–1048576> — cache depth at half speed (C½) for context-scaling decay',
+      'img=<0|1> — attached images on/off',
+      'imgN=<1–8> — number of attached images',
+      'imgRes=`720p`|`1080p`|`1440p`|`4k`> — per-image resolution preset (from multimodal.js IMAGE_PRESETS)',
+      'jit=<0|1> — ITL jitter on/off',
+      'jitPct=<5–60, step 5> — jitter percentage',
+      'autoplay=1|0 — start the simulation automatically on load',
+    ],
   },
   {
     id: 'agentic',
@@ -162,6 +173,17 @@ export function renderTabSection(tab) {
   if (tab.params?.length) {
     lines.push('- URL params:');
     for (const p of tab.params) lines.push(`  - ${p}`);
+  }
+  // #490: machine-greppable per-parameter table for the single-turn tab.
+  if (tab.paramTable && tab.params?.length) {
+    lines.push('');
+    lines.push('| Param | Meaning |');
+    lines.push('| --- | --- |');
+    for (const p of tab.params) {
+      const mm = p.match(/^([a-zA-Z]+)=/);
+      const name = mm ? mm[1] : p.split('=')[0];
+      lines.push(`| \`${name}\` | ${p} |`);
+    }
   }
   return lines.join('\n');
 }
