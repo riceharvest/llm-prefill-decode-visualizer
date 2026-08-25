@@ -278,10 +278,6 @@ export async function bestBody(query = {}) {
     if (q.engine) runs = runs.filter(r => matchesEngineQuery(r, String(q.engine)));
     if (maxAgeDays) runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
     runs = filterByContextBand(runs, contextBand);
-    if (q.minDecode) {
-      const minD = Number(q.minDecode);
-      if (Number.isFinite(minD)) runs = runs.filter(r => r.decodeTokPerSec >= minD);
-    }
     if (q.maxVramGb) {
       const maxV = Number(q.maxVramGb);
       if (Number.isFinite(maxV)) {
@@ -324,7 +320,21 @@ export async function bestBody(query = {}) {
     // trust each median (sample size, IQR width, outlier density).
     // so one lucky run doesn't top the chart.
     const keyFn = r => `${r.hardwareKey}|${r.modelFamily}`;
-    const groups = aggregate(runs, keyFn);
+    let groups = aggregate(runs, keyFn);
+
+    // ?minDecode=N filters GROUPS by their true all-runs median decode,
+    // post-aggregation (#599) — matching the documented contract ("only
+    // groups with median decode ≥ N tok/s") and the Find-HW UI. Filtering
+    // raw runs pre-aggregation would delete slow runs first and inflate the
+    // reported medians (survivorship bias).
+    let minDecodeFilter = null;
+    if (q.minDecode) {
+      const minD = Number(q.minDecode);
+      if (Number.isFinite(minD)) {
+        groups = groups.filter(g => g.decode.median >= minD);
+        minDecodeFilter = minD;
+      }
+    }
 
     const members = new Map();
     for (const run of runs) {
@@ -477,6 +487,7 @@ export async function bestBody(query = {}) {
     if (Number.isFinite(Number(q.minDecode)) && Number(q.minDecode) > 0) filters.minDecode = Number(q.minDecode);
     if (Number.isFinite(Number(q.maxVramGb)) && Number(q.maxVramGb) > 0) filters.maxVramGb = Number(q.maxVramGb);
     if (maxAgeDays) filters.maxAgeDays = maxAgeDays;
+    if (minDecodeFilter != null) filters.minDecode = minDecodeFilter;
 
     // Attach effective VRAM (discrete, falling back to unified) per row (#53).
     const sampleByKey = new Map(groups.map(g => [g.key, g.bestRun]));
@@ -546,7 +557,7 @@ export async function bestBody(query = {}) {
       // from "over budget" when ?maxVramGb= is applied.
       ...(fitCheck ? { excludedRuns: excludedByFit } : {}),
       ...(excludedUnknownVramGb > 0 ? { excludedUnknownVramGb } : {}),
-      caveats: buildCaveats(runs, groups),
+      minDecode: minDecodeFilter,      caveats: buildCaveats(runs, groups),
       warnings,
       ...(by === 'walltime' || by === 'cost' ? {
         workload: {

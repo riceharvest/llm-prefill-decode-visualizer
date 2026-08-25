@@ -139,7 +139,9 @@ export async function getDataset() {
   }
 }
 
-function slim(r) {
+// Exported for tests (#593): the exact-speed fields must mirror the raw
+// upstream floats the wizard applies, not the integer-rounded legacy ones.
+export function slim(r) {
   const h = r.hardware || {};
   return {
     runId: r.id,
@@ -160,6 +162,11 @@ function slim(r) {
     engine: r.engine?.engineName,
     engineVersion: r.engine?.engineVersion ?? null,
     quantization: r.engine?.quantization,
+    // Raw measured speeds (4 decimals) alongside the legacy integer-rounded
+    // fields: the wizard/share links apply the raw floats, so agents need the
+    // exact values to reproduce page numbers for slow runs (#593).
+    prefillTokPerSecExact: round4(r.tokSPrefill),
+    decodeTokPerSecExact: round4(r.tokSOut),
     prefillTokPerSec: Math.round(r.tokSPrefill),
     decodeTokPerSec: Math.round(r.tokSOut),
     promptTokens: r.promptTokens,
@@ -470,4 +477,9 @@ export function aggregate(runs, keyFn, { outlierIqrs = DEFAULT_OUTLIER_IQRS, inc
 
 function round6(x) {
   return Number.isFinite(x) ? Math.round(x * 1e6) / 1e6 : null;
+}
+
+/** Round to 4 decimals; non-finite passes through as null (#593). */
+function round4(x) {
+  return Number.isFinite(x) ? Math.round(x * 1e4) / 1e4 : null;
 }

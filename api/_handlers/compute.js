@@ -91,7 +91,12 @@ const COMPUTE_CACHE_TTL_SECONDS = 600;
 // return, so a dry run can be swapped for the real call 1:1.
 function withId(model, inputs, result, dryRun = false) {
   const id = computeCalcId('compute', { model, ...normalizeParams(inputs) });
-  if (dryRun) return { status: 200, body: dryRunBody(model, inputs, id) };
+  if (dryRun) {
+    // #601: validation-time warnings computed during the case must surface in
+    // the dry-run echo too — the whole point is previewing what would happen.
+    const { warnings } = result;
+    return { status: 200, body: { ...dryRunBody(model, inputs, id), ...(warnings?.length ? { warnings } : {}) } };
+  }
   return { status: 200, body: { id, ...result } };
 }
 
@@ -261,11 +266,6 @@ function computeOne(params, dryRun = false) {
 
     case 'kvCache': {
       const presetKey = params.architecture;
-      if (presetKey && !MODEL_PRESETS[presetKey]) {
-        throw new ApiError('INVALID_PARAMS', `Unknown architecture '${presetKey}'`, {
-          extras: { available: Object.keys(MODEL_PRESETS) }
-        });
-      }
       const preset = presetKey ? MODEL_PRESETS[presetKey] : null;
       // Input validation (#775): reject non-numeric and non-positive values
       // instead of silently defaulting or multiplying sign-cancelled garbage.
@@ -317,6 +317,16 @@ function computeOne(params, dryRun = false) {
         warnings.push({
           code: 'context_exceeds_model_limit',
           message: `contextLength ${inputs.contextLength.toLocaleString('en-US')} exceeds ${inputs.architecture}'s maximum context of ${maxCtx.toLocaleString('en-US')} by ${overflowTokens.toLocaleString('en-US')} tokens — the result is a hypothetical, not a runnable configuration`
+        });
+      }
+
+      // Downgrade signal (#601): an unrecognized architecture id silently
+      // falls back to generic GQA geometry; say so instead of returning a
+      // plausible-looking 200 with no trace of the substitution.
+      if (presetKey && !preset) {
+        warnings.push({
+          code: 'architecture_unknown_generic_fallback',
+          message: `Unknown architecture '${presetKey}' — computed with generic GQA geometry (${inputs.numLayers} layers × ${inputs.kvHeads} KV heads × ${inputs.headDim} dim). Pass numLayers/kvHeads/headDim explicitly for non-GQA or newer architectures.`
         });
       }
 

@@ -25,6 +25,34 @@ function isBlank(v) {
 }
 
 /**
+ * Hostnames/IP literals a webhook must not target (#597): loopback,
+ * link-local, RFC1918 private ranges, and internal-name suffixes. This is a
+ * registration-time guard — it blocks the obvious stored-SSRF targets; it
+ * cannot pin DNS post-resolution (redirects are re-checked at delivery).
+ */
+export function isPrivateWebhookHost(hostname) {
+  const h = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (!h) return true;
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return true;
+  // IPv6: loopback, link-local fe80::/10, unique-local fc00::/7, unspecified
+  if (h.includes(':')) {
+    return h === '::1' || h === '::' || h.startsWith('fe8') || h.startsWith('fe9')
+      || h.startsWith('fea') || h.startsWith('feb') || h.startsWith('fc') || h.startsWith('fd');
+  }
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true; // link-local incl. cloud metadata
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+    if (a >= 224) return true; // multicast + reserved
+  }
+  return false;
+}
+
+/**
  * Validate a watch-subscription body.
  * A watch needs at least one of `model` / `hardware` (a "combo" is the pair,
  * but watching a bare model or bare rig is useful too); `quant` is optional.
@@ -67,6 +95,10 @@ export function validateWatch(body) {
         const u = new URL(body.webhookUrl.trim());
         if (u.protocol !== 'https:') {
           errors.push({ field: 'webhookUrl', code: 'insecure', message: "'webhookUrl' must use https" });
+        } else if (isPrivateWebhookHost(u.hostname)) {
+          // Stored-SSRF guard (#597): the deployment must not become a relay
+          // against loopback/private/metadata addresses.
+          errors.push({ field: 'webhookUrl', code: 'private_address', message: "'webhookUrl' must not target loopback, private, or link-local addresses" });
         } else {
           webhookUrl = u.toString();
         }
@@ -368,6 +400,25 @@ export async function probeWatchStore() {
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
+}
+
+/**
+ * True when the watch store lives on the default ephemeral serverless
+ * filesystem (no WATCHES_DIR mounted): DELETE can land on a different warm
+ * instance than POST, so watches may be undeletable cross-instance (#603).
+ * Handlers surface this as a machine-readable warning instead of silently
+ * breaking the documented DELETE contract.
+ */
+export function watchStoreIsEphemeral() {
+  return !process.env.WATCHES_DIR;
+}
+
+export function watchStoreWarning() {
+  if (!watchStoreIsEphemeral()) return null;
+  return {
+    code: 'ephemeral_watch_store',
+    message: 'The watch store is per-serverless-instance (/tmp). DELETE may return watch_not_found when it lands on a different instance than the one that stored the watch — retries can also fail. Set WATCHES_DIR to a mounted volume for durable storage.'
+  };
 }
 
 function newId() {

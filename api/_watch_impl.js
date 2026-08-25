@@ -4,7 +4,7 @@ import { sendProblemFromError } from './_errors.js';
 import { getAllRuns } from './_localmaxxing.js';
 import {
   validateWatch, saveWatch, listWatches, removeWatch,
-  runsForWatch, watchLabel, rssPathFor, MAX_WATCHES
+  runsForWatch, watchLabel, rssPathFor, MAX_WATCHES, watchStoreWarning
 } from './_watch.js';
 
 export const config = { runtime: 'nodejs' };
@@ -108,7 +108,10 @@ export default async function handler(req, res) {
         rssUrl: rssPathFor(record),
         webhookUrl: record.webhookUrl,
         matchingExistingRuns: matchingRuns,
-        createdAt: record.createdAt
+        createdAt: record.createdAt,
+        // Machine-readable ephemerality signal (#603): present only when the
+        // store is per-instance /tmp so responses stay byte-stable otherwise.
+        ...(watchStoreWarning() ? { warnings: [watchStoreWarning()] } : {})
       }, { status: 201 });
     }
 
@@ -128,7 +131,14 @@ export default async function handler(req, res) {
         throw err;
       }
       if (!removed) {
-        return sendJson(res, { error: 'watch_not_found', message: `no watch with id '${id}'` }, { status: 404 });
+        // #603: a cross-instance DELETE finds nothing even with a valid id +
+        // secret; surface the ephemerality hint so agents know the 404 is an
+        // infrastructure artifact, not a wrong id.
+        return sendJson(res, {
+          error: 'watch_not_found',
+          message: `no watch with id '${id}'`,
+          ...(watchStoreWarning() ? { warnings: [watchStoreWarning()] } : {})
+        }, { status: 404 });
       }
       return res.status(204).end();
     }

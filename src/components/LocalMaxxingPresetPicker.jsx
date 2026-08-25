@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftRight, Database, ExternalLink, LoaderCircle, RotateCcw, Search } from 'lucide-react';
 import { readParam, writeParams } from '../utils/urlState';
 import {
+  resolveLmxRestoreStatus, applyLmxStatusAttr, lmxStatusHint
+} from '../utils/lmxRestoreState';
+import {
   fetchComparableRuns,
   fetchModels,
   getQuantizations,
@@ -146,6 +149,25 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
   // Runs the current selection resolves to (used for both flows downstream)
   const effectiveRuns = pickOrder === 'hardware' ? hwEligibleRuns : eligibleRuns;
 
+  // Machine-readable restore state for lmx: share links (#596): a bare
+  // ?preset=lmx:<id> only becomes a real config once the dataset loads and
+  // the run id resolves. Expose the state on .app-shell as data-lmx-status
+  // so agents can detect silent default-speed fallbacks.
+  const lmxStatus = useMemo(() => resolveLmxRestoreStatus({
+    presetId: selectedPreset,
+    fetchFailed: Boolean(error),
+    runsLoaded: pickOrder === 'hardware' ? allRuns.length > 0 : effectiveRuns.length > 0,
+    runFound: Boolean(selectedRunId) && (pickOrder === 'hardware'
+      ? allRuns.some(run => run.id === selectedRunId)
+      : effectiveRuns.some(run => run.id === selectedRunId))
+  }), [selectedPreset, error, pickOrder, allRuns.length, effectiveRuns, selectedRunId]);
+
+  useEffect(() => {
+    applyLmxStatusAttr(document.querySelector('.app-shell'), lmxStatus);
+  }, [lmxStatus]);
+
+  const lmxHint = lmxStatusHint(lmxStatus, selectedRunId);
+
   useEffect(() => {
     onContextChange({
       modelId,
@@ -222,6 +244,12 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
           </a>
         </div>
       </div>
+
+      {lmxHint && (
+        <p role="status" data-lmx-hint={lmxStatus} style={{ margin: '10px 0 0', color: 'var(--warning, #e6a23c)', fontSize: '0.78rem' }}>
+          {lmxHint}
+        </p>
+      )}
 
       {pickOrder === 'model' ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginTop: '14px' }}>

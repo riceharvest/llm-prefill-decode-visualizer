@@ -65,7 +65,8 @@ export default function SingleTurnVisualizer({
   setPromptTokens: setPromptTokensProp,
   outputTokens: outputTokensProp,
   setOutputTokens: setOutputTokensProp,
-  engineFlags
+  engineFlags,
+  lmxProvenance: lmxProvenanceBlock
 }) {
   const [localPromptTokens, setLocalPromptTokens] = useState(
     () => clampNum(readParamNum('prompt', 2048), PROMPT_TOKENS_RANGE.min, PROMPT_TOKENS_RANGE.max)
@@ -505,7 +506,8 @@ export default function SingleTurnVisualizer({
     imageResId,
     jitterEnabled,
     jitterPct,
-    deepLink: buildDeepLink('single')
+    deepLink: buildDeepLink('single'),
+    provenance: lmxProvenanceBlock
   });
   const handleExportMd = () => downloadMarkdown(buildMarkdown(), 'single-turn-simulation.md');
   const buildJson = () => buildSingleTurnJson({
@@ -524,7 +526,8 @@ export default function SingleTurnVisualizer({
     imageResId,
     jitterEnabled,
     jitterPct,
-    deepLink: buildDeepLink('single')
+    deepLink: buildDeepLink('single'),
+    provenance: lmxProvenanceBlock
   });
   const handleExportJson = () => downloadJson(buildJson(), 'single-turn-simulation.json');
   const handleCopyMd = async () => {

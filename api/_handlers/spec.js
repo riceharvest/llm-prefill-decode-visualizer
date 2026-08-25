@@ -242,6 +242,8 @@ const RUN = {
     quantization: { type: ['string', 'null'], example: 'q4_k_m' },
     prefillTokPerSec: { type: 'integer', description: 'Measured prompt-processing speed (tok/s)' },
     decodeTokPerSec: { type: 'integer', description: 'Measured single-stream decode speed (tok/s)' },
+    prefillTokPerSecExact: { type: ['number', 'null'], description: 'Unrounded measured prompt-processing speed (tok/s); null when the source row predates exact capture' },
+    decodeTokPerSecExact: { type: ['number', 'null'], description: 'Unrounded measured decode speed (tok/s); null when the source row predates exact capture' },
     // Comparability inputs (#719): mirror the wire so the schema stays in sync.
     batchSize: { type: ['integer', 'null'], description: 'Batch size reported by the runner (1 = single-stream)' },
     concurrency: { type: ['integer', 'null'], description: 'Concurrent requests reported by the runner' },

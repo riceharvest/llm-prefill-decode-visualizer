@@ -21,7 +21,10 @@ export const config = { runtime: 'nodejs' };
 // without the hash check re-running and would bypass rate limiting.
 function json(res, body, status = 200) {
   if (!res.getHeader('Cache-Control')) {
-    res.setHeader('Cache-Control', 'private, no-store');
+    // Successful replays are content-addressed and cacheable, but PRIVATE:
+    // a shared-cache hit would assert verified:true without the hash check
+    // re-running (#957). Errors are never cached (#598).
+    res.setHeader('Cache-Control', status === 200 ? 'private, max-age=3600' : 'no-store');
   }
   return sendJson(res, body, { status });
 }

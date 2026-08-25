@@ -138,12 +138,35 @@ export function toLocalPreset(run, now = new Date()) {
   };
 }
 
+/**
+ * Structured provenance for a LocalMaxxing-measured config (#602): lets
+ * exports distinguish community-measured speeds from synthetic preset
+ * numbers and cite the source run with its staleness caveats.
+ * Returns null when the active preset is not an lmx:<runId> one.
+ */
+export function lmxProvenance(presetId, run) {
+  if (!presetId || !presetId.startsWith('lmx:') || !run) return null;
+  const ageDays = runAgeDays(run);
+  return {
+    presetId,
+    runId: run.id,
+    modelId: run.model?.hfId || null,
+    quantization: run.engine?.quantization || null,
+    engine: run.engine?.engineName || null,
+    engineVersion: run.engine?.engineVersion ?? null,
+    measuredAt: run.createdAt || null,
+    ageDays,
+    staleness: stalenessTier(ageDays),
+    sourceUrl: `https://localmaxxing.com/en/runs/${run.id}`,
+    kind: 'community-measured'
+  };
+}
+
 async function fetchJson(path, signal) {
   const response = await fetch(`${API_BASE}${path}`, { signal });
   if (!response.ok) throw new Error(`LocalMaxxing returned ${response.status}`);
   return response.json();
 }
-
 export async function fetchModels(signal) {
   const models = await fetchJson('/models?limit=1000', signal);
   return models
