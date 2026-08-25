@@ -7,12 +7,8 @@ import {
   estimateImageTiles,
   estimateImageTokens
 } from '../utils/multimodal';
-<<<<<<< main
 import { readParamNum, readParam, readParamBool, consumeAutoplay, writeParams } from '../utils/urlState';
 import { phaseToRunState, runStateToBusy } from '../utils/viewState';
-=======
-import { readParamNum, readParam, readParamBool, writeParams, clampNum } from '../utils/urlState';
->>>>>>> base
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
@@ -505,7 +501,6 @@ export default function SingleTurnVisualizer({
     draftTokens,
     acceptance,
     effectiveDecodeSpeed,
-<<<<<<< main
     ctxScaleEnabled,
     ctxHalf,
     imagesEnabled,
@@ -514,17 +509,6 @@ export default function SingleTurnVisualizer({
     jitterEnabled,
     jitterPct,
     deepLink: buildDeepLink('single')
-=======
-    deepLink: buildDeepLink('single'),
-    // Richer run provenance (#408): which model adjustments and budgets
-    // produced these metrics, as structured data instead of URL-string archaeology.
-    engineFlags,
-    itlJitter: { enabled: jitterEnabled, cvPct: jitterPct },
-    images: { enabled: imagesEnabled, count: imageCount, resolutionId: imageResId },
-    contextScaling: { enabled: ctxScaleEnabled, halfSpeedContextTokens: ctxHalfSafe },
-    sloBudgets,
-    sloResults
->>>>>>> base
   });
   const handleExportJson = () => downloadJson(buildJson(), 'single-turn-simulation.json');
   const handleCopyMd = async () => {

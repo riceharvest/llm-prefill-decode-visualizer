@@ -19,15 +19,11 @@ import { toLocalPreset, hardwareName } from './utils/localMaxxing';
 import {
   describeConfig, buildShareLink, readPermalinkTitle, documentTitleFor
 } from './utils/permalink';
-<<<<<<< main
 import { verifyShareLink } from './utils/shareIntegrity';
 import { readParam, readSimSpeed, writeParams } from './utils/urlState';
 import {
   findInvalidIdParams, invalidParamAttr, invalidParamLabel, warnInvalidParams
 } from './utils/shareLinkParams';
-=======
-import { readParam, writeParams, clampNum, readParamNum } from './utils/urlState';
->>>>>>> base
 import {
   serializeSettings, parseSettings,
   createHistory, recordChange, undo as historyUndo, redo as historyRedo,
@@ -98,16 +94,7 @@ export default function App() {
   useEffect(() => { selectedPresetRef.current = selectedPreset; }, [selectedPreset]);
   const [prefillSpeed, setPrefillSpeed] = useState(() => Number(readParam('prefill')) || initialPresetObj.prefillSpeed);
   const [decodeSpeed, setDecodeSpeed] = useState(() => Number(readParam('decode')) || initialPresetObj.decodeSpeed);
-<<<<<<< main
   const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => readSimSpeed());
-=======
-  const [simSpeedMultiplier, setSimSpeedMultiplier] = useState(() => {
-    const v = readParam('sim');
-    // 'inst' and 'instant' both select the INST playback speed (#415) — the
-    // URL normalizes to 'instant' via the writeParams effect below.
-    return v === 'instant' || v === 'inst' ? 'instant' : (Number(v) || 1);
-  });
->>>>>>> base
   const [isPlaying, setIsPlaying] = useState(false);
   // #818: playback state must not carry across view switches — arriving on a
   // new tab with the old tab's run still "playing" starts that simulation
@@ -263,12 +250,7 @@ export default function App() {
     if (s.prefill !== null) setPrefillSpeed(s.prefill);
     else setPrefillSpeed(anchorPreset.prefillSpeed);
     if (s.decode !== null) setDecodeSpeed(s.decode);
-<<<<<<< main
     else setDecodeSpeed(anchorPreset.decodeSpeed);
-=======
-    if (s.prompt !== null) setPromptTokens(s.prompt);
-    if (s.output !== null) setOutputTokens(s.output);
->>>>>>> base
     setSimSpeedMultiplier(s.sim);
     setSelectedFlags(s.flags);
     setIsPlaying(false);
@@ -505,7 +487,6 @@ export default function App() {
         onShare={handleShare}
       />
 
-<<<<<<< main
       {shareLinkTampered && (
         <div className="share-tamper-banner" role="alert" style={{
           margin: '0 auto', maxWidth: '72rem', padding: '0.6rem 1rem',
@@ -538,17 +519,6 @@ export default function App() {
       {/* data-view (#839): machine-readable active-view marker so a static
           HTML scrape can identify the rendered view without JS evaluation. */}
       <main className="app-frame stack" ref={mainRef} data-view={activeTab} data-invalid-param={invalidShareParams.length > 0 ? invalidParamAttr(invalidShareParams) : undefined}>
-=======
-      <main className="app-frame stack" ref={mainRef}>
-        {/* #410: visible + screen-reader-announced notice when applying a
-            preset replaces manually edited speeds (also read by SR users). */}
-        {presetNotice && (
-          <p role="status" className="hint-text" style={{ margin: 0, color: 'var(--text-main)' }}>
-            {presetNotice}
-          </p>
-        )}
-
->>>>>>> base
         <CollapsibleSection id="localmaxxing" title={t('common.localMaxxingTitle') || 'LocalMaxxing measured presets'} badge="LIVE">
           <LocalMaxxingPresetPicker
             selectedPreset={selectedPreset}

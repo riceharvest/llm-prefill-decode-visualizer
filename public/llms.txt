@@ -249,7 +249,7 @@ The machine-readable registry also lives in `/api/spec` (`x-error-codes` + the `
 
 ## App tabs (interactive page)
 
-The human-facing UI is this same site. Deep links carry state via URL params: `?tab=<id>`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`, `theme=<name>`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
+The human-facing UI is this same site. Deep links carry state via URL params: `?tab=<id>`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
 
 **Deep-link id vocabularies (authoritative sources):**
 
@@ -339,18 +339,5 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Endpoints: none (static explainer content)
 
 <!-- tabs-section:end -->
-
-## Rendering modes (theming)
-
-Three palettes ship: `dark` (default, the `:root` tokens), `light`, and `high-contrast` (pure black/white). The active palette always drives rendering — every color token in the stylesheet is keyed off `<html data-theme>`.
-
-Machine-readable theme state (issues #662 #668):
-
-- **Detect:** read `document.documentElement.dataset.theme` — one of `dark`, `light`, `high-contrast`. It matches what actually renders.
-- **Set via URL:** append `?theme=dark|light|high-contrast` (validated; unknown values are ignored). A `?theme=` deep link wins over stored preferences and OS settings, and does not persist.
-- **Set via storage:** write localStorage key `llmpd-theme` to one of the three names before load for a persistent pick.
-- **Change event:** the window fires `llmpd-theme-change` (`detail.theme`) on programmatic switches.
-
-Without any of these signals the theme follows OS preferences: `prefers-contrast: more` → `high-contrast`, else `prefers-color-scheme: light` → `light`, otherwise `dark`.
 
 Source: https://github.com/riceharvest/llm-prefill-decode-visualizer

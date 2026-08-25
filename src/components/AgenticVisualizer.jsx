@@ -1,11 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, FileDown, Copy, Zap, Gauge, FileJson } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
-<<<<<<< main
 import { readParamNum, readParamBool, consumeAutoplay, writeParams } from '../utils/urlState';
-=======
-import { readParamNum, readParamBool, readParam, writeParams, clampNum } from '../utils/urlState';
->>>>>>> base
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
 import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { exportNodeAsPng } from '../utils/exportPng';
@@ -37,22 +33,11 @@ export default function AgenticVisualizer({
   resetKey,
   sloBudgets
 }) {
-<<<<<<< main
   // Agent configuration parameters
   const [numTurns, setNumTurns] = useState(() => readParamNum('turns', 4, 1, 200));
   const [basePromptTokens, setBasePromptTokens] = useState(() => readParamNum('sprompt', 1500));
   const [toolOutputTokensPerTurn, setToolOutputTokensPerTurn] = useState(() => readParamNum('tool', 800));
   const [decodeTokensPerTurn, setDecodeTokensPerTurn] = useState(() => readParamNum('thought', 250));
-=======
-  // Agent configuration parameters. URL values clamp to each control's slider
-  // range (#416): ?turns=500 used to leave the range at 200 while the number
-  // twin and share link kept 500 — now every surface shows the same clamped
-  // value and the URL is rewritten with the normalized number.
-  const [numTurns, setNumTurns] = useState(() => readParamNum('turns', 4, 1, 200));
-  const [basePromptTokens, setBasePromptTokens] = useState(() => readParamNum('sprompt', 1500, 500, 262144));
-  const [toolOutputTokensPerTurn, setToolOutputTokensPerTurn] = useState(() => readParamNum('tool', 800, 100, 50000));
-  const [decodeTokensPerTurn, setDecodeTokensPerTurn] = useState(() => readParamNum('thought', 250, 50, 20000));
->>>>>>> base
   const [enablePrefixCaching, setEnablePrefixCaching] = useState(() => readParamBool('cache', true));
 
   // Number twins clamp to the slider range on commit (#409); empty/garbage
