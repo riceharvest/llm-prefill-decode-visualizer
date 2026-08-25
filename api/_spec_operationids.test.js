@@ -62,6 +62,7 @@ const LOCKED_OPERATION_IDS = {
   'GET /api/best': 'getBestConfigs',
   'GET /api/health': 'getHealth',
   'GET /api/sizing': 'getSizingRecommendation',
+  'POST /api/sizing': 'createSizingRecommendation',
   'GET /api/parse-constraints': 'parseConstraints',
   'GET /api/snapshots': 'listDatasetSnapshots'
 };
