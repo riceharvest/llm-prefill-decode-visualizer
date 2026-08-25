@@ -11,6 +11,8 @@
 //
 // Algorithm: fixed-window counter keyed by client IP (X-Forwarded-For).
 
+import { problemBody } from './_errors.js';
+
 // Documented budget: 120 requests per minute per client IP (per instance).
 // Keep in sync with the "Rate limits" section of public/llms.txt and api/spec.js.
 export const RATE_LIMIT = Number(process.env.RATE_LIMIT_MAX) || 120;
@@ -69,8 +71,15 @@ function send429(res, info) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Retry-After', String(info.retryAfterSec));
+  const detail = `Rate limit exceeded: max ${info.limit} requests per ${RATE_WINDOW_MS / 1000}s per client (per serverless instance). Retry after ${info.retryAfterSec}s.`;
+  // Documented contract (spec x-error-codes + watch/parse-constraints 429
+  // responses): the body carries the machine-readable RATE_LIMITED problem
+  // members so agents can branch on `code` instead of string-matching the
+  // error prose. Legacy flat fields are kept alongside for existing clients.
+  const problem = problemBody({ code: 'RATE_LIMITED', status: 429, detail });
   res.end(JSON.stringify({
-    error: `Rate limit exceeded: max ${info.limit} requests per ${RATE_WINDOW_MS / 1000}s per client (per serverless instance). Retry after ${info.retryAfterSec}s.`,
+    ...problem,
+    error: detail,
     limit: info.limit,
     remaining: 0,
     reset: info.resetEpochSec,

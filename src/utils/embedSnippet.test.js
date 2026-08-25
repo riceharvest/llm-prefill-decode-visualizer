@@ -4,7 +4,8 @@ import {
   buildEmbedHtml,
   buildEmbedIframe,
   buildEmbedMarkdown,
-  escapeHtmlAttr
+  escapeHtmlAttr,
+  escapeMarkdownLinkDest
 } from './embedSnippet.js';
 
 const FAKE_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==';
@@ -61,4 +62,24 @@ test('buildEmbedMarkdown falls back to a bare image without a URL', () => {
 test('buildEmbedMarkdown strips brackets from alt text so the link syntax survives', () => {
   const md = buildEmbedMarkdown({ dataUri: FAKE_URI, alt: 'a [b] c' });
   assert.ok(!md.includes('[b]'), 'brackets removed from alt');
+});
+
+// #684 — a crafted share-link href (query params + fragment are attacker
+// chosen) must not break out of the attribution link destination.
+const EVIL_HREF = 'https://llm-prefill-decode-visualizer.vercel.app/?tab=single&title=x#s/a)[![Free GPU credits](https://evil.example/p.png)](https://phish.example/claim)';
+
+test('buildEmbedMarkdown percent-encodes markdown-breaking characters in sourceUrl (#684)', () => {
+  const md = buildEmbedMarkdown({ dataUri: FAKE_URI, sourceUrl: EVIL_HREF });
+  assert.ok(!md.includes(')](https://phish'), 'injected image/link must not survive as separate nodes');
+  assert.ok(md.includes('%5B!%5BFree%20GPU%20credits%5D%28https://evil.example/p.png%29%5D%28https://phish.example/claim'),
+    'the whole payload stays inside the one destination, encoded');
+  // The destination contains no raw structural chars: it is one balanced token.
+  const dest = md.slice(md.lastIndexOf('](') + 2, -1);
+  assert.ok(!/[()[\]\s]/.test(dest), 'destination has no raw markdown-breaking chars');
+});
+
+test('escapeMarkdownLinkDest encodes structural chars and drops control chars', () => {
+  assert.equal(escapeMarkdownLinkDest('https://e.test/?a=(b)[c] d'), 'https://e.test/?a=%28b%29%5Bc%5D%20d');
+  assert.equal(escapeMarkdownLinkDest('https://e.test/a\\b'), 'https://e.test/a%5Cb');
+  assert.equal(escapeMarkdownLinkDest('https://e.test/<x>\ty'), 'https://e.test/x%20y');
 });

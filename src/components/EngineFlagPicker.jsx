@@ -78,11 +78,14 @@ export default function EngineFlagPicker({
         })}
       </div>
 
-      {/* Audit trail: the composed effect of every active flag, in order */}
+      {/* Audit trail: the composed effect of every active flag, in order.
+          NOTE (#873): selection ≠ application — these deltas reach the
+          simulation ONLY when "Apply to simulation" is clicked. The
+          data-flags-applied attribute makes that state machine-readable. */}
       {result.adjustments.length > 0 && (
-        <div className="panel-inset" style={{ marginTop: '10px' }}>
+        <div className="panel-inset" style={{ marginTop: '10px' }} data-flags-applied="false">
           <div className="field-head" style={{ marginBottom: '8px' }}>
-            <span className="panel-title">Applied deltas</span>
+            <span className="panel-title">Selected deltas</span>
             <span className="tag tag-decode">
               {adjusted.prefillSpeed} tok/s prefill · {adjusted.decodeSpeed} tok/s decode
             </span>
@@ -110,10 +113,18 @@ export default function EngineFlagPicker({
             </tbody>
           </table>
 
+          {/* #878: this preview prices the fixed default single-turn
+              reference workload (2,048 → 512 tok) — NOT necessarily the
+              workload the surrounding view is simulating. Labeled as such so
+              agents don't read it as their current configuration's delta. */}
           <p className="hint-text" style={{ marginTop: '8px' }}>
-            Composed effect on this workload ({promptTokens.toLocaleString()} → {outputTokens.toLocaleString()} tok):{' '}
+            Reference workload — default 2,048 → 512 tok single turn (not your current simulation):{' '}
             <strong>{formatTime(adjTotal)}</strong> vs <strong>{formatTime(baseTotal)}</strong> unflagged
             (saves {formatTime(Math.max(0, savedSeconds))}).
+          </p>
+          <p className="hint-text" style={{ marginTop: '4px' }}>
+            Preview only — the simulation still runs at the raw speeds until you press
+            “Apply to simulation” (#873).
           </p>
 
           {result.warnings.map(w => (

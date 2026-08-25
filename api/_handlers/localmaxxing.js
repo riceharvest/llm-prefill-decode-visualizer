@@ -2,7 +2,7 @@ import { getAllRuns } from '../_localmaxxing.js';
 import { runsCaveats } from '../_caveats.js';
 import { resolveRuns, listSnapshots } from '../_snapshots.js';
 import { normalizeModelId, normalizeQueryModel } from '../_normalize.js';
-import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from '../_pagination.js';
+import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError, paginationScope } from '../_pagination.js';
 import { validateSubmission, checkDuplicates, queueSubmission } from '../_submit.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson } from '../_schema.js';
@@ -162,12 +162,21 @@ export default async function handler(req, res) {
       });
     }
 
-    let { limit, cursor } = parsePagination(q, { defaultLimit: 50, maxLimit: 500 });
+    // Cursors are fingerprinted to this exact query (#740 #755): endpoint,
+    // every row-shaping filter and the resolved snapshot id — reuse under a
+    // different query fails with 400 INVALID_CURSOR instead of wrong pages.
+    const scope = paginationScope('localmaxxing', {
+      hardware, model, quant,
+      maxAgeDays: maxAgeDays ?? '',
+      contextBand: contextBand ?? '',
+      snapshot: snapshot?.id ?? ''
+    });
+    let { limit, cursor } = parsePagination(q, { defaultLimit: 50, maxLimit: 500, scope });
 
     // Stable total order: fastest decode first, runId as unique tiebreak
     runs.sort((a, b) => descNumAscStrCmp(RUN_KEY(a), RUN_KEY(b)));
 
-    const page = paginate({ items: runs, limit, cursor, keyOf: RUN_KEY, cmp: descNumAscStrCmp });
+    const page = paginate({ items: runs, limit, cursor, keyOf: RUN_KEY, cmp: descNumAscStrCmp, scope });
 
     return json(res, {
       description: 'Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false. Each run carries createdAt/ageDays/staleness, engineVersion and its contextBand (<1k, 1k–8k, 8k–32k or 32k+; null when the run reports no context length).',
