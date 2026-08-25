@@ -27,6 +27,34 @@ function positiveFinite(v) {
  *  loopWalltimeSec } budget object whose entries are positive finite numbers
  *  or null (disabled). `loopWalltimeSec` (#682) caps the WHOLE agentic loop;
  *  when unset it falls back to `walltimeSec` at evaluation time. */
+
+/**
+ * Validate one raw budget-field input (#639).
+ *
+ * sanitizeBudgets coerces 0 / negative / garbage to null = "check disabled",
+ * which made a mistyped budget silently DELETE its verdict coverage with no
+ * error surface anywhere. This helper distinguishes the three states so the
+ * editor can reject invalid input instead of silently disabling the check:
+ *   - '' / null      → deliberate off   ({ ok: true, value: null })
+ *   - positive number → set             ({ ok: true, value: n })
+ *   - anything else   → INVALID, reject ({ ok: false, error })
+ */
+export function validateBudgetInput(raw) {
+  if (raw === '' || raw == null) return { ok: true, state: 'off', value: null };
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) {
+    return {
+      ok: false,
+      state: 'invalid',
+      value: null,
+      error: `Budget must be a positive number — got "${raw}". The check stays on its previous value; clear the field to disable it.`
+    };
+  }
+  return { ok: true, state: 'set', value: n };
+}
+
+/** Coerce arbitrary parsed input into a { ttftMs, tpotMs, walltimeSec } budget
+ *  object whose entries are positive finite numbers or null (disabled). */
 export function sanitizeBudgets(raw) {
   return {
     ttftMs: positiveFinite(raw?.ttftMs),

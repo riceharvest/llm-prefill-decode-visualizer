@@ -345,7 +345,7 @@ Both hatches produce the identical final DOM state as a full-speed run; completi
 - Tab-ID: theory
 - URL: /?tab=theory
 - Purpose: Plain-language guide to why prefill is compute-bound and decode is bandwidth-bound, with analogies, glossary and misconception callouts.
-- Surfaces: concept walkthrough; analogies toggle; jargon glossary; misconception callouts
+- Surfaces: concept walkthrough; plain-language mode via ?plain=1 (off: ?plain=0); analogies via ?analogy=1 (off: ?analogy=0); jargon glossary; misconception callouts
 - Endpoints: none (static explainer content)
 
 <!-- tabs-section:end -->

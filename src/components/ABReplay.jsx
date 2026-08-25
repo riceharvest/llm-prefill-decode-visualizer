@@ -13,6 +13,7 @@ import { buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../uti
 import { downloadJson } from '../utils/exportJson';
 import { buildAbMarkdown, buildAbJson } from '../utils/exportAb';
 import { shouldCompleteInstantly } from '../utils/simPlayback';
+import { fmtEn } from '../utils/numfmt';
 
 // Map an /api/presets hardware entry onto the internal preset shape so the
 // fetched agent data can seed/extend the lane selectors exactly like the
@@ -423,7 +424,7 @@ export default function ABReplay({
                 step="128"
                 value={promptTokens}
                 aria-label="Shared input prompt length in tokens"
-                aria-valuetext={`${promptTokens.toLocaleString()} tokens`}
+                aria-valuetext={`${fmtEn(promptTokens)} tokens`}
                 onChange={(e) => setPromptTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />
@@ -450,7 +451,7 @@ export default function ABReplay({
                 step="32"
                 value={outputTokens}
                 aria-label="Shared target output length in tokens"
-                aria-valuetext={`${outputTokens.toLocaleString()} tokens`}
+                aria-valuetext={`${fmtEn(outputTokens)} tokens`}
                 onChange={(e) => setOutputTokens(Number(e.target.value))}
                 style={{ flex: 1 }}
               />

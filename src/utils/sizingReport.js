@@ -17,6 +17,7 @@ import { escapeMarkdownText as esc } from './embedSnippet.js';
 // Canonical report object
 // ---------------------------------------------------------------------------
 
+import { fmtEn } from './numfmt.js';
 function round(value, digits = 2) {
   const f = Math.pow(10, digits);
   return Math.round(value * f) / f;
@@ -228,8 +229,8 @@ export function buildSizingReportMarkdown(report) {
   lines.push('| --- | --- |');
   lines.push(`| Model | ${esc(s.modelId || '—')} |`);
   lines.push(`| Quantization | ${esc(s.quantization || '—')} |`);
-  lines.push(`| Context length | ${(s.contextTokens ?? 0).toLocaleString()} tok |`);
-  lines.push(`| Target output | ${(s.outputTokens ?? 0).toLocaleString()} tok |`);
+  lines.push(`| Context length | ${fmtEn(s.contextTokens ?? 0)} tok |`);
+  lines.push(`| Target output | ${fmtEn(s.outputTokens ?? 0)} tok |`);
   lines.push(`| Concurrency | ${s.concurrency}× |`);
   lines.push('');
 
@@ -262,8 +263,8 @@ export function buildSizingReportMarkdown(report) {
       v.unifiedMemoryGb != null ? `${v.unifiedMemoryGb} GB unified` : null].filter(Boolean);
     lines.push(`| Memory | ${vramBits.length ? vramBits.join(' ') : esc(v.note || '—')} |`);
     if (sys.cost.streetPriceUsd != null) {
-      const range = sys.cost.streetPriceRangeUsd ? ` ($${sys.cost.streetPriceRangeUsd[0].toLocaleString()}–$${sys.cost.streetPriceRangeUsd[1].toLocaleString()})` : '';
-      lines.push(`| Street price | $${sys.cost.streetPriceUsd.toLocaleString()}${range} |`);
+      const range = sys.cost.streetPriceRangeUsd ? ` ($${fmtEn(sys.cost.streetPriceRangeUsd[0])}–$${fmtEn(sys.cost.streetPriceRangeUsd[1])})` : '';
+      lines.push(`| Street price | $${fmtEn(sys.cost.streetPriceUsd)}${range} |`);
     }
     if (sys.cost.perRequestUsd != null) lines.push(`| Cost per request | $${sys.cost.perRequestUsd.toFixed(4)} |`);
     lines.push('');
@@ -297,7 +298,7 @@ export function buildSizingReportMarkdown(report) {
     if (report.tco.cloudUsdPerMtok != null) lines.push(`| Cloud price | $${report.tco.cloudUsdPerMtok}/Mtok |`);
     if (report.tco.monthlyElectricityUsd != null) lines.push(`| Electricity (24/7) | $${report.tco.monthlyElectricityUsd.toFixed(2)}/mo |`);
     if (report.tco.breakEvenTokensPerMonth != null) {
-      lines.push(`| Break-even volume | ${report.tco.breakEvenTokensPerMonth.toLocaleString()} tok/mo |`);
+      lines.push(`| Break-even volume | ${fmtEn(report.tco.breakEvenTokensPerMonth)} tok/mo |`);
     } else if (report.tco.cloudUsdPerMtok != null) {
       lines.push('| Break-even volume | none — cloud is cheaper at any volume |');
     }
@@ -324,7 +325,7 @@ export function buildSizingReportMarkdown(report) {
 }
 
 function fmt(v) {
-  return v == null ? '—' : Math.round(v).toLocaleString();
+  return v == null ? '—' : fmtEn(Math.round(v));
 }
 
 function fmtDur(sec) {

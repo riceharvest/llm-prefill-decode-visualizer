@@ -45,6 +45,16 @@ export function glossaryTermId(term) {
 }
 
 export function getPlainMode() {
+  // URL override first (#638): ?plain=1 / ?plain=true forces the variant on,
+  // ?plain=0 / ?plain=false forces it off — link-addressable for agents and
+  // share links, no localStorage or script injection required.
+  try {
+    const v = new URLSearchParams(window.location.search).get('plain');
+    if (v === '1' || v === 'true') return true;
+    if (v === '0' || v === 'false') return false;
+  } catch {
+    // no window (tests/SSR) — fall through to storage
+  }
   try {
     return localStorage.getItem(STORAGE_KEY) === '1';
   } catch {

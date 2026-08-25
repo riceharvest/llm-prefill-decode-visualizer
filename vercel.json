@@ -146,13 +146,20 @@
       "destination": "/.well-known/ai-plugin.json"
     }
   ],
-  "crons": [
-    {
-      "path": "/api/watch/dispatch",
-      "schedule": "0 6 * * *"
-    }
-  ],
   "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    },
     {
       "source": "/llms.txt",
       "headers": [
@@ -206,6 +213,30 @@
           "value": "Accept-Encoding"
         }
       ]
+    },
+    {
+      "source": "/embed",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors *"
+        }
+      ]
+    },
+    {
+      "source": "/embed/",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors *"
+        }
+      ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/watch/dispatch",
+      "schedule": "0 6 * * *"
     }
   ]
 }

@@ -100,11 +100,16 @@ export function writeParams(updates) {
 // Build a shareable "try it" URL for a demo: routes through the canonical
 // share-link builder (#875) with the given params as the full state and marks
 // autoplay so the target tab starts its simulation on load.
+// Starts from the LIVE query string (#644): previously every demo link dropped
+// all active params — ?lang=ar reverted to English and any other current-URL
+// state was silently reset. Demo params overlay on top and win on conflicts;
+// autoplay=1 is always set by the demo itself.
 export function demoUrl(params) {
-  return buildShareLink({
-    origin: window.location.origin,
-    pathname: window.location.pathname,
-    params,
-    autoplay: true
-  });
+  // (#644) overlay demo params on the LIVE query string so active state
+  // (?lang=, filters, ...) survives the jump; demo params win conflicts.
+  const p = new URLSearchParams(window.location.search);
+  for (const [k, v] of new URLSearchParams(params)) p.set(k, v);
+  p.set('autoplay', '1');
+  const qs = p.toString();
+  return qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
 }

@@ -119,7 +119,7 @@ export const TABS = [
     id: 'theory',
     label: 'Theory',
     purpose: 'Plain-language guide to why prefill is compute-bound and decode is bandwidth-bound, with analogies, glossary and misconception callouts.',
-    surfaces: ['concept walkthrough', 'analogies toggle', 'jargon glossary', 'misconception callouts'],
+    surfaces: ['concept walkthrough', 'plain-language mode via ?plain=1 (off: ?plain=0)', 'analogies via ?analogy=1 (off: ?analogy=0)', 'jargon glossary', 'misconception callouts'],
     endpoints: [],
   },
 ];

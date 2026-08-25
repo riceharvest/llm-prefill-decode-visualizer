@@ -49,6 +49,7 @@ import { runStateAttrs, phaseTagClass as phaseTagClassFor } from '../utils/runSt
 // (issue #409: min/max attributes + clamped commit) and the URL loaders.
 export const PROMPT_TOKENS_RANGE = { min: 128, max: 32768, step: 128 };
 export const OUTPUT_TOKENS_RANGE = { min: 32, max: 4096, step: 32 };
+import { fmtEn } from '../utils/numfmt';
 
 export default function SingleTurnVisualizer({
   prefillSpeed,
@@ -885,7 +886,7 @@ export default function SingleTurnVisualizer({
             </button>
             {ctxScaleEnabled && (
               <span className="tag tag-decode">
-                {t('singleTurn.ctxEffectiveTag', { speed: displayDecodeSpeed.toLocaleString() })}
+                {t('singleTurn.ctxEffectiveTag', { speed: fmtEn(displayDecodeSpeed) })}
               </span>
             )}
           </div>
@@ -1610,7 +1611,7 @@ export default function SingleTurnVisualizer({
                 {Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms'}
               </Metric>
             </div>
-            <div className="metric-sub">{t('singleTurn.tokensPerSecSub', { speed: displayDecodeSpeed.toLocaleString() })}</div>
+            <div className="metric-sub">{t('singleTurn.tokensPerSecSub', { speed: fmtEn(displayDecodeSpeed) })}</div>
             {tpotAnchorText && <div className="metric-anchor">📖 {tpotAnchorText}</div>}
           </div>
 
