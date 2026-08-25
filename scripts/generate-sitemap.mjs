@@ -74,12 +74,23 @@ async function main() {
   // Agent-facing discovery surfaces (issue #363). Kept in sync with
   // api/_route_table.js and the <head> links in index.html. These are
   // static/always-on; the dynamic /compare pairs are computed below.
+  // (#647) also lists the surfaces llms.txt/robots/head links treat as
+  // first-class entry points but that were missing here: the full-docs
+  // compilation, the JSON-RPC endpoint its own manifest advertises, the
+  // status page, the trust pages, and the health probe.
   const AGENT_PATHS = [
     '/llms.txt',
+    '/llms-full.txt',
     '/agents.json',
     '/api/spec',
     '/api/agent/index.json',
     '/.well-known/mcp.json',
+    '/api/mcp',
+    '/status.html',
+    '/about.html',
+    '/contact.html',
+    '/privacy.html',
+    '/api/health',
   ];
 
   const paths = ['/', ...AGENT_PATHS, ...pairs];

@@ -1,3 +1,4 @@
+import { fmtEn } from './numfmt.js';
 const API_BASE = '/localmaxxing-api';
 
 function positiveNumber(value) {
@@ -53,7 +54,7 @@ export function runLabel(run) {
   const engine = run.engine?.engineName || 'unknown engine';
   const age = runAgeDays(run);
   const ageTag = age === null ? '' : ` · ${age < 90 ? 'fresh' : age < 365 ? 'aging' : 'stale'} ${age}d`;
-  return `${hardwareName(run)} · ${engine}${ageTag} · ${run.tokSPrefill.toLocaleString()} prefill / ${run.tokSOut.toLocaleString()} decode tok/s`;
+  return `${hardwareName(run)} · ${engine}${ageTag} · ${fmtEn(run.tokSPrefill)} prefill / ${fmtEn(run.tokSOut)} decode tok/s`;
 }
 
 // ---------- Freshness (issue #38) ----------
@@ -118,13 +119,13 @@ export function toLocalPreset(run, now = new Date()) {
 
   return {
     id: `lmx:${run.id}`,
-    name: `${hardwareName(run)} (${engine} ${quant} · ${run.tokSPrefill.toLocaleString()} / ${run.tokSOut.toLocaleString()} tok/s)`,
+    name: `${hardwareName(run)} (${engine} ${quant} · ${fmtEn(run.tokSPrefill)} / ${fmtEn(run.tokSOut)} tok/s)`,
     prefillSpeed: run.tokSPrefill,
     decodeSpeed: run.tokSOut,
     icon: '📊',
     badge: 'LocalMaxxing run',
     vramBandwidth: 'Measured community result',
-    description: `${modelName}; ${run.promptTokens || 0} prompt tokens; ${run.outputTokens || 0} output tokens; ${run.contextLength?.toLocaleString() || 'unknown'} context.`,
+    description: `${modelName}; ${run.promptTokens || 0} prompt tokens; ${run.outputTokens || 0} output tokens; ${run.contextLength ? fmtEn(run.contextLength) : 'unknown'} context.`,
     sourceUrl: `https://localmaxxing.com/en/runs/${run.id}`,
     localMaxxing: true,
     hardwareKey: hardwareKey(run),

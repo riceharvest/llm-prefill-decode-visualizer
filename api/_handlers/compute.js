@@ -22,6 +22,7 @@ import {
   simulateSingleTurnFeatures,
   evaluateSlo
 } from '../_single_turn_features.js';
+import { resolveVisionInputs } from '../_vision.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -335,7 +336,23 @@ function computeOne(params, dryRun = false) {
         warnings, // always present (#798) — ComputeResult requires it
         ...(maxCtx != null ? { contextWindow: { maxPositionEmbeddings: maxCtx, requested: inputs.contextLength, withinLimit, overflowTokens } } : {})
       };
+      // (#643) vision tokens occupy the KV cache before the first text token:
+      // ?visionTokens=N (explicit) or ?imgRes=<preset>&imgN=<count> resolve to
+      // a total vision-token estimate that is added to contextLength for KV
+      // math. Absent -> byte-identical legacy all-text behavior.
+      const vision = resolveVisionInputs(params);
+      if (vision) {
+        // Recompute with vision tokens folded into the cache context; echo
+        // both the breakdown and the effective context length.
+        inputs.contextLength += vision.visionTokens;
+        const vres = kvCache(inputs);
+        result.warnings = [...(vres.warnings || []), ...(result.warnings || [])];
+        Object.assign(result, vres, {
+          vision: { ...vision, textContextLength: inputs.contextLength - vision.visionTokens, totalKvContextLength: inputs.contextLength }
+        });
+      }
       return withId('kvCache', inputs, result, dryRun);
+
     }
 
     case 'flagged': {

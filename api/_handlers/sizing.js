@@ -8,6 +8,7 @@ import { applySchemaHeaders, sendJson } from '../_schema.js';
 import { sendProblem } from '../_errors.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { estimateStreetPrice } from '../../src/utils/streetPricing.js';
+import { averageScaledSpeed, tpotMultiplierAt } from '../../src/utils/contextScaling.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -95,6 +96,10 @@ function confidenceLevel(runs) {
  * ?outputTokens=512          tokens decoded per request
  * ?maxTtftSeconds=1          SLO cap on expected TTFT
  * ?maxTpotMs=40              SLO cap on expected TPOT
+ * ?maxWalltimeSeconds=10     SLO cap on whole-answer walltime (#648)
+ * ?halfSpeedContextTokens=…  closed-form decode decay knob C½ (#636; alias
+ *                            ?ctxHalf=) — TPOT evaluated against the linear
+ *                            bandwidth-roofline curve instead of empty-cache
  * ?maxVramGb=48              budget cap: rig memory must fit under this
  *
  * Units (#738 #866): every memory figure — maxVramGb, memoryGb and the whole
@@ -128,6 +133,20 @@ export default async function handler(req, res) {
       });
     }
 
+    // (#607) hardware budget cap for the meetsSlo.budget verdict.
+    const budgetUsdMax = (() => {
+      const raw = params.budgetUsdMax;
+      if (raw == null || raw === '') return null;
+      const n = Number(raw);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    })();
+    // (#636) closed-form decode decay knob C½: explicit tokens or ?ctxHalf alias.
+    const halfSpeedContextTokens = (() => {
+      const raw = params.halfSpeedContextTokens ?? params.ctxHalf;
+      if (raw == null || raw === '') return null;
+      const n = Number(raw);
+      return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+    })();
     const workload = {
       model: String(model),
       contextLength: Math.round(num(params.contextLength, 8192)),
@@ -139,13 +158,10 @@ export default async function handler(req, res) {
       // #731: explicit 0 caps are honored (every rig fails the SLO) instead of
       // silently dropping the constraint.
       maxTtftSeconds: params.maxTtftSeconds != null ? numSloCap(params.maxTtftSeconds) : null,
-      maxTpotMs: params.maxTpotMs != null ? numSloCap(params.maxTpotMs) : null
+      maxTpotMs: params.maxTpotMs != null ? numSloCap(params.maxTpotMs) : null,
+      // (#648) third canonical budget: whole-answer walltime.
+      maxWalltimeSeconds: params.maxWalltimeSeconds != null ? numSloCap(params.maxWalltimeSeconds) : null
     };
-    // Hardware budget cap (#607): parse-constraints recognizes budgetUsdMax
-    // but this endpoint never accepted it, so the constraint died in the
-    // chain. Present → each rig's street-price estimate is judged against it.
-    const budgetUsdMax = params.budgetUsdMax != null ? num(params.budgetUsdMax, null) : null;
-
     // Explicit arch overrides, else estimated per group below.
     const explicitArch = ['numLayers', 'kvHeads', 'headDim'].every(k => params[k] != null)
       ? { numLayers: Math.round(Number(params.numLayers)), kvHeads: Math.round(Number(params.kvHeads)), headDim: Math.round(Number(params.headDim)) }
@@ -212,13 +228,31 @@ export default async function handler(req, res) {
       // decays ~ B^-0.25 (same model as /api/compute batched).
       const b = workload.concurrency;
       const perUserDecode = g.decode.median * Math.pow(b, -0.25);
+      // (#636) optional linear-in-cache decay: average decode speed across the
+      // whole generation at cache depths [contextLength … contextLength+output].
+      const scaledDecode = halfSpeedContextTokens != null
+        ? averageScaledSpeed(perUserDecode, workload.contextLength, workload.outputTokens, halfSpeedContextTokens)
+        : null;
+      const effectiveDecode = scaledDecode ?? perUserDecode;
       const ttftSeconds = g.prefill.median > 0
         ? Math.round((workload.promptTokens / g.prefill.median) * 1e4) / 1e4
         : null;
-      const tpotMs = perUserDecode > 0 ? Math.round((1000 / perUserDecode) * 100) / 100 : null;
+      const tpotMs = effectiveDecode > 0 ? Math.round((1000 / effectiveDecode) * 100) / 100 : null;
+      // (#648) whole-answer walltime: TTFT + outputTokens × TPOT (the same
+      // derivation the single-turn UI uses).
+      const walltimeSeconds = ttftSeconds != null && tpotMs != null
+        ? Math.round((ttftSeconds + (workload.outputTokens * tpotMs) / 1000) * 1e4) / 1e4
+        : null;
 
       const meetsTtft = slo.maxTtftSeconds != null && ttftSeconds != null ? ttftSeconds <= slo.maxTtftSeconds : null;
       const meetsTpot = slo.maxTpotMs != null && tpotMs != null ? tpotMs <= slo.maxTpotMs : null;
+      // (#648) numeric margin: (budget - actual)/budget * 100, positive = headroom.
+  const pct = (budget, actual) => (budget != null && actual != null)
+    ? Math.round(((budget - actual) / budget) * 1000) / 10
+    : null;
+const meetsWalltime = slo.maxWalltimeSeconds != null && walltimeSeconds != null
+        ? walltimeSeconds <= slo.maxWalltimeSeconds
+        : null;
       const fitsVram = headroomGb != null ? headroomGb >= 0 : null;
 
       // Budget verdict (#607): street-price estimate vs budgetUsdMax. Null
@@ -255,11 +289,21 @@ export default async function handler(req, res) {
         expected: {
           ttftSeconds,
           tpotMs,
+          walltimeSeconds,
           perUserDecodeTokPerSec: Math.round(perUserDecode * 10) / 10,
           aggregateDecodeTokPerSec: Math.round(perUserDecode * b * 10) / 10,
+          ...(halfSpeedContextTokens != null ? {
+            contextScaling: {
+              halfSpeedContextTokens,
+              model: 'tpot(c) = tpot0 · (1 + c / C½) — linear in cache depth',
+              basePerUserDecodeTokPerSec: Math.round(perUserDecode * 10) / 10,
+              avgPerUserDecodeTokPerSec: Math.round((scaledDecode ?? 0) * 10) / 10,
+              finalTpotMultiplierAtFullContext: Math.round(tpotMultiplierAt(workload.contextLength + workload.outputTokens, halfSpeedContextTokens) * 100) / 100
+            }
+          } : {}),
           // (#763) IQR bounds are ordered ascending [p25, p75] as named.
           // Speeds' q3 (fast) maps to the 25th-percentile time and q1 (slow)
-          // to the 75th — so times come out [q3→lo, q1→hi], never descending.
+          // to the 75th - so times come out [q3->lo, q1->hi], never descending.
           ttftIqr: [g.prefill.q3, g.prefill.q1].map(v => v != null && workload.promptTokens ? Math.round((workload.promptTokens / v) * 1e4) / 1e4 : null),
           tpotIqrMs: [g.decode.q3, g.decode.q1].map(v => v != null ? Math.round((1000 / (v * Math.pow(b, -0.25))) * 100) / 100 : null),
           measuredSingleStream: true,
@@ -271,7 +315,20 @@ export default async function handler(req, res) {
           note: g.runs < 3 ? 'fewer than 3 runs — medians may not generalize' : undefined
         },
         ...(budgetUsdMax != null && pricing ? { pricing } : {}),
-        meetsSlo: { ttft: meetsTtft, tpot: meetsTpot, vram: fitsVram, budget: meetsBudget, all: [meetsTtft, meetsTpot, fitsVram, meetsBudget].every(v => v !== false) },
+        meetsSlo: {
+          ttft: meetsTtft,
+          tpot: meetsTpot,
+          // (#648) third criterion + numeric margins (same convention as the
+          // UI badges: marginPct = (budget - actual)/budget x 100; positive =
+          // headroom left, negative = overran). null = not evaluated.
+          walltime: meetsWalltime,
+          ttftMarginPct: pct(slo.maxTtftSeconds, ttftSeconds),
+          tpotMarginPct: pct(slo.maxTpotMs, tpotMs),
+          walltimeMarginPct: pct(slo.maxWalltimeSeconds, walltimeSeconds),
+          vram: fitsVram,
+          budget: meetsBudget,
+          all: [meetsTtft, meetsTpot, meetsWalltime, fitsVram, meetsBudget].every(v => v !== false)
+        },
         // One-sentence human-readable explanation (#73): fit math + measured
         // source, pass-through ready for agent chat pipelines.
         explain: explainRecommendation({
@@ -311,6 +368,13 @@ export default async function handler(req, res) {
         memoryUnits: 'GiB — every memory figure (overheadGb, vramFit) is binary GiB, not decimal GB',
         quantBitsFallback: 'unparseable quantization labels assume 4.25 bits-per-weight'
       },
+      ...(halfSpeedContextTokens != null ? {
+        contextScaling: {
+          halfSpeedContextTokens,
+          appliedTo: 'per-user decode medians (expected.contextScaling per recommendation)',
+          model: 'tpot(c) = tpot0 · (1 + c / C½); C½ = context depth at which decode speed halves'
+        }
+      } : {}),
       recommendations
     });
   } catch (err) {
