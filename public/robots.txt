@@ -1,9 +1,11 @@
 User-agent: *
 Allow: /
 
-# Agent API discovery surfaces (see sitemap.xml for the full list).
-# Machine-readable entry points: OpenAPI spec, agent manifest, llms.txt guidance,
-# and the MCP endpoint. Crawlers/agents reading robots.txt learn the API exists.
-Agent-Endpoints: /api/spec, /agents.json, /llms.txt, /api/mcp, /api/agent/index.json
+# Agent API discovery surfaces — explicitly allowed for crawlers/agents:
+Allow: /api/spec
+Allow: /agents.json
+Allow: /llms.txt
+Allow: /api/mcp
 
+# Full machine-readable index lives in sitemap.xml and /llms.txt.
 Sitemap: https://llm-prefill-decode-visualizer.vercel.app/sitemap.xml

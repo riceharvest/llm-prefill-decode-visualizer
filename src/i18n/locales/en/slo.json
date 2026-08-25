@@ -22,6 +22,7 @@
   "resetTooltip": "Restore the default budgets (TTFT 500 ms · TPOT 50 ms · walltime 10 s)",
   "agenticOffender": "⚠ Turn {turn} blows the budget: {detail}",
   "agenticOffenderSuffix": "Turns {turns} exceed at least one SLO budget.",
-  "agenticAllPass": "✓ Every turn meets the SLO budgets",
+  "agenticAllPass": "✓ Every turn and the whole-loop walltime meet the SLO budgets",
+  "agenticTurnsPassLoopOver": "✓ Every turn meets its SLO budget — ✗ but the whole loop takes {value} vs the {budget} walltime budget",
   "waterfallBadgeTooltip": "Turn {turn} vs budget: {detail}"
 }

@@ -5,6 +5,7 @@ import {
   describeConfig, slugifyTitle, permalinkHref,
   readPermalinkTitle, documentTitleFor
 } from './permalink.js';
+import { verifyShareLink } from './shareIntegrity.js';
 
 test('shortModelName strips the org namespace and hyphens', () => {
   assert.equal(shortModelName('Qwen/Qwen3-32B'), 'Qwen3 32B');
@@ -71,18 +72,39 @@ test('slugifyTitle produces readable slugs', () => {
   assert.ok(slugifyTitle('x'.repeat(200)).length <= 80);
 });
 
-test('permalinkHref appends the title param and slug hash', () => {
+test('permalinkHref appends the title param, slug hash and integrity signature', async () => {
   const loc = { origin: 'https://example.com', pathname: '/', search: '?tab=agentic&preset=rtx4090_exl2&prefill=3800&decode=105' };
-  const href = permalinkHref(loc, 'Qwen3 32B on RTX 4090 24GB, 8K agentic loop');
+  const href = await permalinkHref(loc, 'Qwen3 32B on RTX 4090 24GB, 8K agentic loop');
   assert.ok(href.startsWith('https://example.com/?tab=agentic&preset=rtx4090_exl2&prefill=3800&decode=105&title='));
   assert.ok(href.endsWith('#s/qwen3-32b-on-rtx-4090-24gb-8k-agentic-loop'));
   // The existing state params survive untouched.
   assert.ok(href.includes('decode=105'));
+  // #917: a fresh link carries an integrity signature over its params.
+  assert.match(href, /[?&]h=[0-9a-f]{12}#/);
 });
 
-test('permalink round-trips through readPermalinkTitle', () => {
+test('permalinkHref signs deterministically and covers the title', async () => {
+  const loc = { origin: 'https://example.com', pathname: '/x', search: '?preset=rtx3090_llamacpp' };
+  const a = await permalinkHref(loc, 'RTX 3090, 2K single turn');
+  const b = await permalinkHref(loc, 'RTX 3090, 2K single turn');
+  const sig = h => h.match(/[?&]h=([0-9a-f]{12})#/)[1];
+  assert.equal(sig(a), sig(b)); // same params → same signature
+  const c = await permalinkHref(loc, 'RTX 4090, 2K single turn'); // different title → different signature
+  assert.notEqual(sig(a), sig(c));
+});
+
+test('permalinkHref replaces any stale signature from the source query', async () => {
+  const loc = { origin: 'https://example.com', pathname: '/', search: '?tab=single&h=deadbeefdead' };
+  const href = await permalinkHref(loc, 'Fresh title');
+  const sigs = [...href.matchAll(/[?&]h=([0-9a-f]{12})/g)].map(m => m[1]);
+  assert.equal(sigs.length, 1); // old `h` overwritten, not duplicated
+  const search = '?' + href.slice(href.indexOf('?') + 1).split('#')[0];
+  assert.equal((await verifyShareLink(search)).status, 'ok');
+});
+
+test('permalink round-trips through readPermalinkTitle', async () => {
   const loc = { origin: 'https://example.com', pathname: '/x', search: '' };
-  const href = permalinkHref(loc, 'RTX 3090, 2K single turn');
+  const href = await permalinkHref(loc, 'RTX 3090, 2K single turn');
   const search = href.slice(href.indexOf('?')).split('#')[0];
   assert.equal(readPermalinkTitle(search), 'RTX 3090, 2K single turn');
   assert.equal(readPermalinkTitle(''), null);
@@ -93,4 +115,10 @@ test('document.title prefers shared titles over derived ones', () => {
   assert.equal(documentTitleFor('Shared run', 'Derived run', brand), 'Shared run');
   assert.equal(documentTitleFor(null, 'Derived run', brand), 'Derived run · ' + brand);
   assert.equal(documentTitleFor(null, '', brand), brand);
+});
+
+test('document.title ignores shared titles on tampered links (#917)', () => {
+  const brand = 'LLM Prefill & Decode Speed Visualizer';
+  assert.equal(documentTitleFor('Forged claim', 'Derived run', brand, true), 'Derived run · ' + brand);
+  assert.equal(documentTitleFor('Shared run', 'Derived run', brand, false), 'Shared run');
 });

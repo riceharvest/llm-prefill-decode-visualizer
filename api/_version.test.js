@@ -24,14 +24,13 @@ function mockRes() {
   };
 }
 
-test('GET /api/version returns 200 with service, version and schemaVersion', () => {
+test('GET /api/version returns 200 with service, version', () => {
   const res = mockRes();
   handler({}, res);
   const body = JSON.parse(res.endedBody);
   assert.equal(res.statusCode, 200);
   assert.equal(body.service, 'llm-prefill-decode-visualizer');
   assert.match(body.version, /^[\w.-]+$/); // package.json semver-ish or 'unknown'
-  assert.equal(body.schemaVersion, SCHEMA_VERSION);
   assert.ok(!Number.isNaN(Date.parse(body.generatedAt)), 'generatedAt is ISO');
 });
 
@@ -41,6 +40,15 @@ test('/api/version carries the standard schema_version stamp + header', () => {
   const body = JSON.parse(res.endedBody);
   assert.equal(body.schema_version, SCHEMA_VERSION);
   assert.equal(res.headers['x-schema-version'], SCHEMA_VERSION);
+});
+
+test('#700: /api/version reports exactly ONE spelling of the schema field', () => {
+  const res = mockRes();
+  handler({}, res);
+  const body = JSON.parse(res.endedBody);
+  assert.equal(body.schema_version, SCHEMA_VERSION);
+  // The camelCase alias was the whole bug — it must stay gone.
+  assert.equal(body.schemaVersion, undefined, 'camelCase schemaVersion must not reappear alongside schema_version');
 });
 
 test('/api/version links to spec and both changelog surfaces', () => {

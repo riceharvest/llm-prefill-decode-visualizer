@@ -143,3 +143,29 @@ export function tokensEmittedBy(schedule, elapsedMs) {
   }
   return lo;
 }
+
+/**
+ * Accessible name for the ITL histogram (#973): the role=img label names the
+ * p50/p95/p99 markers, so it must also carry their values — the marker lines
+ * themselves are hover-only 1px divs unreachable by keyboard/touch/text.
+ * Returns the base label unchanged when no finite summary exists.
+ */
+export function itlHistogramAriaLabel(baseLabel, summary) {
+  if (!baseLabel || !summary || !Number.isFinite(summary.p50)) return baseLabel ?? '';
+  const fmt = v => (Number.isFinite(v) ? v.toFixed(1) : '—');
+  return `${baseLabel}; p50 = ${fmt(summary.p50)} ms, p95 = ${fmt(summary.p95)} ms, p99 = ${fmt(summary.p99)} ms`;
+}
+
+/**
+ * Legend rows for the histogram's percentile color zones (#973): which fill
+ * color means which threshold, with the actual values spelled out.
+ */
+export function itlZoneLegend(summary) {
+  if (!summary || !Number.isFinite(summary.p50)) return [];
+  const fmt = v => (Number.isFinite(v) ? v.toFixed(1) : '—');
+  return [
+    { zone: 'at-or-below-p50', label: `≤ p50 (${fmt(summary.p50)} ms)` },
+    { zone: 'p50-to-p95', label: Number.isFinite(summary.p95) ? `p50–p95 (${fmt(summary.p50)}–${fmt(summary.p95)} ms)` : 'p50–p95' },
+    { zone: 'above-p95', label: Number.isFinite(summary.p95) ? `> p95 (${fmt(summary.p95)}+ ms)` : '> p95' }
+  ];
+}

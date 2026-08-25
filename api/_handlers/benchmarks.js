@@ -1,6 +1,6 @@
 import { aggregate, DEFAULT_OUTLIER_IQRS } from '../_localmaxxing.js';
 import { resolveRuns } from '../_snapshots.js';
-import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from '../_pagination.js';
+import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError, paginationScope } from '../_pagination.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { buildCaveats, rowCaveats } from '../_caveats.js';
 import { sendJson } from '../_schema.js';
@@ -10,6 +10,7 @@ import { auditRuns, dataQuality } from '../_unit_audit.js';
 import { sendProblem, sendProblemFromError } from '../_errors.js';
 import { filterByMaxAge, parseMaxAgeParam } from '../_freshness.js';
 import { parseContextBandParam, filterByContextBand } from '../_contextbands.js';
+import { slugify } from '../../src/utils/compareSlug.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -25,6 +26,16 @@ function json(res, body, status = 200, cacheTtl = 600) {
 // (matches the ordering aggregate() already returns).
 const GROUP_KEY = g => [g.decode.median, g.key];
 
+// Query-param aliasing (#874): every filter parameter accepts BOTH its
+// snake_case and camelCase spellings — neither is silently ignored. When both
+// are present the snake_case spelling wins (matches the pre-existing
+// `q.max_age ?? q.maxAge` precedence).
+function readParam(q, snake, camel) {
+  const snakeVal = q[snake];
+  if (snakeVal !== undefined && snakeVal !== null && snakeVal !== '') return snakeVal;
+  return q[camel];
+}
+
 export default async function handler(req, res) {
   if (!enforceRateLimit(req, res)) return;
   try {
@@ -38,8 +49,8 @@ export default async function handler(req, res) {
     const engineQ = q.engine ? String(q.engine) : null;             // matches "name version" tag substring
 
     const snapshotAt = new Date();
-    const maxAgeDays = parseMaxAgeParam(q.max_age ?? q.maxAge);
-    const contextBand = parseContextBandParam(q.context_band ?? q.contextBand);
+    const maxAgeDays = parseMaxAgeParam(readParam(q, 'max_age', 'maxAge'));
+    const contextBand = parseContextBandParam(readParam(q, 'context_band', 'contextBand'));
 
     const { runs: liveRuns, snapshot } = await resolveRuns(q);
     let runs = liveRuns;
@@ -52,18 +63,24 @@ export default async function handler(req, res) {
     if (maxAgeDays) runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
     runs = filterByContextBand(runs, contextBand);
 
-    const crossEngine = ['1', 'true', 'yes'].includes(String(q.crossEngine).toLowerCase());
+    const crossEngine = ['1', 'true', 'yes'].includes(String(readParam(q, 'cross_engine', 'crossEngine')).toLowerCase());
 
-    const groupBy = q.groupBy === 'model' ? 'model'
-      : q.groupBy === 'hardware' ? 'hardware'
-      : q.groupBy === 'quant' ? 'quant'
-      : 'hardwareModel'; // default: hardware × model family
+    // groupBy values are matched case-insensitively (#974, same value-case
+    // contract as scenario= ids): ?groupBy=MODEL now regroups instead of
+    // silently falling back to hardwareModel. Unknown values still default to
+    // hardwareModel exactly as before; a warnings[] entry flags the coercion.
+    // Param spelling accepts both snake_case and camelCase via readParam.
+    const GROUP_BY_KEYS = { model: 'model', hardware: 'hardware', quant: 'quant', hardwaremodel: 'hardwareModel' };
+    const groupByRaw = readParam(q, 'group_by', 'groupBy');
+    const groupByNorm = groupByRaw != null && groupByRaw !== '' ? GROUP_BY_KEYS[String(groupByRaw).toLowerCase()] : null;
+    const groupBy = groupByNorm || 'hardwareModel'; // default: hardware × model family
+    const groupByCaseNormalized = groupByNorm != null && groupByRaw !== groupByNorm;
 
     // Outlier policy: runs further than N IQRs from their group median are
     // flagged and excluded from the stats by default; pass
     // ?include_outliers=true to compute stats over every run.
-    const includeOutliers = q.include_outliers === 'true' || q.includeOutliers === 'true';
-    const outlierIqrsRaw = Number(q.outlierIqrs);
+    const includeOutliers = String(readParam(q, 'include_outliers', 'includeOutliers')).toLowerCase() === 'true';
+    const outlierIqrsRaw = Number(readParam(q, 'outlier_iqrs', 'outlierIqrs'));
     const outlierIqrs = Number.isFinite(outlierIqrsRaw) && outlierIqrsRaw > 0
       ? Math.min(10, Math.max(1, outlierIqrsRaw))
       : DEFAULT_OUTLIER_IQRS;
@@ -89,13 +106,28 @@ export default async function handler(req, res) {
       members.get(k).push(run);
     }
 
-    const { limit, cursor } = parsePagination(q, { defaultLimit: 25, maxLimit: 200 });
+    // Cursor fingerprinting (#740 #755): bind cursors to the endpoint, every
+    // row-shaping filter (incl. groupBy + outlier policy) and the resolved
+    // snapshot id, so cross-endpoint / cross-filter / cross-refresh reuse is a
+    // 400 instead of silently wrong pages.
+    const scope = paginationScope('benchmarks', {
+      hardware, model, quant, hwClass,
+      engine: engineQ ?? '',
+      maxAgeDays: maxAgeDays ?? '',
+      contextBand: contextBand ?? '',
+      groupBy,
+      crossEngine: String(crossEngine),
+      outlierIqrs,
+      includeOutliers,
+      snapshot: snapshot?.id ?? ''
+    });
+    const { limit, cursor } = parsePagination(q, { defaultLimit: 25, maxLimit: 200, scope });
 
     // aggregate() sorts by median decode desc; enforce the full stable order
     const allGroups = aggregate(runs, keyFns[groupBy], { outlierIqrs, includeOutliers })
       .sort((a, b) => descNumAscStrCmp(GROUP_KEY(a), GROUP_KEY(b)));
 
-    const page = paginate({ items: allGroups, limit, cursor, keyOf: GROUP_KEY, cmp: descNumAscStrCmp });
+    const page = paginate({ items: allGroups, limit, cursor, keyOf: GROUP_KEY, cmp: descNumAscStrCmp, scope });
 
     const groups = page.items.map(g => ({
       ...g,
@@ -107,6 +139,14 @@ export default async function handler(req, res) {
       confidence: { ...confidence(members.get(g.key) || []), ...(g.confidence || {}) },
       crossCheck: crossCheck(members.get(g.key) || []),
       dataQuality: dataQuality(members.get(g.key) || []),
+      // Issue #757: with ?groupBy=hardware each group also exposes the exact
+      // slug used by the SEO comparison pages, so an agent can construct
+      // /compare/:slugA-vs-:slugB URLs without reverse-engineering slugify.
+      // Same algorithm as the compare page: slugify(bestRun.hardware || key).
+      ...(groupBy === 'hardware' ? {
+        hardwareLabel: g.bestRun?.hardware || g.key,
+        slug: slugify(g.bestRun?.hardware || g.key),
+      } : {}),
       bestRun: {
         runId: g.bestRun.runId,
         modelName: g.bestRun.modelName,
@@ -129,9 +169,12 @@ export default async function handler(req, res) {
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
     warnings.push(...groups.filter(g => g.mixedContextBands)
       .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
+    if (groupByCaseNormalized) {
+      warnings.push(`?groupBy=${groupByRaw} matched case-insensitively as '${groupBy}'`);
+    }
 
     return json(res, {
-      description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=&context_band=lt1k|1k-8k|8k-32k|32k+; regroup with ?groupBy=hardware|model|quant|hardwareModel; exclude old measurements with ?max_age=<days>. Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false. Each group carries a confidence block (run count, IQR spread %, outlier count, recency, grade) and a cross_check comparing multi-GPU rigs against the single-GPU baseline on the same model/quant.',
+      description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=&context_band=lt1k|1k-8k|8k-32k|32k+; regroup with ?groupBy=hardware|model|quant|hardwareModel; exclude old measurements with ?max_age=<days>. Filter params accept both snake_case and camelCase spellings (e.g. group_by/groupBy, cross_engine/crossEngine, outlier_iqrs/outlierIqrs, include_outliers/includeOutliers, max_age/maxAge, context_band/contextBand). Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false. Each group carries a confidence block (run count, IQR spread %, outlier count, recency, grade) and a cross_check comparing multi-GPU rigs against the single-GPU baseline on the same model/quant. With ?groupBy=hardware every item also carries slug + hardwareLabel — combine any two as /compare/<slugA>-vs-<slugB>; pairs whose slugs are not in this response return HTTP 404.',
       snapshot,
       snapshotAt: snapshotAt.toISOString(),
       maxAgeDays: maxAgeDays || null,
@@ -142,6 +185,10 @@ export default async function handler(req, res) {
       distinctModelFamilies: [...new Set(runs.map(r => r.modelFamily))].length,
       distinctEngines: [...new Set(runs.map(r => engineTag(r)))],
       engineCohortedByDefault: !crossEngine && groupBy === 'hardwareModel',
+      // Machine-readable unit declaration for every aggregate speed in items[]
+      // (#776): decode/prefill medians etc. are tokens per second — declared
+      // in-band instead of only inside description/note prose.
+      units: { speed: 'tok/s' },
       warnings,
       outlierPolicy: {
         thresholdIqrs: outlierIqrs,

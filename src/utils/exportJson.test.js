@@ -9,6 +9,7 @@ import {
   serializeJson
 } from './exportJson.js';
 import { calculateAgenticTimeline } from './agenticMath.js';
+import { scaledDecodeTime } from './contextScaling.js';
 
 const FIXED_AT = '2026-08-23T12:00:00.000Z';
 
@@ -45,9 +46,12 @@ test('single-turn export carries versioned envelope and stable field names', () 
   assert.equal(out.generatedAt, FIXED_AT);
   assert.equal(out.deepLink, singleTurnInput.deepLink);
 
-  // Stable input field names.
+  // Stable input field names (#722 unified object-toggle convention).
   assert.deepEqual(Object.keys(out.inputs).sort(), [
+    'attachedImages',
+    'contextScaling',
     'decodeSpeedTokPerSec',
+    'itlJitter',
     'outputTokens',
     'prefillSpeedTokPerSec',
     'promptTokens',
@@ -55,10 +59,14 @@ test('single-turn export carries versioned envelope and stable field names', () 
   ]);
   // Stable metric field names.
   assert.deepEqual(Object.keys(out.metrics).sort(), [
+    'avgDecodeSpeedTokPerSec',
+    'avgThroughputTokPerSec',
     'decodeSharePct',
     'decodeTimeSeconds',
     'effectiveDecodeSpeedTokPerSec',
+    'imageTokensTotal',
     'prefillSharePct',
+    'prefillTokensTotal',
     'throughputTokPerSec',
     'totalWalltimeSeconds',
     'tpotMs',
@@ -138,7 +146,11 @@ test('agentic export carries versioned envelope, inputs, turns and summary', () 
   assert.ok(Array.isArray(out.turns));
 
   const expected = Object.keys(buildAgenticJson(agenticInput)).sort();
-  assert.deepEqual(expected, ['deepLink', 'exportType', 'generatedAt', 'generator', 'inputs', 'schemaVersion', 'summary', 'turns']);
+  assert.deepEqual(expected, ['deepLink', 'exportType', 'generatedAt', 'generator', 'inputs', 'metrics', 'schemaVersion', 'summary', 'turns']);
+  // #722 unification: `metrics` mirrors `summary` and adds the shared
+  // throughput alias; the object toggle mirrors speculativeDecoding.enabled.
+  assert.deepEqual(out.metrics, { ...out.summary, throughputTokPerSec: out.summary.avgThroughputTokPerSec });
+  assert.equal(out.inputs.prefixCaching.enabled, out.inputs.prefixCachingEnabled);
 });
 
 test('agentic per-turn rows match the timeline engine with stable names', () => {
@@ -199,4 +211,99 @@ test('agentic export survives a JSON.stringify/parse round-trip', () => {
   const out = buildAgenticJson(agenticInput);
   const back = JSON.parse(JSON.stringify(out));
   assert.deepEqual(back, out);
+});
+
+// ---------------------------------------------------------------------------
+// Engine flags reach the export (#698) + cross-exportType schema (#722)
+// ---------------------------------------------------------------------------
+
+// Issue #698 repro: prompt=2048, output=512, prefill=30000, decode=150,
+// img=1&imgN=2 @1080p (=4400 vision tok), ctx=1&ctxHalf=32768.
+const flagsInput = {
+  promptTokens: 2048,
+  outputTokens: 512,
+  prefillSpeed: 30000,
+  decodeSpeed: 150,
+  specEnabled: false,
+  draftTokens: 0,
+  acceptance: 0,
+  effectiveDecodeSpeed: 150,
+  ctxScaleEnabled: true,
+  ctxHalf: 32768,
+  imagesEnabled: true,
+  imageCount: 2,
+  imageResId: '1080p',
+  deepLink: 'https://example.com/?tab=single&img=1&ctx=1',
+  generatedAt: FIXED_AT
+};
+
+test('single-turn export applies attached images + context scaling (#698)', () => {
+  const out = buildSingleTurnJson(flagsInput);
+
+  // Vision tokens join prefill: 2×1080p → 2 × 2200 = 4400 tok.
+  assert.equal(out.inputs.attachedImages.enabled, true);
+  assert.equal(out.inputs.attachedImages.count, 2);
+  assert.equal(out.inputs.attachedImages.tokensTotal, 4400);
+  assert.equal(out.metrics.imageTokensTotal, 4400);
+  assert.equal(out.metrics.prefillTokensTotal, 6448);
+  // TTFT = 6448 ÷ 30000 ≈ 0.2149s — NOT the flag-blind 2048 ÷ 30000 = 0.0683s.
+  assert.equal(out.metrics.ttftSeconds, roundTo(6448 / 30000));
+  // Context-scaled decode walltime via the closed form.
+  const scaled = scaledDecodeTime(150, 6448, 512, 32768);
+  assert.ok(Math.abs(out.metrics.decodeTimeSeconds - scaled) < 1e-4);
+  assert.ok(Math.abs(out.metrics.totalWalltimeSeconds - (out.metrics.ttftSeconds + scaled)) < 1e-4);
+  // Effective decode speed reports the context-decaying average, not flat 150.
+  assert.ok(out.metrics.avgDecodeSpeedTokPerSec < 150);
+  // Throughput counts vision tokens too.
+  assert.ok(Math.abs(out.metrics.throughputTokPerSec - (6448 + 512) / out.metrics.totalWalltimeSeconds) < 0.1);
+  assert.equal(out.inputs.contextScaling.enabled, true);
+  assert.equal(out.inputs.contextScaling.halfSpeedContextTokens, 32768);
+});
+
+test('single-turn export with all flags off is byte-compatible with the legacy payload', () => {
+  const off = buildSingleTurnJson(singleTurnInput);
+  // Legacy metric values unchanged when no engine feature is active.
+  assert.equal(off.metrics.ttftSeconds, roundTo(4000 / 20000));
+  assert.equal(off.metrics.decodeTimeSeconds, roundTo(800 / 120));
+  assert.equal(off.metrics.effectiveDecodeSpeedTokPerSec, 120);
+  assert.equal(off.metrics.avgDecodeSpeedTokPerSec, 120);
+  assert.equal(off.metrics.prefillTokensTotal, 4000);
+  assert.equal(off.metrics.imageTokensTotal, 0);
+  // Toggle objects report OFF explicitly — omission is never ambiguous.
+  assert.equal(off.inputs.contextScaling.enabled, false);
+  assert.equal(off.inputs.attachedImages.enabled, false);
+  assert.equal(off.inputs.itlJitter.enabled, false);
+});
+
+test('single-turn export includes seeded ITL jitter percentiles when enabled', () => {
+  const jit = buildSingleTurnJson({
+    ...singleTurnInput,
+    jitterEnabled: true,
+    jitterPct: 25
+  });
+  assert.equal(jit.inputs.itlJitter.enabled, true);
+  assert.equal(jit.inputs.itlJitter.jitterPct, 25);
+  // Percentile fields are additive and present only when jitter ran.
+  assert.ok(Number.isFinite(jit.metrics.itlP50Ms));
+  assert.ok(jit.metrics.itlP99Ms > jit.metrics.itlP50Ms);
+  assert.ok(jit.metrics.itlP95Ms > jit.metrics.itlP50Ms);
+  // Seeded draws are deterministic: same config → identical payload.
+  const again = buildSingleTurnJson({
+    ...singleTurnInput,
+    jitterEnabled: true,
+    jitterPct: 25
+  });
+  assert.deepEqual(jit, again);
+
+  const noJit = buildSingleTurnJson(singleTurnInput);
+  assert.equal(noJit.metrics.itlP50Ms, undefined);
+});
+
+test('throughput field convention is unified across both exporters (#722)', () => {
+  const single = buildSingleTurnJson(singleTurnInput);
+  const agentic = buildAgenticJson(agenticInput);
+  // Same concept, same name, same container in both payloads.
+  assert.equal(single.metrics.avgThroughputTokPerSec, single.metrics.throughputTokPerSec);
+  assert.equal(agentic.metrics.avgThroughputTokPerSec, agentic.summary.avgThroughputTokPerSec);
+  assert.equal(agentic.metrics.throughputTokPerSec, agentic.metrics.avgThroughputTokPerSec);
 });

@@ -8,10 +8,11 @@ import {
   estimateImageTokens
 } from '../utils/multimodal';
 import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
+import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
-import { drawItlSamples, summarizeItl, histogramItl, cumulativeItlSchedule, tokensEmittedBy } from '../utils/itl';
+import { drawItlSamples, summarizeItl, histogramItl, cumulativeItlSchedule, tokensEmittedBy, itlHistogramAriaLabel, itlZoneLegend } from '../utils/itl';
 import {
   DEFAULT_HALF_SPEED_CONTEXT,
   HALF_SPEED_CONTEXT_PRESETS,
@@ -422,6 +423,7 @@ export default function SingleTurnVisualizer({
   const throughputAnchorText = throughputAnchor(throughputNow);
   // Markdown walkthrough export (download + clipboard)
   const [mdCopied, setMdCopied] = useState(false);
+  const [mdCopyFailed, setMdCopyFailed] = useState(false);
   const buildMarkdown = () => buildSingleTurnMarkdown({
     promptTokens,
     outputTokens,
@@ -431,6 +433,13 @@ export default function SingleTurnVisualizer({
     draftTokens,
     acceptance,
     effectiveDecodeSpeed,
+    ctxScaleEnabled,
+    ctxHalf,
+    imagesEnabled,
+    imageCount,
+    imageResId,
+    jitterEnabled,
+    jitterPct,
     deepLink: buildDeepLink('single')
   });
   const handleExportMd = () => downloadMarkdown(buildMarkdown(), 'single-turn-simulation.md');
@@ -443,15 +452,23 @@ export default function SingleTurnVisualizer({
     draftTokens,
     acceptance,
     effectiveDecodeSpeed,
+    ctxScaleEnabled,
+    ctxHalf,
+    imagesEnabled,
+    imageCount,
+    imageResId,
+    jitterEnabled,
+    jitterPct,
     deepLink: buildDeepLink('single')
   });
   const handleExportJson = () => downloadJson(buildJson(), 'single-turn-simulation.json');
   const handleCopyMd = async () => {
     const ok = await copyMarkdownToClipboard(buildMarkdown());
-    if (ok) {
-      setMdCopied(true);
-      setTimeout(() => setMdCopied(false), 2000);
-    }
+    // Issue #401: surface failure explicitly — silent no-feedback on a failed
+    // copy is how agents lose the report without knowing it.
+    setMdCopied(ok);
+    setMdCopyFailed(!ok);
+    setTimeout(() => { setMdCopied(false); setMdCopyFailed(false); }, 2000);
   };
 
   // Token stream windowing: derive the visible words from the real decode
@@ -552,7 +569,7 @@ export default function SingleTurnVisualizer({
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
       {/* Issue #63: live narration of the animated run for screen readers */}
-      <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
+      <div className="visually-hidden" role="status" aria-live="polite" data-testid="run-state">{srSummary}</div>
 
       {/* Top Parameter Cards */}
       <section className="panel" aria-label={t('singleTurn.paramsPanelAria')}>
@@ -1065,7 +1082,12 @@ export default function SingleTurnVisualizer({
       ))}
 
       {/* Main Visualizer Stage */}
-      <section className="panel" aria-label={t('singleTurn.simStageAria')}>
+      <section
+        className="panel"
+        aria-label={t('singleTurn.simStageAria')}
+        data-state={phaseToRunState(phase)}
+        aria-busy={runStateToBusy(phaseToRunState(phase))}
+      >
 
         {/* Status Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
@@ -1122,7 +1144,7 @@ export default function SingleTurnVisualizer({
               aria-label="Copy markdown walkthrough to clipboard"
             >
               <Copy size={15} />
-              {mdCopied ? 'Copied!' : 'Copy MD'}
+              {mdCopied ? 'Copied!' : mdCopyFailed ? 'Copy failed' : 'Copy MD'}
             </button>
           </div>
         </div>
@@ -1324,7 +1346,7 @@ export default function SingleTurnVisualizer({
                   <>
                     <div
                       role="img"
-                      aria-label={t('singleTurn.itlHistogramAria')}
+                      aria-label={itlHistogramAriaLabel(t('singleTurn.itlHistogramAria'), itlSummary)}
                       style={{
                         position: 'relative',
                         height: '4rem',
@@ -1354,6 +1376,8 @@ export default function SingleTurnVisualizer({
                       {markers.filter(() => span > 0).map(m => (
                         <div
                           key={m.key}
+                          data-marker={m.key}
+                          data-value-ms={Number.isFinite(m.value) ? m.value.toFixed(1) : undefined}
                           title={`${m.key} = ${m.value.toFixed(1)} ms`}
                           style={{
                             position: 'absolute',
@@ -1366,6 +1390,18 @@ export default function SingleTurnVisualizer({
                         />
                       ))}
                     </div>
+                    {/* Percentile-zone legend (#973): the bin fill colors encode
+                        p50/p95 thresholds — state them with their values. */}
+                    {itlZoneLegend(itlSummary).length > 0 && (
+                      <div className="itl-zone-legend" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '4px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        {itlZoneLegend(itlSummary).map(z => (
+                          <span key={z.zone} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <span aria-hidden="true" style={{ width: '10px', height: '10px', borderRadius: '2px', display: 'inline-block', background: z.zone === 'at-or-below-p50' ? 'var(--decode)' : z.zone === 'p50-to-p95' ? 'var(--agent)' : 'var(--prefill)' }} />
+                            {z.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="field-scale">
                       <span>{itlHistogram.min.toFixed(1)} ms</span>
                       <span>mean {itlSummary.mean.toFixed(1)} ms · avg = TPOT, tail = jitter</span>
