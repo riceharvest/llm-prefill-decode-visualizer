@@ -26,6 +26,7 @@ function fetchSpec() {
     statusCode: 200,
     setHeader(k, v) { headers[k] = v; },
     getHeader(k) { return headers[k]; },
+    hasHeader(k) { return Object.keys(headers).some(h => h.toLowerCase() === String(k).toLowerCase()); },
     end(body) { res.body = body; }
   };
   specHandler({ headers: {}, url: '/api/spec' }, res);

@@ -1,5 +1,6 @@
 import { getAllRuns } from '../_localmaxxing.js';
 import { csvEscape, toCsv, csvPreamble, buildJsonPayload, COLUMNS, DATASET_VERSION, CSV_BOM } from '../_export.js';
+import { problemBody } from '../_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -38,11 +39,15 @@ export default async function handler(req, res) {
     res.write(csvPreamble(runs.length, generatedAt));
     res.write(toCsv(runs));
     res.end();
-  } catch (err) {
-    res.statusCode = 502;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  } catch {
+    // Unify with the API-wide RFC 9457 error contract (#687): serve a fixed
+    // INTERNAL problem+json instead of leaking `String(err.message)` as
+    // application/json.
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/problem+json');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.end(JSON.stringify({ error: String(err.message || err) }));
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(JSON.stringify(problemBody({ code: 'INTERNAL', instance: req.url })));
   }
 }
 

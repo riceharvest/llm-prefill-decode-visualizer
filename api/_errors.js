@@ -45,6 +45,11 @@ export const ERROR_CODES = {
     title: 'Upstream unavailable',
     description: 'Transient failure fetching community benchmark data. Safe to retry with backoff.'
   },
+  BATCH_ALL_FAILED: {
+    status: 400,
+    title: 'Batch failed',
+    description: 'Every item in the batch failed (issue #707). The `errors` member carries one entry per failed item, each with its own stable `code` and HTTP `status`. Partial batches (at least one ok item) still return 200 with per-item ok/error entries.'
+  },
   INTERNAL: {
     status: 500,
     title: 'Internal server error',

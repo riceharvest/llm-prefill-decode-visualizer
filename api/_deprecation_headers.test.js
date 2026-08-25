@@ -25,6 +25,7 @@ async function callApi(handlerFn, url) {
     headers: {},
     setHeader(k, v) { this.headers[k] = v; },
     getHeader(k) { return this.headers[String(k).toLowerCase()]; },
+    hasHeader(k) { const l = String(k).toLowerCase(); return Object.keys(this.headers).some(h => h.toLowerCase() === l); },
     end(body) {
       captured.status = this.statusCode;
       captured.rawBody = body ?? '';

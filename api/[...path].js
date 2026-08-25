@@ -34,6 +34,7 @@ import { ROUTES } from './_route_table.js';
 import { withMarkdownNegotiation } from './_markdown.js';
 import { applyVersionTrustHeaders } from './_versions.js';
 import { sendJson } from './_schema.js';
+import { sendProblem, sendProblemFromError } from './_errors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -229,9 +230,20 @@ export default async function handler(req, res) {
           req.query = { ...req.query, id: calcMatch[1] };
           return calcId(req, res);
         }
-        return json(res, { error: 'Not found', path: pathname }, 404);
+        // Unknown routes speak the same RFC 9457 problem+json contract as
+        // every other error (#687) — not the ad-hoc `{ error }` shape.
+        return sendProblem(res, req, {
+          code: 'NOT_FOUND',
+          detail: `No /api endpoint matches '${pathname}'`
+        });
     }
   } catch (err) {
-    return json(res, { error: String(err.message || err) }, 500);
+    // Central catch-all (#687): route ANY uncaught throw through the shared
+    // problem+json renderer instead of leaking `String(err.message)` as
+    // application/json. Unknown errors become a fixed INTERNAL problem body
+    // (type/title/status/code, application/problem+json, no-store) — raw
+    // internal messages never reach the client.
+    if (res.headersSent) return;
+    return sendProblemFromError(res, req, err);
   }
 }

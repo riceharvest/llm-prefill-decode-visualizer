@@ -10,7 +10,7 @@ import {
 import { ENGINE_FLAGS, applyEngineFlags } from '../../src/utils/engineFlags.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson, withSchemaVersion, applySchemaHeaders } from '../_schema.js';
-import { ApiError, sendProblemFromError } from '../_errors.js';
+import { ApiError, sendProblemFromError, ERROR_CODES, problemType } from '../_errors.js';
 import { computeCalcId } from '../_calc_id.js';
 import { normalizeParams } from '../_calc_id.js';
 import { annotate, THEORETICAL } from '../_basis.js';
@@ -327,7 +327,7 @@ function capabilityList() {
       cost: { params: ['hardwarePriceUsd', 'electricityRatePerKwh', 'powerDrawWatts', 'amortizationMonths', 'promptTokens', 'outputTokens', 'prefillSpeed', 'decodeSpeed'], example: '/api/compute?model=cost&hardwarePriceUsd=2000&electricityRatePerKwh=0.15&powerDrawWatts=450&prefillSpeed=3800&decodeSpeed=105' }
     },
     batch: {
-      description: 'Compare variants in one call: POST {"batch": [{"model": "singleTurn", "promptTokens": 4096}, ...]}. Each item is a normal parameter set including its own "model" field. Returns { results: [{ index, ok, result | error }] } — one bad item does not fail the batch. Failed entries echo their input ("inputs", or "input" for non-object items) and carry a deterministic per-item id plus ApiError extras such as available[], so a subset retry can be correlated by id instead of index. Optionally pass a top-level "batchId" string to pin the response id across subset retries: every attempt under the same batchId returns the same id, verifiable via /api/calc/<id>?batchId=<batchId>.',
+      description: 'Compare variants in one call: POST {"batch": [{"model": "singleTurn", "promptTokens": 4096}, ...]}. Each item is a normal parameter set including its own "model" field. Returns { results: [{ index, ok, result | error }] } — one bad item does not fail the batch. Failed entries echo their input ("inputs", or "input" for non-object items) and carry a deterministic per-item id plus ApiError extras such as available[], so a subset retry can be correlated by id instead of index. Optionally pass a top-level "batchId" string to pin the response id across subset retries: every attempt under the same batchId returns the same id, verifiable via /api/calc/<id>?batchId=<batchId>. When EVERY item fails the call instead returns 400 problem+json with code BATCH_ALL_FAILED and an errors[] member carrying each item\'s stable code/status/type.',
       maxSize: MAX_BATCH_SIZE,
       example: { batch: [{ model: 'singleTurn', promptTokens: 4096 }, { model: 'kvCache', architecture: 'llama70b', contextLength: 131072 }] }
     },
@@ -348,8 +348,12 @@ function capabilityList() {
 // Batch payload: an array of parameter sets, accepted as
 //   POST { "batch": [...] }   (also "variants" as an alias)
 //   GET  /api/compute?batch=[{"model":"..."},...]   (URL-encoded JSON)
-// Returns 200 with per-item ok/error entries so one bad scenario
-// never fails the whole comparison.
+// Partial failure keeps 200 with per-item ok/error entries so one bad
+// scenario never fails the whole comparison (#68/#707). When EVERY item
+// fails, though, the batch is not a success: it throws a BATCH_ALL_FAILED
+// problem+json (400) whose `errors` member carries one entry per item —
+// each with its own stable `code`, HTTP `status` and problem `type` — so
+// transport-level consumers (monitors, retries, caching) see the failure.
 function runBatch(rawItems, dryRun = false) {
   let items = rawItems;
   if (typeof items === 'string') {
@@ -373,6 +377,17 @@ function runBatch(rawItems, dryRun = false) {
   }
 
   const results = items.map((item, index) => {
+    // Failed entries carry the full problem identity (stable `code`, HTTP
+    // `status`, RFC 9457 `type` URI) so agents branch without prose-matching
+    // the `error` field (#707).
+    const failure = (code, error, statusOverride) => ({
+      index,
+      ok: false,
+      code,
+      status: statusOverride ?? ERROR_CODES[code]?.status ?? 500,
+      type: problemType(code),
+      error
+    });
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
       // #964: echo the offending value so a response held in isolation (async
       // processing, log inspection, forwarded result) still says WHAT failed,
@@ -392,6 +407,8 @@ function runBatch(rawItems, dryRun = false) {
     const itemId = computeCalcId('compute', { model: item.model || item.m || '', ...item });
     try {
       const { status, body } = computeOne(item, dryRun);
+      // Stamp schema_version + the same deterministic calc id an individual
+      // call would get, so batch results match standalone calls (#68).
       // Stamp schema_version + the same deterministic calc id an individual
       // call would get, so batch results match standalone calls (#68).
       if (status === 200) return { index, ok: true, result: { id: itemId, ...withSchemaVersion(body) } };
@@ -418,13 +435,27 @@ function runBatch(rawItems, dryRun = false) {
     }
   });
 
+  const okCount = results.filter(r => r.ok).length;
+  const errorCount = results.length - okCount;
+
+  // Total failure (#707): never mask it behind a 200. A batch where nothing
+  // computed gets a real problem+json response; the per-item detail rides
+  // along in `errors`. Applies to dry_run too — malformed batches fail
+  // exactly as they would for a real call. Partial failures still return
+  // the 200 envelope below.
+  if (okCount === 0) {
+    throw new ApiError('BATCH_ALL_FAILED', `all ${errorCount} batch item(s) failed — see errors[] for per-item codes`, {
+      errors: results.map(({ index, code, status, type, error }) => ({ index, code, status, type, error }))
+    });
+  }
+
   return {
     status: 200,
     body: {
       batch: true,
       count: results.length,
-      okCount: results.filter(r => r.ok).length,
-      errorCount: results.filter(r => !r.ok).length,
+      okCount,
+      errorCount,
       results
     }
   };
