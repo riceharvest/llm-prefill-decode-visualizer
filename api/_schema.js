@@ -111,15 +111,40 @@ export function applySchemaHeaders(res) {
       .map(s => s.trim())
       .filter(Boolean)
   );
-  // X-Vercel-Mitigated / X-Vercel-Error (#717): during a platform Security
-  // Checkpoint the edge answers with `x-vercel-mitigated: challenge` before
-  // this app's middleware ever runs. Browser-context agents can only read
-  // these non-safelisted headers if they are CORS-exposed on every /api/*
-  // response, so advertise them alongside the schema headers.
-  for (const h of ['X-Schema-Version', 'Deprecation', 'Sunset', 'X-Vercel-Mitigated', 'X-Vercel-Error']) {
+  for (const h of ['X-Schema-Version', 'Deprecation', 'Sunset', 'X-Vercel-Mitigated', 'X-Vercel-Error', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset']) {
     expose.add(h);
   }
   res.setHeader('Access-Control-Expose-Headers', [...expose].join(', '));
+}
+
+/**
+ * Opt-in byte-stable response bodies (issue #697).
+ *
+ * By default sendJson() embeds the caller's live rate-limit counter
+ * (`rate_limit.remaining`) in every body, so two identical requests never
+ * hash to the same bytes — breaking agent-side replay memoization and
+ * content-addressed caching. When the request passes `?stable=1` (or
+ * `stable=true`), this helper flags the response and the volatile
+ * `rate_limit` block is omitted from the body; quota accounting stays fully
+ * available via the X-RateLimit-Limit/-Remaining/-Reset headers, which are
+ * CORS-exposed for browser agents.
+ *
+ * Additive: the default wire format is unchanged.
+ */
+export function applyStableBodyMode(req, res) {
+  let raw;
+  try {
+    const url = req?.url || '';
+    raw = new URL(url, 'http://x').searchParams.get('stable');
+  } catch {
+    return false;
+  }
+  if (raw == null) return false;
+  if (['1', 'true'].includes(String(raw).toLowerCase())) {
+    res.stableBody = true;
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -206,7 +231,7 @@ export function sendJson(res, body, { status = 200, cacheTtl } = {}) {
   // headers): present whenever the handler ran enforceRateLimit before
   // sending. Additive field — does not bump schema_version. See AGENTS.md,
   // "Rate limits".
-  const rl = rateLimitBody(res);
+  const rl = res.stableBody === true ? null : rateLimitBody(res);
   if (rl && payload.rate_limit === undefined) payload.rate_limit = rl;
   if (rl && payload.rate_limit === undefined) payload.rate_limit = rl;
   else if (!rl) {

@@ -209,6 +209,15 @@ const DEFAULT_POWER_WATTS = { discrete_gpu: 300, unified: 60, cpu_only: 120 };
  *                                 (vramGb, falling back to unifiedMemoryGb)
  * ?limit=N                        default 10
  *
+ * Response shaping for token-budgeted agents (issue #661) — both are
+ * presentation-only and never change ranking or the calc id:
+ * ?warnings=false|none|0          omit the boilerplate top-level `warnings`
+ *                                 array (adds warningsOmitted: true)
+ * ?fields=k1,k2,...               project each results[] row to only the
+ *                                 named keys it actually has; unknown names
+ *                                 are ignored (fieldsApplied echoes the kept
+ *                                 ones, in row order of first appearance)
+ *
  * Cost ranking (?by=cost) inputs:
  * ?price=<usd>                    hardware purchase price (per rig; default 0)
  * ?electricityRate=$/kWh          default 0.15
@@ -532,6 +541,28 @@ export async function bestBody(query = {}) {
       row.power = sample ? estimatePower(sample) : null;
     }
 
+    // Response shaping (#661): presentation-only slimming knobs. Applied to
+    // the finished body so ranking, filtering and the calc id are untouched.
+    const warningsOff = ['false', 'none', '0'].includes(String(q.warnings ?? '').toLowerCase());
+    let fieldsApplied = null;
+    if (q.fields) {
+      const wanted = String(q.fields).split(',').map(s => s.trim()).filter(Boolean);
+      const present = new Set();
+      for (const row of ranked) {
+        for (const name of wanted) if (Object.prototype.hasOwnProperty.call(row, name)) present.add(name);
+      }
+      fieldsApplied = [...present];
+      for (const row of ranked) {
+        const projected = {};
+        for (const name of wanted) {
+          if (Object.prototype.hasOwnProperty.call(row, name)) projected[name] = row[name];
+        }
+        // Mutate in place: `ranked` rows feed only the body below.
+        for (const k of Object.keys(row)) delete row[k];
+        Object.assign(row, projected);
+      }
+    }
+
     return {
       status: 200,
       body: {
@@ -551,15 +582,13 @@ export async function bestBody(query = {}) {
       requestedScenario: workload.requestedScenario,
       fitCheck,
       matchedRuns: runs.length,
-      // #780: surface constraint-elimination telemetry. excludedRuns is the
-      // field the OpenAPI spec already declares (present only with fitCheck);
-      // excludedUnknownVramGb separates "dropped for missing memory data"
-      // from "over budget" when ?maxVramGb= is applied.
       ...(fitCheck ? { excludedRuns: excludedByFit } : {}),
       ...(excludedUnknownVramGb > 0 ? { excludedUnknownVramGb } : {}),
-      minDecode: minDecodeFilter,      caveats: buildCaveats(runs, groups),
-      warnings,
-      ...(by === 'walltime' || by === 'cost' ? {
+      minDecode: minDecodeFilter,
+      caveats: buildCaveats(runs, groups),
+      ...(warningsOff ? { warningsOmitted: true } : { warnings }),
+      ...(fieldsApplied ? { fieldsApplied } : {}),
+      ...((by === 'walltime' || by === 'cost') ? {
         workload: {
           promptTokens: workload.promptTokens,
           outputTokens: workload.outputTokens,

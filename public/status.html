@@ -116,9 +116,24 @@
     return h + 'h ' + (m % 60) + 'm';
   }
 
-  function fmtTime(iso) {
-    if (!iso) return 'never';
-    try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+  // Locale-INDEPENDENT formatting (issue #663): this page is advertised to
+  // agents (llms.txt) as well as humans, so every timestamp renders as a
+  // UTC ISO-8601 string (kept machine-parseable in the <time datetime> /
+  // data-iso attribute too) instead of the visitor-locale locale-formatted
+  // string, whose output flips with the visitor's OS locale ("24.8.2026,
+  // "8/24/2026, 9:38:00 PM"). Counts render ungrouped via String(n).
+  function setIsoTime(id, iso) {
+    var node = el(id);
+    if (!iso) { node.textContent = 'never'; return; }
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) { node.textContent = iso; return; }
+    var text = d.toISOString();
+    while (node.firstChild) node.removeChild(node.firstChild);
+    var t = document.createElement('time');
+    t.setAttribute('datetime', text);
+    t.setAttribute('data-iso', text);
+    t.textContent = text;
+    node.appendChild(t);
   }
 
   function setState(dotClass, headline) {
@@ -134,10 +149,10 @@
     var fl = freshLabel[f.status] || freshLabel.empty;
     el('freshness').innerHTML = '<span style="color:' + fl[0] + '">' + fl[1] + '</span>';
 
-    el('last-sync').textContent = fmtTime(f.fetchedAt);
+    setIsoTime('last-sync', f.fetchedAt);
     el('cache-age').textContent = f.ageSeconds != null ? fmtAge(f.ageSeconds) + ' ago' : '—';
-    el('row-count').textContent = f.rowCount != null ? f.rowCount.toLocaleString() : '—';
-    el('checked-at').textContent = fmtTime(data.time);
+    el('row-count').textContent = f.rowCount != null ? String(f.rowCount) : '—';
+    setIsoTime('checked-at', data.time);
 
     if (!data.ok) setState('bad', 'API error');
     else if (f.status === 'stale') setState('warn', 'Degraded — upstream data is stale');
@@ -155,8 +170,8 @@
     var f = (lastGood && lastGood.upstreamFreshness) || {};
     el('last-sync').textContent = f.fetchedAt ? fmtTime(f.fetchedAt) : '—';
     el('cache-age').textContent = f.ageSeconds != null ? fmtAge(f.ageSeconds) + ' ago' : '—';
-    el('row-count').textContent = f.rowCount != null ? f.rowCount.toLocaleString() : '—';
-    el('checked-at').textContent = new Date().toLocaleString();
+    el('row-count').textContent = f.rowCount != null ? String(f.rowCount) : '—';
+    setIsoTime('checked-at', new Date().toISOString());
 
     setState('bad', 'API error');
   }
@@ -183,7 +198,7 @@
         // value, only flag the headline + API row (#918 mode 2).
         el('api-status').innerHTML = '<span style="color:var(--bad)">Unreachable</span>';
         setState('bad', 'Unreachable — could not reach the API');
-        el('checked-at').textContent = new Date().toLocaleString();
+        el('checked-at').textContent = new Date().toISOString();
       })
       .finally(function () { document.body.classList.remove('refreshing'); });
   }
