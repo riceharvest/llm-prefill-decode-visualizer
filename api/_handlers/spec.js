@@ -397,7 +397,7 @@ const BEST_RESULT = {
     source: { type: ['string', 'null'], format: 'uri' },
     vramFit: {
       type: ['object', 'null'],
-      description: 'Estimated fit at the requested context (present with ?fitCheck or ?contextLength): weights + KV cache vs available memory.',
+      description: 'Estimated fit at the requested context (present with ?fitCheck or ?contextLength): weights + KV cache vs available memory. All memory fields are GiB (binary, 1024-based), not decimal GB (#738 #866).',
       additionalProperties: true
     },
     pricing: {
@@ -668,7 +668,7 @@ export default function handler(req, res) {
           summary: 'Run inference math (TTFT, TPOT, walltime, VRAM)',
           description: 'Pass ?model=<name> plus parameters. Omit model for a self-describing capability list. Also accepts POST with a JSON body, or a batch of up to 50 parameter sets via POST {"batch": [...]} / GET ?batch=[...] — returns per-index results with per-item ok/error status. Every computation response carries a deterministic `id` (calc_<hash> of the resolved inputs) that can be replayed via /api/calc/{id}. Caveat for model=batched: aggregate throughput = decodeSpeed × batchSize^(1 − decodeDecayExponent) grows monotonically with batch size by construction (defaults: ×B^0.75) — the heuristic has NO saturation point or optimal batch size, so it must not be used alone for sizing decisions. To read a scaling curve, sweep batchSize via the batch endpoint (homogeneous items, one param varied).',
           parameters: [
-            { name: 'model', in: 'query', schema: { type: 'string', enum: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost'] } },
+            { name: 'model', in: 'query', schema: { type: 'string', enum: ['singleTurn', 'speculative', 'batched', 'agentic', 'kvCache', 'flagged', 'cost'] }, description: 'kvCache mode reports binary units: kbPerToken is KiB, totalMb is MiB, totalGb is GiB (÷1024ⁿ, not decimal)' },
             { name: 'promptTokens', in: 'query', schema: { type: 'number' }, description: 'singleTurn/batched/agentic/cost' },
             { name: 'outputTokens', in: 'query', schema: { type: 'number' }, description: 'singleTurn/batched/agentic/cost' },
             { name: 'prefillSpeed', in: 'query', schema: { type: 'number' }, description: 'tok/s' },
@@ -720,14 +720,14 @@ export default function handler(req, res) {
         get: {
           operationId: 'estimateVram',
           summary: 'Combined model + KV-cache + context VRAM from just an hfId',
-          description: 'Resolves layers, hidden dim, GQA heads, head dim and weight size from the Hugging Face config automatically — no architecture params needed. Answers "will this rig OOM at 64k?". Optional vramGb budget returns a fits flag plus the max context that fits; optional numTurns+tokensPerTurn projects per-turn KV growth with the exact overflow turn.',
+          description: 'Resolves layers, hidden dim, GQA heads, head dim and weight size from the Hugging Face config automatically — no architecture params needed. Answers "will this rig OOM at 64k?". Optional vramGb budget returns a fits flag plus the max context that fits; optional numTurns+tokensPerTurn projects per-turn KV growth with the exact overflow turn. All memory figures (weights/kvCache/total/fits, and the vramGb budget itself) are GiB — binary, 1024-based, NOT decimal GB (#738 #866); the response repeats this in its top-level units block.',
           parameters: [
             { name: 'hfId', in: 'query', required: true, schema: { type: 'string' }, description: 'Hugging Face repo id or URL, e.g. meta-llama/Llama-3.1-8B-Instruct' },
             { name: 'context', in: 'query', schema: { type: 'integer', default: 32768 }, description: 'context length in tokens' },
             { name: 'quant', in: 'query', schema: { type: 'string', default: 'q4_k_m' }, description: 'quant tag (fp16, q8_0, q6_k, q5_k_m, q4_k_m, q4_0, q3_k_m, q2_k, fp8, …); unknown tags assume ~4.85 bpw and are flagged' },
             { name: 'batchSize', in: 'query', schema: { type: 'integer', default: 1 } },
             { name: 'kvPrecisionBytes', in: 'query', schema: { type: 'number', default: 2 }, description: 'KV cache precision: 2=FP16, 1=FP8, 0.5=INT4' },
-            { name: 'vramGb', in: 'query', schema: { type: 'number' }, description: 'optional VRAM budget → fits flag + maxContextTokens (upper bound)' },
+            { name: 'vramGb', in: 'query', schema: { type: 'number' }, description: 'optional VRAM budget, interpreted as GiB (binary) → fits flag + maxContextTokens (upper bound)' },
             { name: 'numTurns', in: 'query', schema: { type: 'integer' }, description: 'with tokensPerTurn: project KV growth over N agentic turns' },
             { name: 'tokensPerTurn', in: 'query', schema: { type: 'number' }, description: 'tokens added to context per turn' }
           ],
@@ -1150,7 +1150,7 @@ export default function handler(req, res) {
         get: {
           operationId: 'getSizingRecommendation',
           summary: 'Hardware sizing recommendation for a workload spec (VRAM fit + expected TTFT/TPOT)',
-          description: 'One canonical query for deployment planning: pass a workload spec, get ranked rigs with required-VRAM math (weights + KV cache at target context × concurrency + overhead) and expected TTFT/TPOT from aggregated benchmark medians, plus per-group sample confidence.',
+          description: 'One canonical query for deployment planning: pass a workload spec, get ranked rigs with required-VRAM math (weights + KV cache at target context × concurrency + overhead) and expected TTFT/TPOT from aggregated benchmark medians, plus per-group sample confidence. All memory figures — maxVramGb budget, memoryGb and every vramFit field — are GiB (binary, 1024-based), not decimal GB; the response states this in its top-level units block (#738 #866).',
           parameters: [
             { name: 'model', in: 'query', required: true, schema: { type: 'string' }, description: 'model family / hfId substring, e.g. qwen' },
             { name: 'contextLength', in: 'query', schema: { type: 'integer', default: 8192 }, description: 'target context per request (drives KV-cache VRAM)' },
@@ -1159,7 +1159,7 @@ export default function handler(req, res) {
             { name: 'outputTokens', in: 'query', schema: { type: 'integer', default: 512 }, description: 'tokens decoded per request' },
             { name: 'maxTtftSeconds', in: 'query', schema: { type: 'number' }, description: 'SLO cap on expected TTFT' },
             { name: 'maxTpotMs', in: 'query', schema: { type: 'number' }, description: 'SLO cap on expected TPOT' },
-            { name: 'maxVramGb', in: 'query', schema: { type: 'number' }, description: 'budget cap: rig memory (VRAM or unified) must fit under this' },
+            { name: 'maxVramGb', in: 'query', schema: { type: 'number' }, description: 'budget cap, GiB (binary): rig memory (VRAM or unified) must fit under this' },
             { name: 'numLayers', in: 'query', schema: { type: 'integer' }, description: 'explicit KV arch (with kvHeads+headDim skips the per-param-count estimate)' },
             { name: 'kvHeads', in: 'query', schema: { type: 'integer' } },
             { name: 'headDim', in: 'query', schema: { type: 'integer' } },
@@ -1273,6 +1273,7 @@ export default function handler(req, res) {
       get: {
         request: 'curl -s "$BASE/api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m&vramGb=24"',
         response: {
+          units: { memory: 'GiB', note: 'all memory figures (weights, KV cache, totals, headroom, vramGb budgets) are GiB — binary, 1024-based, NOT decimal GB', kvRate: 'bytes/token' },
           inputs: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', context: 65536, quant: 'q4_k_m', resolvedQuant: 'q4_k_m', quantAssumed: false, batchSize: 1, kvPrecisionBytes: 2, vramGb: 24 },
           model: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', family: 'llama', resolutionSource: 'builtin-table', architecture: { numLayers: 32, kvHeads: 8, headDim: 128 }, paramsTotal: 8030261312, paramsB: 8.03, notes: [] },
           weights: { gb: 4.49, source: '8,030,261,312 params × 0.56 bpw', sourceKind: 'params×quant', quant: 'q4_k_m', bytesPerParam: 0.56 },
@@ -1366,11 +1367,12 @@ export default function handler(req, res) {
       get: {
         request: 'curl -s "$BASE/api/sizing?model=qwen&contextLength=32768&concurrency=4&maxTtftSeconds=2&maxTpotMs=50&maxVramGb=48"',
         response: {
-          description: 'Ranked hardware sizing for a workload spec. VRAM fit = weights + KV cache at target context × concurrency + overhead. Expected TTFT/TPOT come from aggregated benchmark medians (single-stream); confidence reflects sample count.',
+          description: 'Ranked hardware sizing for a workload spec. VRAM fit = weights + KV cache at target context × concurrency + overhead. Expected TTFT/TPOT come from aggregated benchmark medians (single-stream); confidence reflects sample count. All memory figures are GiB — binary, 1024-based, not decimal GB.',
+          units: { memory: 'GiB', note: 'all memory figures are GiB — binary, 1024-based, NOT decimal GB' },
           workload: { model: 'qwen', contextLength: 32768, concurrency: 4, promptTokens: 2048, outputTokens: 512 },
           slo: { maxTtftSeconds: 2, maxTpotMs: 50, maxVramGb: 48 },
           matchedRuns: 214,
-          assumptions: { kvArchitecture: 'estimated from parameter count (exposed per recommendation in vramFit)', precisionBytes: 2, overheadGb: 1.5, quantBitsFallback: 'unparseable quantization labels assume 4.25 bits-per-weight' },
+          assumptions: { kvArchitecture: 'estimated from parameter count (exposed per recommendation in vramFit)', precisionBytes: 2, overheadGb: 1.5, memoryUnits: 'GiB — every memory figure (overheadGb, vramFit) is binary GiB, not decimal GB', quantBitsFallback: 'unparseable quantization labels assume 4.25 bits-per-weight' },
           recommendations: [{
             hardware: 'RTX 4090 24GB', hardwareKey: 'rtx4090', hwClass: 'discrete_gpu', gpu: 'RTX 4090', gpuCount: 1,
             modelFamily: 'qwen3.6-27b', exampleModel: 'unsloth/Qwen3.6-27B-MTP-GGUF', quantization: 'q4_k_m', engine: 'llama.cpp',
