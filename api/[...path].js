@@ -40,6 +40,7 @@ import { sendProblem, sendProblemFromError } from './_errors.js';
 export const config = { runtime: 'nodejs' };
 
 /**
+/**
  * Vercel routes URLs that look like static assets (a file extension in the
  * last segment, e.g. `.json`/`.xml`) to the static layer first; when no
  * static file matches they 404 before ever reaching this function. That is
@@ -58,6 +59,32 @@ export function canonicalApiPath(pathname) {
     if (p === `${pathname}.json` || p === `${pathname}.xml`) return p;
   }
   return pathname;
+}
+
+/**
+ * Method enforcement (#538): the OpenAPI spec documents 405 METHOD_NOT_ALLOWED
+ * as problem+json for non-documented verbs, but /api/compute and /api/spec
+ * answered every verb with their GET payload. These are the only two handlers
+ * that don't enforce methods internally; everything else already 405s (watch,
+ * mcp, localmaxxing, agent/*). OPTIONS stays allowed everywhere (CORS
+ * preflight contract), HEAD is treated like GET.
+ */
+const ALLOWED_METHODS = {
+  '/compute': ['GET', 'HEAD', 'POST', 'OPTIONS'],
+  '/spec': ['GET', 'HEAD', 'OPTIONS']
+};
+
+function methodAllowed(req, res, clean) {
+  const allowed = ALLOWED_METHODS[clean];
+  if (!allowed || allowed.includes(req.method)) return true;
+  res.setHeader('Allow', allowed.join(', '));
+  sendProblem(res, req, {
+    status: 405,
+    code: 'METHOD_NOT_ALLOWED',
+    detail: `${req.method} is not supported on /api${clean}. Allowed: ${allowed.join(', ')}.`
+  });
+  return false;
+
 }
 
 function json(res, body, status = 200) {
@@ -179,9 +206,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    if (req.method === 'OPTIONS' && handleOptions(req, res, clean)) {
-      return;
-    }
+    if (!methodAllowed(req, res, clean)) return;
 
     switch (clean) {
       case '/compute': return compute(req, res);
@@ -210,6 +235,7 @@ export default async function handler(req, res) {
       // parameters carried in the query string (?id= / ?file=).
       case '/calc-replay': return calcId(req, res); // from /api/calc/<id> rewrite
       case '/watch-rss': return watchRss(req, res); // from /api/watch/rss.xml rewrite
+      case '/calc': return calcId(req, res); // from /api/calc/:id rewrite (#474)
       case '/watch-dispatch': return watchDispatch(req, res); // from /api/watch/dispatch rewrite
       case '/agent-json': {
         const file = String((req.query || {}).file || '');
@@ -225,12 +251,18 @@ export default async function handler(req, res) {
         return agentDoc(req, res);
       }
       case '/mcp': return mcp(req, res);
-      case '/agent/capabilities.json': return capabilities(req, res);
-      case '/agent/compute.json': return agentCompute(req, res);
-      case '/agent/benchmarks.json': return agentBenchmarks(req, res);
-      case '/agent/scenario.json': return agentScenario(req, res);
-      case '/agent/freshness.json': return agentFreshness(req, res);
-      case '/agent/confidence.json': return agentFreshness(req, res); // alias, same report
+      case '/agent/capabilities.json':
+      case '/agent/capabilities': return capabilities(req, res); // extless carrier rewrite (#540)
+      case '/agent/compute.json':
+      case '/agent/compute': return agentCompute(req, res);
+      case '/agent/benchmarks.json':
+      case '/agent/benchmarks': return agentBenchmarks(req, res);
+      case '/agent/scenario.json':
+      case '/agent/scenario': return agentScenario(req, res);
+      case '/agent/freshness.json':
+      case '/agent/freshness': return agentFreshness(req, res);
+      case '/agent/confidence.json':
+      case '/agent/confidence': return agentFreshness(req, res); // alias, same report
       case '/problems': return problems(req, res);
       default:
         // /api/calc/<id>
@@ -245,11 +277,26 @@ export default async function handler(req, res) {
           req.query = { ...req.query, code: probMatch[1] };
           return problems(req, res);
         }
+        // Rewrite carriers for multi-segment routes (#540): the platform
+        // router only hands single-segment /api/* paths to this function, so
+        // vercel.json funnels unknown multi-segment paths onto /api/notfound.
+        // The echoed `path` reassembles the original segments so agents see
+        // what they actually asked for.
+        if (req.query?.a && req.query?.b) {
+          return json(res, {
+            error: 'Not found',
+            path: `/${req.query.a}/${req.query.b}`
+          }, 404);
+        }
         // Unknown routes speak the same RFC 9457 problem+json contract as
         // every other error (#687) — not the ad-hoc `{ error }` shape.
         return sendProblem(res, req, {
           code: 'NOT_FOUND',
-          detail: `No /api endpoint matches '${pathname}'`
+          detail: `No /api endpoint matches '${pathname}'`,
+          // Legacy flat members (#540): agents keyed on `error`/`path` keep
+          // working alongside the RFC 9457 members above.
+          error: 'Not found',
+          path: pathname
         });
     }
   } catch (err) {
