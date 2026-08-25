@@ -126,7 +126,9 @@ def sync_detailed(
 
      One canonical query for deployment planning: pass a workload spec, get ranked rigs with required-
     VRAM math (weights + KV cache at target context × concurrency + overhead) and expected TTFT/TPOT
-    from aggregated benchmark medians, plus per-group sample confidence.
+    from aggregated benchmark medians, plus per-group sample confidence. All memory figures — maxVramGb
+    budget, memoryGb and every vramFit field — are GiB (binary, 1024-based), not decimal GB; the
+    response states this in its top-level units block (#738 #866).
 
     Args:
         model (str):
@@ -201,7 +203,9 @@ async def asyncio_detailed(
 
      One canonical query for deployment planning: pass a workload spec, get ranked rigs with required-
     VRAM math (weights + KV cache at target context × concurrency + overhead) and expected TTFT/TPOT
-    from aggregated benchmark medians, plus per-group sample confidence.
+    from aggregated benchmark medians, plus per-group sample confidence. All memory figures — maxVramGb
+    budget, memoryGb and every vramFit field — are GiB (binary, 1024-based), not decimal GB; the
+    response states this in its top-level units block (#738 #866).
 
     Args:
         model (str):

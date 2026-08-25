@@ -95,7 +95,8 @@ class BestResult:
             decode_share_pct (float | Unset): Share of scenario walltime spent decoding
             source (None | str | Unset):
             vram_fit (BestResultVramFitType0 | None | Unset): Estimated fit at the requested context (present with ?fitCheck
-                or ?contextLength): weights + KV cache vs available memory.
+                or ?contextLength): weights + KV cache vs available memory. All memory fields are GiB (binary, 1024-based), not
+                decimal GB (#738 #866).
             pricing (BestResultPricingType0 | None | Unset): USD street-price estimate with range, per-GPU breakdown, asOf
                 date and eBay/Craigslist verification links; null when no anchor exists.
             power (BestResultPowerType0 | None | Unset): Board power (TDP per card and total), typical whole-rig inference

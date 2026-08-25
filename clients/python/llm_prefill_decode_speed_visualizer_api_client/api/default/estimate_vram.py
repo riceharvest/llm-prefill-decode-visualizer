@@ -107,7 +107,9 @@ def sync_detailed(
      Resolves layers, hidden dim, GQA heads, head dim and weight size from the Hugging Face config
     automatically — no architecture params needed. Answers \"will this rig OOM at 64k?\". Optional
     vramGb budget returns a fits flag plus the max context that fits; optional numTurns+tokensPerTurn
-    projects per-turn KV growth with the exact overflow turn.
+    projects per-turn KV growth with the exact overflow turn. All memory figures
+    (weights/kvCache/total/fits, and the vramGb budget itself) are GiB — binary, 1024-based, NOT decimal
+    GB (#738 #866); the response repeats this in its top-level units block.
 
     Args:
         hf_id (str):
@@ -165,7 +167,9 @@ async def asyncio_detailed(
      Resolves layers, hidden dim, GQA heads, head dim and weight size from the Hugging Face config
     automatically — no architecture params needed. Answers \"will this rig OOM at 64k?\". Optional
     vramGb budget returns a fits flag plus the max context that fits; optional numTurns+tokensPerTurn
-    projects per-turn KV growth with the exact overflow turn.
+    projects per-turn KV growth with the exact overflow turn. All memory figures
+    (weights/kvCache/total/fits, and the vramGb budget itself) are GiB — binary, 1024-based, NOT decimal
+    GB (#738 #866); the response repeats this in its top-level units block.
 
     Args:
         hf_id (str):

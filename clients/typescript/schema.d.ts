@@ -33,7 +33,7 @@ export interface paths {
         };
         /**
          * Combined model + KV-cache + context VRAM from just an hfId
-         * @description Resolves layers, hidden dim, GQA heads, head dim and weight size from the Hugging Face config automatically — no architecture params needed. Answers "will this rig OOM at 64k?". Optional vramGb budget returns a fits flag plus the max context that fits; optional numTurns+tokensPerTurn projects per-turn KV growth with the exact overflow turn.
+         * @description Resolves layers, hidden dim, GQA heads, head dim and weight size from the Hugging Face config automatically — no architecture params needed. Answers "will this rig OOM at 64k?". Optional vramGb budget returns a fits flag plus the max context that fits; optional numTurns+tokensPerTurn projects per-turn KV growth with the exact overflow turn. All memory figures (weights/kvCache/total/fits, and the vramGb budget itself) are GiB — binary, 1024-based, NOT decimal GB (#738 #866); the response repeats this in its top-level units block.
          */
         get: operations["estimateVram"];
         put?: never;
@@ -255,7 +255,7 @@ export interface paths {
         };
         /**
          * Hardware sizing recommendation for a workload spec (VRAM fit + expected TTFT/TPOT)
-         * @description One canonical query for deployment planning: pass a workload spec, get ranked rigs with required-VRAM math (weights + KV cache at target context × concurrency + overhead) and expected TTFT/TPOT from aggregated benchmark medians, plus per-group sample confidence.
+         * @description One canonical query for deployment planning: pass a workload spec, get ranked rigs with required-VRAM math (weights + KV cache at target context × concurrency + overhead) and expected TTFT/TPOT from aggregated benchmark medians, plus per-group sample confidence. All memory figures — maxVramGb budget, memoryGb and every vramFit field — are GiB (binary, 1024-based), not decimal GB; the response states this in its top-level units block (#738 #866).
          */
         get: operations["getSizingRecommendation"];
         put?: never;
@@ -700,7 +700,7 @@ export interface components {
             decodeSharePct?: number;
             /** Format: uri */
             source?: string | null;
-            /** @description Estimated fit at the requested context (present with ?fitCheck or ?contextLength): weights + KV cache vs available memory. */
+            /** @description Estimated fit at the requested context (present with ?fitCheck or ?contextLength): weights + KV cache vs available memory. All memory fields are GiB (binary, 1024-based), not decimal GB (#738 #866). */
             vramFit?: {
                 [key: string]: unknown;
             } | null;
@@ -931,6 +931,7 @@ export interface operations {
     computeInference: {
         parameters: {
             query?: {
+                /** @description kvCache mode reports binary units: kbPerToken is KiB, totalMb is MiB, totalGb is GiB (÷1024ⁿ, not decimal) */
                 model?: "singleTurn" | "speculative" | "batched" | "agentic" | "kvCache" | "flagged" | "cost";
                 /** @description singleTurn/batched/agentic/cost */
                 promptTokens?: number;
@@ -1038,7 +1039,7 @@ export interface operations {
                 batchSize?: number;
                 /** @description KV cache precision: 2=FP16, 1=FP8, 0.5=INT4 */
                 kvPrecisionBytes?: number;
-                /** @description optional VRAM budget → fits flag + maxContextTokens (upper bound) */
+                /** @description optional VRAM budget, interpreted as GiB (binary) → fits flag + maxContextTokens (upper bound) */
                 vramGb?: number;
                 /** @description with tokensPerTurn: project KV growth over N agentic turns */
                 numTurns?: number;
@@ -1863,7 +1864,7 @@ export interface operations {
                 maxTtftSeconds?: number;
                 /** @description SLO cap on expected TPOT */
                 maxTpotMs?: number;
-                /** @description budget cap: rig memory (VRAM or unified) must fit under this */
+                /** @description budget cap, GiB (binary): rig memory (VRAM or unified) must fit under this */
                 maxVramGb?: number;
                 /** @description explicit KV arch (with kvHeads+headDim skips the per-param-count estimate) */
                 numLayers?: number;

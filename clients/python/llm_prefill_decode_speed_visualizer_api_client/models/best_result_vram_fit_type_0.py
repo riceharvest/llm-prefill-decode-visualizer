@@ -21,7 +21,7 @@ T = TypeVar("T", bound="BestResultVramFitType0")
 @_attrs_define
 class BestResultVramFitType0:
     """ Estimated fit at the requested context (present with ?fitCheck or ?contextLength): weights + KV cache vs available
-    memory.
+    memory. All memory fields are GiB (binary, 1024-based), not decimal GB (#738 #866).
 
      """
 
