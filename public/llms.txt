@@ -63,7 +63,8 @@ Models:
 - `singleTurn` — TTFT, TPOT, total walltime for a chat request. Params: `promptTokens`, `outputTokens`, `prefillSpeed`, `decodeSpeed`.
   Example: `/api/compute?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105`
 - `speculative` — effective decode speed with a draft model. Params: `baseDecodeSpeed`, `draftTokens`, `acceptanceRate`, `draftCostFraction`.
-- `batched` — per-user vs aggregate throughput at batch size B (per-user decode decays ~B^0.25). Params: `prefillSpeed`, `decodeSpeed`, `batchSize`, `promptTokens`, `outputTokens`.
+- `batched` — per-user vs aggregate throughput at batch size B. Params: `prefillSpeed`, `decodeSpeed`, `batchSize`, `promptTokens`, `outputTokens`, `decodeDecayExponent` (default 0.25, valid range 0–1: heuristic contention exponent — 0 = perfect linear scaling, 1 = batching gains nothing).
+  ⚠️ **No saturation point:** aggregate throughput = `decodeSpeed × batchSize^(1 − decodeDecayExponent)` grows monotonically forever by construction (defaults: ×B^0.75). This model has NO knee, plateau, or "optimal batch size" — do not use it alone for sizing decisions (real schedulers saturate earlier via admission control and memory limits). To find where scaling stops paying off, sweep batch sizes and compare marginal gain per slot (see the homogeneous-sweep idiom under POST /api/compute).
 - `agentic` — turn-by-turn walltime for a tool-calling loop, with/without prefix caching savings. Params: `numTurns`, `basePromptTokens`, `toolOutputTokensPerTurn`, `decodeTokensPerTurn`, `prefillSpeed`, `decodeSpeed`, `enablePrefixCaching`.
 - `kvCache` — KV-cache VRAM for an architecture. Params: `architecture` (`llama70b|llama8b|qwen72b|mistral7b`) or explicit `numLayers`+`kvHeads`+`headDim`, plus `contextLength`, `precisionBytes` (2=FP16, 1=FP8, 0.5=INT4), `batchSize`.
 - `flagged` — engine launch-flag modeling. Params: `prefillSpeed`, `decodeSpeed`, `promptTokens`, `outputTokens`, and `flags` (comma-separated ids: `flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3`). Returns adjusted speeds, a per-flag audit trail (delta + source note), warnings, and a `singleTurn` simulation at the adjusted speeds. Deltas are documented heuristics, not measurements.
@@ -81,6 +82,16 @@ Models:
 Calling `/api/compute` with no `model` returns a self-describing capability list.
 
 **Batching (one round trip for N comparisons):** `POST /api/compute` with `{"batch": [{"model": "singleTurn", "promptTokens": 4096}, {"model": "kvCache", "architecture": "llama70b", "contextLength": 131072}]}` (also accepted as `variants`, or `?batch=[...]` as URL-encoded JSON on GET). Each item is a normal parameter set including its own `model` field; max 50 items. Response: `{batch: true, count, okCount, errorCount, results: [{index, ok, result | error}]}` — one bad scenario returns a per-item error instead of failing the whole batch.
+
+**Homogeneous-sweep idiom (read a throughput curve in one call):** all 50 batch items may share the same `model` while you vary a single parameter — that turns one POST into a full parameter-response curve. Worked example, a batch-size curve for `model=batched` (B = 1..48; note a sweep this size uses 48 of the 50-item budget, and each POST counts as ONE request against the 120 req/min rate limit regardless of item count):
+
+```bash
+curl -s -X POST "$BASE/api/compute" -H 'Content-Type: application/json' \
+  -d '{"batch":[{"model":"batched","decodeSpeed":105,"batchSize":1},{"model":"batched","decodeSpeed":105,"batchSize":2}, ...]}'
+# → ordered results[i].result.aggregateDecodeTokPerSec points along the B axis
+```
+
+Results come back in request order with no axis metadata (`paramSwept` etc.), so track which value each index corresponds to client-side. To find where scaling stops paying off, compute the marginal gain between consecutive points (`aggregate(B+1) − aggregate(B)`); for `batched` it shrinks as ~B^−0.25 but never reaches zero — see the no-saturation caveat on the `batched` model above.
 
 **Dry-run / sandbox (`dry_run=true`):** add `&dry_run=true` to any `/api/compute` call (or `"dry_run": true` in the POST body; also applies per-item inside a batch) to validate the request and echo the parsed parameters — defaults filled in, numbers coerced — WITHOUT executing any math. Response: `{dry_run: true, model, inputs, id?, note}`. The `id` is the same deterministic hash the real call would return, and failures (unknown model, malformed batch) behave exactly as they would for a real call — use it as a cheap sanity check before spending a real computation. Example: `/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true&dry_run=true`.
 

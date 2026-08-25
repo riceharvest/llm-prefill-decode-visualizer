@@ -74,7 +74,7 @@ Models (`model=`, dispatch in `api/_handlers/compute.js`):
 | --- | --- | --- |
 | `singleTurn` | TTFT, TPOT, total walltime for one chat request | `promptTokens`, `outputTokens`, `prefillSpeed`, `decodeSpeed` |
 | `speculative` | Effective decode speed with a draft model | `baseDecodeSpeed`, `draftTokens`, `acceptanceRate`, `draftCostFraction` |
-| `batched` | Per-user vs aggregate throughput at batch size B | `prefillSpeed`, `decodeSpeed`, `batchSize`, `promptTokens`, `outputTokens` |
+| `batched` | Per-user vs aggregate throughput at batch size B | `prefillSpeed`, `decodeSpeed`, `batchSize`, `promptTokens`, `outputTokens`, `decodeDecayExponent` |
 | `agentic` | Turn-by-turn walltime for tool-calling loops, with/without prefix caching | `numTurns`, `basePromptTokens`, `toolOutputTokensPerTurn`, `decodeTokensPerTurn`, `prefillSpeed`, `decodeSpeed`, `enablePrefixCaching` |
 | `kvCache` | KV-cache VRAM for an architecture | `architecture` (`llama70b\|llama8b\|qwen72b\|mistral7b`) or explicit `numLayers`+`kvHeads`+`headDim`; plus `contextLength`, `precisionBytes` (2=FP16, 1=FP8, 0.5=INT4), `batchSize` |
 | `flagged` | Engine launch-flag modeling with per-flag audit trail | `prefillSpeed`, `decodeSpeed`, `promptTokens`, `outputTokens`, `flags` (comma-separated: `flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3`) |

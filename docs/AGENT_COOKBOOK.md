@@ -44,6 +44,17 @@ Run inference math: TTFT, TPOT, walltime, VRAM for a parameter set. Models:
 `singleTurn`, `speculative`, `batched`, `agentic`, `kvCache`, `flagged`, `cost`.
 Call without `model` to get the self-describing capability list.
 
+**Batched model caveat (`model=batched`):** per-user decode decays as
+`decodeSpeed × batchSize^(−decodeDecayExponent)` (heuristic contention
+exponent, default 0.25, valid range 0–1; 0 = perfect linear scaling, 1 =
+batching gains nothing), so aggregate throughput grows as
+`decodeSpeed × batchSize^(1 − decodeDecayExponent)`. That curve rises
+monotonically forever **by construction** — there is no saturation point,
+knee, or "optimal batch size" in this model, and no field like
+`optimalBatchSize` in the response. Do not use it alone for sizing decisions;
+to find where scaling stops paying off, measure marginal gain per extra slot
+with a homogeneous sweep (see the batch section below).
+
 ```bash
 curl -s "$BASE/api/compute?model=singleTurn&promptTokens=2048&outputTokens=512&prefillSpeed=3800&decodeSpeed=105"
 ```
@@ -89,6 +100,30 @@ curl -s -X POST "$BASE/api/compute" \
   -H 'Content-Type: application/json' \
   -d '{"batch":[{"model":"singleTurn","promptTokens":1024},{"model":"kvCache","architecture":"llama70b","contextLength":131072}]}'
 ```
+
+**Homogeneous-sweep idiom:** the items do not have to be different models.
+Keep one `model` and vary a single parameter across items to read an entire
+throughput curve in one round trip. A batch-size curve for the batched model:
+
+```bash
+curl -s -X POST "$BASE/api/compute" \
+  -H 'Content-Type: application/json' \
+  -d '{"batch":[
+    {"model":"batched","decodeSpeed":105,"batchSize":1},
+    {"model":"batched","decodeSpeed":105,"batchSize":2},
+    {"model":"batched","decodeSpeed":105,"batchSize":4},
+    {"model":"batched","decodeSpeed":105,"batchSize":8}
+  ]}'
+# → results[i].result.aggregateDecodeTokPerSec, ordered along the B axis
+```
+
+Budget notes: each POST counts as ONE request against the 120 req/min rate
+limit regardless of item count, but a full B=1..48 sweep consumes 48 of the
+50-item budget (two GPU-config comparisons need two calls). Results come back
+in request order with no axis metadata — track which value each `index`
+corresponded to client-side. For `batched`, marginal gain per extra slot
+shrinks (~B^−0.25) but never reaches zero: the model has no saturation point
+(see the caveat under GET /api/compute).
 
 Expected response (200):
 
