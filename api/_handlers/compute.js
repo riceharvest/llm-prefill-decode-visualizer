@@ -42,6 +42,76 @@ const OTHER_ENDPOINTS = [
 // capability list and /llms.txt). Keeps responses bounded.
 export const MAX_BATCH_SIZE = 50;
 
+// Per-model output-field documentation for the capability list (#489).
+// Metric coverage differs per model (e.g. speculative returns no time metrics
+// at all), so the self-describing index declares exactly which fields each
+// model returns, with units. Envelope fields present on EVERY model response
+// (`id`, `inputs`, `warnings`) are documented once in OUTPUTS_NOTE instead of
+// being repeated per model. The _compute_outputs.test.js drift guard asserts
+// this list stays in lockstep with the actual handler output.
+export const MODEL_OUTPUTS = {
+  singleTurn: [
+    { field: 'ttftSeconds', unit: 'seconds' },
+    { field: 'tpotMs', unit: 'ms/token' },
+    { field: 'decodeSeconds', unit: 'seconds' },
+    { field: 'totalWalltimeSeconds', unit: 'seconds' },
+    { field: 'effectiveThroughputTokPerSec', unit: 'tok/s' },
+    { field: 'prefillSharePct', unit: '% of walltime' },
+    { field: 'decodeSharePct', unit: '% of walltime' }
+  ],
+  speculative: [
+    { field: 'effectiveDecodeTokPerSec', unit: 'tok/s' },
+    { field: 'speedupVsVanilla', unit: '× multiplier' },
+    { field: 'tokensPerVerifyStep', unit: 'tokens/step' },
+    { field: 'breakevenAcceptanceRate', unit: 'fraction 0–1' },
+    { field: 'hurtsVsVanilla', unit: 'boolean' }
+  ],
+  batched: [
+    { field: 'ttftSeconds', unit: 'seconds (batch leader)' },
+    { field: 'perUserDecodeSeconds', unit: 'seconds' },
+    { field: 'perUserTotalSeconds', unit: 'seconds' },
+    { field: 'perUserDecodeTokPerSec', unit: 'tok/s per user' },
+    { field: 'aggregateDecodeTokPerSec', unit: 'tok/s across batch' }
+  ],
+  agentic: [
+    { field: 'ttftSeconds', unit: 'seconds' },
+    { field: 'finalContextTokens', unit: 'tokens' },
+    { field: 'totalWalltimeSeconds', unit: 'seconds (all turns)' },
+    { field: 'walltimeWithoutCachingSeconds', unit: 'seconds' },
+    { field: 'cachingSavesSeconds', unit: 'seconds' },
+    { field: 'cachingSavesPct', unit: '%' },
+    { field: 'turns[]', unit: 'array — one row per turn; per-turn prefillSeconds / decodeSeconds / turnWalltimeSeconds / cumulativeWalltimeSeconds (the grand total equals the last element\'s cumulativeWalltimeSeconds)' }
+  ],
+  kvCache: [
+    { field: 'bytesPerToken', unit: 'bytes/token' },
+    { field: 'kbPerToken', unit: 'KB/token' },
+    { field: 'totalMb', unit: 'MB at the requested context' },
+    { field: 'totalGb', unit: 'GB at the requested context' },
+    { field: 'formula', unit: 'string — the exact math used' },
+    { field: 'units', unit: 'object — unit declarations for every KV figure' },
+    { field: 'contextWindow', unit: 'object — withinLimit/overflowTokens vs the architecture max context (present when the limit is known)' }
+  ],
+  flagged: [
+    { field: 'adjusted', unit: 'object — effective prefill/decode tok/s after flag deltas' },
+    { field: 'totalPrefillDeltaPct', unit: '% change vs base' },
+    { field: 'totalDecodeDeltaPct', unit: '% change vs base' },
+    { field: 'adjustments', unit: 'array — per-flag deltas with source notes' },
+    { field: 'simulation', unit: 'object — full single-turn simulation under the adjusted speeds (ttftSeconds, tpotMs, totalWalltimeSeconds, …)' }
+  ],
+  cost: [
+    { field: 'effectiveThroughputTokPerSec', unit: 'tok/s' },
+    { field: 'requestsPerHour', unit: 'requests/hour' },
+    { field: 'hardwareCostUsdPerHour', unit: 'USD/hour' },
+    { field: 'electricityCostUsdPerHour', unit: 'USD/hour' },
+    { field: 'totalCostUsdPerHour', unit: 'USD/hour' },
+    { field: 'costUsdPerMillionTokens', unit: 'USD per 1M tokens' },
+    { field: 'costUsdPerThousandRequests', unit: 'USD per 1k requests' }
+  ]
+};
+
+const MODEL_OUTPUTS_NOTE =
+  'Every successful result also carries the envelope fields id (deterministic calc id), inputs (echoed resolved parameters) and warnings (implausibility flags — see sanity below).';
+
 const MODEL_PRESETS = {
   llama70b:  { numLayers: 80, hiddenSize: 8192, kvHeads: 8, numHeads: 64, headDim: 128, maxContext: 131072 },
   llama8b:   { numLayers: 32, hiddenSize: 4096, kvHeads: 8, numHeads: 32, headDim: 128, maxContext: 131072 },
@@ -441,21 +511,25 @@ function computeOne(params, dryRun = false) {
 }
 
 function capabilityList() {
+  const withOutputs = (entry, model) => ({
+    outputs: MODEL_OUTPUTS[model],
+    ...entry
+  });
   return {
     description: 'LLM inference math API. Pass ?model=<name> plus parameters, or batch up to 50 parameter sets via POST {"batch":[...]} (or ?batch=[...] as JSON). Speed-based models accept ?preset=<hardware preset id> from /api/presets to source prefillSpeed/decodeSpeed defaults (explicit params win; unknown ids get an unknown_preset warning). singleTurn/agentic also accept optional SLO budgets maxTtftSeconds/maxTpotMs and return a pass/fail `slo` block (#472/#480).',
     models: {
-      singleTurn: { params: ['promptTokens', 'outputTokens', 'prefillSpeed', 'decodeSpeed', '?preset', '?jit&jitPct', '?ctx&ctxHalf', '?img&imgN&imgRes', '?maxTtftSeconds&maxTpotMs'], example: '/api/compute?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105' },
-      speculative: { params: ['baseDecodeSpeed', 'draftTokens', 'acceptanceRate', 'draftCostFraction'], example: '/api/compute?model=speculative&baseDecodeSpeed=105&draftTokens=4&acceptanceRate=0.7' },
-      batched: { params: ['prefillSpeed', 'decodeSpeed', 'batchSize', 'promptTokens', 'outputTokens', 'decodeDecayExponent'], example: '/api/compute?model=batched&batchSize=16&decodeSpeed=105' },
-      agentic: { params: ['numTurns', 'basePromptTokens', 'toolOutputTokensPerTurn', 'decodeTokensPerTurn', 'prefillSpeed', 'decodeSpeed', 'enablePrefixCaching', '?preset', '?maxTtftSeconds&maxTpotMs'], example: '/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true' },
-      kvCache: { params: ['architecture|numLayers+kvHeads+headDim', 'contextLength', 'precisionBytes', 'batchSize'], architectures: Object.keys(MODEL_PRESETS), example: '/api/compute?model=kvCache&architecture=llama70b&contextLength=65536' },
-      flagged: {
+singleTurn: withOutputs({ params: ['promptTokens', 'outputTokens', 'prefillSpeed', 'decodeSpeed', '?preset', '?jit&jitPct', '?ctx&ctxHalf', '?img&imgN&imgRes', '?maxTtftSeconds&maxTpotMs'], example: '/api/compute?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105' }, 'singleTurn'),
+speculative: withOutputs({ params: ['baseDecodeSpeed', 'draftTokens', 'acceptanceRate', 'draftCostFraction'], example: '/api/compute?model=speculative&baseDecodeSpeed=105&draftTokens=4&acceptanceRate=0.7' }, 'speculative'),
+batched: withOutputs({ params: ['prefillSpeed', 'decodeSpeed', 'batchSize', 'promptTokens', 'outputTokens', 'decodeDecayExponent'], example: '/api/compute?model=batched&batchSize=16&decodeSpeed=105' }, 'batched'),
+agentic: withOutputs({ params: ['numTurns', 'basePromptTokens', 'toolOutputTokensPerTurn', 'decodeTokensPerTurn', 'prefillSpeed', 'decodeSpeed', 'enablePrefixCaching', '?preset', '?maxTtftSeconds&maxTpotMs'], example: '/api/compute?model=agentic&numTurns=6&enablePrefixCaching=true' }, 'agentic'),
+kvCache: withOutputs({ params: ['architecture|numLayers+kvHeads+headDim', 'contextLength', 'precisionBytes', 'batchSize'], architectures: Object.keys(MODEL_PRESETS), example: '/api/compute?model=kvCache&architecture=llama70b&contextLength=65536' }, 'kvCache'),
+      flagged: withOutputs({
         params: ['prefillSpeed', 'decodeSpeed', 'promptTokens', 'outputTokens', 'flags'],
         flags: Object.fromEntries(ENGINE_FLAGS.map(f => [f.id, { flag: f.flag, engine: f.engine, prefillDeltaPct: Math.round((f.prefillMult - 1) * 100), decodeDeltaPct: Math.round((f.decodeMult - 1) * 100), kvBits: f.kvBits, source: f.source, sourceNote: f.sourceNote }])),
         description: 'Applies documented engine launch-flag deltas to base speeds and simulates a single turn. All deltas are heuristics with a source note each — not measurements. NOTE: these are engine LAUNCH FLAGS (llama.cpp/vLLM), not the web UI\'s feature toggles — see uiToggles below for that mapping.',
         example: '/api/compute?model=flagged&prefillSpeed=2400&decodeSpeed=65&flags=flash-attn,kv-q8'
-      },
-      cost: { params: ['hardwarePriceUsd', 'electricityRatePerKwh', 'powerDrawWatts', 'amortizationMonths', 'promptTokens', 'outputTokens', 'prefillSpeed', 'decodeSpeed'], example: '/api/compute?model=cost&hardwarePriceUsd=2000&electricityRatePerKwh=0.15&powerDrawWatts=450&prefillSpeed=3800&decodeSpeed=105' }
+      }, 'flagged'),
+      cost: withOutputs({ params: ['hardwarePriceUsd', 'electricityRatePerKwh', 'powerDrawWatts', 'amortizationMonths', 'promptTokens', 'outputTokens', 'prefillSpeed', 'decodeSpeed'], example: '/api/compute?model=cost&hardwarePriceUsd=2000&electricityRatePerKwh=0.15&powerDrawWatts=450&prefillSpeed=3800&decodeSpeed=105' }, 'cost')
     },
     uiToggles: {
       description: 'Mapping from the Single-turn view\'s four feature toggles to API parameters, so an agent reproducing UI state does NOT land on model=flagged (that models engine launch flags, which share zero overlap with these toggles).',

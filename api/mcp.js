@@ -617,13 +617,23 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    // Discovery: point at the manifest and spec.
-    return json(res, {
-      server: 'llm-prefill-decode-visualizer',
+    // Streamable HTTP transport (#491): a GET on the MCP endpoint must either
+    // open an SSE stream or return 405 Method Not Allowed. This server is
+    // stateless and offers no server-initiated stream, so 405 it is — with an
+    // Allow header (RFC 9110 §15.5.5) and pointers to the discovery surfaces
+    // that used to be served here (they remain available there).
+    res.statusCode = 405;
+    res.setHeader('Allow', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Vary', 'Accept, Accept-Encoding, Origin');
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({
+      error: 'Method not allowed',
+      detail: 'This MCP endpoint speaks JSON-RPC over POST only (stateless Streamable HTTP, no SSE stream). GET is reserved by the transport spec.',
       transport: 'streamable-http',
       protocolVersion: '2025-06-18',
       endpoints: { manifest: '/.well-known/mcp.json', spec: '/api/spec', thisEndpoint: '/api/mcp' }
-    });
+    }));
   }
 
   if (req.method !== 'POST') {

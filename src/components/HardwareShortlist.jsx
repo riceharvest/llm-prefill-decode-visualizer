@@ -3,15 +3,20 @@ import { ListFilter, ExternalLink, RotateCcw } from 'lucide-react';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
 import { quantizationMatches } from '../utils/hardwareShortlist';
 import { formatTime } from '../utils/presets';
+import { fetchHardwareShortlist, qualitySignals, qualitySummaryText } from '../utils/hardwareShortlist';
 
 // Constraint-driven hardware shortlist ("find me hardware").
 //
 // The user states workload constraints — minimum acceptable decode tok/s at a
 // given quantization, an optional model family, and a max VRAM budget — and we
 // return a ranked shortlist of community-measured rigs. Ranking comes straight
-// from GET /api/best (median decode per hardware×model group, outlier-resistant);
-// the numeric constraints are applied client-side because they are workload
-// requirements, not corpus filters.
+// from GET /api/best (median decode per hardware×model group, outlier-resistant).
+// Constraints are applied SERVER-SIDE (#496) via /api/best's own quant /
+// minDecode / maxVramGb filters so the shortlist answers the same question the
+// documented API does — filtering only the global top-50 client-side hid
+// qualifying rigs ranked below 50 and starved the quant dropdown. An
+// unconstrained top-50 is still fetched alongside to build the quantization
+// vocabulary even while a quant filter narrows the constrained result set.
 //
 // Power draw and new-vs-used listing price are NOT yet tracked in the
 // community run metadata (totalPowerWatts/hardwareCost are almost always null
@@ -47,7 +52,8 @@ export default function HardwareShortlist() {
 
   const [status, setStatus] = useState('loading'); // loading | ready | error
   const [error, setError] = useState(null);
-  const [rows, setRows] = useState([]);       // ranked groups from /api/best
+  const [rows, setRows] = useState([]);       // ranked groups currently displayed
+  const [optionRows, setOptionRows] = useState([]); // unconstrained top-50 (quant vocabulary)
   const [matchedRuns, setMatchedRuns] = useState(0);
   const abortRef = useRef(null);
 
@@ -93,16 +99,18 @@ export default function HardwareShortlist() {
   }, [model, minDecode, maxVram, quant]);
 
   // Distinct quantizations seen in the corpus, most common first.
+  // Built from the UNCONSTRAINED top-50 so selecting one option doesn't
+  // collapse the rest out of the dropdown (#496, consequence 3).
   const quantOptions = useMemo(() => {
     const counts = new Map();
-    for (const row of rows) {
+    for (const row of optionRows) {
       const q = row.quantization || 'Unknown';
       counts.set(q, (counts.get(q) || 0) + 1);
     }
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([q]) => q);
-  }, [rows]);
+  }, [optionRows]);
 
   // Issue #832: constraints are applied server-side now (or by the client-side
   // fallback aggregator inside fetchHardwareShortlist), so the ranked rows ARE
@@ -223,7 +231,10 @@ export default function HardwareShortlist() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {shortlist.map((row, i) => (
+              {shortlist.map((row, i) => {
+                const q = qualitySignals(row);
+                const qualityLine = qualitySummaryText(q);
+                return (
                 <div key={`${row.hardwareKey}|${row.modelFamily}|${row.quantization}`} className="panel-inset">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
                     <div>
@@ -247,6 +258,15 @@ export default function HardwareShortlist() {
                       )}
                     </div>
                   </div>
+
+                  {qualityLine && (
+                    <div data-quality-signals style={{
+                      marginTop: '7px', fontSize: '0.72rem', lineHeight: 1.5,
+                      color: (q.flagged || q.grade === 'low') ? 'var(--warn)' : 'var(--text-muted)'
+                    }}>
+                      {qualityLine}
+                    </div>
+                  )}
 
                   <div style={{ ...rowStyle, marginTop: '9px', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>
                     <span>Prefill (median)</span>
@@ -315,7 +335,8 @@ export default function HardwareShortlist() {
                     </span>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}

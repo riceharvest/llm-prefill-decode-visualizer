@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildShortlist, effectiveVramGb, fetchHardwareShortlist, quantizationMatches } from './hardwareShortlist.js';
+import { buildShortlist, effectiveVramGb, fetchHardwareShortlist, quantizationMatches, qualitySignals, qualitySummaryText } from './hardwareShortlist.js';
 
 function run(overrides = {}) {
   return {
@@ -126,4 +126,104 @@ test('quantizationMatches folds case on both row and query (#817)', () => {
   // empty/absent quant = no filter
   assert.equal(quantizationMatches('Q4_K_M', ''), true);
   assert.equal(quantizationMatches(undefined, 'q4'), false);
+});
+
+// ---- #496: constraints must travel to /api/best, not filter the top-50 locally
+
+test('fetchHardwareShortlist passes quant/minDecode/maxVramGb server-side (#496)', async t => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (path) => {
+    calls.push(String(path));
+    if (String(path).startsWith('/api/best')) {
+      return { ok: true, json: async () => ({ results: [{ hardwareKey: 'k', modelFamily: 'm', quantization: 'FP8', medianDecodeTokPerSec: 99 }], matchedRuns: 38 }) };
+    }
+    return { ok: true, json: async () => ({ runs: [] }) }; // localmaxxing enrichment
+  };
+
+  const out = await fetchHardwareShortlist({ minDecode: 20, quant: 'fp8', maxVramGb: 32, model: 'llama' });
+  const bestUrl = calls.find(c => c.startsWith('/api/best'));
+  assert.ok(bestUrl, 'expected an /api/best call');
+  const params = new URL(bestUrl, 'http://x').searchParams;
+  assert.equal(params.get('quant'), 'fp8');
+  assert.equal(params.get('minDecode'), '20');
+  assert.equal(params.get('maxVramGb'), '32');
+  assert.equal(params.get('model'), 'llama');
+  // Honest corpus count from the constrained query surfaces in the UI:
+  assert.equal(out.matchedRuns, 38);
+});
+
+test('fetchHardwareShortlist omits constraint params that are unset (byte-identical legacy URL)', async t => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (path) => {
+    calls.push(String(path));
+    if (String(path).startsWith('/api/best')) {
+      return { ok: true, json: async () => ({ results: [], matchedRuns: 0 }) };
+    }
+    return { ok: true, json: async () => ({ runs: [] }) };
+  };
+
+  await fetchHardwareShortlist({});
+  const bestUrl = new URL(calls.find(c => c.startsWith('/api/best')), 'http://x');
+  assert.equal(bestUrl.search, '?by=decode&limit=50');
+});
+
+// ---- #503: per-rig quality signals from /api/best must survive to the DOM
+
+test('qualitySignals normalizes confidence grade, flags and caveats (#503)', () => {
+  const row = {
+    confidence: { grade: 'low', runs: 1 },
+    dataQuality: {
+      status: 'flagged',
+      flagged: [
+        { runId: 'r1', codes: ['decode_above_roofline'] },
+        { runId: 'r2', codes: ['decode_above_roofline', 'prefill_above_compute_roofline'] }
+      ]
+    },
+    caveats: [
+      { code: 'n1_group', severity: 'warning', summary: 'n=1' },
+      null,
+      { code: 'engine_mix', summary: 'mixed engines' }
+    ],
+    newestAgeDays: 12
+  };
+  const q = qualitySignals(row);
+  assert.deepEqual(q, {
+    grade: 'low',
+    runs: 1,
+    flagged: true,
+    flagCodes: ['decode_above_roofline', 'prefill_above_compute_roofline'],
+    caveats: [
+      { code: 'n1_group', severity: 'warning', summary: 'n=1' },
+      { code: 'engine_mix', severity: 'warning', summary: 'mixed engines' }
+    ],
+    newestAgeDays: 12
+  });
+});
+
+test('qualitySignals tolerates rows without any quality block', () => {
+  const q = qualitySignals({});
+  assert.equal(q.grade, null);
+  assert.equal(q.flagged, false);
+  assert.deepEqual(q.flagCodes, []);
+  assert.deepEqual(q.caveats, []);
+});
+
+test('qualitySummaryText renders one machine-readable line per card', () => {
+  const bad = qualitySummaryText(qualitySignals({
+    confidence: { grade: 'low', runs: 1 },
+    dataQuality: { status: 'flagged', flagged: [{ codes: ['decode_above_roofline'] }] },
+    caveats: [{ code: 'n1_group', summary: 'n=1' }]
+  }));
+  assert.equal(bad, 'confidence: low (n=1) · flagged (decode_above_roofline) · n=1');
+
+  const clean = qualitySummaryText(qualitySignals({
+    confidence: { grade: 'high', runs: 16 },
+    dataQuality: { status: 'ok' },
+    caveats: []
+  }));
+  assert.equal(clean, 'confidence: high (n=16)');
 });

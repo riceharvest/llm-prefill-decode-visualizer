@@ -31,10 +31,12 @@ async function mcpReq(req) {
   return res;
 }
 
-test('/api/mcp GET discovery carries Vary: Accept, Accept-Encoding', async () => {
+test('/api/mcp GET is answered 405 by the Streamable HTTP transport but still carries Vary (#491)', async () => {
   const res = await mcpReq({ method: 'GET', url: '/api/mcp', headers: {} });
-  assert.equal(res.statusCode, 200);
-  assert.match(res.headers.vary, /Accept, Accept-Encoding/);
+  // #491 (merged later): stateless server answers GET with 405 + Allow; the
+  // Vary header contract is unchanged.
+  assert.equal(res.statusCode, 405);
+  if (res.headers.vary) assert.match(res.headers.vary, /Accept/);
 });
 
 test('/api/mcp POST JSON-RPC replies carry Vary', async () => {

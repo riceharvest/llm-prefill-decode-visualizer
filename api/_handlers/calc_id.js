@@ -11,6 +11,7 @@ import { computeBody as computeResponse } from './compute.js';
 import { bestBody as bestResponse } from './best.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson } from '../_schema.js';
+import { diffRunsBody } from './diff.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -53,8 +54,8 @@ export default async function handler(req, res) {
     }, 400);
   }
 
-  if (!['compute', 'best'].includes(endpoint)) {
-    return json(res, { error: `Unknown endpoint '${endpoint}'`, available: ['compute', 'best'] }, 400);
+  if (!['compute', 'best', 'diff'].includes(endpoint)) {
+    return json(res, { error: `Unknown endpoint '${endpoint}'`, available: ['compute', 'best', 'diff'] }, 400);
   }
 
   // Strip routing/meta keys; whatever remains is the request being replayed.
@@ -72,8 +73,10 @@ export default async function handler(req, res) {
   if (!hasParams) {
     return json(res, {
       error: 'Missing request parameters',
-      detail: `Calc ids are content hashes of the request — they are not a lookup key into a database. Re-send the original ${endpoint === 'best' ? 'filters' : 'parameters'} alongside the id and this endpoint will re-run the same math and verify the hash.`,
-      example: endpoint === 'best'
+      detail: `Calc ids are content hashes of the request — they are not a lookup key into a database. Re-send the original ${endpoint === 'diff' ? 'run ids' : endpoint === 'best' ? 'filters' : 'parameters'} alongside the id and this endpoint will re-run the same math and verify the hash.`,
+      example: endpoint === 'diff'
+        ? `/api/calc/${id}?endpoint=diff&runA=<runId>&runB=<runId>`
+        : endpoint === 'best'
         ? `/api/calc/${id}?endpoint=best&by=decode&maxParamsB=8`
         : `/api/calc/${id}?model=singleTurn&promptTokens=4096&outputTokens=512`
     }, 400);
@@ -110,7 +113,11 @@ export default async function handler(req, res) {
 
   let out;
   try {
-    out = endpoint === 'best' ? await bestResponse(params) : computeResponse(params);
+    out = endpoint === 'best'
+      ? await bestResponse(params)
+      : endpoint === 'diff'
+        ? await diffRunsBody(params)
+        : computeResponse(params);
   } catch (err) {
     return json(res, { error: String(err.message || err) }, 500);
   }

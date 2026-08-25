@@ -10,6 +10,7 @@ import { GPU_CATALOG, WEIGHT_PRECISIONS, gpuById, normalizeGpuId, parseParamsB, 
 import Metric from './Metric';
 import Analogy from './Analogy';
 import { memoryLedger, SAFETY_HEADROOM_FRACTION } from '../../api/_math.js';
+import { gpuVerdictChipLabel, kvCacheLiveSummary } from '../utils/kvVerdictA11y';
 import MultiGpuPlanner from './MultiGpuPlanner';
 import ChartDataTable from './ChartDataTable';
 import { t } from '../i18n/strings';
@@ -518,6 +519,18 @@ export default function KVCacheCalculator() {
           </div>
         </div>
 
+        {/* Live announcement of computed results (#510): every control change
+            re-computes these silently otherwise — AT users and DOM-watching
+            agents get one polite summary instead. */}
+        <p role="status" aria-live="polite" className="visually-hidden" data-kv-live-summary>
+          {kvCacheLiveSummary({
+            kbPerToken: Number((bytesPerTokenSingleSeq / 1024).toFixed(1)),
+            totalGb: Number(totalKVCacheGB.toFixed(2)),
+            gpuVramGb: safeGpuVram > 0 ? safeGpuVram : null,
+            verdictLabel: safeGpuVram > 0 ? (verdictLabel[ledger.verdict] || '') : ''
+          })}
+        </p>
+
         {/* ---- Full memory budget ledger ---- */}
         <section className="panel-inset" aria-label={t('kvCache.ledgerAria')} style={{ marginTop: '18px', padding: '14px 16px' }}>
           <h3 style={{ margin: '0 0 6px', fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -552,6 +565,7 @@ export default function KVCacheCalculator() {
                   }}
                   className={gpuId === gpu.id ? 'active' : ''}
                   aria-pressed={gpuId === gpu.id}
+                  aria-label={gpuVerdictChipLabel({ name: gpu.name, vramGb: gpu.vramGb, verdict: v, verdictLabels: verdictLabel })}
                   style={{ fontFamily: 'var(--font-sans)', fontSize: '0.76rem', display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   <span aria-hidden="true" style={{
