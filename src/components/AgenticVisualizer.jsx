@@ -34,7 +34,7 @@ export default function AgenticVisualizer({
   sloBudgets
 }) {
   // Agent configuration parameters
-  const [numTurns, setNumTurns] = useState(() => readParamNum('turns', 4));
+  const [numTurns, setNumTurns] = useState(() => readParamNum('turns', 4, 1, 200));
   const [basePromptTokens, setBasePromptTokens] = useState(() => readParamNum('sprompt', 1500));
   const [toolOutputTokensPerTurn, setToolOutputTokensPerTurn] = useState(() => readParamNum('tool', 800));
   const [decodeTokensPerTurn, setDecodeTokensPerTurn] = useState(() => readParamNum('thought', 250));

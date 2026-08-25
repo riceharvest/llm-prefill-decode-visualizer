@@ -104,3 +104,54 @@ test('idle gap before first arrival produces no empty busy steps', () => {
   const sim = simulateBatching({ requests: late, maxBatchSize: 4, chunkSize: 256, ...PARAMS });
   assert.equal(sim.steps[0].tStart, 2);
 });
+
+// --- Regression guards for crafted/unclamped URL params (#1059 #1078) ---
+
+test('simulateBatching terminates with maxBatchSize <= 0 instead of spinning forever (#1078)', () => {
+  const reqs = workload();
+  const sim = simulateBatching({ requests: reqs, maxBatchSize: 0, chunkSize: 512, ...PARAMS });
+  assert.ok(Number.isFinite(sim.makespan));
+  assert.ok(sim.steps.length > 0);
+  assert.equal(sim.requests.filter(r => r.finishTime !== null).length, reqs.length);
+
+  const neg = simulateBatching({ requests: reqs, maxBatchSize: -3, chunkSize: 0, ...PARAMS });
+  assert.equal(neg.requests.filter(r => r.finishTime !== null).length, reqs.length);
+});
+
+test('simulateStaticBatching terminates with maxBatchSize <= 0 instead of walking in place (#1078)', () => {
+  const reqs = workload();
+  const sim = simulateStaticBatching({ requests: reqs, maxBatchSize: 0, ...PARAMS });
+  assert.ok(Number.isFinite(sim.makespan));
+  assert.ok(sim.steps.length > 0);
+  assert.equal(sim.requests.filter(r => r.finishTime !== null).length, reqs.length);
+});
+
+test('generateRequests caps absurd numRequests so crafted ?breqs= can not OOM render (#1059)', () => {
+  const huge = generateRequests({
+    numRequests: 1e9,
+    meanPromptTokens: 2000,
+    meanOutputTokens: 128,
+    arrivalIntervalMs: 150
+  });
+  assert.ok(huge.length <= 10000, `expected capped workload, got ${huge.length}`);
+  assert.ok(huge.length > 0);
+
+  // Degenerate values yield an empty (but well-formed) workload.
+  assert.deepEqual(generateRequests({
+    numRequests: 0,
+    meanPromptTokens: 2000,
+    meanOutputTokens: 128,
+    arrivalIntervalMs: 150
+  }), []);
+  assert.deepEqual(generateRequests({
+    numRequests: Number.NaN,
+    meanPromptTokens: 2000,
+    meanOutputTokens: 128,
+    arrivalIntervalMs: 150
+  }), []);
+});
+
+test('normal workloads are unaffected by the caps', () => {
+  const reqs = workload({ numRequests: 48 });
+  assert.equal(reqs.length, 48);
+});

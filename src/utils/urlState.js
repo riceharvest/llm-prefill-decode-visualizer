@@ -10,11 +10,33 @@ export function readParam(name) {
   return p.get(name);
 }
 
-export function readParamNum(name, fallback) {
+export function clampNum(n, min, max) {
+  if (typeof min === 'number') n = Math.max(min, n);
+  if (typeof max === 'number') n = Math.min(max, n);
+  return n;
+}
+
+// Numeric URL param with optional [min, max] clamp. Malformed values fall back
+// unchanged; out-of-range values are clamped so crafted share links
+// (?breqs=99999999, ?turns=-5) can't drive O(n) allocation or negative loops
+// in the visualizers (issues #1040, #1059, #1078).
+export function readParamNum(name, fallback, min, max) {
   const v = readParam(name);
   if (v === null || v === '') return fallback;
   const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
+  if (!Number.isFinite(n)) return fallback;
+  return clampNum(n, min, max);
+}
+
+// Shared ?sim= playback-speed reader for every entry point (/ and /embed).
+// Accepts 'instant' or a positive finite multiplier; 0, negatives and garbage
+// fall back to 1x instead of pinning the simulation clock below zero forever
+// (issues #1039, #1040).
+export function readSimSpeed() {
+  const v = readParam('sim');
+  if (v === 'instant') return 'instant';
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
 export function readParamBool(name, fallback) {
