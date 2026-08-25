@@ -5,6 +5,7 @@ import {
   loadSnapshots, saveSnapshots, parseSettings,
   exportSnapshots, importSnapshots, mergeSnapshots
 } from '../utils/settingsHistory';
+import { buildShareLink } from '../utils/permalink';
 
 function makeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -26,10 +27,13 @@ function snapshotSummary(snap) {
 /**
  * Named settings snapshots sidebar (#96). Snapshots serialize to the shared
  * URL format (see utils/settingsHistory.js), so "copy link" hands out a
- * permalink that restores the configuration anywhere. Restoring is undoable —
- * App records it on the same history stack as manual edits.
+ * permalink that restores the configuration anywhere. The link is minted by
+ * the canonical builder (#875) with `tab` pinned to the active view, so it
+ * reopens exactly what was saved instead of an accidental default view.
+ * Restoring is undoable — App records it on the same history stack as manual
+ * edits.
  */
-export default function SnapshotsSidebar({ currentQs, onRestore, restoreReport, canUndo, canRedo, onUndo, onRedo }) {
+export default function SnapshotsSidebar({ currentQs, activeTab, onRestore, restoreReport, canUndo, canRedo, onUndo, onRedo }) {
   const [snapshots, setSnapshots] = useState(loadSnapshots);
   const [name, setName] = useState('');
   const [copiedId, setCopiedId] = useState('');
@@ -95,9 +99,14 @@ export default function SnapshotsSidebar({ currentQs, onRestore, restoreReport, 
 
   const handleCopy = async (snap) => {
     try {
-      await navigator.clipboard.writeText(
-        `${window.location.origin}${window.location.pathname}?${snap.qs}`
-      );
+      // Canonical share link (#875): snapshot settings + the active tab, so
+      // opening the link restores both the speeds and the right view.
+      await navigator.clipboard.writeText(buildShareLink({
+        origin: window.location.origin,
+        pathname: window.location.pathname,
+        search: snap.qs ? `?${snap.qs}` : '',
+        tab: activeTab
+      }));
       setCopiedId(snap.id);
       setTimeout(() => setCopiedId(''), 2000);
     } catch {

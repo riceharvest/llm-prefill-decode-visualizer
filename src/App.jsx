@@ -17,7 +17,7 @@ import SloBudgetsPanel, { useSloBudgets } from './components/SloBudgetsPanel';
 import { HARDWARE_PRESETS } from './utils/presets';
 import { toLocalPreset, hardwareName } from './utils/localMaxxing';
 import {
-  describeConfig, permalinkHref, readPermalinkTitle, documentTitleFor
+  describeConfig, buildShareLink, readPermalinkTitle, documentTitleFor
 } from './utils/permalink';
 import { verifyShareLink } from './utils/shareIntegrity';
 import { readParam, writeParams } from './utils/urlState';
@@ -418,16 +418,19 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [handleUndo, handleRedo, shortcutsOpen]);
 
-  // Issue #106: share a titled permalink — the current query-string state
-  // (which already encodes preset, speeds, flags and every tab's sim inputs)
-  // plus the auto-generated human-readable `title` param and #s/<slug>.
+  // Issue #875: share a canonical permalink built by buildShareLink() — the
+  // current query-string state (which already encodes preset, speeds, flags
+  // and every tab's sim inputs) with `tab` pinned to the active view and
+  // transient keys stripped. Titles stay display-only (#106): document.title
+  // derives the readable config name, the link itself stays deterministic.
   const handleShare = async () => {
     try {
-      const href = await permalinkHref({
+      const href = buildShareLink({
         origin: window.location.origin,
         pathname: window.location.pathname,
-        search: window.location.search
-      }, permalinkTitle);
+        search: window.location.search,
+        tab: activeTab
+      });
       await navigator.clipboard.writeText(href);
     } catch {
       // clipboard may be unavailable; no-op
@@ -534,6 +537,7 @@ export default function App() {
         <CollapsibleSection id="snapshots" title="Snapshots & history">
           <SnapshotsSidebar
             currentQs={currentQs}
+            activeTab={activeTab}
             onRestore={handleRestoreSnapshot}
             restoreReport={lastRestoreReport}
             canUndo={settingsHistory.past.length > 0}

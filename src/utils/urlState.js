@@ -1,6 +1,9 @@
 // Lightweight URL query-param helpers for shareable per-tab settings.
 // Settings are written with history.replaceState so the URL always reflects
-// the current state without spamming browser history.
+// the current state without spamming browser history. Shareable URLs are
+// minted exclusively by buildShareLink() (utils/permalink.js, #875).
+
+import { buildShareLink } from './permalink';
 
 export function readParam(name) {
   const p = new URLSearchParams(window.location.search);
@@ -49,10 +52,14 @@ export function writeParams(updates) {
   }
 }
 
-// Build a shareable "try it" URL for a demo: sets the given params and marks
+// Build a shareable "try it" URL for a demo: routes through the canonical
+// share-link builder (#875) with the given params as the full state and marks
 // autoplay so the target tab starts its simulation on load.
 export function demoUrl(params) {
-  const p = new URLSearchParams(params);
-  p.set('autoplay', '1');
-  return `${window.location.pathname}?${p.toString()}`;
+  return buildShareLink({
+    origin: window.location.origin,
+    pathname: window.location.pathname,
+    params,
+    autoplay: true
+  });
 }
