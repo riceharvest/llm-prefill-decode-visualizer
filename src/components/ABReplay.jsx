@@ -6,7 +6,7 @@ import {
   formatTime,
   formatTokens
 } from '../utils/presets';
-import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import { readParam, readParamNum, consumeAutoplay, writeParams } from '../utils/urlState';
 import { clockToRunState, runStateToBusy } from '../utils/viewState';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
@@ -67,6 +67,16 @@ export default function ABReplay({
   const [hardwareB, setHardwareB] = useState(() => readParam('abB') || 'rtx4090_exl2');
   const [promptTokens, setPromptTokens] = useState(() => readParamNum('abp', 2048));
   const [outputTokens, setOutputTokens] = useState(() => readParamNum('abo', 512));
+
+  // #693: honor ?autoplay=1 like the single-turn/agentic tabs — demo links
+  // into tab=ab used to land paused. consumeAutoplay() makes this fire once
+  // per page load only (#818), so remounting the tab doesn't re-start runs.
+  const autoplay = useRef(consumeAutoplay());
+  useEffect(() => {
+    if (!autoplay.current) return undefined;
+    const timer = setTimeout(() => setIsPlaying(true), 250);
+    return () => clearTimeout(timer);
+  }, [setIsPlaying]);
 
   // /api/presets seeds both lanes: fetched hardware entries extend the selector
   // options and validate the current selection; scenarios come from the same

@@ -56,6 +56,21 @@ export function readSimMultiplier() {
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
+// Consume the ?autoplay=1 demo-link flag exactly ONCE per page load.
+// Every simulator used to re-read the raw param at mount, so ?autoplay=1
+// re-fired its start timer every time you navigated away from a tab and
+// back (#818), while tab=ab ignored the flag entirely (#693). Callers
+// auto-start only when this returns true; later mounts get false.
+let autoplayConsumed = false;
+export function consumeAutoplay() {
+  if (autoplayConsumed) return false;
+  if (readParamBool('autoplay', false)) {
+    autoplayConsumed = true;
+    return true;
+  }
+  return false;
+}
+
 export function writeParams(updates) {
   const p = new URLSearchParams(window.location.search);
   for (const [k, v] of Object.entries(updates)) {
