@@ -7,7 +7,7 @@ import {
   estimateImageTiles,
   estimateImageTokens
 } from '../utils/multimodal';
-import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
+import { readParamNum, readParam, readParamBool, consumeAutoplay, writeParams } from '../utils/urlState';
 import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
@@ -119,8 +119,10 @@ export default function SingleTurnVisualizer({
   };
 
   // Auto-start the simulation when the page was opened via a "try it" demo link
+  // (#818: consume the flag once per page load so returning to this tab later
+  // doesn't re-fire autoplay).
   useEffect(() => {
-    if (readParam('autoplay') === '1') {
+    if (consumeAutoplay()) {
       const timer = setTimeout(() => setIsPlaying(true), 250);
       return () => clearTimeout(timer);
     }

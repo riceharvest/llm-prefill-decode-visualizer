@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, FileDown, Copy, Zap, Gauge, FileJson } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
-import { readParamNum, readParamBool, readParam, writeParams } from '../utils/urlState';
+import { readParamNum, readParamBool, consumeAutoplay, writeParams } from '../utils/urlState';
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
 import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { exportNodeAsPng } from '../utils/exportPng';
@@ -59,8 +59,10 @@ export default function AgenticVisualizer({
   };
 
   // Auto-start the simulation when the page was opened via a "try it" demo link
+  // (#818: consume the flag once per page load so returning to this tab later
+  // doesn't re-fire autoplay).
   useEffect(() => {
-    if (readParam('autoplay') === '1') {
+    if (consumeAutoplay()) {
       const timer = setTimeout(() => setIsPlaying(true), 250);
       return () => clearTimeout(timer);
     }
