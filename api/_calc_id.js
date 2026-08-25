@@ -9,6 +9,36 @@ import { createHash } from 'node:crypto';
 const PURE_NUMERIC = /^-?\d+(\.\d+)?$/;
 
 /**
+ * Canonicalize one value. Scalars behave exactly as before (#68); arrays and
+ * plain objects are canonicalized recursively (#964) so nested payloads —
+ * notably `batch: [...]` — hash from their CONTENT instead of JavaScript's
+ * lossy `String([{...}])` coercion ("[object Object],[object Object]"), which
+ * made every same-length batch collide on one id.
+ */
+function normalizeValue(v) {
+  if (v === undefined || v === null || v === '') return undefined;
+  if (typeof v === 'number') return Object.is(v, -0) ? 0 : v;
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'string') {
+    if (PURE_NUMERIC.test(v.trim())) {
+      const n = Number(v.trim());
+      return Object.is(n, -0) ? 0 : n;
+    }
+    return String(v);
+  }
+  if (Array.isArray(v)) {
+    // Keep positions stable: dropped members become null rather than
+    // shifting the rest (index alignment matters for batches).
+    return v.map(x => {
+      const nx = normalizeValue(x);
+      return nx === undefined ? null : nx;
+    });
+  }
+  if (typeof v === 'object') return normalizeParams(v);
+  return String(v);
+}
+
+/**
  * Canonicalize raw request params so semantically identical requests hash equal:
  * - keys sorted
  * - numeric strings and numbers collapse ("4096" === 4096)
@@ -18,18 +48,8 @@ const PURE_NUMERIC = /^-?\d+(\.\d+)?$/;
 export function normalizeParams(params) {
   const out = {};
   for (const key of Object.keys(params || {}).sort()) {
-    const v = params[key];
-    if (v === undefined || v === null || v === '') continue;
-    if (typeof v === 'number') {
-      out[key] = Object.is(v, -0) ? 0 : v;
-    } else if (typeof v === 'boolean') {
-      out[key] = v;
-    } else if (typeof v === 'string' && PURE_NUMERIC.test(v.trim())) {
-      const n = Number(v.trim());
-      out[key] = Object.is(n, -0) ? 0 : n;
-    } else {
-      out[key] = String(v);
-    }
+    const nv = normalizeValue(params[key]);
+    if (nv !== undefined) out[key] = nv;
   }
   return out;
 }

@@ -54,6 +54,23 @@ test('every source doc is attributed with a source comment', () => {
   }
 });
 
+test('llms-full.txt has no dead repo-relative links — every link resolves on the deployed site (#888)', () => {
+  // Sources are written for GitHub readers; the compilation is served at the
+  // site root where repo-relative hrefs 404. The generator rewrites deployed
+  // artifacts to root URLs and unwraps everything else to `repo/path` text.
+  const DEAD = [];
+  for (const [, target] of content.matchAll(/\[[^\]]+\]\(([^)\s]+)\)/g)) {
+    if (/^(https?:|#|mailto:)/i.test(target)) continue;
+    if (/^\//.test(target)) continue; // deployment-root URLs are fine
+    DEAD.push(target);
+  }
+  assert.deepEqual(
+    DEAD,
+    [],
+    `llms-full.txt still links repo-relative paths that 404 on the hosted site: ${DEAD.join(', ')}`,
+  );
+});
+
 test('committed llms-full.txt is fresh — regenerating reproduces it byte-for-byte', () => {
   // Build a minimal scratch tree (generator + its inputs) so the real file is
   // only compared, never rewritten mid-test, and no node_modules copy is made.

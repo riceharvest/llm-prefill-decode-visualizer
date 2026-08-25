@@ -42,8 +42,27 @@ test('cost: known rig — $2000 GPU, 450W, $0.15/kWh over 36 months', () => {
   approx(r.electricityCostUsdPerHour, 0.45 * 0.15, 0.00001);
   approx(r.totalCostUsdPerHour, 2000 / (36 * 730) + 0.0675, 0.00001);
   approx(r.requestsPerHour, 3600 / total, 0.01);
-  // ($/hour ÷ tok/s) × 1e6 = $/1M tokens
-  approx(r.costUsdPerMillionTokens, ((2000 / (36 * 730) + 0.0675) / throughput) * 1e6, 0.1);
+  // ($/hour ÷ 3600 s/h ÷ tok/s) × 1e6 = $/1M tokens (#868: hours→seconds
+  // conversion — the old formula was exactly 3600× too high)
+  approx(r.costUsdPerMillionTokens, (((2000 / (36 * 730) + 0.0675) / 3600) / throughput) * 1e6, 0.1);
+});
+
+// #868 regression: costUsdPerMillionTokens must stay internally consistent
+// with costUsdPerThousandRequests for non-zero price/power inputs.
+//   $/1M tokens = ($/1k requests × 1000 / tokens-per-request) × 1e6
+test('cost: #868 costUsdPerMillionTokens is consistent with costUsdPerThousandRequests', () => {
+  const r = cost({
+    hardwarePriceUsd: 2000, powerDrawWatts: 450, electricityRatePerKwh: 0.30,
+    promptTokens: 1000000, outputTokens: 1000000,
+    prefillSpeed: 3800, decodeSpeed: 105
+  });
+  assert.ok(r.totalCostUsdPerHour > 0);
+  const perRequestCostUsd = (r.costUsdPerThousandRequests / 1000);
+  const expectedPerMillion = (perRequestCostUsd / (r.inputs.promptTokens + r.inputs.outputTokens)) * 1e6;
+  approx(r.costUsdPerMillionTokens, expectedPerMillion, Math.max(0.01, expectedPerMillion * 1e-6));
+  // And the exact issue repro inputs: true value ≈ $0.28695 per 1M tokens
+  // ($0.5739/request ÷ 2M tokens) — the old code returned 3600× this (≈1033).
+  approx(r.costUsdPerMillionTokens, 0.28695, 0.00005);
 });
 
 test('cost: defaults produce a sane all-in number without any inputs', () => {

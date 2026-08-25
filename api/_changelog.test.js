@@ -96,3 +96,48 @@ test('CHANGELOG.json versions match CHANGELOG-API.md entries exactly', () => {
     assert.deepEqual(v.changes, md.versions[i].changes, `versions[${i}].changes`);
   });
 });
+
+// --- Structured machine-readable change metadata (#929) ---
+
+const CHANGE_TYPES = new Set(['additive', 'docs', 'fix']);
+
+test('CHANGELOG.json changes[] records are well-shaped', () => {
+  const data = readChangelogJson();
+  assert.ok(Array.isArray(data.changes), 'top-level changes[] exists');
+  assert.ok(data.changes.length > 0, 'changes[] is non-empty');
+  for (const [i, c] of data.changes.entries()) {
+    assert.equal(typeof c.description, 'string', `changes[${i}].description is a string`);
+    assert.ok(c.description.length > 0, `changes[${i}].description non-empty`);
+    assert.ok(CHANGE_TYPES.has(c.type), `changes[${i}].type in enum (${c.type})`);
+    assert.ok(Array.isArray(c.endpoints), `changes[${i}].endpoints is an array`);
+    for (const ep of c.endpoints) {
+      assert.equal(typeof ep, 'string', `changes[${i}] endpoint is a string`);
+      assert.ok(ep.startsWith('/api/') || ep === '/api/*',
+        `changes[${i}] endpoint looks like an API path: ${ep}`);
+    }
+    assert.equal(typeof c.breaking, 'boolean', `changes[${i}].breaking is boolean`);
+    assert.equal(Object.keys(c).length, 4, `changes[${i}] has exactly the documented keys`);
+  }
+});
+
+test('CHANGELOG.json changes[] covers every substantive unreleased bullet exactly once', () => {
+  const data = readChangelogJson();
+  const substantive = data.unreleased.filter(b => !b.startsWith('Affected endpoints:'));
+  const described = data.changes.map(c => c.description);
+  // every substantive bullet has exactly one structured record, verbatim
+  assert.deepEqual([...described].sort(), [...substantive].sort(),
+    'descriptions ≡ non-"Affected endpoints" bullets (verbatim, set-equal)');
+  assert.equal(new Set(described).size, described.length,
+    'no duplicate descriptions');
+});
+
+test('CHANGELOG.json versions[] ids are present and unique (#929 dup-key)', () => {
+  const data = readChangelogJson();
+  const ids = data.versions.map(v => v.id);
+  for (const [i, id] of ids.entries()) {
+    assert.equal(typeof id, 'string', `versions[${i}].id is a string`);
+    assert.ok(id.length > 0, `versions[${i}].id non-empty`);
+  }
+  assert.equal(new Set(ids).size, ids.length,
+    'version entry ids uniquely key history even when version strings repeat');
+});

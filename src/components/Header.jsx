@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Cpu, Link2, Check } from 'lucide-react';
 import { HARDWARE_PRESETS } from '../utils/presets';
 import { t } from '../i18n/strings';
+import { TESTIDS } from '../utils/testids';
 
 const MODES = [
   { id: 'single', label: 'Single-turn' },
@@ -47,6 +48,7 @@ export default function Header({
 
         <select
           id="view-select"
+          data-testid={TESTIDS.viewSelect}
           aria-label={t('header.viewAriaLabel')}
           value={activeTab}
           onChange={(e) => setActiveTab(e.target.value)}
@@ -61,6 +63,7 @@ export default function Header({
           <label htmlFor="hw-preset" className="field-label">{t('header.presetLabel')}</label>
           <select
             id="hw-preset"
+            data-testid={TESTIDS.hwPreset}
             value={selectedPreset}
             onChange={(e) => {
               const pId = e.target.value;
@@ -80,7 +83,7 @@ export default function Header({
             ))}
           </select>
 
-          <button onClick={handleShare} className="btn btn-icon" aria-label={t('header.shareTooltip')} title={t('header.shareTooltip')}>
+          <button onClick={handleShare} className="btn btn-icon" data-testid={TESTIDS.shareButton} aria-label={t('header.shareTooltip')} title={t('header.shareTooltip')}>
             {copied ? <Check size={15} /> : <Link2 size={15} />}
           </button>
         </div>

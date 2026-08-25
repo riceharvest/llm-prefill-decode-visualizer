@@ -33,8 +33,8 @@
   "weightPrecision": "Weight Precision",
   "weightPrecisionAria": "Weight quantization precision",
   "weightsSource": "{params} params × ~{bpw} bits/weight ≈ {gb}",
-  "weightsOverrideLabel": "Measured weights (GB)",
-  "weightsOverrideAria": "Measured weights size in GB, overrides the estimate",
+  "weightsOverrideLabel": "Measured weights (GiB)",
+  "weightsOverrideAria": "Measured weights size in GiB (binary, 1024-based), overrides the estimate",
   "weightsOverrideHint": "Know the real size? Paste the actual file size from your downloaded GGUF or a LocalMaxxing run page to replace the parameter-count estimate.",
   "targetGpu": "Target GPU VRAM",
   "targetGpuAria": "Target GPU for the fit verdict",
@@ -61,11 +61,12 @@
   "precisionLabel": "Precision (weights & KV)",
   "gpuBudgetLabel": "Target GPU",
   "gpuBudgetAria": "Target GPU VRAM in gigabytes",
-  "ledgerUtilization": "{pct}% of {vram} GB",
-  "ledgerFreeAfterReserve": "{gb} GB free after {reserve} GB headroom reserve",
+  "ledgerUtilization": "{pct}% of {vram} GB VRAM (fit math in GiB)",
+  "ledgerFreeAfterReserve": "{gb} GiB free after {reserve} GB headroom reserve",
   "ledgerOverReserve": "over the {reserve} GB safety reserve",
   "verdictPassDetail": "leaves the safety reserve intact",
   "verdictWarnDetail": "fits only by eating into the safety reserve — expect OOM under load spikes",
   "verdictFailDetail": "exceeds physical VRAM — reduce precision, context, batch size or move to a bigger GPU",
-  "perGpuVerdicts": "Verdict per GPU at current settings"
+  "perGpuVerdicts": "Verdict per GPU at current settings",
+  "unitsNote": "All computed memory figures are binary units — KiB/MiB/GiB (1024-based), not decimal KB/MB/GB."
 }

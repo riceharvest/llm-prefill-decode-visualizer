@@ -8,5 +8,15 @@
   "copyLink": "Copy share link for snapshot",
   "empty": "No snapshots yet — tweak the settings above and save one.",
   "emptySummary": "Saved configuration",
-  "defaultName": "Untitled snapshot"
+  "defaultName": "Untitled snapshot",
+  "export": "Export snapshots as JSON",
+  "import": "Import snapshots from JSON",
+  "exportFailed": "Export failed — the browser blocked the download.",
+  "importUnreadable": "Import failed — the file could not be read.",
+  "importInvalid": "Import failed: {reason}",
+  "importEmpty": "No valid snapshots found in the file ({skipped} skipped).",
+  "imported": "Imported {count} snapshot(s) ({skipped} skipped)",
+  "saveFailed": "Saving failed — storage is full or blocked. Snapshots saved this session will be lost on reload.",
+  "restoreReset": "Speeds absent from the snapshot were reset to the preset defaults ({fields}).",
+  "restoreUnresolvedPreset": "Preset “{preset}” is unavailable — current hardware kept."
 }

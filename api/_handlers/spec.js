@@ -434,7 +434,7 @@ const COMPUTE_RESULT = {
       items: {
         type: 'object',
         properties: {
-          code: { type: 'string', enum: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor'] },
+          code: { type: 'string', enum: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor', 'context_exceeds_model_limit'] },
           message: { type: 'string' }
         },
         additionalProperties: true
@@ -683,7 +683,7 @@ export default function handler(req, res) {
             { name: 'powerDrawWatts', in: 'query', schema: { type: 'number' }, description: 'cost: whole-rig wall power under load' },
             { name: 'amortizationMonths', in: 'query', schema: { type: 'number' }, description: 'cost: months to spread hardware price over, default 36' },
             { name: 'architecture', in: 'query', schema: { type: 'string', enum: ['llama70b', 'llama8b', 'qwen72b', 'mistral7b'] }, description: 'kvCache preset arch' },
-            { name: 'contextLength', in: 'query', schema: { type: 'integer' }, description: 'kvCache' },
+            { name: 'contextLength', in: 'query', schema: { type: 'integer' }, description: 'kvCache (must be >= 1; checked against the architecture max context — overflow emits a warning plus contextWindow.withinLimit/overflowTokens)' },
             { name: 'precisionBytes', in: 'query', schema: { type: 'number', enum: [2, 1, 0.5] }, description: 'kvCache: FP16/FP8/INT4' },
             { name: 'flags', in: 'query', schema: { type: 'string' }, description: 'flagged: comma-separated engine flag ids (flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3). Documented heuristic deltas; response carries a per-flag audit trail.' },
             { name: 'dry_run', in: 'query', schema: { type: 'boolean' }, description: 'Validate + echo parsed params (defaults filled in) without executing any math. Returns { dry_run: true, model, inputs, id?, note }; the id matches the real call. Also applies per-item inside a batch via "dry_run": true in the POST body.' }

@@ -54,6 +54,67 @@ function fmt(x, digits = 1) {
   return Number.isFinite(x) ? Number(x).toLocaleString('en-US', { maximumFractionDigits: digits }) : '?';
 }
 
+// ---------------------------------------------------------------------------
+// SLO budget evaluation (#560): the Compare/Diff UI shows ✓/✗ badges against
+// user budgets, but no API surface returned a pass/fail verdict. Optional
+// ?sloTtftMs= / ?sloTpotMs= / ?sloWalltimeSec= on /api/diff now attach an
+// additive `slo` block evaluating BOTH runs against the budgets, using the
+// same margin convention as src/utils/slo.js: marginPct = (budget − actual)
+// ÷ budget × 100 (positive = headroom left). A disabled/absent budget yields
+// null for that metric; passA/passB are null when nothing is enabled.
+// ---------------------------------------------------------------------------
+
+const positiveFinite = v => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+function sloCheck(value, budget) {
+  if (budget == null || value == null || !Number.isFinite(value)) return null;
+  return {
+    value,
+    budget,
+    pass: value <= budget,
+    marginPct: Math.round((budget - value) / budget * 10000) / 100
+  };
+}
+
+/**
+ * Evaluate both diffed runs against optional SLO budgets.
+ * `budgets` may carry ttftMs / tpotMs / walltimeSec (positive numbers;
+ * anything else disables that check). Times come from derivedTimes() so the
+ * evaluation matches the diff's own reference-workload metrics.
+ */
+export function evaluateDiffSlo(runA, runB, budgets = {}) {
+  const b = {
+    ttftMs: positiveFinite(budgets.ttftMs),
+    tpotMs: positiveFinite(budgets.tpotMs),
+    walltimeSec: positiveFinite(budgets.walltimeSec)
+  };
+  const side = run => {
+    const t = derivedTimes(run);
+    return {
+      ttft: sloCheck(t.ttftSeconds == null ? null : t.ttftSeconds * 1000, b.ttftMs),
+      tpot: sloCheck(t.tpotSeconds == null ? null : t.tpotSeconds * 1000, b.tpotMs),
+      walltime: sloCheck(t.walltimeSeconds, b.walltimeSec)
+    };
+  };
+  const overall = checks => {
+    const active = Object.values(checks).filter(c => c !== null);
+    if (!active.length) return null;
+    return active.every(c => c.pass);
+  };
+  const aChecks = side(runA);
+  const bChecks = side(runB);
+  return {
+    budgets: b,
+    passA: overall(aChecks),
+    passB: overall(bChecks),
+    a: aChecks,
+    b: bChecks
+  };
+}
+
 /**
  * Build the full diff between runA and runB plus a plain-language summary.
  * Never throws for missing fields — metrics that either run lacks come back
