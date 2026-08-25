@@ -146,7 +146,7 @@ async function readJsonBody(req) {
 }
 
 const WHATIF_DESCRIPTION =
-  'What-if decision diffing: pass two /api/best-style constraint sets (a and b) and get back only the deltas — options entering/leaving the feasible set and per-option VRAM headroom changes. Constraint sets accept JSON objects (POST body or ?a={...}) or URL-encoded query strings (?a=fitCheck=true&contextLength=8192). Enable fitCheck/contextLength in the sets for headroom deltas; headroom values are estimates (see _vramfit). Comparison covers the top-N ranked options per set (default limit 50, the /api/best cap).';
+  'What-if decision diffing: pass two /api/best-style constraint sets (a and b) and get back only the deltas — options entering/leaving the feasible set and per-option VRAM headroom changes. Constraint sets accept JSON objects (POST body or ?a={...}) or URL-encoded query strings (?a=fitCheck=true&contextLength=8192). Enable fitCheck/contextLength in the sets for headroom deltas; headroom values are estimates (see _vramfit). Comparison covers the top-N ranked options PER SET (each set may carry its own limit; default 50, the /api/best cap). When a side returns its full cap the response flags truncated:true and adds a whatif_truncated warning — options ranked below the cap are reported as entering/leaving even though constraint feasibility did not change (#847).';
 
 // GET/POST /api/diff
 //   Default mode: ?runA=<id>&runB=<id> — diff two measured runs.
@@ -323,17 +323,43 @@ async function whatIfHandler(q, res, req) {
   // full-dataset diff masquerade as a filtered one (#558).
   const ignoredA = ignoredConstraintKeys(constraintsA);
   const ignoredB = ignoredConstraintKeys(constraintsB);
-  const warnings = [
+  const ignoredWarnings = [
     ...(ignoredA.length ? [`constraint set a: unsupported key(s) ignored — not applied to the matched runs: ${ignoredA.join(', ')}`] : []),
     ...(ignoredB.length ? [`constraint set b: unsupported key(s) ignored — not applied to the matched runs: ${ignoredB.join(', ')}`] : [])
   ];
 
+  // #847: limit is honored PER SIDE by bestBody() — surface the effective
+  // per-side cutoffs and flag when a delta may contain rank-cutoff
+  // artifacts rather than real feasibility changes.
+  const effectiveLimit = set => Math.min(50, Math.max(1, Number(set.limit) || 10));
+  const limitA = effectiveLimit(setA);
+  const limitB = effectiveLimit(setB);
+  const truncatedA = bodyA.body.results.length >= limitA;
+  const truncatedB = bodyB.body.results.length >= limitB;
+  const warnings = [
+    ...ignoredWarnings
+  ];
+  if (limitA !== limitB) {
+    warnings.push({
+      code: 'whatif_limit_mismatch',
+      message: `Per-side limits differ (a=${limitA}, b=${limitB}); entered/left verdicts are only comparable up to the smaller cutoff.`
+    });
+  }
+  if (truncatedA || truncatedB) {
+    warnings.push({
+      code: 'whatif_truncated',
+      message: 'One or both constraint sets returned their full top-N cap of ranked options; options ranked below the cap appear as entering/leaving even though constraint feasibility did not change. Raise ?limit= (max 50 per side) to widen the comparison.'
+    });
+  }
+
   return json(res, {
     description: WHATIF_DESCRIPTION,
     mode: 'whatif',
+    limits: { a: limitA, b: limitB },
+    truncated: { a: truncatedA, b: truncatedB },
     ...(warnings.length ? { warnings } : {}),
-    a: { constraints: setA, ...(ignoredA.length ? { ignoredKeys: ignoredA } : {}), matchedRuns: bodyA.body.matchedRuns, snapshot: bodyA.body.snapshot, id: bodyA.body.id, resultCount: bodyA.body.results.length },
-    b: { constraints: setB, ...(ignoredB.length ? { ignoredKeys: ignoredB } : {}), matchedRuns: bodyB.body.matchedRuns, snapshot: bodyB.body.snapshot, id: bodyB.body.id, resultCount: bodyB.body.results.length },
+    a: { constraints: setA, ...(ignoredA.length ? { ignoredKeys: ignoredA } : {}), matchedRuns: bodyA.body.matchedRuns, snapshot: bodyA.body.snapshot, id: bodyA.body.id, resultCount: bodyA.body.results.length, limit: limitA, truncated: truncatedA },
+    b: { constraints: setB, ...(ignoredB.length ? { ignoredKeys: ignoredB } : {}), matchedRuns: bodyB.body.matchedRuns, snapshot: bodyB.body.snapshot, id: bodyB.body.id, resultCount: bodyB.body.results.length, limit: limitB, truncated: truncatedB },
     delta: computeWhatIfDiff(bodyA.body.results, bodyB.body.results)
   }, 200, 120);
 }
