@@ -11,6 +11,7 @@ import { sendProblem, sendProblemFromError } from '../_errors.js';
 import { filterByMaxAge, parseMaxAgeParam } from '../_freshness.js';
 import { parseContextBandParam, filterByContextBand } from '../_contextbands.js';
 import { slugify } from '../../src/utils/compareSlug.js';
+import { parseBool, boolWarnings } from '../_params.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -63,7 +64,13 @@ export default async function handler(req, res) {
     if (maxAgeDays) runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
     runs = filterByContextBand(runs, contextBand);
 
-    const crossEngine = ['1', 'true', 'yes'].includes(String(readParam(q, 'cross_engine', 'crossEngine')).toLowerCase());
+    // Shared boolean vocabulary (see _params.js): 1/true/yes/on vs
+    // 0/false/no/off, case-insensitive. Unrecognized values are treated as
+    // absent and surfaced as a warnings[] entry instead of being silently
+    // discarded (#688).
+    const crossEngine = parseBool(q.crossEngine) ?? false;
+    const includeOutliersRaw = q.include_outliers ?? q.includeOutliers;
+    const includeOutliers = parseBool(includeOutliersRaw) ?? false;
 
     const groupByRaw = readParam(q, 'group_by', 'groupBy');
     const groupBy = groupByRaw === 'model' ? 'model'
@@ -73,8 +80,7 @@ export default async function handler(req, res) {
 
     // Outlier policy: runs further than N IQRs from their group median are
     // flagged and excluded from the stats by default; pass
-    // ?include_outliers=true to compute stats over every run.
-    const includeOutliers = String(readParam(q, 'include_outliers', 'includeOutliers')).toLowerCase() === 'true';
+    // ?include_outliers=true (or 1/yes/on) to compute stats over every run.
     const outlierIqrsRaw = Number(readParam(q, 'outlier_iqrs', 'outlierIqrs'));
     const outlierIqrs = Number.isFinite(outlierIqrsRaw) && outlierIqrsRaw > 0
       ? Math.min(10, Math.max(1, outlierIqrsRaw))
@@ -164,6 +170,7 @@ export default async function handler(req, res) {
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
     warnings.push(...groups.filter(g => g.mixedContextBands)
       .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
+    warnings.push(...boolWarnings([['crossEngine', q.crossEngine], ['include_outliers', includeOutliersRaw]]));
 
     return json(res, {
       description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=&context_band=lt1k|1k-8k|8k-32k|32k+; regroup with ?groupBy=hardware|model|quant|hardwareModel; exclude old measurements with ?max_age=<days>. Filter params accept both snake_case and camelCase spellings (e.g. group_by/groupBy, cross_engine/crossEngine, outlier_iqrs/outlierIqrs, include_outliers/includeOutliers, max_age/maxAge, context_band/contextBand). Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false. Each group carries a confidence block (run count, IQR spread %, outlier count, recency, grade) and a cross_check comparing multi-GPU rigs against the single-GPU baseline on the same model/quant. With ?groupBy=hardware every item also carries slug + hardwareLabel — combine any two as /compare/<slugA>-vs-<slugB>; pairs whose slugs are not in this response return HTTP 404.',
