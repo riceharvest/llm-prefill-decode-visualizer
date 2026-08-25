@@ -4,11 +4,7 @@ import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
 import Analogy from './Analogy';
 import { t } from '../i18n/strings';
-<<<<<<< main
 import { TESTIDS } from '../utils/testids';
-=======
-import { clampNum } from '../utils/urlState';
->>>>>>> base
 
 // Time-scale options (#76): rendered as an ARIA radiogroup with roving
 // tabindex — one option is tabbable, arrow keys move and select.

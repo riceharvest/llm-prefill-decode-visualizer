@@ -10,7 +10,6 @@ export function readParam(name) {
   return p.get(name);
 }
 
-<<<<<<< main
 export function clampNum(n, min, max) {
   if (typeof min === 'number') n = Math.max(min, n);
   if (typeof max === 'number') n = Math.min(max, n);
@@ -21,14 +20,11 @@ export function clampNum(n, min, max) {
 // unchanged; out-of-range values are clamped so crafted share links
 // (?breqs=99999999, ?turns=-5) can't drive O(n) allocation or negative loops
 // in the visualizers (issues #1040, #1059, #1078).
-=======
->>>>>>> base
 export function readParamNum(name, fallback, min, max) {
   const v = readParam(name);
   if (v === null || v === '') return fallback;
   const n = Number(v);
   if (!Number.isFinite(n)) return fallback;
-<<<<<<< main
   return clampNum(n, min, max);
 }
 
@@ -41,19 +37,6 @@ export function readSimSpeed() {
   if (v === 'instant') return 'instant';
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : 1;
-=======
-  return min !== undefined || max !== undefined ? clampNum(n, min, max) : n;
-}
-
-/** Clamp a number into [min, max]. Undefined bounds are open; non-finite
- *  input falls back to `min ?? max ?? value` so callers never see NaN. */
-export function clampNum(value, min, max) {
-  let n = Number(value);
-  if (!Number.isFinite(n)) n = min ?? max ?? 0;
-  if (min !== undefined && min !== null && n < min) n = min;
-  if (max !== undefined && max !== null && n > max) n = max;
-  return n;
->>>>>>> base
 }
 
 export function readParamBool(name, fallback) {

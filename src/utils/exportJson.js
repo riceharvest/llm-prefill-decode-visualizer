@@ -160,7 +160,6 @@ export function buildSingleTurnJson({
         acceptanceRate: specEnabled ? acceptance : 0,
         draftCost: specEnabled ? 0.2 : 0
       },
-<<<<<<< main
       // Engine features that alter the metrics below (#698): present in every
       // payload so a consumer can tell from the inputs alone which features
       // were active for this run. Object-toggle convention per #722.
@@ -182,31 +181,6 @@ export function buildSingleTurnJson({
       }
     },
     metrics
-=======
-      ...(Array.isArray(engineFlags) && engineFlags.length > 0 ? { engineFlags } : {}),
-      ...(itlJitter && itlJitter.enabled
-        ? { itlJitter: { enabled: true, cvPct: itlJitter.cvPct } }
-        : {}),
-      ...(images && images.enabled
-        ? { images: { enabled: true, count: images.count, resolutionId: images.resolutionId } }
-        : {}),
-      ...(contextScaling && contextScaling.enabled
-        ? { contextScaling: { enabled: true, halfSpeedContextTokens: contextScaling.halfSpeedContextTokens } }
-        : {}),
-      ...(sloBudgets ? { sloBudgets: sloBudgets } : {})
-    },
-    metrics: {
-      ttftSeconds: roundTo(ttftSeconds),
-      tpotMs: roundTo(tpotMs),
-      decodeTimeSeconds: roundTo(decodeTimeSeconds),
-      totalWalltimeSeconds: roundTo(totalWalltimeSeconds),
-      effectiveDecodeSpeedTokPerSec: roundTo(effectiveDecodeSpeed, 2),
-      throughputTokPerSec: roundTo(throughputTokPerSec, 2),
-      prefillSharePct: roundTo(prefillSharePct, 2),
-      decodeSharePct: roundTo(decodeSharePct, 2),
-      ...(sloResults ? { sloResults } : {})
-    }
->>>>>>> base
   };
 }
 
