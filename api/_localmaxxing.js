@@ -164,6 +164,12 @@ function slim(r) {
     decodeTokPerSec: Math.round(r.tokSOut),
     promptTokens: r.promptTokens,
     outputTokens: r.outputTokens,
+    // Comparability inputs (#719): lets agents re-derive the wizard's
+    // single-stream filter (batchSize===1 && concurrency<=1 && numParallel<=1)
+    // from the documented API instead of trusting a bare comparable flag.
+    batchSize: Number.isFinite(r.batchSize) ? r.batchSize : null,
+    concurrency: r.engineFlags?.concurrency ?? null,
+    numParallel: r.engineFlags?.numParallel ?? null,
     contextLength: r.contextLength,
     // Context-length band (issue #39): null when the run reports no usable
     // contextLength — comparisons annotate the mix instead of assuming.

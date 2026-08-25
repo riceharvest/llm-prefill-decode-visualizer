@@ -19,6 +19,10 @@
 - [Changelog feed](https://llm-prefill-decode-visualizer.vercel.app/changelog.json)
 - [Status page](https://llm-prefill-decode-visualizer.vercel.app/status.html)
 
+These static surfaces send strong `ETag` validators: send `If-None-Match` to revalidate — unchanged content returns `304` with zero bytes.
+
+These static surfaces send strong `ETag` validators: send `If-None-Match` to revalidate — unchanged content returns `304` with zero bytes.
+
 ## Source map
 
 - [Frontend app](src/App.jsx): React UI with nine tabs — single-turn, agentic loop, batching, compare, A/B replay, run diff, hardware shortlist, KV-cache calculator, theory

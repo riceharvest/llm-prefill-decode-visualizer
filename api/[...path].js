@@ -36,6 +36,7 @@ import { withMarkdownNegotiation } from './_markdown.js';
 import { applyVersionTrustHeaders } from './_versions.js';
 import { sendJson, withConditionalGet } from './_schema.js';
 import { sendProblem, sendProblemFromError } from './_errors.js';
+import { applyDeprecationForPath } from './_schema.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -130,7 +131,9 @@ function applyAgentEndpointsHeader(req, res) {
       .map(s => s.trim())
       .filter(Boolean)
   );
-  for (const h of ['X-Agent-Endpoints', 'X-Schema-Version']) expose.add(h);
+  for (const h of ['X-Agent-Endpoints', 'X-Schema-Version', 'X-Vercel-Mitigated', 'X-Vercel-Error']) {
+    expose.add(h);
+  }
   res.setHeader('Access-Control-Expose-Headers', [...expose].join(', '));
 }
 
@@ -207,6 +210,11 @@ export default async function handler(req, res) {
     }
 
     if (!methodAllowed(req, res, clean)) return;
+
+    // Deprecation contract (#714): routes registered in DEPRECATION_REGISTRY
+    // announce themselves via Deprecation/Sunset/Link headers on every
+    // response (including errors) until they are sunset. No-op otherwise.
+    applyDeprecationForPath(res, clean);
 
     switch (clean) {
       case '/compute': return compute(req, res);

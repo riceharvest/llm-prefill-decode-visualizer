@@ -111,7 +111,14 @@ export function applySchemaHeaders(res) {
       .map(s => s.trim())
       .filter(Boolean)
   );
-  for (const h of ['X-Schema-Version', 'Deprecation', 'Sunset']) expose.add(h);
+  // X-Vercel-Mitigated / X-Vercel-Error (#717): during a platform Security
+  // Checkpoint the edge answers with `x-vercel-mitigated: challenge` before
+  // this app's middleware ever runs. Browser-context agents can only read
+  // these non-safelisted headers if they are CORS-exposed on every /api/*
+  // response, so advertise them alongside the schema headers.
+  for (const h of ['X-Schema-Version', 'Deprecation', 'Sunset', 'X-Vercel-Mitigated', 'X-Vercel-Error']) {
+    expose.add(h);
+  }
   res.setHeader('Access-Control-Expose-Headers', [...expose].join(', '));
 }
 
@@ -141,6 +148,37 @@ export function applyDeprecationHeaders(res, { deprecatedAt, sunset, link } = {}
   }
   if (link) res.setHeader('Link', `<${link}>; rel="deprecation"`);
   applySchemaHeaders(res);
+}
+
+/**
+ * Deprecation registry (#714): route path (as seen by the /api dispatcher,
+ * e.g. '/compute') -> { deprecatedAt, sunset, link }. Empty until a surface
+ * is actually deprecated; the dispatcher consults it on every request via
+ * applyDeprecationForPath(), so registering a route activates the documented
+ * Deprecation/Sunset/Link header contract for it immediately.
+ */
+export const DEPRECATION_REGISTRY = {};
+
+/** Mark an API route deprecated (see DEPRECATION_REGISTRY). */
+export function registerDeprecatedRoute(route, { deprecatedAt, sunset, link } = {}) {
+  DEPRECATION_REGISTRY[route] = { ...(deprecatedAt && { deprecatedAt }), sunset, link };
+}
+
+/** Remove a registration (used by tests). */
+export function unregisterDeprecatedRoute(route) {
+  delete DEPRECATION_REGISTRY[route];
+}
+
+/**
+ * Apply the deprecation headers for `pathname` when it is registered as
+ * deprecated. Returns true when headers were applied. Safe to call on every
+ * request: the common case is one Map lookup and no header writes.
+ */
+export function applyDeprecationForPath(res, pathname) {
+  const meta = DEPRECATION_REGISTRY[pathname];
+  if (!meta) return false;
+  applyDeprecationHeaders(res, meta);
+  return true;
 }
 
 /**

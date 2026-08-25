@@ -1,4 +1,4 @@
-import { parseConstraints, constraintsToSizingQuery, isCoarseQuantLabel } from '../_parse_constraints.js';
+import { parseConstraints, constraintsToSizingQuery, isCoarseQuantLabel, constraintsToBestQuery } from '../_parse_constraints.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson } from '../_schema.js';
 import { sendProblem } from '../_errors.js';
@@ -50,9 +50,10 @@ export default function handler(req, res) {
   }
   const sizingParams = constraintsToSizingQuery(constraints);
   const sizingQueryString = sizingParams.toString();
+  const bestParams = constraintsToBestQuery(constraints);
 
   return sendJson(res, {
-    description: 'Natural-language constraint parsing: canonical constraint struct + explicit ambiguities. Feed sizingQuery to /api/sizing for ranked hardware; resolve each ambiguity before trusting the numbers.',
+    description: 'Natural-language constraint parsing: canonical constraint struct + explicit ambiguities. Feed sizingQuery to /api/sizing or bestQuery to /api/best for ranked hardware; resolve each ambiguity before trusting the numbers.',
     input,
     recognizedCount: Object.values(constraints).filter(v => v != null).length,
     constraints,
@@ -65,6 +66,6 @@ export default function handler(req, res) {
           // directly to a base URL without double-prefixing.
           sizingQueryString
         }
-      : { sizingQuery: null, sizingQueryString: null })
-  }, { cacheTtl: 3600 });
+      : { sizingQuery: null, sizingQueryString: null }),
+    ...(bestParams.toString() ? { bestQuery: `/api/best?${bestParams.toString()}` } : { bestQuery: null })  }, { cacheTtl: 3600 });
 }
