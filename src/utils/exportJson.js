@@ -68,6 +68,7 @@ export function buildSingleTurnJson({
   jitterEnabled,
   jitterPct,
   deepLink,
+  provenance,
   generatedAt = new Date().toISOString(),
   // Optional richer-state inputs (issue #408): present in the output only when
   // the caller provides them, so existing consumers' outputs are unchanged.
@@ -149,6 +150,10 @@ export function buildSingleTurnJson({
     exportType: 'single-turn-chat',
     generatedAt,
     deepLink,
+    // LocalMaxxing measurement provenance (#602): present only when the
+    // active preset is lmx:<runId> so synthetic-preset exports stay
+    // byte-identical to before.
+    ...(provenance ? { provenance } : {}),
     inputs: {
       promptTokens: safePrompt,
       outputTokens: safeOutput,

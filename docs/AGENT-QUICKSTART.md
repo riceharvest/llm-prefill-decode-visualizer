@@ -33,8 +33,8 @@ A `/v1/` prefix is accepted and stripped (`/api/v1/compute` ≡ `/api/compute`).
 ### Inference math
 
 ```
-GET /api/compute?model=singleTurn&promptTokens=2048&outputTokens=512&prefillTps=5000&decodeTps=80
-GET /api/vram?model=llama3.1&contextLength=32768&precision=fp16
+GET /api/compute?model=singleTurn&promptTokens=2048&outputTokens=512&prefillSpeed=5000&decodeSpeed=80
+GET /api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=32768&quant=q4_k_m
 GET /api/diff?a=<calcId>&b=<calcId>
 ```
 

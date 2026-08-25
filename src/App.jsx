@@ -17,7 +17,7 @@ import SloBudgetsPanel, { useSloBudgets } from './components/SloBudgetsPanel';
 import { sanitizeBudgets } from './utils/slo';
 import { HARDWARE_PRESETS } from './utils/presets';
 import { copyTextToClipboard } from './utils/clipboard';
-import { toLocalPreset, hardwareName } from './utils/localMaxxing';
+import { toLocalPreset, hardwareName, lmxProvenance } from './utils/localMaxxing';
 import {
   describeConfig, buildShareLink, readPermalinkTitle, documentTitleFor
 } from './utils/permalink';
@@ -136,6 +136,13 @@ export default function App() {
   const selectedLmxRun = useMemo(() => (
     localMaxxingContext.runs.find(r => r.id === localMaxxingContext.selectedRunId) || null
   ), [localMaxxingContext]);
+  // Measurement provenance for exports (#602): non-null only while an
+  // lmx:<runId> preset is actually applied, so agents reading exported
+  // JSON/Markdown can tell measured speeds from synthetic preset numbers.
+  const lmxProvenanceBlock = useMemo(
+    () => lmxProvenance(selectedPreset, selectedLmxRun),
+    [selectedPreset, selectedLmxRun]
+  );
   const permalinkTitle = useMemo(() => describeConfig({
     presetId: selectedPreset,
     hardwareLabel: selectedPreset.startsWith('lmx:') && selectedLmxRun
@@ -589,6 +596,7 @@ export default function App() {
             outputTokens={outputTokens}
             setOutputTokens={setOutputTokens}
             engineFlags={selectedFlags}
+            lmxProvenance={lmxProvenanceBlock}
           />
         )}
 
