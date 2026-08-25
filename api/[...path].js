@@ -176,6 +176,10 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (req.method === 'OPTIONS' && handleOptions(req, res, clean)) {
+      return;
+    }
+
     switch (clean) {
       case '/compute': return compute(req, res);
       case '/presets': return presets(req, res);
