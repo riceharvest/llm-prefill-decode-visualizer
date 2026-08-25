@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
-import { Camera, Save, Trash2, Link2, RotateCcw, Check, Undo2, Redo2 } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Camera, Save, Trash2, Link2, RotateCcw, Check, Undo2, Redo2, Download, Upload } from 'lucide-react';
 import { t } from '../i18n/strings';
-import { loadSnapshots, saveSnapshots, parseSettings } from '../utils/settingsHistory';
+import {
+  loadSnapshots, saveSnapshots, parseSettings,
+  exportSnapshots, importSnapshots, mergeSnapshots
+} from '../utils/settingsHistory';
 
 function makeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -26,14 +29,58 @@ function snapshotSummary(snap) {
  * permalink that restores the configuration anywhere. Restoring is undoable —
  * App records it on the same history stack as manual edits.
  */
-export default function SnapshotsSidebar({ currentQs, onRestore, canUndo, canRedo, onUndo, onRedo }) {
+export default function SnapshotsSidebar({ currentQs, onRestore, restoreReport, canUndo, canRedo, onUndo, onRedo }) {
   const [snapshots, setSnapshots] = useState(loadSnapshots);
   const [name, setName] = useState('');
   const [copiedId, setCopiedId] = useState('');
+  // #566: storage failures used to be swallowed — surface them instead.
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [importNote, setImportNote] = useState(null);
+  const fileInputRef = useRef(null);
 
   const persist = (list) => {
     setSnapshots(list);
-    saveSnapshots(list);
+    const ok = saveSnapshots(list);
+    setSaveFailed(!ok);
+  };
+
+  const handleExport = () => {
+    try {
+      const blob = new Blob([exportSnapshots(snapshots)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `snapshots-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setImportNote({ ok: false, reason: t('snapshots.exportFailed') });
+    }
+  };
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    let text;
+    try {
+      text = await file.text();
+    } catch {
+      setImportNote({ ok: false, reason: t('snapshots.importUnreadable') });
+      return;
+    }
+    const res = importSnapshots(text);
+    if (res.error || res.snapshots.length === 0) {
+      setImportNote({
+        ok: false,
+        reason: res.error
+          ? t('snapshots.importInvalid', { reason: res.error })
+          : t('snapshots.importEmpty', { skipped: res.skipped })
+      });
+      return;
+    }
+    persist(mergeSnapshots(snapshots, res.snapshots));
+    setImportNote({ ok: true, count: res.snapshots.length, skipped: res.skipped });
   };
 
   const handleSave = () => {
@@ -101,7 +148,47 @@ export default function SnapshotsSidebar({ currentQs, onRestore, canUndo, canRed
         <button onClick={handleSave} className="btn btn-icon" title={t('snapshots.save')} aria-label={t('snapshots.save')}>
           <Save size={16} />
         </button>
+        <button onClick={handleExport} disabled={snapshots.length === 0} className="btn btn-icon" title={t('snapshots.export')} aria-label={t('snapshots.export')}>
+          <Download size={15} />
+        </button>
+        <button onClick={() => fileInputRef.current?.click()} className="btn btn-icon" title={t('snapshots.import')} aria-label={t('snapshots.import')}>
+          <Upload size={15} />
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: 'none' }}
+          onChange={handleImportFile}
+        />
       </div>
+
+      {/* #566: storage write failures are visible instead of silently losing saves */}
+      {saveFailed && (
+        <p className="hint-text" role="alert" style={{ color: 'var(--text-warn, #fbbf24)', margin: '0 0 8px' }}>
+          {t('snapshots.saveFailed')}
+        </p>
+      )}
+      {importNote && (
+        <p className="hint-text" role={importNote.ok ? 'status' : 'alert'} style={{ margin: '0 0 8px' }}>
+          {importNote.ok
+            ? t('snapshots.imported', { count: importNote.count, skipped: importNote.skipped })
+            : importNote.reason}
+        </p>
+      )}
+      {/* #569: partial-restore adjustments are visible instead of silent */}
+      {restoreReport && (restoreReport.unresolvedPreset || restoreReport.resetToDefaults.length > 0) && (
+        <p className="hint-text" role="status" style={{ margin: '0 0 8px' }}>
+          {[
+            restoreReport.unresolvedPreset
+              ? t('snapshots.restoreUnresolvedPreset', { preset: restoreReport.unresolvedPreset })
+              : null,
+            restoreReport.resetToDefaults.length > 0
+              ? t('snapshots.restoreReset', { fields: restoreReport.resetToDefaults.join(', ') })
+              : null
+          ].filter(Boolean).join(' ')}
+        </p>
+      )}
 
       {snapshots.length === 0 ? (
         <p className="hint-text">{t('snapshots.empty')}</p>

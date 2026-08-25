@@ -2,11 +2,12 @@
 // state plus a human-readable `title` param built from the live config, so a
 // pasted link reads like content ("Qwen3 32B Q4 on RTX 4090, 8K agentic loop")
 // instead of a query string. Everything stays client-side: no backend storage,
-// the URL itself is the storage. A cosmetic slug rides along in the hash
-// (#s/qwen3-32b-rtx4090-8k-agentic-loop) so permalinks have a readable
-// identity even though the app routes purely through query params.
+// the URL itself is the storage. Share links carry only query params — no hash
+// fragment, since nothing in the app resolves an element id under #s/ (the old
+// cosmetic #s/<slug> suffix was dead weight on every link).
 
 import { HARDWARE_PRESETS } from './presets.js';
+import { SHARE_SIG_PARAM, signShareParams } from './shareIntegrity.js';
 
 // Tab ids → short human phrases used at the end of generated titles.
 const TAB_TITLE_PHRASES = {
@@ -105,15 +106,22 @@ export function slugifyTitle(title) {
   return cut.slice(0, 80).replace(/-+$/, '');
 }
 
-// Full permalink URL: current query state + `title` param + #s/<slug>.
-// `loc` is injected ({ origin, pathname, search }) so this stays unit-testable
-// outside the browser; callers pass window.location.
-export function permalinkHref(loc, title) {
+// Full permalink URL: current query state + `title` param. No hash fragment —
+// the app routes purely through query params and nothing resolves #s/ ids, so
+// a slug hash would be dead weight (and would break exact-URL identity).
+// Since #917 the link also carries an integrity signature `h=<hex>` (HMAC over
+// the canonicalized params incl. title) that App verifies on load — mutated
+// links surface a "link was modified" banner instead of being accepted
+// verbatim. Async because signing goes through Web Crypto; `loc` is injected
+// ({ origin, pathname, search }) so this stays unit-testable outside the
+// browser; callers pass window.location.
+export async function permalinkHref(loc, title) {
   const p = new URLSearchParams(loc.search || '');
   p.set('title', title);
+  p.set(SHARE_SIG_PARAM, await signShareParams(`?${p.toString()}`));
   const qs = p.toString();
   const base = `${loc.origin}${loc.pathname}`;
-  return `${base}?${qs}#s/${slugifyTitle(title)}`;
+  return `${base}?${qs}`;
 }
 
 // The title encoded into a shared link, if any (readParam-style decoding).
@@ -123,8 +131,10 @@ export function readPermalinkTitle(search) {
 }
 
 // document.title policy: an opened shared link shows its own encoded title;
-// otherwise the derived config title sits under the site brand.
-export function documentTitleFor(sharedTitle, derivedTitle, brandTitle) {
-  if (sharedTitle) return sharedTitle;
+// otherwise the derived config title sits under the site brand. A tampered
+// link (signature mismatch) is excluded from this preference — its title is
+// attacker-controllable free text and must not masquerade as the app's claim.
+export function documentTitleFor(sharedTitle, derivedTitle, brandTitle, tampered) {
+  if (sharedTitle && !tampered) return sharedTitle;
   return derivedTitle ? `${derivedTitle} · ${brandTitle}` : brandTitle;
 }

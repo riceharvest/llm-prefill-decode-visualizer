@@ -151,6 +151,7 @@ export default function MultiGpuPlanner({ preset, totalKvBytes }) {
                 key={c.id}
                 onClick={() => setCardId(c.id)}
                 data-tooltip={c.name}
+                aria-label={`${c.name} · ${c.vramGb} GB`}
                 className={cardId === c.id ? 'active' : ''}
                 aria-pressed={cardId === c.id}
                 style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', padding: '4px 7px' }}

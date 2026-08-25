@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Layers, Play, Pause, RotateCcw } from 'lucide-react';
+import { Layers, Play, Pause, RotateCcw, FileDown, Copy, FileJson } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
 import { readParamNum, writeParams } from '../utils/urlState';
 import { generateRequests, simulateBatching, simulateStaticBatching } from '../utils/batchScheduling';
+import { clockToRunState, runStateToBusy } from '../utils/viewState';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
 import Metric from './Metric';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
+import { requestRowA11y, isRowActivateKey } from '../utils/batchingRows';
 import { t } from '../i18n/strings';
+import { buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
+import { downloadJson } from '../utils/exportJson';
+import { buildBatchingMarkdown, buildBatchingJson } from '../utils/exportBatching';
 
 // Chunk-size slider stops. 0 = chunked prefill OFF (whole prompt per step).
 const CHUNK_STOPS = [0, 128, 256, 512, 1024, 2048, 4096, 8192];
@@ -30,6 +35,12 @@ export default function BatchingVisualizer({
     return idx >= 0 ? idx : 5;
   });
   const [arrivalIntervalMs, setArrivalIntervalMs] = useState(() => readParamNum('barr', 150));
+  // Workload PRNG seed (issue #692): ?bseed= makes the ±40% length/arrival
+  // jitter reproducible and lets agents sample different draws. Same default
+  // (42) as generateRequests so existing links render identically.
+  const [workloadSeed, setWorkloadSeed] = useState(() =>
+    Math.max(0, Math.floor(readParamNum('bseed', 42)))
+  );
 
   const chunkSize = CHUNK_STOPS[chunkStopIndex];
   const chunkingOn = chunkSize > 0;
@@ -41,9 +52,10 @@ export default function BatchingVisualizer({
       bgen: meanOutputTokens,
       bmax: maxBatchSize,
       bchunk: chunkSize,
-      barr: arrivalIntervalMs
+      barr: arrivalIntervalMs,
+      bseed: workloadSeed
     });
-  }, [numRequests, meanPromptTokens, meanOutputTokens, maxBatchSize, chunkSize, arrivalIntervalMs]);
+  }, [numRequests, meanPromptTokens, meanOutputTokens, maxBatchSize, chunkSize, arrivalIntervalMs, workloadSeed]);
 
   // --- Misconception callout: fires the moment chunked prefill is disabled ---
   const [showChunkCallout, setShowChunkCallout] = useState(false);
@@ -66,8 +78,9 @@ export default function BatchingVisualizer({
     numRequests,
     meanPromptTokens,
     meanOutputTokens,
-    arrivalIntervalMs
-  }), [numRequests, meanPromptTokens, meanOutputTokens, arrivalIntervalMs]);
+    arrivalIntervalMs,
+    seed: workloadSeed
+  }), [numRequests, meanPromptTokens, meanOutputTokens, arrivalIntervalMs, workloadSeed]);
 
   const sim = useMemo(() => simulateBatching({
     requests,
@@ -258,6 +271,34 @@ export default function BatchingVisualizer({
   const continuousSaving = staticSim.makespan - makespan;
   const continuousSavingPct = staticSim.makespan > 0 ? (continuousSaving / staticSim.makespan) * 100 : 0;
 
+  // Issue #398: machine-readable artifact of the batch run — same Export MD /
+  // Export JSON / Copy MD affordances the single-turn view ships.
+  const [exportCopied, setExportCopied] = useState(false);
+  const [exportCopyFailed, setExportCopyFailed] = useState(false);
+  const batchingExportArgs = () => ({
+    numRequests,
+    meanPromptTokens,
+    meanOutputTokens,
+    maxBatchSize,
+    chunkSize,
+    arrivalIntervalMs,
+    prefillSpeed,
+    decodeSpeed,
+    summary,
+    staticSummary: staticSim.summary,
+    requests: sim.requests,
+    deepLink: buildDeepLink('batching')
+  });
+  const handleExportMd = () => downloadMarkdown(buildBatchingMarkdown(batchingExportArgs()), 'batching-simulation.md');
+  const handleExportJson = () => downloadJson(buildBatchingJson(batchingExportArgs()), 'batching-simulation.json');
+  const handleCopyMd = async () => {
+    const ok = await copyMarkdownToClipboard(buildBatchingMarkdown(batchingExportArgs()));
+    // Issue #401 parity: never claim success over a failed clipboard write.
+    setExportCopied(ok);
+    setExportCopyFailed(!ok);
+    setTimeout(() => { setExportCopied(false); setExportCopyFailed(false); }, 2000);
+  };
+
   // Screen-reader run summary (issue #63): aria-live narration of the batch
   // playhead, bucket-rounded to 25% of the makespan so the rAF loop produces
   // a few announcements per run instead of one per frame.
@@ -302,20 +343,20 @@ export default function BatchingVisualizer({
 
         <div className="grid-auto" style={{ '--grid-min': '15rem' }}>
 
-          {/* Concurrent Requests */}
+          {/* Concurrent Requests (#397: slider+number share one field label) */}
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">{t('batching.concurrentRequests')}</span>
+              <span className="field-label" id="batching-label-requests">{t('batching.concurrentRequests')}</span>
               <span className="field-value" style={{ color: 'var(--agent)' }}>{numRequests} {t('batching.requestsUnit')}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input type="range" min="2" max="48" step="1" value={numRequests}
-                aria-label={t('batching.requestsAria')}
+                aria-labelledby="batching-label-requests"
                 aria-valuetext={`${numRequests} concurrent ${numRequests === 1 ? 'request' : 'requests'}`}
                 onChange={(e) => { setNumRequests(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
               <input type="number" value={numRequests}
-                aria-label={t('batching.requestsValueAria')}
+                aria-labelledby="batching-label-requests"
                 onChange={(e) => { setNumRequests(Number(e.target.value)); handleReset(); }}
                 style={{ width: '4rem' }} />
             </div>
@@ -324,17 +365,22 @@ export default function BatchingVisualizer({
           {/* Mean Prompt Tokens */}
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">{t('batching.meanPrompt')}</span>
+              <span className="field-label" id="batching-label-prompt">{t('batching.meanPrompt')}</span>
               <span className="field-value" style={{ color: 'var(--prefill)' }}>{formatTokens(meanPromptTokens)} tok</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <input type="range" min="128" max="32768" step="128" value={meanPromptTokens}
-                aria-label={t('batching.meanPromptAria')}
+              {/* #397: step 8 (was 128) so URL/default values like bprompt=2000
+                  are exactly representable — with step=128 the browser clamped
+                  the DOM .value to 2048 while state said 2000, so scrapers read
+                  a stale number. aria-valuenow pins the true state regardless. */}
+              <input type="range" min="128" max="32768" step="8" value={meanPromptTokens}
+                aria-labelledby="batching-label-prompt"
+                aria-valuenow={meanPromptTokens}
                 aria-valuetext={`${meanPromptTokens.toLocaleString()} tokens`}
                 onChange={(e) => { setMeanPromptTokens(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
               <input type="number" value={meanPromptTokens}
-                aria-label={t('batching.meanPromptValueAria')}
+                aria-labelledby="batching-label-prompt"
                 onChange={(e) => { setMeanPromptTokens(Number(e.target.value)); handleReset(); }}
                 style={{ width: '5rem' }} />
             </div>
@@ -343,17 +389,18 @@ export default function BatchingVisualizer({
           {/* Mean Output Tokens */}
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">{t('batching.meanOutput')}</span>
+              <span className="field-label" id="batching-label-output">{t('batching.meanOutput')}</span>
               <span className="field-value" style={{ color: 'var(--decode)' }}>{formatTokens(meanOutputTokens)} tok</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input type="range" min="32" max="4096" step="32" value={meanOutputTokens}
-                aria-label={t('batching.meanOutputAria')}
+                aria-labelledby="batching-label-output"
+                aria-valuenow={meanOutputTokens}
                 aria-valuetext={`${meanOutputTokens.toLocaleString()} tokens`}
                 onChange={(e) => { setMeanOutputTokens(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
               <input type="number" value={meanOutputTokens}
-                aria-label={t('batching.meanOutputValueAria')}
+                aria-labelledby="batching-label-output"
                 onChange={(e) => { setMeanOutputTokens(Number(e.target.value)); handleReset(); }}
                 style={{ width: '5rem' }} />
             </div>
@@ -362,17 +409,17 @@ export default function BatchingVisualizer({
           {/* Max Batch Size */}
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">{t('batching.maxBatch')}</span>
+              <span className="field-label" id="batching-label-maxbatch">{t('batching.maxBatch')}</span>
               <span className="field-value" style={{ color: 'var(--agent)' }}>{maxBatchSize} {t('batching.maxBatchUnit')}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input type="range" min="1" max="32" step="1" value={maxBatchSize}
-                aria-label={t('batching.maxBatchAria')}
+                aria-labelledby="batching-label-maxbatch"
                 aria-valuetext={`batch size ${maxBatchSize}`}
                 onChange={(e) => { setMaxBatchSize(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
               <input type="number" value={maxBatchSize}
-                aria-label={t('batching.maxBatchValueAria')}
+                aria-labelledby="batching-label-maxbatch"
                 onChange={(e) => { setMaxBatchSize(Number(e.target.value)); handleReset(); }}
                 style={{ width: '4rem' }} />
             </div>
@@ -381,14 +428,15 @@ export default function BatchingVisualizer({
           {/* Chunk size slider */}
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">{t('batching.chunkedPrefill')}</span>
+              <span className="field-label" id="batching-label-chunk">{t('batching.chunkedPrefill')}</span>
               <span className="field-value" style={{ color: chunkingOn ? 'var(--decode)' : 'var(--text-muted)' }}>
                 {chunkingOn ? `${formatTokens(chunkSize)} tok` : 'OFF'}
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input type="range" min="0" max={CHUNK_STOPS.length - 1} step="1" value={chunkStopIndex}
-                aria-label={t('batching.chunkAria')}
+                aria-labelledby="batching-label-chunk"
+                aria-valuenow={chunkStopIndex}
                 aria-valuetext={chunkSize === 0
                   ? 'chunked prefill off'
                   : `${formatTokens(chunkSize)} tokens per prefill chunk`}
@@ -409,20 +457,48 @@ export default function BatchingVisualizer({
           {/* Arrival Interval */}
           <div className="panel-inset field">
             <div className="field-head">
-              <span className="field-label">{t('batching.arrivalInterval')}</span>
+              <span className="field-label" id="batching-label-arrival">{t('batching.arrivalInterval')}</span>
               <span className="field-value">{arrivalIntervalMs} {t('batching.arrivalUnit')}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <input type="range" min="0" max="2000" step="10" value={arrivalIntervalMs}
-                aria-label={t('batching.arrivalAria')}
+                aria-labelledby="batching-label-arrival"
+                aria-valuenow={arrivalIntervalMs}
                 aria-valuetext={`${arrivalIntervalMs} milliseconds between arrivals`}
                 onChange={(e) => { setArrivalIntervalMs(Number(e.target.value)); handleReset(); }}
                 style={{ flex: 1 }} />
               <input type="number" value={arrivalIntervalMs}
-                aria-label={t('batching.arrivalValueAria')}
+                aria-labelledby="batching-label-arrival"
                 onChange={(e) => { setArrivalIntervalMs(Number(e.target.value)); handleReset(); }}
                 style={{ width: '4rem' }} />
             </div>
+          </div>
+
+          {/* Workload Seed (issue #692) */}
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Workload seed</span>
+              <span className="field-value">#{workloadSeed}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input type="number" min="0" step="1" value={workloadSeed}
+                aria-label="Workload random seed"
+                aria-valuetext={`seed ${workloadSeed}`}
+                onChange={(e) => {
+                  const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                  setWorkloadSeed(v);
+                  handleReset();
+                }}
+                style={{ flex: 1 }} />
+              <button type="button" className="btn" style={{ padding: '4px 10px', fontSize: '0.72rem' }}
+                aria-label="Re-roll workload seed"
+                onClick={() => { setWorkloadSeed(Math.floor(Math.random() * 0x100000000)); handleReset(); }}>
+                Re-roll
+              </button>
+            </div>
+            <p className="hint-text" style={{ fontSize: '0.68rem', marginTop: '6px', marginBottom: 0 }}>
+              URL param ?bseed= — same seed, same ±40% length/arrival jitter.
+            </p>
           </div>
 
         </div>
@@ -437,7 +513,12 @@ export default function BatchingVisualizer({
       )}
 
       {/* Main Batch Simulation Stage */}
-      <section className="panel" aria-label={t('batching.simStageAria')}>
+      <section
+        className="panel"
+        aria-label={t('batching.simStageAria')}
+        data-state={clockToRunState(elapsedSim, makespan)}
+        aria-busy={runStateToBusy(clockToRunState(elapsedSim, makespan))}
+      >
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -467,6 +548,25 @@ export default function BatchingVisualizer({
             >
               <RotateCcw size={15} />
               {t('batching.resetTag')}
+            </button>
+
+            {/* Issue #398: export/copy the batch run as a scrapeable artifact */}
+            <button onClick={handleExportMd} className="btn" title="Export this batch run as a markdown walkthrough (download)">
+              <FileDown size={15} />
+              Export MD
+            </button>
+            <button onClick={handleExportJson} className="btn" title="Export this batch run as machine-readable JSON (download)">
+              <FileJson size={15} />
+              Export JSON
+            </button>
+            <button
+              onClick={handleCopyMd}
+              className="btn"
+              title="Copy the markdown walkthrough to the clipboard"
+              aria-label="Copy batching walkthrough to clipboard"
+            >
+              <Copy size={15} />
+              {exportCopied ? 'Copied!' : exportCopyFailed ? 'Copy failed' : 'Copy MD'}
             </button>
           </div>
         </div>
@@ -569,6 +669,12 @@ export default function BatchingVisualizer({
                 <div
                   key={req.id}
                   onClick={() => setSelectedRequestId(isSelected ? null : req.id)}
+                  onKeyDown={e => {
+                    if (!isRowActivateKey(e)) return;
+                    e.preventDefault();
+                    setSelectedRequestId(isSelected ? null : req.id);
+                  }}
+                  {...requestRowA11y(req, isSelected)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

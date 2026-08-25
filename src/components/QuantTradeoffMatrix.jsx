@@ -52,7 +52,13 @@ export default function QuantTradeoffMatrix({ localMaxxingContext, onApplySpeeds
   // choice always wins, even when the picker selection changes again.
   const defaultApplied = useRef(false);
 
+  // #449: only persist ?qtm= when the URL asked for it or the user explicitly
+  // loaded a family — the context-derived default seed must not materialize
+  // in the address bar / share links as if the user had set it.
+  const familyIntentionalRef = useRef(readParam('qtm') !== null);
+
   useEffect(() => {
+    if (!familyIntentionalRef.current) return;
     writeParams({ qtm: family });
   }, [family]);
 
@@ -133,7 +139,10 @@ export default function QuantTradeoffMatrix({ localMaxxingContext, onApplySpeeds
 
   const loadFamily = () => {
     const value = familyInput.trim();
-    if (value) setFamily(value);
+    if (value) {
+      familyIntentionalRef.current = true; // explicit user commit → shareable (#449)
+      setFamily(value);
+    }
   };
 
   const handleLoadRow = (row) => {

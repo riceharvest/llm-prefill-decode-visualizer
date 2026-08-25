@@ -7,19 +7,21 @@
 
 import { formatTime, formatTokens } from './presets.js';
 import { calculateAgenticTimeline } from './agenticMath.js';
+import { computeSingleTurnEngineRun } from './exportEngineMath.js';
 
 // ---------------------------------------------------------------------------
 // Deep links
 // ---------------------------------------------------------------------------
 
 // Build a URL that reproduces the exact config when opened: keeps every
-// current query param (preset, speeds, per-tab settings) and pins the tab,
-// while dropping transient state like autoplay.
+// current query param (preset, speeds, per-tab settings, autoplay) and pins
+// the tab. autoplay=1 is preserved rather than stripped so a received deep
+// link round-trips through every export — dropping it silently changed the
+// linked page's playback semantics (the sim no longer starts on load).
 export function buildDeepLink(tab) {
   if (typeof window === 'undefined') return '';
   const p = new URLSearchParams(window.location.search);
   if (tab) p.set('tab', tab);
-  p.delete('autoplay');
   const qs = p.toString();
   return `${window.location.origin}${window.location.pathname}${qs ? `?${qs}` : ''}`;
 }
@@ -37,17 +39,59 @@ export function buildSingleTurnMarkdown({
   draftTokens,
   acceptance,
   effectiveDecodeSpeed,
+  ctxScaleEnabled,
+  ctxHalf,
+  imagesEnabled,
+  imageCount,
+  imageResId,
+  jitterEnabled,
+  jitterPct,
   deepLink
 }) {
-  const safePrompt = Math.max(0, promptTokens || 0);
-  const safeOutput = Math.max(0, outputTokens || 0);
-  const ttft = safePrompt / prefillSpeed;
-  const decodeTime = safeOutput / effectiveDecodeSpeed;
-  const total = ttft + decodeTime;
-  const tpotMs = effectiveDecodeSpeed > 0 ? 1000 / effectiveDecodeSpeed : Infinity;
-  const throughput = total > 0 ? (safePrompt + safeOutput) / total : 0;
-  const prefillPct = total > 0 ? (ttft / total) * 100 : 0;
-  const decodePct = total > 0 ? (decodeTime / total) * 100 : 0;
+  // Engine features (#698): attached images, context scaling and ITL jitter
+  // are applied here exactly like the on-page simulation, via the shared
+  // computeSingleTurnEngineRun — the same module exportJson.js uses, so the
+  // MD walkthrough and JSON payload always agree with each other and with
+  // the deepLink they embed.
+  const run = computeSingleTurnEngineRun({
+    promptTokens,
+    outputTokens,
+    prefillSpeed,
+    decodeSpeed,
+    specEnabled,
+    draftTokens,
+    acceptance,
+    effectiveDecodeSpeed,
+    ctxScaleEnabled,
+    ctxHalf,
+    imagesEnabled,
+    imageCount,
+    imageResId,
+    jitterEnabled,
+    jitterPct
+  });
+  const {
+    safePrompt,
+    safeOutput,
+    imagesEnabled: imgOn,
+    imageCount: imgN,
+    imageResolutionLabel,
+    imageTokensTotal,
+    ctxScaleEnabled: ctxOn,
+    ctxHalfSafe,
+    jitterEnabled: jitOn,
+    jitterPct: jitPctSafe,
+    totalPrefillTokens,
+    ttftSeconds: ttft,
+    tpotMs,
+    decodeTimeSeconds: decodeTime,
+    totalWalltimeSeconds: total,
+    avgDecodeSpeedTokPerSec,
+    throughputTokPerSec: throughput,
+    prefillSharePct: prefillPct,
+    decodeSharePct: decodePct,
+    itlSummary
+  } = run;
 
   const specSection = specEnabled ? `
 ### Speculative decoding
@@ -60,6 +104,45 @@ effective   = steps/s × tokens/step = ${Math.round(effectiveDecodeSpeed)} tok/s
 
 Draft model proposes k = ${draftTokens} tokens per step, target verifies in one pass; acceptance α = ${acceptance}, draft cost c_draft ≈ 0.2.
 ` : '';
+
+  const imagesSection = imgOn ? `
+### Attached images
+
+${imgN} × ${imageResolutionLabel} attachment(s) tile into vision-encoder tokens that join the text prompt during prefill:
+
+\`\`\`
+prefill tokens = prompt + vision = ${safePrompt.toLocaleString()} + ${imageTokensTotal.toLocaleString()} = ${totalPrefillTokens.toLocaleString()} tok
+TTFT           = ${totalPrefillTokens.toLocaleString()} ÷ ${prefillSpeed} = ${ttft.toFixed(4)}s (${formatTime(ttft)})
+\`\`\`
+` : '';
+  const imagesInputRow = `| Attached images | ${imgOn ? `ON (${imgN} × ${imageResolutionLabel}, ${imageTokensTotal.toLocaleString()} vision tok)` : 'OFF'} |`;
+
+  const ctxSection = ctxOn ? `
+### Context scaling
+
+Decode slows as the KV cache fills (linear TPOT model, C½ = cache depth at half speed). Token i is produced at cache depth ${totalPrefillTokens.toLocaleString()} + i:
+
+\`\`\`
+speed(c)      = base ÷ (1 + c/C½)
+decode walltime = Σ tpot₀·(1 + (P+i)/C½) = closed form = ${decodeTime.toFixed(4)}s (${formatTime(decodeTime)})
+avg speed     = ${Math.round(avgDecodeSpeedTokPerSec)} tok/s over ${safeOutput} tokens
+\`\`\`
+
+C½ = ${ctxHalfSafe.toLocaleString()} tok.
+` : '';
+  const ctxInputRow = `| Context scaling | ${ctxOn ? `ON (C½ = ${ctxHalfSafe.toLocaleString()} tok)` : 'OFF'} |`;
+
+  const jitterSection = jitOn && itlSummary ? `
+### ITL jitter
+
+Seeded mean-preserving lognormal draws around the average TPOT (±${jitPctSafe}%): the average is unchanged, only the tail grows.
+
+\`\`\`
+p50 = ${itlSummary.p50.toFixed(1)} ms · p95 = ${itlSummary.p95.toFixed(1)} ms · p99 = ${itlSummary.p99.toFixed(1)} ms
+decode time = sum of drawn gaps = ${decodeTime.toFixed(4)}s (${formatTime(decodeTime)})
+\`\`\`
+` : '';
+  const jitterInputRow = `| ITL jitter | ${jitOn ? `ON (±${jitPctSafe}%)` : 'OFF'} |`;
 
   return `# Single-Turn Chat Simulation
 
@@ -74,16 +157,21 @@ Step-by-step walkthrough generated by the LLM Prefill & Decode Visualizer.
 | Prefill speed | ${prefillSpeed.toLocaleString()} tok/s |
 | Decode speed (base) | ${decodeSpeed.toLocaleString()} tok/s |
 | Speculative decoding | ${specEnabled ? `ON (k = ${draftTokens}, α = ${acceptance})` : 'OFF'} |
-${specSection}
+${imagesInputRow}
+${ctxInputRow}
+${jitterInputRow}
+${[specSection, imagesSection, ctxSection, jitterSection].filter(Boolean).join('\n')}
 ## Formulas
 
 \`\`\`
-TTFT   = prompt ÷ prefill        = ${safePrompt} ÷ ${prefillSpeed} = ${ttft.toFixed(4)}s (${formatTime(ttft)})
-TPOT   = 1000 ÷ decode          = 1000 ÷ ${Math.round(effectiveDecodeSpeed * 100) / 100} = ${Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞'}
-Decode = output ÷ decode        = ${safeOutput} ÷ ${Math.round(effectiveDecodeSpeed * 100) / 100} = ${decodeTime.toFixed(4)}s (${formatTime(decodeTime)})
+TTFT   = prompt ÷ prefill        = ${safePrompt} ÷ ${prefillSpeed} = ${(safePrompt / prefillSpeed).toFixed(4)}s (${formatTime(ttft)})
+TPOT   = 1000 ÷ decode          = 1000 ÷ ${Math.round(avgDecodeSpeedTokPerSec * 100) / 100} = ${Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞'}
+Decode = output ÷ decode        = ${safeOutput} ÷ ${Math.round(avgDecodeSpeedTokPerSec * 100) / 100} = ${decodeTime.toFixed(4)}s (${formatTime(decodeTime)})
 Total  = TTFT + Decode          = ${ttft.toFixed(4)} + ${decodeTime.toFixed(4)} = ${total.toFixed(4)}s (${formatTime(total)})
 \`\`\`
-
+${imgOn || ctxOn || jitOn ? `
+Note: the formulas above substitute feature-aware values (attached images extend prefill; context scaling decays the per-token rate; jitter sums seeded per-token draws), matching the on-page run for this exact configuration.
+` : ''}
 ## Final metrics
 
 | Metric | Value |
@@ -245,24 +333,31 @@ export function downloadMarkdown(markdown, filename = 'simulation.md') {
 }
 
 export async function copyMarkdownToClipboard(markdown) {
-  try {
-    await navigator.clipboard.writeText(markdown);
-    return true;
-  } catch {
-    // Clipboard API can be unavailable (http origins, permissions); fall back
-    // to a hidden-textarea execCommand copy, then give up gracefully.
+  // Issue #401: when navigator.clipboard exists but writeText REJECTS
+  // (headless drivers, denied permission), that rejection is authoritative —
+  // silently falling through to the deprecated execCommand() path returned
+  // true in headless Chromium while nothing was written, so the UI claimed
+  // "Copied!" over silent data loss. Only use the textarea fallback when the
+  // async Clipboard API is unavailable altogether (older browsers / http).
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     try {
-      const ta = document.createElement('textarea');
-      ta.value = markdown;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand('copy');
-      ta.remove();
-      return ok;
+      await navigator.clipboard.writeText(markdown);
+      return true;
     } catch {
       return false;
     }
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = markdown;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
   }
 }

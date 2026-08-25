@@ -192,3 +192,31 @@ test('handles missing optional data gracefully', () => {
   assert.doesNotMatch(md, /## Total cost of ownership/);
   assert.match(md, /### Groq LPU/);
 });
+
+// #896 — community-submitted strings (localmaxxing.com run fields) must not
+// inject markdown structure into the exported report.
+test('markdown output escapes community-submitted strings (#896)', () => {
+  const evil = 'RTX 4090 | [![Free GPU credits](https://evil.example/p.png)](https://phish.example/claim)\n\n## Sponsored: spam';
+  const report = buildSizingReport({
+    scenario: { ...baseScenario, modelId: 'model`[x]`' },
+    systemA: { ...systemA, name: evil, engine: 'eng|ine', engineVersion: '1.\n2', gpuName: evil },
+    systemB: null,
+    tco: null,
+    notes: ['note with | pipe and [brackets]']
+  });
+  const md = buildSizingReportMarkdown(report);
+
+  assert.ok(!md.includes('[![Free GPU credits]'), 'injected image must not survive');
+  // `\](` renders as a literal ] followed by text — not a link — so only
+  // *unescaped* link syntax counts as an injection.
+  assert.ok(!/(^|[^\\])\]\(https:\/\/phish/.test(md), 'injected link must not survive');
+  assert.ok(!md.includes('\n## Sponsored'), 'newline must be flattened — no forged headings');
+  // Table rows stay intact: every line that starts a cell ends its cell.
+  for (const line of md.split('\n')) {
+    if (line.startsWith('|')) assert.ok(line.endsWith('|'), `table row stays balanced: ${line}`);
+  }
+  // Escapes are present but reversible.
+  assert.match(md, /### RTX 4090 \\\| \\\[!\\\[Free GPU credits\\\]/);
+  assert.match(md, /\| Engine \| eng\\\|ine 1\. 2 \|/);
+  assert.match(md, /- note with \\\| pipe and \\\[brackets\\\]/);
+});

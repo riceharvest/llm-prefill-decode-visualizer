@@ -7,9 +7,11 @@ import { GPU_CATALOG, WEIGHT_PRECISIONS, gpuById, parseParamsB, weightsGiB } fro
 import Metric from './Metric';
 import Analogy from './Analogy';
 import { memoryLedger, SAFETY_HEADROOM_FRACTION } from '../../api/_math.js';
+import { resolveBudgetVramGb, gpuSelectionPatch } from '../utils/kvGpuState';
 import MultiGpuPlanner from './MultiGpuPlanner';
 import ChartDataTable from './ChartDataTable';
 import { t } from '../i18n/strings';
+import { formatUtilizationPct, stackedLedgerBarAria } from '../utils/kvLedgerA11y';
 
 // KV-cache geometry pulled from each model's actual config.json on HuggingFace
 // and its architecture paper. Four KV modes:
@@ -265,7 +267,7 @@ export default function KVCacheCalculator() {
   const [overheadPct, setOverheadPct] = useState(() =>
     Math.min(40, Math.max(0, readParamNum('oh', DEFAULT_OVERHEAD_FRACTION * 100)))
   );
-  // Measured weights size (GB) — overrides the parameter-count estimate
+  // Measured weights size (GiB) — overrides the parameter-count estimate
   const [weightsOverrideGb, setWeightsOverrideGb] = useState(() => Math.max(0, readParamNum('wgb', 0)));
 
   // Shareable per-tab settings
@@ -295,11 +297,19 @@ export default function KVCacheCalculator() {
 
   const overheadFraction = overheadPct / 100;
   const selectedGpu = gpuById(gpuId);
+  // #988: one VRAM source of truth for BOTH panels — the planner honors the
+  // same explicit-ledger override the ledger does, instead of silently using
+  // the gpu preset capacity and rendering contradictory fits.
+  const budgetVramGb = resolveBudgetVramGb(selectedGpu, gpuVramGb);
+  const applyGpuPatch = patch => {
+    if ('gpuVramGb' in patch) setGpuVramGb(patch.gpuVramGb);
+    setGpuId(patch.gpuId);
+  };
   const budget = vramBudget({
     weightsGb,
     kvGb: totalKVCacheGB,
     overheadFraction,
-    gpuVramGb: selectedGpu ? selectedGpu.vramGb : null
+    gpuVramGb: budgetVramGb
   });
   const gpuVerdicts = GPU_CATALOG.map(gpu => ({
     gpu,
@@ -457,9 +467,9 @@ export default function KVCacheCalculator() {
             <div className="metric-value" style={{ color: 'var(--accent)' }}>
               <Metric
                 term="kvPerToken"
-                substitution={`${kvFormula(preset)} × ${precision} bytes = ${(bytesPerTokenSingleSeq / 1024).toFixed(1)} KB`}
+                substitution={`${kvFormula(preset)} × ${precision} bytes = ${(bytesPerTokenSingleSeq / 1024).toFixed(1)} KiB`}
               >
-                {(bytesPerTokenSingleSeq / 1024).toFixed(1)} KB
+                {(bytesPerTokenSingleSeq / 1024).toFixed(1)} KiB
               </Metric>
             </div>
           </div>
@@ -469,10 +479,10 @@ export default function KVCacheCalculator() {
             <div className="metric-value" style={{ color: 'var(--prefill)', fontSize: '1.55rem' }}>
               <Metric
                 term="kvTotal"
-                substitution={`${(bytesPerTokenSingleSeq / 1024).toFixed(1)} KB × ${safeContext.toLocaleString()} tok × ${safeBatch} batch = ${totalKVCacheGB >= 1 ? `${totalKVCacheGB.toFixed(2)} GB` : `${totalKVCacheMB.toFixed(0)} MB`}`}
+                substitution={`${(bytesPerTokenSingleSeq / 1024).toFixed(1)} KiB × ${safeContext.toLocaleString()} tok × ${safeBatch} batch = ${totalKVCacheGB >= 1 ? `${totalKVCacheGB.toFixed(2)} GiB` : `${totalKVCacheMB.toFixed(0)} MiB`}`}
                 align="left"
               >
-                {totalKVCacheGB >= 1 ? `${totalKVCacheGB.toFixed(2)} GB` : `${totalKVCacheMB.toFixed(0)} MB`}
+                {totalKVCacheGB >= 1 ? `${totalKVCacheGB.toFixed(2)} GiB` : `${totalKVCacheMB.toFixed(0)} MiB`}
               </Metric>
             </div>
           </div>
@@ -546,7 +556,7 @@ export default function KVCacheCalculator() {
               onChange={(e) => { setGpuId(''); setGpuVramGb(Number(e.target.value)); }}
               style={{ width: '5.25rem' }}
             />
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-subtle)', alignSelf: 'center' }}>GB</span>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-subtle)', alignSelf: 'center' }}>GiB</span>
           </div>
 
           {/* Stacked bar: weights + KV + overhead against the GPU's VRAM */}
@@ -554,7 +564,7 @@ export default function KVCacheCalculator() {
             position: 'relative', height: '26px', borderRadius: 'var(--radius-sm)',
             background: 'var(--bg-inset)', border: '1px solid var(--border)', overflow: 'hidden'
           }} role="img"
-            aria-label={`${t('kvCache.ledgerUtilization', { pct: ledger.utilizationPct ?? '—', vram: safeGpuVram })} — ${verdictLabel[ledger.verdict] || ''}`}
+            aria-label={`${t('kvCache.ledgerUtilization', { pct: formatUtilizationPct(ledger.utilizationPct), vram: safeGpuVram })} — ${verdictLabel[ledger.verdict] || ''}`}
           >
             <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
               <div style={{ width: segPct(ledger.weightsGb), background: 'var(--accent)' }} />
@@ -572,24 +582,24 @@ export default function KVCacheCalculator() {
           <div style={{ marginTop: '12px', display: 'grid', gap: '6px', fontSize: '0.78rem', fontFamily: 'var(--font-mono)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--accent)' }}>■ {t('kvCache.ledgerWeights', { params: preset.params, prec: precision === 2 ? 'FP16' : precision === 1 ? 'FP8' : 'INT4' })}</span>
-              <span>{ledger.weightsGb?.toFixed(2)} GB</span>
+              <span>{ledger.weightsGb?.toFixed(2)} GiB</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--prefill)' }}>■ {t('kvCache.ledgerKv')}</span>
-              <span>{ledger.kvCacheGb?.toFixed(2)} GB</span>
+              <span>{ledger.kvCacheGb?.toFixed(2)} GiB</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--agent)' }}>■ {t('kvCache.ledgerOverhead', { pct: Math.round(DEFAULT_OVERHEAD_FRACTION * 100) })}</span>
-              <span>{ledger.frameworkOverheadGb?.toFixed(2)} GB</span>
+              <span>{ledger.frameworkOverheadGb?.toFixed(2)} GiB</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: '6px', fontWeight: 600 }}>
               <span>{t('kvCache.ledgerTotal')}</span>
-              <span>{ledger.totalGb?.toFixed(2)} GB · {t('kvCache.ledgerUtilization', { pct: ledger.utilizationPct ?? '—', vram: safeGpuVram })}</span>
+              <span>{ledger.totalGb?.toFixed(2)} GiB · {t('kvCache.ledgerUtilization', { pct: formatUtilizationPct(ledger.utilizationPct), vram: safeGpuVram })}</span>
             </div>
           </div>
 
           {/* Chart-to-table alternative (#75): the stacked bar's exact ledger
-              values, visually hidden until keyboard focus (the GB numbers
+              values, visually hidden until keyboard focus (the GiB numbers
               already render as text in the rows above). */}
           <ChartDataTable
             caption={t('chartTable.kvLedgerCaption')}
@@ -604,7 +614,7 @@ export default function KVCacheCalculator() {
                 id: 'weights',
                 label: t('kvCache.ledgerWeights', { params: preset.params, prec: precision === 2 ? 'FP16' : precision === 1 ? 'FP8' : 'INT4' }),
                 cells: {
-                  gb: `${ledger.weightsGb?.toFixed(2)} GB`,
+                  gb: `${ledger.weightsGb?.toFixed(2)} GiB`,
                   share: ledger.totalGb > 0 ? `${((ledger.weightsGb / ledger.totalGb) * 100).toFixed(1)}%` : '—'
                 }
               },
@@ -612,7 +622,7 @@ export default function KVCacheCalculator() {
                 id: 'kv',
                 label: t('kvCache.ledgerKv'),
                 cells: {
-                  gb: `${ledger.kvCacheGb?.toFixed(2)} GB`,
+                  gb: `${ledger.kvCacheGb?.toFixed(2)} GiB`,
                   share: ledger.totalGb > 0 ? `${((ledger.kvCacheGb / ledger.totalGb) * 100).toFixed(1)}%` : '—'
                 }
               },
@@ -620,7 +630,7 @@ export default function KVCacheCalculator() {
                 id: 'overhead',
                 label: t('kvCache.ledgerOverhead', { pct: Math.round(DEFAULT_OVERHEAD_FRACTION * 100) }),
                 cells: {
-                  gb: `${ledger.frameworkOverheadGb?.toFixed(2)} GB`,
+                  gb: `${ledger.frameworkOverheadGb?.toFixed(2)} GiB`,
                   share: ledger.totalGb > 0 ? `${((ledger.frameworkOverheadGb / ledger.totalGb) * 100).toFixed(1)}%` : '—'
                 }
               },
@@ -628,8 +638,8 @@ export default function KVCacheCalculator() {
                 id: 'total',
                 label: t('chartTable.totalRowLabel'),
                 cells: {
-                  gb: `${ledger.totalGb?.toFixed(2)} GB`,
-                  share: t('chartTable.utilizationLabel', { pct: ledger.utilizationPct ?? '—', vram: safeGpuVram })
+                  gb: `${ledger.totalGb?.toFixed(2)} GiB`,
+                  share: t('chartTable.utilizationLabel', { pct: formatUtilizationPct(ledger.utilizationPct), vram: safeGpuVram })
                 }
               },
               {
@@ -679,6 +689,11 @@ export default function KVCacheCalculator() {
           </p>
         )}
 
+        {/* Units note (#738 #866): computed memory figures are binary units */}
+        <p style={{ fontSize: '0.7rem', color: 'var(--text-subtle)', marginTop: '12px' }}>
+          {t('kvCache.unitsNote')}
+        </p>
+
         {/* Source footnote */}
         <p style={{ fontSize: '0.7rem', color: 'var(--text-subtle)', marginTop: '12px' }}>
           {preset.kvMode === 'csa_hca'
@@ -714,7 +729,7 @@ export default function KVCacheCalculator() {
               <span className="field-label">{t('kvCache.weightPrecision')}</span>
               <span className="field-value" style={{ color: 'var(--prefill)' }}>
                 {usesMeasuredWeights
-                  ? `${fmtGb(weightsGb)} GB · measured`
+                  ? `${fmtGb(weightsGb)} GiB · measured`
                   : preset.params}
               </span>
             </div>
@@ -737,7 +752,7 @@ export default function KVCacheCalculator() {
                 {t('kvCache.weightsSource', {
                   params: preset.params,
                   bpw: weightPreset.bpw,
-                  gb: `${fmtGb(estimatedWeightsGiB || 0)} GB`
+                  gb: `${fmtGb(estimatedWeightsGiB || 0)} GiB`
                 })}
               </p>
             )}
@@ -786,12 +801,13 @@ export default function KVCacheCalculator() {
           <div className="panel-inset field">
             <div className="field-head">
               <span className="field-label">{t('kvCache.targetGpu')}</span>
-              <span className="field-value" style={{ color: 'var(--accent)' }}>{selectedGpu ? `${selectedGpu.vramGb} GB` : '—'}</span>
+              {/* #988: show the effective budget VRAM (override-aware), matching the ledger */}
+              <span className="field-value" style={{ color: 'var(--accent)' }}>{budgetVramGb != null ? `${fmtGb(budgetVramGb)} GB` : '—'}</span>
             </div>
             <select
               value={gpuId}
               aria-label={t('kvCache.targetGpuAria')}
-              onChange={(e) => setGpuId(e.target.value)}
+              onChange={(e) => applyGpuPatch(gpuSelectionPatch(e.target.value, GPU_CATALOG))}
               style={{ width: '100%', marginTop: '4px' }}
             >
               {GPU_CATALOG.map(gpu => (
@@ -807,26 +823,40 @@ export default function KVCacheCalculator() {
         {/* Stacked ledger bar */}
         {selectedGpu && (
           <div style={{ marginBottom: '18px' }}>
-            <div style={{ position: 'relative', height: '34px', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            {/* #777: expose the bar's composition as an accessible name built
+                from the same legend strings rendered below it — segment
+                identity used to live only in hover-only title attributes. */}
+            <div
+              role="img"
+              aria-label={stackedLedgerBarAria(
+                [
+                  { label: t('kvCache.ledgerWeights'), value: `${fmtGb(weightsGb)} GB` },
+                  { label: t('kvCache.ledgerKv'), value: `${fmtGb(totalKVCacheGB)} GB` },
+                  { label: t('kvCache.ledgerOverhead', { pct: overheadPct }), value: `${fmtGb(budget.overheadGb)} GB` }
+                ],
+                t('kvCache.gpuLimitMarker', { gb: `${selectedGpu.vramGb} GB` })
+              )}
+              style={{ position: 'relative', height: '34px', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
               {(() => {
-                const scaleMax = Math.max(budget.totalGb, selectedGpu.vramGb);
+                const scaleMax = Math.max(budget.totalGb, budgetVramGb);
                 const pct = gb => Math.min(100, (gb / scaleMax) * 100);
-                const limitPos = pct(selectedGpu.vramGb);
+                const limitPos = pct(budgetVramGb);
                 return (
                   <>
                     <div title={t('kvCache.ledgerWeights')} style={{ position: 'absolute', inset: 0, width: `${pct(weightsGb)}%`, background: 'linear-gradient(180deg, var(--prefill), color-mix(in srgb, var(--prefill) 70%, black))' }} />
                     <div title={t('kvCache.ledgerKv')} style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(weightsGb)}%`, width: `${Math.max(0, pct(weightsGb + totalKVCacheGB) - pct(weightsGb))}%`, background: 'var(--decode)' }} />
                     <div title={t('kvCache.ledgerOverhead', { pct: overheadPct })} style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(weightsGb + totalKVCacheGB)}%`, width: `${Math.max(0, pct(budget.totalGb) - pct(weightsGb + totalKVCacheGB))}%`, background: 'repeating-linear-gradient(45deg, var(--agent), var(--agent) 4px, transparent 4px, transparent 8px)', backgroundColor: 'color-mix(in srgb, var(--agent) 35%, transparent)' }} />
-                    <div title={t('kvCache.gpuLimitMarker', { gb: `${selectedGpu.vramGb} GB` })} style={{ position: 'absolute', top: 0, bottom: 0, left: `${limitPos}%`, width: '2px', background: 'white', boxShadow: '0 0 6px rgba(255,255,255,0.9)' }} />
+                    <div title={t('kvCache.gpuLimitMarker', { gb: `${fmtGb(budgetVramGb)} GB` })} style={{ position: 'absolute', top: 0, bottom: 0, left: `${limitPos}%`, width: '2px', background: 'white', boxShadow: '0 0 6px rgba(255,255,255,0.9)' }} />
                   </>
                 );
               })()}
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', marginTop: '8px', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>
-              <span><span style={{ display: 'inline-block', width: '9px', height: '9px', background: 'var(--prefill)', marginRight: '5px', borderRadius: '2px' }} />{t('kvCache.ledgerWeights')} {fmtGb(weightsGb)} GB</span>
-              <span><span style={{ display: 'inline-block', width: '9px', height: '9px', background: 'var(--decode)', marginRight: '5px', borderRadius: '2px' }} />{t('kvCache.ledgerKv')} {fmtGb(totalKVCacheGB)} GB</span>
-              <span><span style={{ display: 'inline-block', width: '9px', height: '9px', border: '1px solid var(--agent)', marginRight: '5px', borderRadius: '2px' }} />{t('kvCache.ledgerOverhead', { pct: overheadPct })} {fmtGb(budget.overheadGb)} GB</span>
-              <span style={{ opacity: 0.75 }}>{t('kvCache.gpuLimitMarker', { gb: `${selectedGpu.vramGb} GB` })}</span>
+              <span><span style={{ display: 'inline-block', width: '9px', height: '9px', background: 'var(--prefill)', marginRight: '5px', borderRadius: '2px' }} />{t('kvCache.ledgerWeights')} {fmtGb(weightsGb)} GiB</span>
+              <span><span style={{ display: 'inline-block', width: '9px', height: '9px', background: 'var(--decode)', marginRight: '5px', borderRadius: '2px' }} />{t('kvCache.ledgerKv')} {fmtGb(totalKVCacheGB)} GiB</span>
+              <span><span style={{ display: 'inline-block', width: '9px', height: '9px', border: '1px solid var(--agent)', marginRight: '5px', borderRadius: '2px' }} />{t('kvCache.ledgerOverhead', { pct: overheadPct })} {fmtGb(budget.overheadGb)} GiB</span>
+              <span style={{ opacity: 0.75 }}>{t('kvCache.gpuLimitMarker', { gb: `${fmtGb(budgetVramGb)} GB` })}</span>
             </div>
           </div>
         )}
@@ -835,20 +865,20 @@ export default function KVCacheCalculator() {
         <div className="metric-grid">
           <div className="metric" style={{ borderInlineStartColor: 'var(--accent)' }}>
             <div className="metric-label">{t('kvCache.ledgerTotal')}</div>
-            <div className="metric-value" style={{ color: 'var(--accent)' }}>{fmtGb(budget.totalGb)} GB</div>
+            <div className="metric-value" style={{ color: 'var(--accent)' }}>{fmtGb(budget.totalGb)} GiB</div>
           </div>
 
           <div className="metric" style={{ borderInlineStartColor: budget.headroomGb !== null && budget.headroomGb >= 0 ? 'var(--decode)' : 'var(--danger)' }}>
             <div className="metric-label">
               {budget.headroomGb !== null && budget.headroomGb < 0
-                ? t('kvCache.ledgerOverBudget', { gb: `${fmtGb(-budget.headroomGb)} GB` })
+                ? t('kvCache.ledgerOverBudget', { gb: `${fmtGb(-budget.headroomGb)} GiB` })
                 : t('kvCache.ledgerHeadroom', { gpu: selectedGpu ? selectedGpu.name : '' })}
             </div>
             <div className="metric-value" style={{
               color: budget.headroomGb === null ? 'var(--text-subtle)'
                 : budget.headroomGb >= 0 ? 'var(--decode)' : 'var(--danger)'
             }}>
-              {budget.headroomGb === null ? '—' : `${budget.headroomGb >= 0 ? '+' : ''}${fmtGb(budget.headroomGb)} GB`}
+              {budget.headroomGb === null ? '—' : `${budget.headroomGb >= 0 ? '+' : ''}${fmtGb(budget.headroomGb)} GiB`}
             </div>
           </div>
 
@@ -883,7 +913,7 @@ export default function KVCacheCalculator() {
           {gpuVerdicts.map(({ gpu, verdict }) => (
             <button
               key={gpu.id}
-              onClick={() => setGpuId(gpu.id)}
+              onClick={() => applyGpuPatch(gpuSelectionPatch(gpu.id, GPU_CATALOG))}
               data-tooltip={`${t('kvCache.gpuVerdictAria', {
                 name: gpu.name,
                 verdict: verdict === 'pass' ? t('kvCache.verdictPass') : verdict === 'warn' ? t('kvCache.verdictWarn') : t('kvCache.verdictFail')

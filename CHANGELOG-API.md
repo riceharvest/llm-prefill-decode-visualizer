@@ -79,6 +79,20 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 ### Unreleased (additive — no version bump)
 
+- `GET|POST /api/compute?model=kvCache` input validation fix: non-numeric or
+  non-positive `numLayers` / `kvHeads` / `headDim` / `contextLength` /
+  `batchSize` now return `400 INVALID_PARAMS` instead of being silently
+  defaulted (or worse, multiplied through — doubly-negative ctx × batch used
+  to cancel signs into a plausible-looking positive `totalGb`). `precisionBytes`
+  now enforces its documented enum `[2, 1, 0.5]`, and unknown `architecture`
+  values are rejected with the available list. Every kvCache result now always
+  carries the required `warnings` array (empty when inputs are plausible), and
+  requests whose `contextLength` exceeds the architecture max emit a
+  `context_exceeds_model_limit` warning plus a `contextWindow` block
+  (`maxPositionEmbeddings` / `requested` / `withinLimit` / `overflowTokens`)
+  mirroring `/api/vram`. Behavior change: previously-accepted invalid inputs
+  now fail with 400; valid-request response shapes only gain fields.
+- Affected endpoints: `/api/compute` (`model=kvCache`).
 - `/api/spec` now annotates every operation with a machine-readable
   `x-rate-limit` extension: `{ enforced, limit, windowSeconds, keying, scope }`
   plus, for metered endpoints, the `X-RateLimit-*` header names and the 429

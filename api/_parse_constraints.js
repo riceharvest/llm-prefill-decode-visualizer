@@ -61,8 +61,17 @@ function parseQuantization(text) {
   return { value: null, ambiguous: false };
 }
 
+function normalizeNumericString(s) {
+  let str = String(s).replace(/[\s_]/g, '');
+  // A trailing comma group of 1–2 digits is a decimal comma ("1,5"), not a
+  // thousands separator ("70,000" groups into 3-digit blocks). #1061
+  if (/^\d{1,3}(,\d{1,2})$/.test(str)) str = str.replace(',', '.');
+  else str = str.replace(/,/g, '');
+  return str;
+}
+
 function parseNumber(s) {
-  const n = Number(String(s).replace(/,/g, ''));
+  const n = Number(normalizeNumericString(s));
   return Number.isFinite(n) ? n : null;
 }
 
@@ -91,7 +100,10 @@ function parseContextLength(text) {
  */
 export function parseConstraints(rawText) {
   const input = String(rawText ?? '').trim();
-  const text = input.toLowerCase();
+  // Collapse locale digit-grouping separators (NBSP, narrow NBSP, thin space,
+  // underscore) between digits — but only for exactly-3-digit groups, so
+  // "Qwen 3.6 27B" keeps its version spacing. #1061
+  const text = input.toLowerCase().replace(/(?<=\d)[\s_](?=\d{3}(?!\d))/g, '');
   const constraints = {
     deployment: null,
     modelFamily: null,
@@ -133,8 +145,12 @@ export function parseConstraints(rawText) {
   // --- parameter count ------------------------------------------------------
   // Strip budget amounts first so "$1500" can't collide with a "1500B" match.
   const withoutMoney = text.replace(/\$?\s*[\d,.]+\s*(?:k|m)?\s*(?:usd|dollars|bucks)\b/g, ' ');
-  const pm = withoutMoney.match(/\b(\d+(?:\.\d+)?)\s*x?\s*-?\s*b\b/);
-  if (pm) constraints.paramsB = parseNumber(pm[1]);
+  // "27b" and "1t" both parse; trillions convert to billions. (#1068)
+  const pm = withoutMoney.match(/\b(\d+(?:\.\d+)?)\s*x?\s*-?\s*([tb])\b/);
+  if (pm) {
+    const base = parseNumber(pm[1]);
+    if (base != null) constraints.paramsB = pm[2] === 't' ? base * 1000 : base;
+  }
 
   // --- quantization ---------------------------------------------------------
   const quant = parseQuantization(text);
@@ -174,10 +190,22 @@ export function parseConstraints(rawText) {
     : moneyWords
       ? parseMoney(moneyWords[1], moneyWords[2])
       : null;
-  if (budget != null) constraints.budgetUsdMax = budget;
+  const moneySrc = money ? money[1] : moneyWords ? moneyWords[1] : null;
+  if (budget != null) {
+    constraints.budgetUsdMax = budget;
+    if (/,\d{1,2}$/.test(moneySrc)) {
+      ambiguities.push({
+        field: 'budgetUsdMax',
+        message: `"${moneySrc}" read as a decimal comma (budget ${budget}). If the comma was a thousands separator, restate the amount without it.` // #1061
+      });
+    }
+  }
 
   // --- minimum decode speed ------------------------------------------------------
-  const sm = text.match(/\b(?:at least|min(?:imum)?(?: of)?|>=?|no less than|over)\s*([\d,]+)\s*(?:tok(?:en)?s?)(?:\/s| per second|s\/sec|s\/s)\b/);
+  // No leading \b before the operator alternation: a word boundary can never
+  // hold between a space/string-start and ">" or "≥", which silently killed
+  // ">= 30 tok/s". ≥ is accepted alongside <=/≤ used by the other fields. #1068
+  const sm = text.match(/(?:\bat least\b|\bmin(?:imum)?(?: of)?\b|>=?|≥|\bno less than\b|\bover\b)\s*([\d,]+)\s*(?:tok(?:en)?s?)(?:\/s| per second|s\/sec|s\/s)\b/);
   if (sm) constraints.minDecodeTokPerSec = parseNumber(sm[1]);
 
   // --- VRAM cap --------------------------------------------------------------------
@@ -196,6 +224,17 @@ export function parseConstraints(rawText) {
   }
 
   // --- catch-all -----------------------------------------------------------------
+  if (input
+      && /[<>≤≥]\s*\d/.test(text)
+      && constraints.budgetUsdMax == null
+      && constraints.minDecodeTokPerSec == null
+      && constraints.maxVramGb == null
+      && !Object.values(constraints).every(v => v == null)) {
+    ambiguities.push({
+      field: 'input',
+      message: 'Input contains a numeric comparison (>, <, <=, ≥) that did not map to budget, minimum decode speed, or VRAM cap — restate using words like "under $X", "at least N tok/s", or "N gb VRAM".' // #1068
+    });
+  }
   if (!input) {
     ambiguities.push({
       field: 'input',
@@ -211,16 +250,31 @@ export function parseConstraints(rawText) {
   return { input, constraints, ambiguities };
 }
 
+// Bare quantization level ("q4", "q8", "iq3"): matches no stored benchmark
+// tag (those are full llama.cpp labels like q4_k_m), so feeding it to
+// /api/sizing as ?quant= silently returns zero runs (#563). The parser keeps
+// it in `constraints.quantization` but the ready-made query omits it.
+const COARSE_QUANT_RE = /^i?q[1-8]$/i;
+
+export function isCoarseQuantLabel(quantization) {
+  return COARSE_QUANT_RE.test(String(quantization || ''));
+}
+
 /**
  * Map the canonical constraints onto the structured query params of
  * /api/sizing (the downstream decision endpoint), so agents can chain
  * parse-constraints → sizing in one step. Fields with no sizing param are
- * skipped; null fields are omitted entirely.
+ * skipped; null fields are omitted entirely. A bare-level quantization
+ * ("Q4") is omitted too (#563): the stored quants are K-variant tags like
+ * q4_k_m, and exact-match filtering on "q4" matches zero runs — dropping the
+ * token yields working recommendations instead of a dead pipeline.
  */
 export function constraintsToSizingQuery(constraints) {
   const params = new URLSearchParams();
   if (constraints.modelFamily) params.set('model', constraints.modelFamily);
-  if (constraints.quantization) params.set('quant', constraints.quantization);
+  if (constraints.quantization && !isCoarseQuantLabel(constraints.quantization)) {
+    params.set('quant', constraints.quantization);
+  }
   if (constraints.contextLength) params.set('contextLength', String(constraints.contextLength));
   if (constraints.concurrency) params.set('concurrency', String(constraints.concurrency));
   if (constraints.maxVramGb) params.set('maxVramGb', String(constraints.maxVramGb));

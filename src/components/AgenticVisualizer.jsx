@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, ToggleLeft, ToggleRight, Play, Pause, CheckCircle, RotateCcw, FileDown, Copy, Zap, Gauge, FileJson } from 'lucide-react';
 import { formatTime, formatTokens } from '../utils/presets';
-import { readParamNum, readParamBool, readParam, writeParams } from '../utils/urlState';
+import { readParamNum, readParamBool, consumeAutoplay, writeParams } from '../utils/urlState';
 import { calculateAgenticTimeline, waterfallGeometry } from '../utils/agenticMath';
+import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { exportNodeAsPng } from '../utils/exportPng';
 import EmbedDialog from './EmbedDialog';
 import MisconceptionCallout, { isMisconceptionDismissed, dismissMisconception } from './MisconceptionCallout';
@@ -16,7 +17,7 @@ import ChartDataTable from './ChartDataTable';
 import Metric from './Metric';
 import Analogy from './Analogy';
 import SloBadge from './SloBadge';
-import { evaluateAgenticSlo, evaluateMetric } from '../utils/slo.js';
+import { evaluateAgenticSlo } from '../utils/slo.js';
 
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
@@ -58,8 +59,10 @@ export default function AgenticVisualizer({
   };
 
   // Auto-start the simulation when the page was opened via a "try it" demo link
+  // (#818: consume the flag once per page load so returning to this tab later
+  // doesn't re-fire autoplay).
   useEffect(() => {
-    if (readParam('autoplay') === '1') {
+    if (consumeAutoplay()) {
       const timer = setTimeout(() => setIsPlaying(true), 250);
       return () => clearTimeout(timer);
     }
@@ -226,11 +229,14 @@ export default function AgenticVisualizer({
     if (!checks.length) return null;
     return { pass: checks.every(r => r.pass), marginPct: Math.min(...checks.map(r => r.marginPct)) };
   };
-  // Whole-loop walltime vs the walltime budget (header badge).
-  const evaluateAgenticSloWalltime = evaluateMetric(totalAgentWalltime, sloBudgets?.walltimeSec);
+  // Whole-loop walltime vs the walltime budget (header badge). #682: this is
+  // the same verdict evaluateAgenticSlo produces, so the badge and the banner
+  // can never disagree about the loop-total scope.
+  const evaluateAgenticSloWalltime = agenticSlo.loopTotal;
 
   // Markdown walkthrough export (download + clipboard)
   const [mdCopied, setMdCopied] = useState(false);
+  const [mdCopyFailed, setMdCopyFailed] = useState(false);
   const buildMarkdown = () => buildAgenticMarkdown({
     numTurns,
     basePromptTokens,
@@ -255,10 +261,10 @@ export default function AgenticVisualizer({
   const handleExportJson = () => downloadJson(buildJson(), 'agentic-loop-simulation.json');
   const handleCopyMd = async () => {
     const ok = await copyMarkdownToClipboard(buildMarkdown());
-    if (ok) {
-      setMdCopied(true);
-      setTimeout(() => setMdCopied(false), 2000);
-    }
+    // Issue #401: surface failure explicitly instead of silent no-feedback.
+    setMdCopied(ok);
+    setMdCopyFailed(!ok);
+    setTimeout(() => { setMdCopied(false); setMdCopyFailed(false); }, 2000);
   };
 
   // Ref for timer
@@ -469,7 +475,7 @@ export default function AgenticVisualizer({
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
       {/* Issue #63: live narration of the animated run for screen readers */}
-      <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
+      <div className="visually-hidden" role="status" aria-live="polite" data-testid="run-state">{srSummary}</div>
 
       {/* Top Configuration Card */}
       <section className="panel" aria-label={t('agentic.paramsPanelAria')}>
@@ -481,10 +487,10 @@ export default function AgenticVisualizer({
 
           {/* Prefix Caching Toggle */}
           <button
-            data-tour="prefix-caching"
             onClick={handleTogglePrefixCaching}
             className="btn"
             aria-pressed={enablePrefixCaching}
+            data-testid="prefix-caching-toggle"
             style={enablePrefixCaching
               ? { borderColor: 'var(--decode-border)', color: 'var(--decode)', background: 'var(--decode-dim)' }
               : undefined}
@@ -624,7 +630,12 @@ export default function AgenticVisualizer({
       ))}
 
       {/* Main Agent Loop Simulation Stage */}
-      <section className="panel" aria-label={t('agentic.simStageAria')}>
+      <section
+        className="panel"
+        aria-label={t('agentic.simStageAria')}
+        data-state={phaseToRunState(currentPhase)}
+        aria-busy={runStateToBusy(phaseToRunState(currentPhase))}
+      >
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -687,7 +698,7 @@ export default function AgenticVisualizer({
               aria-label="Copy markdown walkthrough to clipboard"
             >
               <Copy size={15} />
-              {mdCopied ? 'Copied!' : 'Copy MD'}
+              {mdCopied ? 'Copied!' : mdCopyFailed ? 'Copy failed' : 'Copy MD'}
             </button>
           </div>
         </div>
@@ -762,20 +773,53 @@ export default function AgenticVisualizer({
             )}
           </div>
         )}
-        {sloEnabled && agenticSlo.failingTurns.length === 0 && (
-          <div
-            className="panel-inset"
-            style={{
-              borderColor: 'var(--decode-border)',
-              background: 'var(--decode-dim)',
-              marginBottom: '18px',
-              fontSize: '0.8rem',
-              color: 'var(--decode)'
-            }}
-          >
-            {t('slo.agenticAllPass')}
-          </div>
-        )}
+        {/* #682: the all-clear banner consults BOTH scopes — per-turn checks
+            AND the whole-loop walltime. A loop whose turns all pass but whose
+            total walltime overruns the budget gets a scoped warning instead of
+            a false "everything passes". */}
+        {sloEnabled && agenticSlo.failingTurns.length === 0 && (() => {
+          const loopOver = agenticSlo.loopTotal && !agenticSlo.loopTotal.pass;
+          if (!loopOver) {
+            return (
+              <div
+                className="panel-inset"
+                style={{
+                  borderColor: 'var(--decode-border)',
+                  background: 'var(--decode-dim)',
+                  marginBottom: '18px',
+                  fontSize: '0.8rem',
+                  color: 'var(--decode)'
+                }}
+              >
+                {t('slo.agenticAllPass')}
+              </div>
+            );
+          }
+          return (
+            <div
+              className="panel-inset"
+              role="alert"
+              aria-label={t('slo.agenticTurnsPassLoopOver', {
+                value: formatTime(agenticSlo.loopTotal.value),
+                budget: formatTime(agenticSlo.loopTotal.budget)
+              })}
+              style={{
+                borderColor: 'var(--danger)',
+                background: 'rgba(248, 113, 113, 0.08)',
+                marginBottom: '18px',
+                fontSize: '0.8rem',
+                color: 'var(--text-muted)'
+              }}
+            >
+              <strong style={{ color: 'var(--danger)' }}>
+                {t('slo.agenticTurnsPassLoopOver', {
+                  value: formatTime(agenticSlo.loopTotal.value),
+                  budget: formatTime(agenticSlo.loopTotal.budget)
+                })}
+              </strong>
+            </div>
+          );
+        })()}
 
         {/* Live Side-by-Side Prefill vs Decode Stream */}
         <div className="panel-inset" style={{ marginBottom: '20px' }}>
