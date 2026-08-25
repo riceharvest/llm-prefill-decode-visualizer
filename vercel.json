@@ -98,10 +98,6 @@
       "destination": "/.well-known/mcp.json"
     },
     {
-      "source": "/.well-known/ai-plugin",
-      "destination": "/.well-known/ai-plugin.json"
-    },
-    {
       "source": "/problems",
       "destination": "/api/problems"
     },
@@ -140,6 +136,20 @@
     {
       "source": "/api/agent/confidence.json",
       "destination": "/api/agent/confidence"
+    },
+    {
+      "source": "/.well-known/security",
+      "destination": "/.well-known/security.txt"
+    },
+    {
+      "source": "/.well-known/ai-plugin",
+      "destination": "/.well-known/ai-plugin.json"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/watch/dispatch",
+      "schedule": "0 6 * * *"
     }
   ],
   "headers": [
@@ -196,12 +206,6 @@
           "value": "Accept-Encoding"
         }
       ]
-    }
-  ],
-  "crons": [
-    {
-      "path": "/api/watch/dispatch",
-      "schedule": "0 6 * * *"
     }
   ]
 }

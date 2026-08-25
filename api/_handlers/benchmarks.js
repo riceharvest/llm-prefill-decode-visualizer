@@ -1,4 +1,5 @@
 import { aggregate, DEFAULT_OUTLIER_IQRS } from '../_localmaxxing.js';
+import { normalizeQueryModel } from '../_normalize.js';
 import { resolveRuns } from '../_snapshots.js';
 import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError, paginationScope } from '../_pagination.js';
 import { enforceRateLimit } from '../_ratelimit.js';
@@ -44,7 +45,10 @@ export default async function handler(req, res) {
 
     // Filters
     const hardware = q.hardware ? String(q.hardware).toLowerCase() : null;
-    const model = q.model ? String(q.model).toLowerCase() : null;   // matches family OR raw hfId
+    // Normalize like /api/best + /api/localmaxxing (issue #970) so spaced or
+    // dotted display spellings ("Qwen3.6 27B") resolve to the same stored
+    // family key instead of raw substring-matching nothing.
+    const model = q.model ? normalizeQueryModel(q.model) : null;   // matches family OR raw hfId
     const quant = q.quant ? String(q.quant).toLowerCase() : null;
     const hwClass = q.hwClass ? String(q.hwClass).toLowerCase() : null; // discrete_gpu | unified | cpu_only
     const engineQ = q.engine ? String(q.engine) : null;             // matches "name version" tag substring

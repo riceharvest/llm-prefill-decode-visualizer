@@ -11,8 +11,15 @@
 // default) so self-hosted deployments emit their own origin (#925).
 import { writeFileSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { resolveSiteUrl, withSitemapDirective } from './site-origin.mjs';
+// Re-export for tests/agents importing the resolver from the sitemap module.
+export { resolveSiteUrl };
+
+/** The robots.txt `Sitemap:` line for a given base origin (#925). */
+export function robotsSitemapLine(siteUrl = SITE_URL) {
+  return `Sitemap: ${siteUrl}/sitemap.xml`;
+}
 
 const SITE_URL = resolveSiteUrl(process.env);
 const TOP_N = 10;
@@ -102,7 +109,12 @@ async function main() {
   console.log(`[sitemap] wrote ${paths.length} URLs (${source}) -> ${OUT}`);
 }
 
-main().catch(err => {
-  // Never break the build over SEO niceties.
-  console.warn(`[sitemap] skipped: ${err.message}`);
-});
+// Run only when executed directly (node scripts/generate-sitemap.mjs), so
+// tests can import the pure helpers without triggering a build.
+const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
+if (isDirectRun) {
+  main().catch(err => {
+    // Never break the build over SEO niceties.
+    console.warn(`[sitemap] skipped: ${err.message}`);
+  });
+}

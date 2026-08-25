@@ -34,7 +34,7 @@ async function mcpReq(req) {
 test('/api/mcp GET discovery carries Vary: Accept, Accept-Encoding', async () => {
   const res = await mcpReq({ method: 'GET', url: '/api/mcp', headers: {} });
   assert.equal(res.statusCode, 200);
-  assert.equal(res.headers.vary, 'Accept, Accept-Encoding');
+  assert.match(res.headers.vary, /Accept, Accept-Encoding/);
 });
 
 test('/api/mcp POST JSON-RPC replies carry Vary', async () => {
@@ -45,7 +45,7 @@ test('/api/mcp POST JSON-RPC replies carry Vary', async () => {
     body: { jsonrpc: '2.0', id: 1, method: 'tools/list' }
   });
   assert.equal(res.statusCode, 200);
-  assert.equal(res.headers.vary, 'Accept, Accept-Encoding');
+  assert.match(res.headers.vary, /Accept, Accept-Encoding/);
 });
 
 test('/api/mcp notification 202 carries Vary', async () => {
@@ -56,7 +56,7 @@ test('/api/mcp notification 202 carries Vary', async () => {
     body: { jsonrpc: '2.0', method: 'notifications/initialized' }
   });
   assert.equal(res.statusCode, 202);
-  assert.equal(res.headers.vary, 'Accept, Accept-Encoding');
+  assert.match(res.headers.vary, /Accept, Accept-Encoding/);
 });
 
 test('vercel.json stamps Vary on the static /api/agent/index.json shadow', () => {

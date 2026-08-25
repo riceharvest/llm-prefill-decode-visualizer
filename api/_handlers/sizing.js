@@ -1,4 +1,6 @@
-import { aggregate } from '../_localmaxxing.js';
+import { getAllRuns, aggregate } from '../_localmaxxing.js';
+import { normalizeQueryModel } from '../_normalize.js';
+
 import { kvCache } from '../_math.js';
 import { explainRecommendation } from '../_explain.js';
 import { ensureSnapshot } from '../_snapshots.js';
@@ -155,7 +157,10 @@ export default async function handler(req, res) {
     let runs = allRuns;
 
     // Same filters as /api/best
-    runs = runs.filter(r => r.modelFamily.includes(workload.model.toLowerCase()) || r.modelId?.toLowerCase().includes(workload.model.toLowerCase()));
+    // Normalize like /api/best + /api/localmaxxing (issue #970) — the
+    // "Same filters as /api/best" claim above is only true if the matcher is.
+    const modelNeedle = normalizeQueryModel(workload.model);
+    runs = runs.filter(r => r.modelFamily.includes(modelNeedle) || r.modelId?.toLowerCase().includes(modelNeedle));
     if (params.quant) runs = runs.filter(r => r.quantization?.toLowerCase() === String(params.quant).toLowerCase());
     if (params.hwClass) runs = runs.filter(r => r.hwClass?.toLowerCase() === String(params.hwClass).toLowerCase());
     // Budget cap: rig memory (VRAM or unified) must fit under it.

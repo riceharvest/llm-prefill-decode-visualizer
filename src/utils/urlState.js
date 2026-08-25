@@ -3,7 +3,7 @@
 // the current state without spamming browser history. Shareable URLs are
 // minted exclusively by buildShareLink() (utils/permalink.js, #875).
 
-import { buildShareLink } from './permalink';
+import { buildShareLink } from './permalink.js';
 
 export function readParam(name) {
   const p = new URLSearchParams(window.location.search);
@@ -11,6 +11,14 @@ export function readParam(name) {
 }
 
 export function clampNum(n, min, max) {
+  // Non-finite input is garbage: fall back to the lower bound (deterministic,
+  // never NaN-poisons the simulation state); with no bounds at all, fall back to 0.
+  const num = Number(n);
+  if (!Number.isFinite(num)) {
+    if (typeof min === 'number') return min;
+    return 0;
+  }
+  n = num;
   if (typeof min === 'number') n = Math.max(min, n);
   if (typeof max === 'number') n = Math.min(max, n);
   return n;
@@ -86,11 +94,7 @@ export function writeParams(updates) {
   // pathname+search alone silently dropped it on every mount-time sync.
   const hash = window.location.hash || '';
   const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
-  if (push) {
-    window.history.pushState(null, '', `${url}${hash}`);
-  } else {
-    window.history.replaceState(null, '', `${url}${hash}`);
-  }
+  window.history.replaceState(null, '', `${url}${hash}`);
 }
 
 // Build a shareable "try it" URL for a demo: routes through the canonical
