@@ -5,6 +5,8 @@ An interactive tool for understanding LLM inference performance: prefill (comput
 <!-- agent-parseable:meta -->
 Base-URL: https://llm-prefill-decode-visualizer.vercel.app
 OpenAPI-Spec: /api/spec
+Agent-Manifest: /agents.json
+Endpoint-Index: /api/agent/index.json
 Tabs: single,agentic,batching,compare,ab,diff,shortlist,kvcache,theory
 Tab-URL-Template: {Base-URL}/?tab={id}
 Tab-Section-Header-Format: ### Tab: {id} — {label}
@@ -236,7 +238,7 @@ The machine-readable registry also lives in `/api/spec` (`x-error-codes` + the `
 
 ## App tabs (interactive page)
 
-The human-facing UI is this same site. Deep links carry state via URL params: `?tab=<id>`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`, `theme=<name>`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
+The human-facing UI is this same site. Deep links carry state via URL params: `?tab=<id>`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
 
 <!-- tabs-section:start -->
 ### Tab: single — Single-turn
@@ -259,9 +261,17 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 
 - Tab-ID: batching
 - URL: /?tab=batching
-- Purpose: Show concurrent users sharing one accelerator: per-user decode decays roughly B^0.25 with batch size while aggregate throughput climbs.
+- Purpose: Show concurrent users sharing one accelerator: per-user decode decays as batchSize^(−decodeDecayExponent) with batch size while aggregate throughput climbs — a heuristic power law with NO saturation point, so it must not be used alone to pick an optimal batch size.
 - Surfaces: batch-size slider; per-user vs aggregate throughput meters; shared-compute animation
 - Endpoints: GET /api/compute?model=batched
+- URL params:
+  - breqs=<2–48> — concurrent requests in the batch
+  - bprompt=<128–32768> — mean prompt tokens per request
+  - bgen=<32–4096> — mean output tokens per request
+  - bmax=<1–32> — maximum batch size (concurrent decodes)
+  - bchunk=<0|128|256|512|1024|2048|4096|8192> — chunked-prefill chunk size; 0 disables chunking. The UI slider is indexed by these stops, so DOM slider position ≠ token value
+  - barr=<0–2000, ms> — interval between request arrivals
+  - sim=<1|2|5|20|instant> — playback time-scale multiplier shared by all animated tabs
 
 ### Tab: compare — Compare
 
@@ -284,7 +294,7 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Tab-ID: diff
 - URL: /?tab=diff
 - Purpose: Diff two community benchmark runs (or two constraint sets via what-if mode) and read per-metric deltas plus a plain-language summary.
-- Surfaces: run A/B selectors; delta table; what-if constraint diffing
+- Surfaces: run A/B free-text id inputs; per-metric delta rows with ratios; plain-language summary; deep links (?tab=diff&runA&runB) auto-execute on load
 - Endpoints: GET /api/diff?runA=<id>&runB=<id>; GET /api/diff?mode=whatif
 
 ### Tab: shortlist — Find HW
@@ -312,18 +322,5 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Endpoints: none (static explainer content)
 
 <!-- tabs-section:end -->
-
-## Rendering modes (theming)
-
-Three palettes ship: `dark` (default, the `:root` tokens), `light`, and `high-contrast` (pure black/white). The active palette always drives rendering — every color token in the stylesheet is keyed off `<html data-theme>`.
-
-Machine-readable theme state (issues #662 #668):
-
-- **Detect:** read `document.documentElement.dataset.theme` — one of `dark`, `light`, `high-contrast`. It matches what actually renders.
-- **Set via URL:** append `?theme=dark|light|high-contrast` (validated; unknown values are ignored). A `?theme=` deep link wins over stored preferences and OS settings, and does not persist.
-- **Set via storage:** write localStorage key `llmpd-theme` to one of the three names before load for a persistent pick.
-- **Change event:** the window fires `llmpd-theme-change` (`detail.theme`) on programmatic switches.
-
-Without any of these signals the theme follows OS preferences: `prefers-contrast: more` → `high-contrast`, else `prefers-color-scheme: light` → `light`, otherwise `dark`.
 
 Source: https://github.com/riceharvest/llm-prefill-decode-visualizer

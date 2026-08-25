@@ -36,6 +36,27 @@ import { applyVersionTrustHeaders } from './_versions.js';
 
 export const config = { runtime: 'nodejs' };
 
+/**
+ * Vercel routes URLs that look like static assets (a file extension in the
+ * last segment, e.g. `.json`/`.xml`) to the static layer first; when no
+ * static file matches they 404 before ever reaching this function. That is
+ * why every dotted /api route (agent capabilities/compute/benchmarks/
+ * scenario/freshness/confidence .json and watch/rss.xml) returned NOT_FOUND
+ * in production while extensionless routes worked (#548 #380 #468).
+ *
+ * vercel.json rewrites those misses to the extensionless form of the path;
+ * this restores the canonical dotted path so the switch below keeps serving
+ * both spellings through the same handlers.
+ */
+const DOTTED_ROUTES = ROUTES.map((r) => r.path).filter((p) => /\.(json|xml)$/.test(p));
+export function canonicalApiPath(pathname) {
+  if (pathname.includes('.')) return pathname;
+  for (const p of DOTTED_ROUTES) {
+    if (p === `${pathname}.json` || p === `${pathname}.xml`) return p;
+  }
+  return pathname;
+}
+
 function json(res, body, status = 200) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -148,7 +169,8 @@ export default async function handler(req, res) {
     // (issues #943/#953). vercel.json's "trailingSlash": false normally
     // 308-redirects slashed URLs before they reach this function; this is
     // the safety net for clients/environments where it did not apply.
-    const clean = pathname.replace(/^\/v1\//, '/').replace(/\/+$/, '') || '/';
+    let clean = pathname.replace(/^\/v1\//, '/').replace(/\/+$/, '') || '/';
+    clean = canonicalApiPath(clean);
 
     if (req.method === 'OPTIONS' && handleOptions(req, res, clean)) {
       return;
