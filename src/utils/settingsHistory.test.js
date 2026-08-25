@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   serializeSettings, parseSettings, settingsEqual,
   createHistory, recordChange, undo, redo, HISTORY_LIMIT,
-  loadSnapshots, saveSnapshots, SNAPSHOT_STORAGE_KEY,
+  loadSnapshots, saveSnapshots, mergeSnapshots, onExternalSnapshots,
+  SNAPSHOT_STORAGE_KEY,
   SPEED_RANGES, clampPrefill, clampDecode
 } from './settingsHistory.js';
 
@@ -164,4 +165,80 @@ test('clamped values survive parseSettings (undo/redo/snapshot restore path)', (
   const none = parseSettings('preset=x');
   assert.equal(none.prefill, null);
   assert.equal(none.decode, null);
+});
+
+// ---- #610: cross-tab snapshot sync -----------------------------------------
+
+test('#610: mergeSnapshots unions by id, primary wins conflicts, invalid entries dropped', () => {
+  const local = [
+    { id: 'a', name: 'A (renamed here)', qs: 'x=1', createdAt: 2 },
+    { id: 'b', name: 'B', qs: 'x=2', createdAt: 1 }
+  ];
+  const incoming = [
+    { id: 'a', name: 'A', qs: 'x=1', createdAt: 1 }, // conflict → local wins
+    { id: 'c', name: 'C', qs: 'x=3', createdAt: 3 }, // only in storage → kept
+    { id: 'bad' } // invalid shape → never resurrected
+  ];
+  const merged = mergeSnapshots(local, incoming);
+  assert.deepEqual(merged.map(s => s.id), ['a', 'b', 'c']);
+  assert.equal(merged[0].name, 'A (renamed here)');
+});
+
+test('#610: onExternalSnapshots fires on storage events for the snapshots key and unsubscribes', () => {
+  // Minimal window + localStorage stand-in (node has neither by default).
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: k => store.has(k) ? store.get(k) : null,
+    setItem: (k, v) => store.set(k, String(v))
+  };
+  const listeners = [];
+  globalThis.window = {
+    addEventListener: (_type, fn) => listeners.push(fn),
+    removeEventListener: (_type, fn) => {
+      const i = listeners.indexOf(fn);
+      if (i >= 0) listeners.splice(i, 1);
+    }
+  };
+  try {
+    saveSnapshots([{ id: 'a', name: 'n', qs: '', createdAt: 1 }]);
+    const seen = [];
+    const unsubscribe = onExternalSnapshots(list => seen.push(list));
+    assert.equal(listeners.length, 1);
+
+    // Event from ANOTHER tab for an unrelated key → ignored.
+    listeners[0]({ key: 'llmpdv.slo-budgets-v1' });
+    // Event for the snapshots key → callback gets the fresh list.
+    store.set(SNAPSHOT_STORAGE_KEY, JSON.stringify([{ id: 'z', name: 'z', qs: '', createdAt: 9 }]));
+    listeners[0]({ key: SNAPSHOT_STORAGE_KEY });
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0][0].id, 'z');
+
+    unsubscribe();
+    assert.equal(listeners.length, 0);
+  } finally {
+    delete globalThis.window;
+    delete globalThis.localStorage;
+  }
+});
+
+// ---- #613: snapshots carry SLO budgets -------------------------------------
+
+test('#613: loadSnapshots preserves the budgets field on stored snapshots', () => {
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: k => store.get(k) ?? null,
+    setItem: (k, v) => store.set(k, String(v))
+  };
+  try {
+    const snaps = [{
+      id: 's1', name: 'budgeted', qs: 'preset=x', createdAt: 1,
+      budgets: { ttftMs: 500, tpotMs: 40, walltimeSec: 10 }
+    }];
+    saveSnapshots(snaps);
+    const loaded = loadSnapshots();
+    assert.equal(loaded.length, 1);
+    assert.deepEqual(loaded[0].budgets, { ttftMs: 500, tpotMs: 40, walltimeSec: 10 });
+  } finally {
+    delete globalThis.localStorage;
+  }
 });

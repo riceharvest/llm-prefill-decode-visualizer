@@ -24,9 +24,31 @@ export const GPU_CATALOG = [
   { id: 'l40s', name: 'L40S', vramGb: 48 },
   { id: 'a100', name: 'A100 80GB', vramGb: 80 },
   { id: 'h100', name: 'H100 80GB', vramGb: 80 },
+  { id: 'h200', name: 'H200 141GB', vramGb: 141 },
+  // #609: entries below used to exist ONLY as ledger chips (the old local
+  // GPU_PRESETS list), so ?gpu= share links and chip clicks could not resolve
+  // against the planner catalog — one selection left the other surface stale.
+  { id: 'rtx3060', name: 'RTX 3060', vramGb: 12 },
+  { id: 'dual3090', name: 'Dual RTX 3090', vramGb: 48, multiGpu: true },
+  { id: 'm3ultra', name: 'Mac Studio M3 Ultra', vramGb: 192, unified: true },
   { id: 'm4max128', name: 'Apple M4 Max · 128 GB unified', vramGb: 128, unified: true },
   { id: 'm2ultra192', name: 'Apple M2 Ultra · 192 GB unified', vramGb: 192, unified: true }
 ];
+
+/**
+ * Legacy ledger-chip ids that predate the shared catalog (#609). Old share
+ * links carrying them keep resolving instead of silently falling back to the
+ * default GPU while the other surface shows a different rig.
+ */
+export const LEGACY_GPU_ID_ALIASES = {
+  a10080: 'a100'
+};
+
+/** Canonicalize a ?gpu= id through the legacy alias table. */
+export function normalizeGpuId(id) {
+  const key = String(id || '');
+  return LEGACY_GPU_ID_ALIASES[key] ?? key;
+}
 
 export function gpuById(id) {
   return GPU_CATALOG.find(g => g.id === id) || null;

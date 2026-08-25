@@ -117,6 +117,11 @@ export function rankGroups(groups, by, workload, limit) {
         prefillSharePct: projection.prefillSharePct,
         decodeSharePct: projection.decodeSharePct,
         _rawWalltime: rawWalltime,
+        _efficiency: efficiencyScore({
+          vramGb: sample.vramGb,
+          unifiedMemoryGb: sample.unifiedMemoryGb,
+          medianDecodeTokPerSec: g.decode.median
+        }),
         source: sample.source
       };
     })
@@ -124,11 +129,16 @@ export function rankGroups(groups, by, workload, limit) {
       ((by === 'walltime' ? a._rawWalltime - b._rawWalltime
       : by === 'confidence' ? (b.confidence?.score ?? 0) - (a.confidence?.score ?? 0)
       : by === 'prefill' ? b.medianPrefillTokPerSec - a.medianPrefillTokPerSec
-      : by === 'efficiency' ? (b.medianDecodeTokPerSec / Math.max(1, b.exampleModel ? 1 : 1)) - (a.medianDecodeTokPerSec / Math.max(1, a.exampleModel ? 1 : 1))
+      // #605 #611: rank by decode tok/s per GB of rig memory instead of the
+      // old constant-divisor no-op that silently equaled ?by=decode.
+      : by === 'efficiency' ? (b._efficiency ?? -Infinity) - (a._efficiency ?? -Infinity)
       : b.medianDecodeTokPerSec - a.medianDecodeTokPerSec)) || byGroupKey(a, b)
     )
     .slice(0, limit)
-    .map(({ _rawWalltime, ...entry }) => entry);
+    .map(({ _rawWalltime, _efficiency, ...entry }) =>
+      by === 'efficiency' && _efficiency != null
+        ? { ...entry, efficiencyTokPerSecPerGbVram: _efficiency }
+        : entry);
 }
 
 /** Discrete VRAM if known, otherwise unified memory size. Null when unknown. */
@@ -136,6 +146,18 @@ function effectiveVramGb(run) {
   if (Number.isFinite(run.vramGb)) return run.vramGb;
   if (Number.isFinite(run.unifiedMemoryGb)) return run.unifiedMemoryGb;
   return null;
+}
+
+/**
+ * Efficiency metric for ?by=efficiency (#605 #611): median decode throughput
+ * per GB of rig memory (VRAM, falling back to unified memory). Null when the
+ * group's memory size is unknown — such groups sort last instead of silently
+ * re-using the decode ranking (the old comparator divided by a constant 1).
+ */
+export function efficiencyScore(row) {
+  const mem = effectiveVramGb(row);
+  if (!mem || mem <= 0 || !Number.isFinite(row.medianDecodeTokPerSec)) return null;
+  return row.medianDecodeTokPerSec / mem;
 }
 
 function json(res, body, status = 200) {
@@ -501,6 +523,8 @@ export async function bestBody(query = {}) {
         ? `Ranked hardware×model groups by projected end-to-end walltime for ${workload.promptTokens} prompt → ${workload.outputTokens} output tokens (${workload.source}${workload.scenarioLabel ? `, ${workload.scenarioLabel}` : ''}). Medians are outlier-resistant and carry a 95% percentile bootstrap CI (medianXxxCi95 + medianXxxLabel); overlapping intervals mean statistical ties. runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), ?engine=<substr> restricts to same-engine builds only, and staleness/newestRunAt flag how old the newest measurement is; ?max_age=<days> drops older runs.`
         : by === 'cost'
         ? 'Ranked hardware×model groups by cost-efficiency: $/1M tokens from hardware price (amortized) + electricity at measured median speeds for the given scenario shape. Lower is better.'
+        : by === 'efficiency'
+        ? 'Ranked hardware×model groups by memory efficiency: median decode tok/s per GB of rig memory (VRAM, falling back to unified memory) — exposed per row as efficiencyTokPerSecPerGbVram. Groups with unknown memory size sort last. Other fields as in the speed ranking.'
         : 'Ranked hardware×model groups by measured community speed. Medians are outlier-resistant; runsInGroup shows sample size, confidence grades how trustworthy each slot is (low = single submission), ?engine=<substr> restricts to same-engine builds only, ?context_band=lt1k|1k-8k|8k-32k|32k+ restricts to one measured-context regime, and staleness/newestRunAt flag how old the newest measurement is; ?max_age=<days> drops older runs.',
       rankedBy: by,
       snapshot,

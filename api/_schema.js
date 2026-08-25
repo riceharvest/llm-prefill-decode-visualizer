@@ -29,7 +29,7 @@ const BOOT_TIME = new Date();
 /** Strong ETag for a generated body: content hash of the exact object the
  *  handler would serialize (pre-schema_version-stamp, pre-rate_limit — both
  *  vary per call and must not destabilize the validator). */
-function etagFor(body) {
+function bodyEtagFor(body) {
   return '"' + createHash('sha256').update(JSON.stringify(body)).digest('hex').slice(0, 32) + '"';
 }
 
@@ -67,7 +67,7 @@ function writeNotModified(res) {
  * @returns {boolean} true when a 304 was written
  */
 export function conditionalGet(req, res, body, { cacheTtl } = {}) {
-  const etag = etagFor(body);
+  const etag = bodyEtagFor(body);
   res.setHeader('ETag', etag);
   res.setHeader('Last-Modified', BOOT_TIME.toUTCString());
   if (cacheTtl != null && !res.getHeader('Cache-Control')) {
@@ -183,4 +183,67 @@ export function sendJson(res, body, { status = 200, cacheTtl } = {}) {
   // exporter (src/utils/exportJson.js serializeJson) so every JSON surface in
   // this repo agrees on the framing.
   res.end(JSON.stringify(payload, null, 2) + '\n');
+}
+
+/** Strong ETag for one exact response body: sha256 of the exact serialized
+ *  bytes, base64url-quoted (long form distinguishes the edge validator from
+ *  the inner body-hash used by conditionalGet()). */
+export function etagFor(chunk) {
+  return `"${createHash('sha256').update(String(chunk)).digest('base64url')}"`;
+}
+
+function ifNoneMatchSatisfied(headerValue, etag) {
+  // Weak comparison per RFC 9110 §13.1.2: ignore W/ prefixes; `*` matches any.
+  const candidates = String(headerValue).split(',').map(v => v.trim().replace(/^W\//, ''));
+  return candidates.includes('*') || candidates.includes(etag);
+}
+
+/**
+ * Conditional-GET support for every /api/* JSON response (#606): stamps a
+ * strong ETag computed from the exact serialized body and answers a matching
+ * `If-None-Match` with an empty-bodied 304 instead of re-sending the payload.
+ * Installed at the dispatcher edge (like markdown negotiation) so handlers
+ * stay untouched; clients that send no conditional headers see byte-identical
+ * responses plus the new ETag header.
+ */
+export function withConditionalGet(req, res) {
+  const originalEnd = res.end.bind(res);
+  res.end = function patchedEnd(chunk, ...rest) {
+    const contentType = String(res.getHeader('Content-Type') || '');
+    const isJson = contentType.includes('application/json');
+    if (!isJson || chunk == null || res.statusCode !== 200) {
+      return originalEnd(chunk, ...rest);
+    }
+    // Handlers using conditionalGet() already stamped a stable, content-
+    // derived validator on the pre-rate-limit body — respect it instead of
+    // overwriting with a per-call-varying hash.
+    let etag = res.getHeader('ETag');
+    if (!etag) {
+      etag = etagFor(chunk);
+      res.setHeader('ETag', etag);
+    }
+    if (!res.getHeader('Last-Modified')) {
+      res.setHeader('Last-Modified', BOOT_TIME.toUTCString());
+    }
+    if (!res.getHeader('Cache-Control')) {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    }
+    const expose = new Set(
+      (res.getHeader('Access-Control-Expose-Headers') || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+    );
+    if (!expose.has('ETag')) {
+      expose.add('ETag');
+      res.setHeader('Access-Control-Expose-Headers', [...expose].join(', '));
+    }
+    const inm = req?.headers?.['if-none-match'];
+    if (inm && ifNoneMatchSatisfied(inm, etag)) {
+      res.statusCode = 304;
+      res.removeHeader?.('Content-Type');
+      return originalEnd();
+    }
+    return originalEnd(chunk, ...rest);
+  };
 }

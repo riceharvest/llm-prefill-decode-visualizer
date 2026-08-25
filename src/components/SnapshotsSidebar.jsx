@@ -1,12 +1,13 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Camera, Save, Trash2, Link2, RotateCcw, Check, Undo2, Redo2, Download, Upload } from 'lucide-react';
 import { t } from '../i18n/strings';
 import {
   loadSnapshots, saveSnapshots, parseSettings,
-  exportSnapshots, importSnapshots, mergeSnapshots
+  exportSnapshots, importSnapshots, mergeSnapshots, onExternalSnapshots
 } from '../utils/settingsHistory';
 import { buildShareLink } from '../utils/permalink';
 import { copyTextToClipboard } from '../utils/clipboard';
+import { sanitizeBudgets } from '../utils/slo';
 
 function makeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -33,8 +34,11 @@ function snapshotSummary(snap) {
  * reopens exactly what was saved instead of an accidental default view.
  * Restoring is undoable — App records it on the same history stack as manual
  * edits.
+ *
+ * Snapshots also carry the SLO budgets active at save time (#613) and stay in
+ * sync across tabs via storage events (#610).
  */
-export default function SnapshotsSidebar({ currentQs, activeTab, onRestore, restoreReport, canUndo, canRedo, onUndo, onRedo }) {
+export default function SnapshotsSidebar({ currentQs, activeTab, budgets, onRestore, restoreReport, canUndo, canRedo, onUndo, onRedo }) {
   const [snapshots, setSnapshots] = useState(loadSnapshots);
   const [name, setName] = useState('');
   const [copiedId, setCopiedId] = useState('');
@@ -42,6 +46,10 @@ export default function SnapshotsSidebar({ currentQs, activeTab, onRestore, rest
   const [saveFailed, setSaveFailed] = useState(false);
   const [importNote, setImportNote] = useState(null);
   const fileInputRef = useRef(null);
+
+  // #610: another tab's save/delete updates this tab instead of being
+  // overwritten by the next write here (last-writer-wins erasure).
+  useEffect(() => onExternalSnapshots((fresh) => setSnapshots(fresh)), []);
 
   const persist = (list) => {
     setSnapshots(list);
@@ -93,6 +101,7 @@ export default function SnapshotsSidebar({ currentQs, activeTab, onRestore, rest
       id: makeId(),
       name: name.trim() || t('snapshots.defaultName'),
       qs: currentQs,
+      budgets: sanitizeBudgets(budgets), // #613: restore re-judges with THESE budgets
       createdAt: Date.now()
     }, ...snapshots]);
     setName('');
@@ -213,7 +222,7 @@ export default function SnapshotsSidebar({ currentQs, activeTab, onRestore, rest
                   </div>
                 </div>
                 <button
-                  onClick={() => onRestore(snap.qs)}
+                  onClick={() => onRestore(snap.qs, snap.budgets)}
                   title={t('snapshots.restore')}
                   aria-label={`${t('snapshots.restore')}: ${snap.name}`}
                   className="btn btn-icon"

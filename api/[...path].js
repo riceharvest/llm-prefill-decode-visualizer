@@ -34,7 +34,7 @@ import { default as problems } from './_handlers/problems.js';
 import { ROUTES } from './_route_table.js';
 import { withMarkdownNegotiation } from './_markdown.js';
 import { applyVersionTrustHeaders } from './_versions.js';
-import { sendJson } from './_schema.js';
+import { sendJson, withConditionalGet } from './_schema.js';
 import { sendProblem, sendProblemFromError } from './_errors.js';
 
 export const config = { runtime: 'nodejs' };
@@ -155,6 +155,9 @@ function handleOptions(req, res, clean) {
 
 export default async function handler(req, res) {
   withMarkdownNegotiation(req, res);
+  // Installed after markdown negotiation so the conditional-GET wrapper sits
+  // outermost: the ETag is computed over the exact bytes that ship (#606).
+  withConditionalGet(req, res);
   applyRequestIdEcho(req, res);
   applyAgentEndpointsHeader(req, res);
   const pathname = (req.url || '').split('?')[0].replace(/^\/api\/?/, '/');

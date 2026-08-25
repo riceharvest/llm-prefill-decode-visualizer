@@ -309,6 +309,9 @@ export function constraintsToSizingQuery(constraints) {
   if (constraints.contextLength) params.set('contextLength', String(constraints.contextLength));
   if (constraints.concurrency) params.set('concurrency', String(constraints.concurrency));
   if (constraints.maxVramGb) params.set('maxVramGb', String(constraints.maxVramGb));
+  // #607: /api/sizing now accepts budgetUsdMax, so the recognized constraint
+  // survives the parse-constraints → sizing chain instead of being dropped.
+  if (constraints.budgetUsdMax) params.set('budgetUsdMax', String(constraints.budgetUsdMax));
   if (constraints.hwClass) params.set('hwClass', constraints.hwClass);
   return params;
 }

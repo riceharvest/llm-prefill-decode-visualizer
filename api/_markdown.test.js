@@ -23,6 +23,22 @@ test('wantsMarkdown detects text/markdown in Accept', () => {
   assert.equal(wantsMarkdown(fakeReq(undefined)), false);
 });
 
+// #604: AGENT-QUICKSTART advertises ?format=md — it must negotiate like the
+// Accept header instead of being silently ignored.
+test('#604: wantsMarkdown honors ?format=md and ?format=markdown', () => {
+  const reqWith = (url, accept) => ({ url, headers: { accept } });
+  assert.equal(wantsMarkdown(reqWith('/api/best?by=cost&format=md', 'application/json')), true);
+  assert.equal(wantsMarkdown(reqWith('/api/best?format=markdown', '')), true);
+  assert.equal(wantsMarkdown(reqWith('/api/best?format=MD', '')), true);
+  // format=json / junk values never trigger markdown…
+  assert.equal(wantsMarkdown(reqWith('/api/best?format=json', 'application/json')), false);
+  assert.equal(wantsMarkdown(reqWith('/api/best?format=csv', '*/*')), false);
+  // …and neither does an unrelated query param.
+  assert.equal(wantsMarkdown(reqWith('/api/best?by=efficiency', '*/*')), false);
+  // Accept header still wins even alongside ?format=json.
+  assert.equal(wantsMarkdown(reqWith('/api/best?format=json', 'text/markdown')), true);
+});
+
 test('jsonToMarkdown renders scalars as key: value list', () => {
   const md = jsonToMarkdown({ ok: true, ttftSeconds: 1.08 }, { title: 'GET compute' });
   assert.match(md, /## GET compute/);

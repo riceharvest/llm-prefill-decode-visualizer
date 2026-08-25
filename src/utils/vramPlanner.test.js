@@ -5,7 +5,9 @@ import {
   weightsGiB,
   WEIGHT_PRECISIONS,
   GPU_CATALOG,
-  gpuById
+  gpuById,
+  normalizeGpuId,
+  LEGACY_GPU_ID_ALIASES
 } from './vramPlanner.js';
 import { vramBudget, DEFAULT_OVERHEAD_FRACTION } from '../../api/_math.js';
 
@@ -88,4 +90,32 @@ test('vramBudget: never throws on garbage input', () => {
   assert.equal(r.weightsGb, 0);
   assert.equal(r.kvGb, 0);
   assert.equal(r.verdict, null);
+});
+
+// ---- #609: one shared GPU vocabulary for ledger chips + planner catalog ----
+
+test('#609: every former ledger-chip rig resolves in the shared catalog', () => {
+  // The old local GPU_PRESETS ids — a10080 was the only id that never existed
+  // in GPU_CATALOG (it aliases to 'a100'); all others must be first-class.
+  for (const id of ['rtx3060', 'rtx4090', 'dual3090', 'a100', 'h200', 'm3ultra']) {
+    const gpu = gpuById(id);
+    assert.ok(gpu, `GPU_CATALOG should contain ${id}`);
+    assert.ok(Number.isFinite(gpu.vramGb) && gpu.vramGb > 0);
+  }
+});
+
+test('#609: legacy chip ids canonicalize through LEGACY_GPU_ID_ALIASES', () => {
+  assert.equal(normalizeGpuId('a10080'), 'a100');
+  assert.equal(gpuById(normalizeGpuId('a10080')).vramGb, 80);
+  assert.equal(normalizeGpuId('rtx4090'), 'rtx4090');
+  assert.equal(normalizeGpuId(undefined), '');
+  assert.deepEqual(LEGACY_GPU_ID_ALIASES, { a10080: 'a100' });
+});
+
+test('#609: shared catalog keeps unique ids and positive VRAM figures', () => {
+  const ids = GPU_CATALOG.map(g => g.id);
+  assert.equal(new Set(ids).size, ids.length, 'no duplicate catalog ids');
+  for (const gpu of GPU_CATALOG) {
+    assert.ok(gpu.name && gpu.vramGb > 0, `${gpu.id} well-formed`);
+  }
 });

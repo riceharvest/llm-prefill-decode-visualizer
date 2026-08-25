@@ -257,10 +257,10 @@ export function importSnapshots(text) {
  * preserved, new ids appended; on id collision the existing snapshot wins.
  */
 export function mergeSnapshots(existing, imported) {
-  const byId = new Map((Array.isArray(existing) ? existing : []).map(s => [s.id, s]));
-  const merged = [...(Array.isArray(existing) ? existing : [])];
+  const byId = new Map((Array.isArray(existing) ? existing : []).filter(validSnapshot).map(s => [s.id, s]));
+  const merged = [...byId.values()];
   for (const snap of Array.isArray(imported) ? imported : []) {
-    if (!byId.has(snap.id)) {
+    if (validSnapshot(snap) && !byId.has(snap.id)) {
       byId.set(snap.id, snap);
       merged.push(snap);
     }
@@ -288,4 +288,21 @@ export function planRestore(qs, { presets = [] } = {}) {
   if (s.prefill === null) resets.push('prefill');
   if (s.decode === null) resets.push('decode');
   return { settings: s, presetKnown, resets, unresolvedPreset: presetKnown ? null : s.preset };
+}
+
+/**
+ * Subscribe to snapshot changes made in OTHER tabs (#610): fires `cb` with
+ * the freshly-loaded list whenever another tab writes the snapshots key.
+ * Returns an unsubscribe function. No-op without window/storage events.
+ */
+export function onExternalSnapshots(cb) {
+  if (typeof globalThis.window === 'undefined' || typeof globalThis.window.addEventListener !== 'function') {
+    return () => {};
+  }
+  const handler = (event) => {
+    if (event.key != null && event.key !== SNAPSHOT_STORAGE_KEY) return;
+    cb(loadSnapshots());
+  };
+  globalThis.window.addEventListener('storage', handler);
+  return () => globalThis.window.removeEventListener('storage', handler);
 }

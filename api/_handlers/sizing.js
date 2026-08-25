@@ -5,6 +5,7 @@ import { ensureSnapshot } from '../_snapshots.js';
 import { applySchemaHeaders, sendJson } from '../_schema.js';
 import { sendProblem } from '../_errors.js';
 import { enforceRateLimit } from '../_ratelimit.js';
+import { estimateStreetPrice } from '../../src/utils/streetPricing.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -98,6 +99,8 @@ function confidenceLevel(runs) {
  * vramFit block — is GiB (binary, 1024-based), not decimal GB. The response
  * states this in its top-level `units` block.
  *
+ * ?budgetUsdMax=1500         hardware budget cap: street-price estimates are
+ *                            judged against it (meetsSlo.budget per rig)
  * ?numLayers=&kvHeads=&headDim=   explicit KV arch (skips the estimate)
  * ?quant=q4_k_m&hwClass=…    same filters as /api/best
  * ?limit=N                   default 5, max 25
@@ -136,6 +139,10 @@ export default async function handler(req, res) {
       maxTtftSeconds: params.maxTtftSeconds != null ? numSloCap(params.maxTtftSeconds) : null,
       maxTpotMs: params.maxTpotMs != null ? numSloCap(params.maxTpotMs) : null
     };
+    // Hardware budget cap (#607): parse-constraints recognizes budgetUsdMax
+    // but this endpoint never accepted it, so the constraint died in the
+    // chain. Present → each rig's street-price estimate is judged against it.
+    const budgetUsdMax = params.budgetUsdMax != null ? num(params.budgetUsdMax, null) : null;
 
     // Explicit arch overrides, else estimated per group below.
     const explicitArch = ['numLayers', 'kvHeads', 'headDim'].every(k => params[k] != null)
@@ -209,6 +216,14 @@ export default async function handler(req, res) {
       const meetsTpot = slo.maxTpotMs != null && tpotMs != null ? tpotMs <= slo.maxTpotMs : null;
       const fitsVram = headroomGb != null ? headroomGb >= 0 : null;
 
+      // Budget verdict (#607): street-price estimate vs budgetUsdMax. Null
+      // when no budget was given or the rig's price is unknown (cpu_only
+      // rigs, GPUs missing from the price table) — unknown never fails.
+      const pricing = estimateStreetPrice(s);
+      const meetsBudget = budgetUsdMax != null && pricing
+        ? pricing.estimateUsd <= budgetUsdMax
+        : null;
+
       return {
         hardware: s.hardware,
         hardwareKey: s.hardwareKey,
@@ -250,7 +265,8 @@ export default async function handler(req, res) {
           level: confidenceLevel(g.runs),
           note: g.runs < 3 ? 'fewer than 3 runs — medians may not generalize' : undefined
         },
-        meetsSlo: { ttft: meetsTtft, tpot: meetsTpot, vram: fitsVram, all: [meetsTtft, meetsTpot, fitsVram].every(v => v !== false) },
+        ...(budgetUsdMax != null && pricing ? { pricing } : {}),
+        meetsSlo: { ttft: meetsTtft, tpot: meetsTpot, vram: fitsVram, budget: meetsBudget, all: [meetsTtft, meetsTpot, fitsVram, meetsBudget].every(v => v !== false) },
         // One-sentence human-readable explanation (#73): fit math + measured
         // source, pass-through ready for agent chat pipelines.
         explain: explainRecommendation({
@@ -280,6 +296,7 @@ export default async function handler(req, res) {
       units: { memory: 'GiB', note: 'all memory figures are GiB — binary, 1024-based, NOT decimal GB' },
       workload,
       slo,
+      ...(budgetUsdMax != null ? { budgetUsdMax } : {}),
       matchedRuns: runs.length,
       snapshot,
       assumptions: {

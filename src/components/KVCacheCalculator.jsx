@@ -6,7 +6,7 @@ import {
   findInvalidIdParams, invalidParamAttr, invalidParamLabel, warnInvalidParams
 } from '../utils/shareLinkParams';
 import { DEFAULT_OVERHEAD_FRACTION, vramBudget } from '../../api/_math.js';
-import { GPU_CATALOG, WEIGHT_PRECISIONS, gpuById, parseParamsB, weightsGiB } from '../utils/vramPlanner';
+import { GPU_CATALOG, WEIGHT_PRECISIONS, gpuById, normalizeGpuId, parseParamsB, weightsGiB } from '../utils/vramPlanner';
 import Metric from './Metric';
 import Analogy from './Analogy';
 import { memoryLedger, SAFETY_HEADROOM_FRACTION } from '../../api/_math.js';
@@ -213,16 +213,11 @@ function presetParamsB(preset) {
   return m[2].toUpperCase() === 'T' ? n * 1000 : n;
 }
 
-// Target GPUs for the budget ledger. VRAM figures are the physical card /
-// unified-memory totals users actually shop against.
-const GPU_PRESETS = [
-  { id: 'rtx3060', name: 'RTX 3060', vramGb: 12 },
-  { id: 'rtx4090', name: 'RTX 4090', vramGb: 24 },
-  { id: 'dual3090', name: 'Dual RTX 3090', vramGb: 48 },
-  { id: 'a10080', name: 'A100 80GB', vramGb: 80 },
-  { id: 'h200', name: 'H200 141GB', vramGb: 141 },
-  { id: 'm3ultra', name: 'Mac Studio M3 Ultra', vramGb: 192, unified: true }
-];
+// Target GPUs for the budget ledger (#609): now derived from the planner's
+// shared GPU_CATALOG so both vocabularies are one — a chip click, the planner
+// select, and ?gpu= share links all speak the same ids.
+const GPU_LEDGER_IDS = ['rtx3060', 'rtx4090', 'dual3090', 'a100', 'h200', 'm3ultra'];
+const GPU_PRESETS = GPU_LEDGER_IDS.map(gpuById).filter(Boolean);
 
 function kvFormula(preset) {
   switch (preset.kvMode) {
@@ -252,7 +247,8 @@ export default function KVCacheCalculator() {
   const [gpuVramGb, setGpuVramGb] = useState(() => {
     const fromUrl = readParamNum('vram', NaN);
     if (Number.isFinite(fromUrl) && fromUrl > 0) return fromUrl;
-    const preset = GPU_PRESETS.find(g => g.id === (readParam('gpu') || 'rtx4090'));
+    // #609: legacy chip ids (a10080, …) canonicalize before the catalog lookup
+    const preset = GPU_PRESETS.find(g => g.id === normalizeGpuId(readParam('gpu') || 'rtx4090'));
     return preset ? preset.vramGb : 24;
   });
 
@@ -272,8 +268,8 @@ export default function KVCacheCalculator() {
   }, [invalidShareParams]);
   const [weightPrecisionId, setWeightPrecisionId] = useState(() => readParam('wp') || 'fp16');
   const [gpuId, setGpuId] = useState(() => {
-    const g = readParam('gpu');
-    return g || 'rtx4090';
+    const g = normalizeGpuId(readParam('gpu')); // #609: accept legacy ids
+    return gpuById(g) ? g : 'rtx4090';
   });
   const [overheadPct, setOverheadPct] = useState(() =>
     Math.min(40, Math.max(0, readParamNum('oh', DEFAULT_OVERHEAD_FRACTION * 100)))
@@ -549,11 +545,9 @@ export default function KVCacheCalculator() {
                 <button
                   key={gpu.id}
                   onClick={() => {
-                    // Ledger chip ids (rtx3060/dual3090/…) don't all exist in
-                    // the planner's GPU_CATALOG — only select a real catalog
-                    // id, else clear it so the planner shows "unknown" instead
-                    // of a dangling select value.
-                    setGpuId(gpuById(gpu.id) ? gpu.id : '');
+                    // #609: every ledger chip id is a real catalog id now —
+                    // selecting keeps both surfaces on the same rig.
+                    setGpuId(gpu.id);
                     setGpuVramGb(gpu.vramGb);
                   }}
                   className={gpuId === gpu.id ? 'active' : ''}
@@ -826,7 +820,13 @@ export default function KVCacheCalculator() {
             <select
               value={gpuId}
               aria-label={t('kvCache.targetGpuAria')}
-              onChange={(e) => setGpuId(e.target.value)}
+              onChange={(e) => {
+                // #609: planner selection drives the ledger chips too, instead
+                // of leaving them showing a contradictory rig.
+                const gpu = gpuById(e.target.value);
+                setGpuId(e.target.value);
+                if (gpu) setGpuVramGb(gpu.vramGb);
+              }}
               style={{ width: '100%', marginTop: '4px' }}
             >
               {GPU_CATALOG.map(gpu => (
@@ -918,7 +918,11 @@ export default function KVCacheCalculator() {
           {gpuVerdicts.map(({ gpu, verdict }) => (
             <button
               key={gpu.id}
-              onClick={() => setGpuId(gpu.id)}
+              onClick={() => {
+                // #609: planner-side card picker syncs the ledger chips too.
+                setGpuId(gpu.id);
+                if (gpuById(gpu.id)) setGpuVramGb(gpu.vramGb);
+              }}
               data-tooltip={`${t('kvCache.gpuVerdictAria', {
                 name: gpu.name,
                 verdict: verdict === 'pass' ? t('kvCache.verdictPass') : verdict === 'warn' ? t('kvCache.verdictWarn') : t('kvCache.verdictFail')
