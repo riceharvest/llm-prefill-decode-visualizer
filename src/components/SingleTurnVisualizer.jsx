@@ -618,7 +618,11 @@ export default function SingleTurnVisualizer({
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
       {/* Issue #63: live narration of the animated run for screen readers */}
-      <div className="visually-hidden" role="status" aria-live="polite" data-testid="run-state">{srSummary}</div>
+      {/* #63 run summary text: deliberately NOT an aria-live region (#1010) —
+          the throttled AriaLiveRegion above is this view's single announcer;
+          a second polite region here re-announced every transition and
+          defeated the 5 s throttle. Text stays available to SR browsing. */}
+      <div className="visually-hidden">{srSummary}</div>
 
       {/* Top Parameter Cards */}
       <section className="panel" aria-label={t('singleTurn.paramsPanelAria')}>

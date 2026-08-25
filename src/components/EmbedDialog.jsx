@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Copy, Check, ImageDown } from 'lucide-react';
 import { nodeToPngDataUri, exportNodeAsSvg } from '../utils/exportPng';
 import { buildEmbedHtml, buildEmbedIframe, buildEmbedMarkdown } from '../utils/embedSnippet';
+import { useFocusTrap } from '../utils/focus';
 import { t } from '../i18n/strings';
 
 // Embed dialog (#104): turns the current chart into copy-paste-ready
@@ -14,6 +15,19 @@ export default function EmbedDialog({ open, onClose, getNode, title, sourceUrl }
   const [error, setError] = useState('');
   const [copiedKey, setCopiedKey] = useState('');
   const copyTimer = useRef(null);
+  const dialogRef = useRef(null);
+
+  // WAI-ARIA dialog pattern (#824): initial focus, Tab cycling inside the
+  // dialog, and focus restored to the opener on close.
+  useFocusTrap(dialogRef, open);
+
+  // Escape closes the dialog (focus trap handles Tab only).
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
 
   const chartNode = open && getNode ? getNode() : null;
 
@@ -77,6 +91,8 @@ export default function EmbedDialog({ open, onClose, getNode, title, sourceUrl }
 
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,

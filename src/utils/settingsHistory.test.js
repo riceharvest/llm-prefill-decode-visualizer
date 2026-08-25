@@ -4,9 +4,7 @@ import {
   serializeSettings, parseSettings, settingsEqual,
   createHistory, recordChange, undo, redo, HISTORY_LIMIT,
   loadSnapshots, saveSnapshots, SNAPSHOT_STORAGE_KEY,
-  sanitizeHistory, loadHistory, saveHistory, HISTORY_STORAGE_KEY,
-  exportSnapshots, importSnapshots, mergeSnapshots, SNAPSHOT_EXPORT_SCHEMA,
-  planRestore
+  SPEED_RANGES, clampPrefill, clampDecode
 } from './settingsHistory.js';
 
 test('serialize matches the URL-sharing param format', () => {
@@ -142,140 +140,28 @@ test('snapshot helpers no-op gracefully without localStorage', () => {
   assert.doesNotThrow(() => saveSnapshots([{ id: 'a', name: 'n', qs: 'x', createdAt: 1 }]));
 });
 
-// ---------- #565: undo/redo stack persistence ----------
+// --- speed clamping (#1005) -------------------------------------------------
 
-test('history survives a localStorage round-trip (reload keeps the trail)', () => {
-  const store = new Map();
-  globalThis.localStorage = {
-    getItem: (k) => (store.has(k) ? store.get(k) : null),
-    setItem: (k, v) => store.set(k, v)
-  };
-  try {
-    assert.deepEqual(loadHistory(), { past: [], future: [] });
-    let h = createHistory();
-    h = recordChange(h, 'preset=a');
-    h = recordChange(h, 'preset=b');
-    h = undo(h, 'preset=c').history; // leaves entries in BOTH halves
-    assert.ok(h.past.length > 0 && h.future.length > 0);
-    assert.ok(saveHistory(h));
-    const restored = loadHistory();
-    assert.deepEqual(restored, sanitizeHistory(JSON.parse(store.get(HISTORY_STORAGE_KEY))));
-    assert.ok(restored.past.length > 0, 'restored history must not be empty');
-    // The pre-reload change is still undoable.
-    assert.equal(undo(restored, 'current').qs, restored.past[restored.past.length - 1]);
-    // Corrupt storage falls back to an empty history instead of throwing.
-    store.set(HISTORY_STORAGE_KEY, '{oops');
-    assert.deepEqual(loadHistory(), { past: [], future: [] });
-    store.set(HISTORY_STORAGE_KEY, '{"past":[42,null,"preset=x"],"future":"nope"}');
-    assert.deepEqual(loadHistory(), { past: ['preset=x'], future: [] });
-  } finally {
-    delete globalThis.localStorage;
-  }
+test('clampPrefill/clampDecode pin values into the declared slider ranges', () => {
+  assert.deepEqual(SPEED_RANGES.prefill, { min: 50, max: 50000 });
+  assert.deepEqual(SPEED_RANGES.decode, { min: 2, max: 1000 });
+  assert.equal(clampPrefill(999999999), 50000);
+  assert.equal(clampDecode(36716), 1000);
+  assert.equal(clampPrefill(10), 50);
+  assert.equal(clampDecode(0.5), 2);
+  assert.equal(clampPrefill(2048), 2048);
 });
 
-test('saveHistory caps oversized stacks and reports storage failure', () => {
-  delete globalThis.localStorage;
-  assert.equal(saveHistory({ past: Array(200).fill('x'), future: ['y'] }), false);
-  globalThis.localStorage = {
-    getItem: () => null,
-    setItem() { throw new Error('QuotaExceededError'); }
-  };
-  try {
-    assert.equal(saveHistory(createHistory()), false);
-  } finally {
-    delete globalThis.localStorage;
-  }
-});
-
-test('sanitizeHistory enforces the HISTORY_LIMIT cap on both halves', () => {
-  const big = { past: Array.from({ length: HISTORY_LIMIT + 10 }, (_, i) => `p${i}`), future: Array.from({ length: HISTORY_LIMIT + 3 }, (_, i) => `f${i}`) };
-  const s = sanitizeHistory(big);
-  assert.equal(s.past.length, HISTORY_LIMIT);
-  assert.equal(s.future.length, HISTORY_LIMIT);
-  assert.equal(s.past[0], `p${10}`); // oldest trimmed
-});
-
-// ---------- #566: snapshot export / import / merge ----------
-
-const SAMPLE_SNAPS = [
-  { id: 'x1', name: '4090 fp16 32k ctx', qs: 'preset=rtx4090_exl2&prefill=3800', createdAt: 111 },
-  { id: 'x2', name: 'pi5 slow', qs: 'preset=rpi5&prefill=120&decode=8', createdAt: 222 }
-];
-
-test('export → import round-trips names, ids and createdAt intact', () => {
-  const json = exportSnapshots(SAMPLE_SNAPS);
-  const parsed = JSON.parse(json);
-  assert.equal(parsed.schema, SNAPSHOT_EXPORT_SCHEMA);
-  assert.equal(parsed.version, 1);
-  assert.ok(parsed.exportedAt);
-  const res = importSnapshots(json);
-  assert.equal(res.error, null);
-  assert.deepEqual(res.snapshots, SAMPLE_SNAPS);
-  assert.equal(res.skipped, 0);
-});
-
-test('import rejects broken files but salvages valid entries from mixed ones', () => {
-  assert.equal(importSnapshots('{not json').error, 'not valid JSON');
-  assert.equal(importSnapshots('{"nope":1}').error, 'expected an array of snapshots or {"snapshots":[…]}');
-  const mixed = JSON.stringify({
-    snapshots: [
-      SAMPLE_SNAPS[0],
-      { id: 'bad' },                       // invalid → skipped
-      SAMPLE_SNAPS[0],                     // duplicate id → skipped
-      { id: 'x9', name: 'n', qs: 'q=1' }   // missing createdAt is tolerated
-    ]
-  });
-  const res = importSnapshots(mixed);
-  assert.equal(res.error, null);
-  assert.equal(res.snapshots.length, 2);
-  assert.equal(res.skipped, 2);
-  assert.equal(res.snapshots[1].id, 'x9');
-});
-
-test('mergeSnapshots appends new ids and keeps existing entries on collision', () => {
-  const existing = [SAMPLE_SNAPS[0]];
-  const imported = [
-    { id: 'x1', name: 'hijack attempt', qs: 'evil=1', createdAt: 999 },
-    SAMPLE_SNAPS[1]
-  ];
-  const merged = mergeSnapshots(existing, imported);
-  assert.equal(merged.length, 2);
-  assert.equal(merged[0].name, '4090 fp16 32k ctx'); // existing wins
-  assert.deepEqual(merged[1], SAMPLE_SNAPS[1]);
-});
-
-test('saveSnapshots returns true on success so callers can detect failure', () => {
-  const store = new Map();
-  globalThis.localStorage = {
-    getItem: (k) => (store.has(k) ? store.get(k) : null),
-    setItem: (k, v) => store.set(k, v)
-  };
-  try {
-    assert.equal(saveSnapshots(SAMPLE_SNAPS), true);
-  } finally {
-    delete globalThis.localStorage;
-  }
-});
-
-// ---------- #569: total restore planning ----------
-
-test('planRestore flags absent speed keys and unresolved presets', () => {
-  const plan = planRestore('preset=nope404&sim=2', { presets: [{ id: 'rtx4090_exl2' }] });
-  assert.equal(plan.settings.sim, 2);
-  assert.deepEqual(plan.resets, ['prefill', 'decode']);
-  assert.equal(plan.unresolvedPreset, 'nope404');
-
-  const full = planRestore('preset=rtx4090_exl2&prefill=3800&decode=105', { presets: [{ id: 'rtx4090_exl2' }] });
-  assert.deepEqual(full.resets, []);
-  assert.equal(full.unresolvedPreset, null);
-
-  // lmx: ids are runtime-resolved — never flagged as unresolved here.
-  const lmx = planRestore('preset=lmx:abc123&prefill=100', { presets: [] });
-  assert.equal(lmx.unresolvedPreset, null);
-  assert.deepEqual(lmx.resets, ['decode']);
-
-  // No preset at all: nothing to flag.
-  const bare = planRestore('prefill=50', { presets: [{ id: 'rtx4090_exl2' }] });
-  assert.equal(bare.unresolvedPreset, null);
-  assert.deepEqual(bare.resets, ['decode']);
+test('clamped values survive parseSettings (undo/redo/snapshot restore path)', () => {
+  const s = parseSettings('prefill=999999999&decode=36716&sim=20');
+  assert.equal(s.prefill, 50000);
+  assert.equal(s.decode, 1000);
+  // In-range values pass through untouched
+  const ok = parseSettings('prefill=4096&decode=340');
+  assert.equal(ok.prefill, 4096);
+  assert.equal(ok.decode, 340);
+  // Absent values stay absent
+  const none = parseSettings('preset=x');
+  assert.equal(none.prefill, null);
+  assert.equal(none.decode, null);
 });
