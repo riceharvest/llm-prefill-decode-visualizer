@@ -172,3 +172,19 @@ export function descNumAscStrCmp(a, b) {
   const sb = String(b[1]);
   return sa < sb ? -1 : sa > sb ? 1 : 0;
 }
+
+export function listEnvelope({
+  items,
+  total,
+  pagination = null,
+  aliases = {},
+  ...rest
+}) {
+  return {
+    ...rest,
+    total: total ?? items.length,
+    items,
+    ...aliases,
+    ...(pagination ? { has_more: pagination.has_more, next_cursor: pagination.next_cursor ?? null } : {})
+  };
+}
