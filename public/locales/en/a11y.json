@@ -1,0 +1,9 @@
+{
+  "liveRegionLabel": "Simulation progress announcements",
+  "prefilling": "Prefilling {tokens} tokens…",
+  "decoding": "Decoding…",
+  "doneSummary": "Done: TTFT {ttft}, TPOT {tpot}, total {total}",
+  "turnPrefilling": "Turn {turn} of {turns}: prefilling…",
+  "turnDecoding": "Turn {turn} of {turns}: decoding…",
+  "agenticDoneSummary": "Done: {turns} turns, TTFT {ttft}, TPOT {tpot}, total {total}"
+}

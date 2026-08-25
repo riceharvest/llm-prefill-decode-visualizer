@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ListFilter, ExternalLink, RotateCcw } from 'lucide-react';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import { fetchStateAttrs } from '../utils/fetchState';
 
 // Constraint-driven hardware shortlist ("find me hardware").
 //
@@ -118,7 +119,7 @@ export default function HardwareShortlist() {
   return (
     <div className="stack">
 
-      <section className="panel" aria-label="Hardware shortlist">
+      <section className="panel" aria-label="Hardware shortlist" {...fetchStateAttrs(status)}>
         <h2 className="panel-title" style={{ marginBottom: '14px' }} tabIndex={-1} data-panel-heading>
           <ListFilter size={16} />
           <span>Find Me Hardware</span>
@@ -199,13 +200,13 @@ export default function HardwareShortlist() {
 
         {/* Results */}
         {status === 'loading' && (
-          <div className="panel-inset" style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+          <div className="panel-inset" role="status" {...fetchStateAttrs('loading')} style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
             Querying community benchmark corpus…
           </div>
         )}
 
         {status === 'error' && (
-          <div className="panel-inset" style={{ borderColor: 'var(--danger)', fontSize: '0.82rem', color: 'var(--danger)' }}>
+          <div className="panel-inset" role="alert" data-state="error" style={{ borderColor: 'var(--danger)', fontSize: '0.82rem', color: 'var(--danger)' }}>
             Couldn&apos;t reach /api/best ({error}). The ranking API needs the serverless
             backend — on Vercel it ships with the deploy; locally run the Vite dev server
             which mounts the same handlers.

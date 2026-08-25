@@ -5,6 +5,7 @@ import {
   ApiError,
   problemBody,
   problemType,
+  requestInstance,
   sendProblem,
   sendProblemFromError,
   sendRateLimited,
@@ -105,4 +106,46 @@ test('sendRateLimited emits a 429 RATE_LIMITED problem with Retry-After', () => 
   const body = JSON.parse(res.body);
   assert.equal(body.code, 'RATE_LIMITED');
   assert.equal(body.title, 'Rate limited');
+});
+
+// --- #1095: the Vercel catch-all appends its internal `...path=<fn>` routing
+// key to req.url; the RFC 9457 `instance` member must never carry it. ---
+
+test('requestInstance strips the platform ...path routing key wherever it sits', () => {
+  // First position (platform key prepended before client params).
+  assert.equal(
+    requestInstance({ url: '/api/compute?...path=compute&model=bogus_model_xyz' }),
+    '/api/compute?model=bogus_model_xyz'
+  );
+  // Last position (live repro from #1095).
+  assert.equal(
+    requestInstance({ url: '/api/benchmarks?groupBy=hardware&limit=2&cursor=!!!not-a-cursor!!!&...path=benchmarks' }),
+    '/api/benchmarks?groupBy=hardware&limit=2&cursor=!!!not-a-cursor!!!'
+  );
+  // Only param → bare path, no dangling '?'.
+  assert.equal(requestInstance({ url: '/api/best?...path=best' }), '/api/best');
+  // Unpolluted URLs pass through byte-for-byte.
+  assert.equal(requestInstance({ url: '/api/best?by=decode' }), '/api/best?by=decode');
+  assert.equal(requestInstance({ url: '/api/health' }), '/api/health');
+  assert.equal(requestInstance(undefined), '');
+});
+
+test('problem responses never emit ...path in instance (#1095)', () => {
+  const polluted = { url: '/api/compute?model=bogus_model_xyz&...path=compute' };
+
+  const res1 = mockRes();
+  sendProblem(res1, polluted, { code: 'INVALID_PARAMS', detail: 'unknown model' });
+  assert.equal(JSON.parse(res1.body).instance, '/api/compute?model=bogus_model_xyz');
+
+  const res2 = mockRes();
+  sendProblemFromError(res2, polluted, new ApiError('INVALID_PARAMS', 'unknown model'));
+  assert.equal(JSON.parse(res2.body).instance, '/api/compute?model=bogus_model_xyz');
+
+  const res3 = mockRes();
+  sendRateLimited(res3, { url: '/api/best?by=cost&...path=best' });
+  assert.equal(JSON.parse(res3.body).instance, '/api/best?by=cost');
+
+  // Explicit instances are respected untouched.
+  const body = problemBody({ code: 'NOT_FOUND', instance: '/api/calc/nope' });
+  assert.equal(body.instance, '/api/calc/nope');
 });

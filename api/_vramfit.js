@@ -8,6 +8,7 @@
 // these numbers are estimates, not measured values.
 
 import { kvCache } from './_math.js';
+import { locateQuantComponent, quantTagIsComposite } from './_quant_tag.js';
 
 /** Fraction of unified memory usable by the model (OS/GPU reserves the rest). */
 export const UNIFIED_USABLE_FRACTION = 0.75;
@@ -22,6 +23,22 @@ export const OVERHEAD_FRACTION = 0.1;
 export function quantBitsPerWeight(quantization) {
   if (!quantization) return null; // unknown → caller decides fallback
   const q = String(quantization).toLowerCase();
+
+  // Composite/mixed-tag guard (#1071): when the tag carries MORE THAN ONE
+  // recognized weight-storage component (e.g.
+  // 'GPTQ-INT4-G64-sym-local+DFlash-BF16-local'), the unanchored legacy tests
+  // below latch onto whichever substring appears first in THIS table — which
+  // diverged from sizing.js by 4× on such tags. Route composites through the
+  // shared anchored scanner instead: both fit paths pick the SAME component
+  // (earliest in tag order), each mapped through its own constants table.
+  const comp = locateQuantComponent(q);
+  if (comp && quantTagIsComposite(q)) {
+    if (comp.kind === 'int') return Number(comp.bitBase) + 0.5; // same effective-rate convention as the gguf bucket
+    if (comp.kind === 'f16') return 16;
+    if (comp.kind === 'f8') return 8;
+    if (comp.kind === 'gguf') return quantBitsPerWeight(comp.text);
+    if (comp.kind === 'mlx') return quantBitsPerWeight(comp.text);
+  }
 
   // MLX-style tags first: "4bit", "6bit", "8bit", "4bit-dwq" ...
   const mlx = q.match(/(\d+)\s*bit/);
@@ -39,6 +56,7 @@ export function quantBitsPerWeight(quantization) {
     const base = Number(gguf[1] ?? gguf[0].slice(-1));
     if (base >= 2 && base <= 8) return base + 0.5;
   }
+
   return null; // unrecognized → caller decides fallback
 }
 

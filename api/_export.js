@@ -31,7 +31,10 @@ export const COLUMNS = [
   { key: 'promptTokens', type: 'number', description: 'Prompt length in tokens for the benchmark run' },
   { key: 'outputTokens', type: 'number', description: 'Generated length in tokens for the benchmark run' },
   { key: 'contextLength', type: 'number', description: 'Context length used for the run; empty when unreported' },
-  { key: 'source', type: 'string', description: 'URL of the original run page on localmaxxing.com' }
+  { key: 'source', type: 'string', description: 'URL of the original run page on localmaxxing.com' },
+  { key: 'contextBand', type: 'string', description: 'Context-length band id derived from contextLength (e.g. <=8k, 8k-32k); empty when the run reports no usable contextLength' },
+  { key: 'createdAt', type: 'string', description: 'ISO-8601 timestamp of the upstream measurement; empty when unreported' },
+  { key: 'engineVersion', type: 'string', description: 'Inference engine build/version as reported by the submitter; empty when unreported' }
 ];
 
 /** Escape a single CSV field per RFC 4180 (quote when needed, double inner quotes). */
@@ -41,14 +44,25 @@ export function csvEscape(value) {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/** Serialize run objects to RFC 4180 CSV text (header + rows, trailing newline). */
+/** UTF-8 BOM prepended to CSV exports: Excel on ANSI-locale Windows ignores
+ * the Content-Type charset for double-clicked files and needs a BOM to render
+ * the non-ASCII em-dashes in the `#` preamble correctly. */
+export const CSV_BOM = '\ufeff';
+
+/**
+ * Serialize run objects to RFC 4180 CSV text (header + rows).
+ *
+ * Framing contract: LF (`\n`) line endings with a trailing terminator. LF
+ * (instead of RFC 4180's CRLF) keeps naive `split('\n')` parsers free of
+ * `\r` pollution in the last column; lenient RFC 4180 parsers accept LF.
+ */
 export function toCsv(rows) {
   const header = COLUMNS.map(c => c.key).join(',');
   const lines = [header];
   for (const r of rows) {
     lines.push(COLUMNS.map(c => csvEscape(r[c.key])).join(','));
   }
-  return lines.join('\r\n') + '\r\n';
+  return lines.join('\n') + '\n';
 }
 
 /**
@@ -66,7 +80,7 @@ export function csvPreamble(rowCount, generatedAt) {
   ];
   for (const c of COLUMNS) lines.push(`#   ${c.key}: ${c.type} — ${c.description}`);
   lines.push(`# source: https://localmaxxing.com — exported via /api/export`);
-  return lines.join('\r\n') + '\r\n';
+  return lines.join('\n') + '\n';
 }
 
 /** JSON export envelope with the same dictionary in structured form. */

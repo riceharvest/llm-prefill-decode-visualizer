@@ -9,7 +9,8 @@
 //   - validated loads: ?id=<preset> must match a known preset id exactly;
 //     unknown or empty-but-present ids are rejected with 400 and the list
 //     of valid ids so an agent can self-correct;
-//   - derived convenience fields (totalTokens, prefillShare) so an agent
+//   - derived convenience fields (totalTokens, prefillShare on the legacy
+//     0..1 scale + prefillSharePct on the API-wide 0–100 scale) so an agent
 //     never has to do arithmetic it could get wrong;
 //   - pointers to the next hop (/api/compute) including a ready-to-use
 //     example query for the loaded scenario.
@@ -60,7 +61,12 @@ export function toAgentScenario(s) {
     totalTokens,
     // Fraction of all tokens that are prompt (prefill) tokens, 0..1, so an
     // agent can reason about prefill-vs-decode dominance without computing.
-    prefillShare: Math.round((s.promptTokens / totalTokens) * 1000) / 1000
+    prefillShare: Math.round((s.promptTokens / totalTokens) * 1000) / 1000,
+    // Same quantity on the API-wide percent scale (#741): every sibling share
+    // field (prefillSharePct, decodeSharePct, cachingSavesPct, utilizationPct)
+    // is 0–100 with a Pct suffix. Kept alongside the legacy 0..1 fraction so
+    // existing consumers are unaffected.
+    prefillSharePct: Math.round((s.promptTokens / totalTokens) * 10000) / 100
   };
 }
 

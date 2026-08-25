@@ -1,5 +1,78 @@
 {
+  "trailingSlash": false,
   "rewrites": [
+    {
+      "source": "/api/calc/:id",
+      "destination": "/api/calc-replay?id=:id"
+    },
+    {
+      "source": "/api/watch/rss.xml",
+      "destination": "/api/watch-rss"
+    },
+    {
+      "source": "/api/watch/dispatch",
+      "destination": "/api/watch-dispatch"
+    },
+    {
+      "source": "/api/agent/capabilities.json",
+      "destination": "/api/agent-json?file=capabilities.json"
+    },
+    {
+      "source": "/api/agent/compute.json",
+      "destination": "/api/agent-json?file=compute.json"
+    },
+    {
+      "source": "/api/agent/benchmarks.json",
+      "destination": "/api/agent-json?file=benchmarks.json"
+    },
+    {
+      "source": "/api/agent/scenario.json",
+      "destination": "/api/agent-json?file=scenario.json"
+    },
+    {
+      "source": "/api/agent/freshness.json",
+      "destination": "/api/agent-json?file=freshness.json"
+    },
+    {
+      "source": "/api/agent/confidence.json",
+      "destination": "/api/agent-json?file=confidence.json"
+    },
+    {
+      "source": "/v1/calc/:id",
+      "destination": "/api/calc-replay?id=:id"
+    },
+    {
+      "source": "/v1/watch/rss.xml",
+      "destination": "/api/watch-rss"
+    },
+    {
+      "source": "/v1/watch/dispatch",
+      "destination": "/api/watch-dispatch"
+    },
+    {
+      "source": "/v1/agent/capabilities.json",
+      "destination": "/api/agent-json?file=capabilities.json"
+    },
+    {
+      "source": "/v1/agent/compute.json",
+      "destination": "/api/agent-json?file=compute.json"
+    },
+    {
+      "source": "/v1/agent/benchmarks.json",
+      "destination": "/api/agent-json?file=benchmarks.json"
+    },
+    {
+      "source": "/v1/agent/scenario.json",
+      "destination": "/api/agent-json?file=scenario.json"
+    },
+    {
+      "source": "/v1/agent/freshness.json",
+      "destination": "/api/agent-json?file=freshness.json"
+    },
+    {
+      "source": "/v1/agent/confidence.json",
+      "destination": "/api/agent-json?file=confidence.json"
+    },
     {
       "source": "/embed",
       "destination": "/index.html"
@@ -7,6 +80,10 @@
     {
       "source": "/embed/",
       "destination": "/index.html"
+    },
+    {
+      "source": "/v1/api/:path*",
+      "destination": "/api/:path*"
     },
     {
       "source": "/v1/:path*",
@@ -43,6 +120,10 @@
     {
       "source": "/.well-known/mcp",
       "destination": "/.well-known/mcp.json"
+    },
+    {
+      "source": "/.well-known/ai-plugin",
+      "destination": "/.well-known/ai-plugin.json"
     }
   ],
   "crons": [

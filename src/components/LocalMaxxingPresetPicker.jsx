@@ -195,7 +195,12 @@ export default function LocalMaxxingPresetPicker({ selectedPreset, onApplyRun, o
   };
 
   return (
-    <section className="panel" aria-label={t('localMaxxing.panelAria')}>
+    <section
+      className="panel"
+      aria-label={t('localMaxxing.panelAria')}
+      data-state={loadingAll || loadingModels || loadingRuns ? 'loading' : 'ready'}
+      aria-busy={loadingAll || loadingModels || loadingRuns}
+    >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>

@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   LESSONS,
+  attemptCount,
   checkAnswer,
+  markAttempted,
   isComplete,
   loadProgress,
   saveProgress,
@@ -68,14 +70,14 @@ test('progress persists via injected storage and survives reload', () => {
 });
 
 test('loadProgress tolerates corrupt/missing storage entries', () => {
-  assert.deepEqual(loadProgress(fakeStorage()), { completed: {} });
-  assert.deepEqual(loadProgress(fakeStorage({ 'llmpd-curriculum-progress': '{oops' })), { completed: {} });
-  assert.deepEqual(loadProgress(fakeStorage({ 'llmpd-curriculum-progress': '"stray"' })), { completed: {} });
+  assert.deepEqual(loadProgress(fakeStorage()), { completed: {}, attempted: {} });
+  assert.deepEqual(loadProgress(fakeStorage({ 'llmpd-curriculum-progress': '{oops' })), { completed: {}, attempted: {} });
+  assert.deepEqual(loadProgress(fakeStorage({ 'llmpd-curriculum-progress': '"stray"' })), { completed: {}, attempted: {} });
   // storage throwing (quota/private mode) degrades to session-only
   const throwing = { getItem: () => { throw new Error('nope'); }, setItem: () => { throw new Error('nope'); } };
-  assert.deepEqual(loadProgress(throwing), { completed: {} });
-  const p = saveProgress({ completed: { x: 1 } }, throwing);
-  assert.deepEqual(p, { completed: { x: 1 } });
+  assert.deepEqual(loadProgress(throwing), { completed: {}, attempted: {} });
+  const p = saveProgress({ completed: { x: 1 }, attempted: {} }, throwing);
+  assert.deepEqual(p, { completed: { x: 1 }, attempted: {} });
 });
 
 test('nextIncompleteLesson finds the first unfinished slot and returns -1 when done', () => {
@@ -95,4 +97,53 @@ test('nextIncompleteLesson finds the first unfinished slot and returns -1 when d
     store
   );
   assert.equal(nextIncompleteLesson(allDone), -1);
+});
+
+// ---- #1022: wrong answers must be recorded, not just successes ----
+
+test('#1022: markAttempted counts every check, wrong answers included', () => {
+  const store = fakeStorage();
+  let progress = loadProgress(store);
+
+  // Two wrong checks then one correct on the same lesson.
+  for (let i = 0; i < 3; i++) {
+    progress = markAttempted(progress, 'ttft-basics');
+  }
+  assert.equal(attemptCount(progress, 'ttft-basics'), 3);
+  // Completion is orthogonal — attempts alone never complete a lesson.
+  assert.equal(isComplete(progress, 'ttft-basics'), false);
+
+  progress = saveProgress(
+    { ...progress, completed: { ...progress.completed, 'ttft-basics': Date.now() } },
+    store
+  );
+  const reloaded = loadProgress(store);
+  assert.equal(isComplete(reloaded, 'ttft-basics'), true);
+  assert.equal(attemptCount(reloaded, 'ttft-basics'), 3); // survives reload
+  assert.equal(attemptCount(reloaded, 'tpot'), 0); // untouched lesson
+});
+
+test('#1022: legacy completed-only payloads load with an empty attempted map', () => {
+  const legacy = fakeStorage({
+    'llmpd-curriculum-progress': JSON.stringify({ completed: { 'tpot': 42 } })
+  });
+  const p = loadProgress(legacy);
+  assert.deepEqual(p.attempted, {});
+  assert.equal(isComplete(p, 'tpot'), true);
+
+  // And a fresh attempt on top of the legacy record keeps both fields.
+  const next = markAttempted(p, 'kv-memory-math');
+  assert.equal(attemptCount(next, 'kv-memory-math'), 1);
+  assert.equal(isComplete(next, 'tpot'), true);
+});
+
+// ---- #1046: lesson 5's mandated verification step must be performable ----
+
+test('#1046: spec-decoding verify step no longer demands an impossible acceptance value', () => {
+  const lesson = LESSONS.find(l => l.id === 'spec-decoding');
+  // The simulator clamps acceptance to [0.3, 0.95] (SingleTurnVisualizer),
+  // so the old "toward 20%" instruction could never be followed.
+  assert.ok(!lesson.verify.includes('20%'), lesson.verify);
+  assert.ok(/30%/.test(lesson.verify), lesson.verify);
+  assert.ok(!lesson.explanation.includes('vanishes entirely'), lesson.explanation);
 });
