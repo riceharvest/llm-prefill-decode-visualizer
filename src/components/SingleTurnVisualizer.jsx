@@ -40,6 +40,7 @@ import { evaluateSlo } from '../utils/slo.js';
 
 import { buildSingleTurnMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { buildSingleTurnJson, downloadJson } from '../utils/exportJson';
+import { resolveActiveScenario } from '../utils/scenarioState';
 import { t } from '../i18n/strings';
 
 // Workload slider bounds — shared by the range inputs, the number twins
@@ -158,7 +159,15 @@ export default function SingleTurnVisualizer({
     setAcceptance(pairAcceptance(pair));
   };
 
-  const activeScenario = SCENARIO_PRESETS.find(s => s.promptTokens === promptTokens && s.outputTokens === outputTokens);
+  // Active scenario (#475): an explicit ?scenario=<id> wins so preset
+  // identity survives token tweaks and share links; legacy reverse-inference
+  // by exact token-count match stays as fallback.
+  const activeScenario = resolveActiveScenario({
+    scenarios: SCENARIO_PRESETS,
+    urlScenarioId: readParam('scenario'),
+    promptTokens,
+    outputTokens
+  });
 
   const applyScenario = (scenario) => {
     setPromptTokens(scenario.promptTokens);
@@ -179,6 +188,7 @@ export default function SingleTurnVisualizer({
   // Shareable per-tab settings
   useEffect(() => {
     writeParams({
+      scenario: activeScenario ? activeScenario.id : '',
       prompt: promptTokens,
       output: outputTokens,
       spec: specEnabled ? '1' : '',
@@ -192,7 +202,7 @@ export default function SingleTurnVisualizer({
       jit: jitterEnabled ? '1' : '',
       jitPct: jitterEnabled && jitterPct !== 25 ? jitterPct : ''
     });
-  }, [promptTokens, outputTokens, specEnabled, draftTokens, acceptance, ctxScaleEnabled, ctxHalf, imagesEnabled, imageCount, imageResId, jitterEnabled, jitterPct]);
+  }, [promptTokens, outputTokens, activeScenario, specEnabled, draftTokens, acceptance, ctxScaleEnabled, ctxHalf, imagesEnabled, imageCount, imageResId, jitterEnabled, jitterPct]);
 
   // Simulation state
   const [phase, setPhase] = useState('idle'); // 'idle' | 'prefilling' | 'decoding' | 'completed'
