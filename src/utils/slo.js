@@ -59,6 +59,38 @@ export function saveSloBudgets(budgets, storage = typeof localStorage !== 'undef
   }
 }
 
+// ---------------------------------------------------------------------------
+// URL-param transport for budgets (issue #407): budgets were localStorage-only,
+// so share links could not reproduce the thresholds a run was judged against.
+// Param vocabulary: sloTtft / sloTpot / sloWall (ms / ms / s, matching keys).
+// ---------------------------------------------------------------------------
+
+/** Read budgets out of a query-param getter, overlaying any present param on
+ *  top of `base` (usually the localStorage value). A present-but-invalid value
+ *  disables that metric's check rather than silently keeping the base value. */
+export function budgetsFromUrlParams(getParam = () => null, base = DEFAULT_SLO_BUDGETS) {
+  const clean = sanitizeBudgets(base);
+  const overlay = { ttftMs: getParam('sloTtft'), tpotMs: getParam('sloTpot'), walltimeSec: getParam('sloWall') };
+  const out = { ...clean };
+  for (const [key, raw] of Object.entries(overlay)) {
+    if (raw === null || raw === undefined || raw === '') continue;
+    const n = Number(raw);
+    out[key] = Number.isFinite(n) && n > 0 ? n : null;
+  }
+  return out;
+}
+
+/** Inverse: build writeParams()-style updates from a budget object. Disabled
+ *  (null) entries map to '' so writeParams deletes them from the URL. */
+export function budgetUrlParams(budgets) {
+  const clean = sanitizeBudgets(budgets);
+  return {
+    sloTtft: clean.ttftMs !== null ? String(clean.ttftMs) : '',
+    sloTpot: clean.tpotMs !== null ? String(clean.tpotMs) : '',
+    sloWall: clean.walltimeSec !== null ? String(clean.walltimeSec) : ''
+  };
+}
+
 /**
  * Evaluate one metric against its budget.
  * Returns null when either value or budget is unusable (check disabled).

@@ -4,13 +4,31 @@ import { sanityWarnings } from '../../api/_math.js';
 import SanityWarnings from './SanityWarnings';
 import Analogy from './Analogy';
 import { t } from '../i18n/strings';
+<<<<<<< main
 import { TESTIDS } from '../utils/testids';
+=======
+import { clampNum } from '../utils/urlState';
+>>>>>>> base
 
 // Time-scale options (#76): rendered as an ARIA radiogroup with roving
 // tabindex — one option is tabbable, arrow keys move and select.
 const TIME_OPTIONS = [1, 2, 5, 20, 'instant'];
 
 const timeOptionLabel = (mult) => (mult === 'instant' ? t('common.instant') : `${mult}x`);
+
+// Slider ranges for the two speed controls. The number twins mirror them via
+// min/max attributes and clamp on commit (#409) so the field can never display
+// a value the simulation is not using.
+export const PREFILL_RANGE = { min: 50, max: 50000 };
+export const DECODE_RANGE = { min: 2, max: 1000 };
+
+/** Number-twin onChange: ignore empty/garbage input, clamp the rest. */
+const commitSpeedNumber = (setter, { min, max }) => (e) => {
+  if (e.target.value === '') return;
+  const n = Number(e.target.value);
+  if (!Number.isFinite(n)) return;
+  setter(clampNum(n, min, max));
+};
 
 export default function SpeedControls({
   prefillSpeed,
@@ -80,10 +98,13 @@ export default function SpeedControls({
             />
             <input
               type="number"
+              min={PREFILL_RANGE.min}
+              max={PREFILL_RANGE.max}
               value={prefillSpeed}
               data-testid={TESTIDS.prefillInput}
               aria-label={t('speedControls.prefillValueAria')}
-              onChange={(e) => setPrefillSpeed(Number(e.target.value))}
+              title={`Valid range ${PREFILL_RANGE.min}–${PREFILL_RANGE.max} tok/s; values outside it are clamped`}
+              onChange={commitSpeedNumber(setPrefillSpeed, PREFILL_RANGE)}
               style={{ width: '5.5rem' }}
             />
             <span className="field-label">{t('common.tokPerSec')}</span>
@@ -115,10 +136,13 @@ export default function SpeedControls({
             />
             <input
               type="number"
+              min={DECODE_RANGE.min}
+              max={DECODE_RANGE.max}
               value={decodeSpeed}
               data-testid={TESTIDS.decodeInput}
               aria-label={t('speedControls.decodeValueAria')}
-              onChange={(e) => setDecodeSpeed(Number(e.target.value))}
+              title={`Valid range ${DECODE_RANGE.min}–${DECODE_RANGE.max} tok/s; values outside it are clamped`}
+              onChange={commitSpeedNumber(setDecodeSpeed, DECODE_RANGE)}
               style={{ width: '5.5rem' }}
             />
             <span className="field-label">{t('common.tokPerSec')}</span>

@@ -214,6 +214,7 @@ test('agentic export survives a JSON.stringify/parse round-trip', () => {
 });
 
 // ---------------------------------------------------------------------------
+<<<<<<< main
 // Engine flags reach the export (#698) + cross-exportType schema (#722)
 // ---------------------------------------------------------------------------
 
@@ -306,4 +307,49 @@ test('throughput field convention is unified across both exporters (#722)', () =
   assert.equal(single.metrics.avgThroughputTokPerSec, single.metrics.throughputTokPerSec);
   assert.equal(agentic.metrics.avgThroughputTokPerSec, agentic.summary.avgThroughputTokPerSec);
   assert.equal(agentic.metrics.throughputTokPerSec, agentic.metrics.avgThroughputTokPerSec);
+=======
+// #408: richer run provenance in the single-turn export
+// ---------------------------------------------------------------------------
+
+test('optional engine/jitter/image/ctx/slo inputs appear only when provided (#408)', () => {
+  const base = buildSingleTurnJson({ ...singleTurnInput });
+  // Legacy callers (no new args) keep the exact same output shape.
+  assert.ok(!('engineFlags' in base.inputs));
+  assert.ok(!('itlJitter' in base.inputs));
+  assert.ok(!('images' in base.inputs));
+  assert.ok(!('contextScaling' in base.inputs));
+  assert.ok(!('sloBudgets' in base.inputs));
+  assert.ok(!('sloResults' in base.metrics));
+
+  const rich = buildSingleTurnJson({
+    ...singleTurnInput,
+    engineFlags: ['flash-attn', 'kv-q8'],
+    itlJitter: { enabled: true, cvPct: 25 },
+    images: { enabled: true, count: 2, resolutionId: '1080p' },
+    contextScaling: { enabled: true, halfSpeedContextTokens: 32768 },
+    sloBudgets: { ttftMs: 500, tpotMs: 50, walltimeSec: null },
+    sloResults: { ttft: { value: 200, budget: 500, pass: true, marginPct: 60 }, tpot: null, walltime: null }
+  });
+  assert.deepEqual(rich.inputs.engineFlags, ['flash-attn', 'kv-q8']);
+  assert.deepEqual(rich.inputs.itlJitter, { enabled: true, cvPct: 25 });
+  assert.deepEqual(rich.inputs.images, { enabled: true, count: 2, resolutionId: '1080p' });
+  assert.deepEqual(rich.inputs.contextScaling, { enabled: true, halfSpeedContextTokens: 32768 });
+  assert.deepEqual(rich.inputs.sloBudgets, { ttftMs: 500, tpotMs: 50, walltimeSec: null });
+  assert.equal(rich.metrics.sloResults.ttft.pass, true);
+
+  // Disabled features are omitted entirely — no `enabled: false` noise.
+  const off = buildSingleTurnJson({
+    ...singleTurnInput,
+    itlJitter: { enabled: false, cvPct: 25 },
+    images: { enabled: false, count: 1, resolutionId: '1080p' }
+  });
+  assert.ok(!('itlJitter' in off.inputs));
+  assert.ok(!('images' in off.inputs));
+
+  // Output remains deterministic given identical inputs.
+  assert.equal(
+    JSON.stringify(buildSingleTurnJson({ ...singleTurnInput, engineFlags: ['x'] })),
+    JSON.stringify(buildSingleTurnJson({ ...singleTurnInput, engineFlags: ['x'] }))
+  );
+>>>>>>> base
 });
