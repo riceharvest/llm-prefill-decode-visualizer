@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ListFilter, ExternalLink, RotateCcw } from 'lucide-react';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import { quantizationMatches } from '../utils/hardwareShortlist';
+import { formatTime } from '../utils/presets';
 
 // Constraint-driven hardware shortlist ("find me hardware").
 //
@@ -236,6 +238,13 @@ export default function HardwareShortlist() {
                         {Math.round(row.medianDecodeTokPerSec).toLocaleString()}
                       </span>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}> tok/s median decode</span>
+                      {/* #845: the 95% bootstrap CI that defines which adjacent
+                          ranks are statistical ties — previously stripped. */}
+                      {row.medianDecodeCi95 && (
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', fontFamily: 'var(--font-mono)' }}>
+                          95% CI {row.medianDecodeCi95.lo?.toLocaleString()}–{row.medianDecodeCi95.hi?.toLocaleString()} tok/s · overlap ≈ tie
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -255,6 +264,45 @@ export default function HardwareShortlist() {
                     <span>Engine · quant</span>
                     <span>{row.engine || '—'} · {row.quantization || '—'}</span>
                   </div>
+                  {/* #845: decision-metric rows previously stripped from the
+                      DOM — workload projections, pricing, power, and the
+                      ready-made explain string. Each renders only when the
+                      API row actually carries the field. */}
+                  {row.projectedWalltimeSeconds != null && (
+                    <div style={rowStyle}>
+                      <span>Projected walltime (workload)</span>
+                      <span style={{ ...numStyle }}>{formatTime(row.projectedWalltimeSeconds)}</span>
+                    </div>
+                  )}
+                  {row.ttftSeconds != null && (
+                    <div style={rowStyle}>
+                      <span>TTFT (projected)</span>
+                      <span style={{ ...numStyle }}>{formatTime(row.ttftSeconds)}</span>
+                    </div>
+                  )}
+                  {row.pricing?.estimateUsd != null && (
+                    <div style={rowStyle}>
+                      <span>Street-price estimate</span>
+                      <span style={{ ...numStyle }}>
+                        ≈${Math.round(row.pricing.estimateUsd).toLocaleString()}
+                        {row.pricing.lowUsd != null && row.pricing.highUsd != null
+                          ? ` (${Math.round(row.pricing.lowUsd).toLocaleString()}–${Math.round(row.pricing.highUsd).toLocaleString()})`
+                          : ''}
+                      </span>
+                    </div>
+                  )}
+                  {row.power?.loadWatts != null && (
+                    <div style={rowStyle}>
+                      <span>Power draw</span>
+                      <span style={{ ...numStyle }}>
+                        ~{Math.round(row.power.loadWatts)} W load
+                        {row.power.totalTdpWatts != null ? ` · ${Math.round(row.power.totalTdpWatts)} W TDP` : ''}
+                      </span>
+                    </div>
+                  )}
+                  {row.explain && (
+                    <p style={{ margin: '8px 0 0', color: 'var(--text-muted)', fontSize: '0.74rem' }}>{row.explain}</p>
+                  )}
                   <div style={{ ...rowStyle, alignItems: 'center' }}>
                     <span>Source runs in group</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

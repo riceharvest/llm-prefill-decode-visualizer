@@ -25,6 +25,17 @@ function median(sorted) {
 }
 
 /**
+ * Quantization filter match (#817): case-insensitive on BOTH sides, parity
+ * with /api/best?quant= which lowercases row + query before comparing.
+ * A share link carrying 'q4_k_m' must not silently empty the shortlist
+ * while the JSON path accepts the same string.
+ */
+export function quantizationMatches(rowQuant, quant) {
+  if (!quant) return true;
+  return String(rowQuant || '').toLowerCase() === String(quant).toLowerCase();
+}
+
+/**
  * Build the shortlist from raw comparable runs (same shape as the flattened
  * rows behind /api/localmaxxing). Groups by hardware rig × model family,
  * ranks by median decode so one lucky run doesn't top the chart, and keeps

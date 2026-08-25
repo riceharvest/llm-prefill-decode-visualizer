@@ -178,8 +178,8 @@ export default function TheoryGuide() {
                 {FAQ_DEMOS[i] && (
                   <button
                     onClick={() => { window.location.href = demoUrl(FAQ_DEMOS[i]); }}
-                    className="btn"
-                    style={{ marginTop: '10px', minHeight: '30px', padding: '5px 12px', fontSize: '0.76rem' }}
+                    className="btn btn-sm"
+                    style={{ marginTop: '10px', padding: '5px 12px', fontSize: '0.76rem' }}
                   >
                     <Play size={12} />
                     {t('theory.tryIt')}
