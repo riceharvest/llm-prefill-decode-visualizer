@@ -13,6 +13,21 @@ export const MAX_SEEN_RUN_IDS = 200;
 export const RSS_MAX_ITEMS = 50;
 /** Webhook POST timeout in ms. */
 export const WEBHOOK_TIMEOUT_MS = 5_000;
+/** Consecutive failed deliveries before a watch is dead-lettered (#694). */
+export const WEBHOOK_MAX_FAILURES = 5;
+/** Base delay for the capped exponential retry backoff (#694). */
+export const WEBHOOK_BACKOFF_BASE_MS = 60_000;
+/** Upper bound on the retry backoff (bounded so a dead endpoint is not hammered forever). */
+export const WEBHOOK_BACKOFF_CAP_MS = 24 * 60 * 60 * 1000;
+/**
+ * Max webhook redirects followed per delivery (#1029). Every hop — including
+ * the first — is re-validated as https before the request (or the next hop's
+ * URL) is fetched, so a 30x from a validated host cannot downgrade the
+ * delivery to http://internal targets.
+ */
+export const MAX_WEBHOOK_REDIRECTS = 3;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
 
 function isBlank(v) {
   return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
@@ -83,6 +98,9 @@ export function validateWatch(body) {
       hardware: fields.hardware ?? null,
       quant: fields.quant ? fields.quant.toLowerCase() : null,
       webhookUrl,
+      // #699: opt-in backfill — when true, runs dated before the watch's
+      // createdAt (e.g. imported/backfilled batches) are delivered too.
+      includeExisting: body.includeExisting === true,
       createdAt: new Date().toISOString(),
       lastSeenRunIds: []
     }
@@ -90,6 +108,22 @@ export function validateWatch(body) {
 }
 
 const norm = s => String(s || '').toLowerCase();
+
+/**
+ * Canonical identity of a watch combo (#1027): normalized model/hardware/
+ * quant plus the exact webhook target. Two registrations with the same
+ * fingerprint would deliver every dispatch N times, so saveWatch refuses
+ * exact duplicates.
+ */
+export function watchFingerprint(watch) {
+  const canon = s => String(s ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  return JSON.stringify([
+    canon(watch.model),
+    canon(watch.hardware),
+    canon(watch.quant),
+    watch.webhookUrl ? String(watch.webhookUrl).trim() : ''
+  ]);
+}
 
 /**
  * Does one community run match a watch? Mirrors the /api/localmaxxing GET
@@ -129,18 +163,20 @@ export function runsForWatch(runs, watch) {
 }
 
 /**
- * Runs a watch has NOT been notified about yet: matched, created after the
- * watch itself, and not already in the watch's bounded seen-set. Pure — the
- * caller persists the updated seen-set.
+ * Runs a watch has NOT been notified about yet: matched, not already in the
+ * watch's bounded seen-set, and (unless `watch.includeExisting` is set — the
+ * #699 backfill opt-in) created after the watch itself. Pure — the caller
+ * persists the updated seen-set.
  */
 export function unseenRunsForWatch(runs, watch, _now = Date.now()) {
   const seen = new Set(watch.lastSeenRunIds || []);
-  const createdAtMs = new Date(watch.createdAt || 0).getTime();
+  const floorMs = watch.includeExisting ? null : new Date(watch.createdAt || 0).getTime();
   return runsForWatch(runs, watch).filter(r => {
     if (seen.has(String(r.runId))) return false;
+    if (floorMs == null) return true;
     const t = r.createdAt ? new Date(r.createdAt).getTime() : NaN;
     if (!Number.isFinite(t)) return true; // undated runs surface once (no ordering signal)
-    return t >= createdAtMs - 1000;
+    return t >= floorMs - 1000;
   }).slice(0, MAX_SEEN_RUN_IDS);
 }
 
@@ -154,6 +190,54 @@ export function markRunsSeen(watch, runs, now = Date.now()) {
   return watch;
 }
 
+// ---------- Delivery health (#694) ----------
+// A failed delivery must NOT mark the runs seen: they stay unseen and are
+// retried with a capped exponential backoff. After WEBHOOK_MAX_FAILURES
+// consecutive failures the watch is dead-lettered — it stops being attempted
+// (so a dead endpoint cannot hammer itself forever) but stays listed with its
+// failure state so the owner can detect the deafness and re-create the watch.
+
+/**
+ * Record a failed webhook delivery on a watch record (mutates + returns it).
+ * Sets consecutiveFailures, lastDeliveryError, nextRetryAt (capped exponential
+ * backoff) and flips deadLettered once WEBHOOK_MAX_FAILURES is reached.
+ */
+export function recordDeliveryFailure(watch, { error = null, status = null, now = Date.now() } = {}) {
+  const failures = (watch.consecutiveFailures || 0) + 1;
+  watch.consecutiveFailures = failures;
+  watch.lastDeliveryError = error ?? (status != null ? `HTTP ${status}` : 'delivery failed');
+  watch.lastFailureAt = new Date(now).toISOString();
+  if (failures >= WEBHOOK_MAX_FAILURES) {
+    watch.deadLettered = true;
+    delete watch.nextRetryAt; // no automatic retry past the dead-letter threshold
+  } else {
+    const delay = Math.min(WEBHOOK_BACKOFF_BASE_MS * 2 ** (failures - 1), WEBHOOK_BACKOFF_CAP_MS);
+    watch.nextRetryAt = new Date(now + delay).toISOString();
+  }
+  return watch;
+}
+
+/** Reset delivery-failure state after a successful dispatch (mutates + returns it). */
+export function recordDeliverySuccess(watch) {
+  delete watch.consecutiveFailures;
+  delete watch.nextRetryAt;
+  delete watch.lastDeliveryError;
+  delete watch.lastFailureAt;
+  delete watch.deadLettered;
+  return watch;
+}
+
+/**
+ * Is this watch due for a delivery attempt? False while backing off after a
+ * failure and false once dead-lettered.
+ */
+export function retryDue(watch, now = Date.now()) {
+  if (watch.deadLettered) return false;
+  if (!watch.nextRetryAt) return true;
+  const t = new Date(watch.nextRetryAt).getTime();
+  return !Number.isFinite(t) || t <= now;
+}
+
 // ---------- RSS ----------
 
 function xmlEscape(s) {
@@ -162,10 +246,14 @@ function xmlEscape(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
-/** RFC 822 date for RSS pubDate; falls back to build time for undated runs. */
-function rfc822(d, fallback) {
+/**
+ * RFC 822 date for RSS pubDate. Undated runs get a fixed epoch timestamp, not
+ * the feed build time (#696): stamping build time made their pubDate churn on
+ * every poll while the guid stayed constant, defeating change detection.
+ */
+function rfc822(d) {
   const t = d ? new Date(d).getTime() : NaN;
-  return new Date(Number.isFinite(t) ? t : fallback).toUTCString();
+  return new Date(Number.isFinite(t) ? t : 0).toUTCString();
 }
 
 /** Stable GUID per run (the upstream run id, namespaced). */
@@ -174,11 +262,26 @@ function runGuid(run) {
 }
 
 /**
+ * Deterministic entity tag for one RSS page (#696): a hash over the sorted
+ * GUID list plus the match count, so If-None-Match can yield a cheap 304.
+ * `guids` order does not matter; the result is stable for identical content.
+ */
+export async function rssEtag(guids, matchedCount = null) {
+  const sorted = [...guids].map(String).sort();
+  const data = new TextEncoder().encode(JSON.stringify({ sorted, matchedCount }));
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  const hex = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+  return `"rss-${hex.slice(0, 32)}"`;
+}
+
+/**
  * Render an RSS 2.0 feed of community runs for a combo.
  * `origin` seeds absolute self-references; runs carry their own `source` link.
+ * `limit` overrides the default item cap (the handler applies cursor
+ * pagination itself before calling this).
  */
-export function buildRssFeed({ runs, title, description, origin = '', builtAt = Date.now() }) {
-  const items = runs.slice(0, RSS_MAX_ITEMS);
+export function buildRssFeed({ runs, title, description, origin = '', builtAt = Date.now(), limit = RSS_MAX_ITEMS }) {
+  const items = runs.slice(0, limit);
   const esc = xmlEscape;
   const itemXml = items.map(r => {
     const speed = `${r.prefillTokPerSec} prefill / ${r.decodeTokPerSec} decode tok/s`;
@@ -192,7 +295,7 @@ export function buildRssFeed({ runs, title, description, origin = '', builtAt = 
       `      <title>${esc(`${r.modelFamily} on ${r.hardware}: ${speed}`)}</title>`,
       `      <link>${esc(r.source || origin)}</link>`,
       `      <guid isPermaLink="false">${esc(runGuid(r))}</guid>`,
-      `      <pubDate>${rfc822(r.createdAt, builtAt)}</pubDate>`,
+      `      <pubDate>${rfc822(r.createdAt)}</pubDate>`,
       `      <description>${esc([bits, speed].filter(Boolean).join('\n'))}</description>`,
       '    </item>'
     ].join('\n');
@@ -273,6 +376,25 @@ function watchesPath() {
   return `${dir.replace(/\/$/, '')}/${WATCHES_FILE}`;
 }
 
+/**
+ * Cheap read-only health probe for the watch store (#657): checks that the
+ * store directory exists and is writable — the same precondition saveWatch
+ * needs. Never creates or mutates anything, so /api/health can call it on
+ * every request. Missing file is healthy (no watches yet); an unwritable
+ * directory means every POST /api/watch would 503 with
+ * watch_store_unavailable.
+ */
+export async function probeWatchStore() {
+  try {
+    const { access, constants } = await import('node:fs/promises');
+    const dir = process.env.WATCHES_DIR || '/tmp';
+    await access(dir.replace(/\/$/, ''), constants.W_OK);
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
 function newId() {
   const t = Date.now().toString(36);
   const r = Math.random().toString(36).slice(2, 8);
@@ -301,6 +423,18 @@ export async function saveWatch(watch) {
   const existing = await listWatches();
   if (existing.length >= MAX_WATCHES) {
     throw new Error(`watch limit reached (${MAX_WATCHES})`);
+  }
+  // Duplicate registration guard (#1027): an identical combo+webhook would
+  // receive every dispatch N times. Refuse with a structured error (the
+  // handler maps it to 409 + the existing watchId); the secret is NOT
+  // re-disclosed to the duplicate caller.
+  const fp = watchFingerprint(watch);
+  const dupe = existing.find(w => watchFingerprint(w) === fp);
+  if (dupe) {
+    const err = new Error(`an identical watch already exists (${dupe.watchId}); reuse its rssUrl or DELETE it first`);
+    err.code = 'DUPLICATE_WATCH';
+    err.existingWatchId = dupe.watchId;
+    throw err;
   }
   const record = { ...watch, watchId: newId(), secret: newSecret() };
   const { appendFile } = await import('node:fs/promises');
@@ -365,23 +499,43 @@ export function _resetWatchStore() {
  * { ok, status?, error?, skipped? } — never throws (delivery failures are
  * data, not crashes: dispatch continues with the remaining watches).
  */
-export async function deliverWebhook(watch, runs, { fetchImpl = fetch, timeoutMs = WEBHOOK_TIMEOUT_MS } = {}) {
+export async function deliverWebhook(watch, runs, { fetchImpl = fetch, timeoutMs = WEBHOOK_TIMEOUT_MS, maxRedirects = MAX_WEBHOOK_REDIRECTS } = {}) {
   if (!watch.webhookUrl) return { ok: false, skipped: true, error: 'no webhookUrl registered' };
   const body = JSON.stringify(webhookPayload(watch, runs));
   try {
-    const res = await fetchImpl(watch.webhookUrl, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        // HMAC-lite: lets receivers confirm the ping came from this deploy
-        // (share the secret out-of-band; it was returned exactly once at signup).
-        'x-watch-secret': watch.secret,
-        'user-agent': 'llm-prefill-decode-visualizer-watch/1.0'
-      },
-      body,
-      signal: AbortSignal.timeout(timeoutMs)
-    });
-    return { ok: res.ok, status: res.status };
+    let url = String(watch.webhookUrl);
+    let method = 'POST';
+    for (let hop = 0; ; hop++) {
+      // Re-validate the scheme on EVERY hop (#1029): validateWatch only gates
+      // the URL at subscribe time; a redirect from the validated host must
+      // not be allowed to downgrade https → http.
+      if (new URL(url).protocol !== 'https:') {
+        return { ok: false, error: `blocked non-https webhook ${hop ? 'redirect target' : 'URL'}: ${url}` };
+      }
+      const isGet = method === 'GET';
+      const res = await fetchImpl(url, {
+        method,
+        headers: {
+          // HMAC-lite: lets receivers confirm the ping came from this deploy
+          // (share the secret out-of-band; it was returned exactly once at signup).
+          'x-watch-secret': watch.secret,
+          'user-agent': 'llm-prefill-decode-visualizer-watch/1.0',
+          ...(isGet ? {} : { 'content-type': 'application/json' })
+        },
+        body: isGet ? undefined : body,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      if (REDIRECT_STATUSES.has(res.status)) {
+        const loc = res?.headers?.get?.('location');
+        if (!loc) return { ok: res.ok, status: res.status };
+        if (hop >= maxRedirects) return { ok: false, error: `too many webhook redirects (> ${maxRedirects})` };
+        url = new URL(loc, url).toString();
+        if (res.status === 303 && method === 'POST') method = 'GET'; // RFC 9110: 303 → GET, body dropped
+        continue;
+      }
+      return { ok: res.ok, status: res.status };
+    }
   } catch (err) {
     return { ok: false, error: String(err?.message || err) };
   }

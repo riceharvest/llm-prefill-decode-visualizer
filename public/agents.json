@@ -1,5 +1,5 @@
 {
-  "$schema": "https://spec.agentproviders.dev/schemas/agents.v1.json",
+  "$schema": "https://llm-prefill-decode-visualizer.vercel.app/agents.v1.schema.json",
   "name": "llm-prefill-decode-visualizer",
   "description": "LLM inference performance math: TTFT, TPOT, walltime for single-turn chat, agentic loops, batched serving, speculative decoding, and KV-cache VRAM. Includes community-measured hardware benchmarks.",
   "url": "https://llm-prefill-decode-visualizer.vercel.app",
@@ -10,6 +10,7 @@
     }
   ],
   "docs": "/llms.txt — also see /api/agent/capabilities.json for the machine-readable surface list",
+  "endpointIndex": "/api/agent/index.json",
   "endpoints": [
     {
       "path": "/api/agent/benchmarks.json",
@@ -166,10 +167,24 @@
       "sinceVersion": "1.0.0"
     },
     {
+      "path": "/api/problems",
+      "method": "GET",
+      "description": "RFC 9457 problem-type documentation for every error code advertised in problem+json `type` URIs (/problems/<slug>, slug = lowercased CODE with _ → -). No argument returns the registry index; ?code=<slug|CODE> or /problems/<slug> returns { code, slug, type, title, status, description, spec }. Unknown codes return 404 with the available slugs.",
+      "returns": "{ description, codes[] } index, or per-code { code, slug, type, title, status, description, spec }",
+      "sinceVersion": "2.6.1"
+    },
+    {
       "path": "/api/runs",
       "method": "GET",
       "description": "One-shot machine-readable dump of the FULL run index (comparable AND batched/non-comparable runs). ?format=json|csv; ?comparable=all|true|false. JSON envelope carries schemaVersion, generatedAt, rowCount, totalRunCount and a structured dataDictionary; CSV is RFC 4180 with a #-comment preamble.",
       "returns": "application/json or text/csv",
+      "sinceVersion": "2.6.0"
+    },
+    {
+      "path": "/api/runs/:id",
+      "method": "GET",
+      "description": "Look up ONE community-measured run by its runId without downloading the full /api/runs dump. Unknown ids return a problem+json 404 (code NOT_FOUND).",
+      "returns": "{ description, schemaVersion, generatedAt, run }",
       "sinceVersion": "2.6.0"
     },
     {
@@ -196,8 +211,15 @@
     {
       "path": "/api/version",
       "method": "GET",
-      "description": "Machine-readable version report: service name, app version (package.json), wire schemaVersion, generatedAt timestamp and links to /api/spec, CHANGELOG-API.md and CHANGELOG.json.",
-      "returns": "{ service, version, schemaVersion, generatedAt, links{} }",
+      "description": "Machine-readable version report: service name, app version (package.json), wire schema_version (single spelling, stamped by the API layer), generatedAt timestamp and links to /api/versions, /api/spec, CHANGELOG-API.md and CHANGELOG.json.",
+      "returns": "{ service, version, generatedAt, links{} } + universal schema_version stamp",
+      "sinceVersion": "2.6.0"
+    },
+    {
+      "path": "/api/versions",
+      "method": "GET",
+      "description": "Version discovery (#685): every served URL prefix (/api, /v1) with its wire schema_version and lifecycle status (current|deprecated, canonical flag, deprecatedAt, sunset). Pin a prefix whose status is \"current\"; deprecated prefixes also carry Deprecation/Sunset headers on every response.",
+      "returns": "{ description, generatedAt, current, versions[]{prefix, schema_version, status, canonical, deprecatedAt, sunset}, links{} }",
       "sinceVersion": "2.6.0"
     },
     {

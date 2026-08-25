@@ -203,26 +203,69 @@ export function lookupHfArch(hfIdRaw) {
  */
 export function guessArchFromName(hfIdRaw) {
   const name = String(hfIdRaw || '').split('/').pop() || '';
-  const m = name.toLowerCase().match(/(\d+(?:\.\d+)?)\s*b(?![a-z0-9])/);
-  if (!m) return null;
-  const paramsB = Number(m[1]);
-  if (!Number.isFinite(paramsB) || paramsB <= 0) return null;
+  const lower = name.toLowerCase();
+
+  // MoE ids carry size tags a naive "\d+b" scan misreads as total params
+  // (#1073): "8x7b" is experts×expert-size (product ≈ total), and an
+  // "a2.7b" tag is ACTIVE params — never the total.
+  const moe = lower.match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*b(?![a-z0-9])/);
+  const active = lower.match(/(?<![a-z0-9])a(\d+(?:\.\d+)?)\s*b(?![a-z0-9])/);
+
+  let paramsB = null;
+  let tag = null;
+  let activeOnlyLowerBound = false;
+  if (moe) {
+    paramsB = Number(moe[1]) * Number(moe[2]);
+    tag = moe[0];
+  } else {
+    // Prefer a dense (non-active) size tag: skip candidates whose digits are
+    // directly attached to a preceding 'a' ("…a2.7b" = active params).
+    const dense = /(\d+(?:\.\d+)?)\s*b(?![a-z0-9])/g;
+    let m;
+    while ((m = dense.exec(lower))) {
+      if (m.index > 0 && lower[m.index - 1] === 'a') continue;
+      paramsB = Number(m[1]);
+      tag = m[0];
+      break;
+    }
+    if (paramsB == null && active) {
+      // Active-only MoE id (e.g. Qwen1.5-MoE-A2.7B): total params are strictly
+      // greater than active params, so report the active tag as an explicit
+      // LOWER bound and say so in the notes.
+      paramsB = Number(active[1]);
+      tag = active[0];
+      activeOnlyLowerBound = true;
+    }
+  }
+
+  if (paramsB == null || !Number.isFinite(paramsB) || paramsB <= 0) return null;
 
   let numLayers = 80;
   if (paramsB <= 10) numLayers = 32;
   else if (paramsB <= 22) numLayers = 48;
   else if (paramsB <= 45) numLayers = 64;
 
+  const weightsSource = moe
+    ? `parameter count estimated from the MoE name tag '${tag}' (${moe[1]}×${moe[2]} ≈ ${paramsB}B total; product approximation, not the measured safetensors count)`
+    : activeOnlyLowerBound
+      ? `parameter count parsed from the model-name ACTIVE-params tag '${tag}' (~${paramsB}B) — LOWER BOUND only: this is a MoE id with no total-size tag, real weights are larger`
+      : `parameter count parsed from the model-name tag '${tag}' (~${paramsB}B)`;
+
+  const notes = [
+    `huggingface.co could not be reached/used — architecture guessed from the '${tag}' name tag: ${numLayers} layers, 8 KV heads × 128 dim (dense-bucket heuristic). Treat weights AND KV as rough estimates.`,
+    'KV-cache math assumes GQA with 8 KV heads and a 128 head dim; models with different attention shapes will drift.'
+  ];
+  if (moe) notes.unshift(`MoE id detected from name tag '${tag}': params estimated as ${moe[1]} experts × ${moe[2]}B ≈ ${paramsB}B total (approximation).`);
+  if (activeOnlyLowerBound) notes.unshift(`MoE id with only an active-params tag ('${tag}'): reported parameter count is a LOWER bound — actual total weights are several times larger.`);
+
   return {
     source: 'name-heuristic',
     family: null,
     architecture: { numLayers, hiddenSize: null, numHeads: null, kvHeads: 8, headDim: 128, maxContextLength: null },
     paramsTotal: Math.round(paramsB * 1e9),
-    weightsSource: `parameter count parsed from the model-name tag '${m[0]}' (~${paramsB}B)`,
+    weightsSource,
     weightsSourceKind: 'params×quant',
-    notes: [
-      `huggingface.co could not be reached/used — architecture guessed from the '${m[0]}' name tag: ${numLayers} layers, 8 KV heads × 128 dim (dense-bucket heuristic). Treat weights AND KV as rough estimates.`,
-      'KV-cache math assumes GQA with 8 KV heads and a 128 head dim; models with different attention shapes will drift.'
-    ]
+    ...(activeOnlyLowerBound || moe ? { moe: true } : {}),
+    notes
   };
 }

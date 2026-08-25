@@ -30,16 +30,25 @@ test('committed agents.json matches the generator output (no drift)', () => {
   );
 });
 
+// Transport shims (issues #372 #373 #376 #381): vercel.json rewrites
+// multi-segment paths to these single-segment aliases because the platform
+// edge never routes nested /api/* paths to this function. They serve the SAME
+// surface as their canonical table routes, so they get no separate table entry.
+const INTERNAL_ALIAS_CASES = new Set(['/calc-replay', '/watch-rss', '/watch-dispatch', '/agent-json']);
+
 test('every dispatcher case has a route-table entry (and vice versa)', () => {
   const source = fs.readFileSync(path.join(root, 'api', '[...path].js'), 'utf8');
 
   // Static `case '/x':` dispatch targets.
-  const casePaths = [...source.matchAll(/case '(\/[^']*)':/g)].map((m) => m[1]);
+  const casePaths = [...source.matchAll(/case '(\/[^']*)':/g)].map((m) => m[1])
+    .filter((p) => !INTERNAL_ALIAS_CASES.has(p));
   // The dynamic /calc/<id> fallback (regex route, no case label).
   const hasCalcFallback = /clean\.match\(\/\^\\\/calc\\\//.test(source);
+  const hasRunsFallback = /clean\.match\(\/\^\\\/runs\\\//.test(source);
 
-  const tableStatic = ROUTES.filter((r) => r.path !== '/calc/:id').map((r) => r.path);
+  const tableStatic = ROUTES.filter((r) => r.path !== '/calc/:id' && r.path !== '/runs/:id').map((r) => r.path);
   const tableHasCalc = ROUTES.some((r) => r.path === '/calc/:id');
+  const tableHasRuns = ROUTES.some((r) => r.path === '/runs/:id');
 
   const missingFromTable = casePaths.filter((p) => !tableStatic.includes(p));
   assert.deepEqual(
@@ -57,6 +66,8 @@ test('every dispatcher case has a route-table entry (and vice versa)', () => {
 
   assert.ok(hasCalcFallback, 'expected the /calc/<id> regex fallback in the dispatcher');
   assert.ok(tableHasCalc, 'route table must describe the /calc/:id dynamic route');
+  assert.ok(hasRunsFallback, 'expected the /runs/<id> regex fallback in the dispatcher');
+  assert.ok(tableHasRuns, 'route table must describe the /runs/:id dynamic route');
 });
 
 test('every endpoint carries a well-formed sinceVersion annotation', () => {

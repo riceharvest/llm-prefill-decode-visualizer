@@ -208,6 +208,25 @@ function queuePath() {
 }
 
 /**
+ * Cheap read-only health probe for the submission review queue (#657):
+ * checks that the queue directory exists and is writable — the same
+ * precondition queueSubmission needs. Never creates or mutates anything,
+ * so /api/health can call it on every request. A missing file is healthy
+ * (queue simply empty); an unwritable directory means every run submission
+ * would 503 with queue_unavailable.
+ */
+export async function probeSubmitQueue() {
+  try {
+    const { access, constants } = await import('node:fs/promises');
+    const dir = process.env.SUBMISSIONS_DIR || '/tmp';
+    await access(dir.replace(/\/$/, ''), constants.W_OK);
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/**
  * Append a validated submission to the review queue (JSONL, one per line).
  * Submissions are NEVER published to the read APIs directly — they wait for
  * manual review. On Vercel the filesystem is ephemeral, so the queue file is

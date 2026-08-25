@@ -1,17 +1,27 @@
 // Theme selection (issue #81): dark is the site default, with light and a pure
-// black/white high-contrast palette selectable from the header. The chosen
-// theme lands on <html data-theme="…"> and index.css keys every token off that
-// attribute — dark needs no attribute because :root already carries it.
+// black/white high-contrast palette. index.css keys every color token off
+// <html data-theme="…"> ([data-theme='light'] / [data-theme='high-contrast']
+// override blocks; dark needs no attribute because :root already carries it).
 //
 // Initial resolution order:
-//   1. explicit user choice persisted in localStorage
-//   2. prefers-contrast: more → high-contrast
-//   3. OS color-scheme preference (light → light, otherwise dark)
-// While the user has not made an explicit pick, OS preference changes are
-// followed live; once they do pick, their choice wins until cleared.
+//   1. ?theme=light|dark|high-contrast URL param (validated against THEMES)
+//   2. explicit user choice persisted in localStorage under `llmpd-theme`
+//   3. prefers-contrast: more → high-contrast
+//   4. OS color-scheme preference (light → light, otherwise dark)
+// While neither the URL nor an explicit stored pick is present, OS preference
+// changes are followed live; once one of them applies, it wins until cleared.
+//
+// Machine-readable state for agents (issues #662 #668):
+//   - `<html data-theme>` always carries the active palette name
+//   - `?theme=` deep-links a rendering mode without touching storage
+//   - localStorage key `llmpd-theme` holds an explicit user pick
+//   - window event `llmpd-theme-change` fires on programmatic switches
 
 const STORAGE_KEY = 'llmpd-theme';
+
+import { noteStorageFailure, noteStorageSuccess } from './storageHealth.js';
 export const THEME_CHANGE_EVENT = 'llmpd-theme-change';
+export const THEME_URL_PARAM = 'theme';
 export const THEMES = ['dark', 'light', 'high-contrast'];
 
 const LIGHT_SCHEME_QUERY = '(prefers-color-scheme: light)';
@@ -28,8 +38,11 @@ function storageGet() {
 function storageSet(value) {
   try {
     localStorage.setItem(STORAGE_KEY, value);
+    noteStorageSuccess();
   } catch {
-    // ignore — theme just won't persist across reloads
+    // ignore — theme just won't persist across reloads; failure is recorded
+    // for persistence-aware UI instead of being swallowed silently (#779)
+    noteStorageFailure(STORAGE_KEY);
   }
 }
 
@@ -51,7 +64,22 @@ function mediaMatches(query) {
   }
 }
 
+/** Theme requested via the ?theme= URL param, or null when absent/invalid. */
+export function getUrlTheme() {
+  try {
+    if (typeof window === 'undefined' || !window.location) return null;
+    const value = new URLSearchParams(window.location.search).get(THEME_URL_PARAM);
+    return isValidTheme(value) ? value : null;
+  } catch {
+    return null; // no location (tests/SSR) — fall through to other signals
+  }
+}
+
 export function resolveInitialTheme() {
+  // ?theme= wins so deep links always render the requested mode (#668),
+  // even over a previously stored explicit choice.
+  const fromUrl = getUrlTheme();
+  if (fromUrl) return fromUrl;
   const stored = getStoredTheme();
   if (stored) return stored;
   if (mediaMatches(CONTRAST_QUERY)) return 'high-contrast';
@@ -96,7 +124,9 @@ applyTheme(resolveInitialTheme());
 try {
   if (typeof matchMedia === 'function') {
     const followOs = () => {
-      if (!getStoredTheme()) applyTheme(resolveInitialTheme());
+      // Live-follow only while nothing more specific (URL param or stored
+      // pick) is in charge — otherwise it would clobber an explicit request.
+      if (!getUrlTheme() && !getStoredTheme()) applyTheme(resolveInitialTheme());
     };
     matchMedia(LIGHT_SCHEME_QUERY).addEventListener('change', followOs);
     matchMedia(CONTRAST_QUERY).addEventListener('change', followOs);

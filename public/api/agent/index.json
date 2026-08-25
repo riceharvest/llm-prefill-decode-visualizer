@@ -1,7 +1,7 @@
 {
   "$schema": "https://llm-prefill-decode-visualizer.vercel.app/api/spec",
   "name": "llm-prefill-decode-visualizer",
-  "description": "Machine-readable index of every agent-facing endpoint on the LLM Prefill & Decode Speed Visualizer API. All endpoints return JSON (except /api/watch/rss.xml, which returns RSS XML), support CORS, require no auth, and are also served under the /v1/ prefix (replace /api/ with /v1/). Full request/response details: GET /api/spec (OpenAPI 3.1). Human + agent docs: /llms.txt.",
+  "description": "Machine-readable index of every agent-facing endpoint on the LLM Prefill & Decode Speed Visualizer API. All endpoints return JSON (except /api/watch/rss.xml, which returns RSS XML, and /api/og, which renders a PNG chart card), support CORS, require no auth, and are also served under the /v1/ prefix (replace /api/ with /v1/). Full request/response details: GET /api/spec (OpenAPI 3.1). Human + agent docs: /llms.txt.",
   "baseURL": "https://llm-prefill-decode-visualizer.vercel.app",
   "openapi": "/api/spec",
   "docs": "/llms.txt",
@@ -150,9 +150,21 @@
     },
     {
       "method": "GET",
+      "path": "/api/runs/{id}",
+      "description": "Look up ONE community-measured run by its runId without downloading the full /api/runs dump. Unknown ids return a problem+json 404 (code NOT_FOUND).",
+      "responseSchema": "{ description, schemaVersion, generatedAt, run }"
+    },
+    {
+      "method": "GET",
       "path": "/api/version",
-      "description": "Machine-readable version report: service name, app version (package.json), schemaVersion (wire schema_version), generatedAt and links to /api/spec, CHANGELOG-API.md and CHANGELOG.json.",
-      "responseSchema": "{ service, version, schemaVersion, generatedAt, links{} }"
+      "description": "Machine-readable version report: service name, app version (package.json), the wire schema_version stamped on every JSON response (single spelling), generatedAt and links to /api/versions, /api/spec, CHANGELOG-API.md and CHANGELOG.json.",
+      "responseSchema": "{ service, version, generatedAt, links{} } + universal schema_version stamp"
+    },
+    {
+      "method": "GET",
+      "path": "/api/versions",
+      "description": "Version discovery: every served URL prefix (/api, /v1) with its wire schema_version, lifecycle status (current|deprecated), canonical flag, deprecatedAt and sunset. Deprecated prefixes carry Deprecation/Sunset headers on every response.",
+      "responseSchema": "{ description, generatedAt, current, versions[]{prefix, schema_version, status, canonical, deprecatedAt, sunset}, links{} }"
     },
     {
       "method": "GET",
@@ -189,6 +201,38 @@
       "path": "/api/agent/confidence.json",
       "description": "Alias for GET /api/agent/freshness.json — identical handler and response shape.",
       "responseSchema": "same as /api/agent/freshness.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/problems",
+      "description": "RFC 9457 problem-type documentation for every error code advertised in problem+json `type` URIs (/problems/<slug>, slug = lowercased CODE with _ -> -). No argument returns the registry index; ?code=<slug|CODE> or /api/problems/<slug> returns { code, slug, type, title, status, description, spec }. Unknown codes return 404 with the available slugs.",
+      "responseSchema": "{ description, codes[] } index, or per-code { code, slug, type, title, status, description, spec }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/og",
+      "description": "Renders a 1200x630 PNG Open Graph chart card from URL params (preset, prefill, decode, scenario, prompt). Binary image/png response; errors use problem+json.",
+      "responseSchema": "binary image/png (1200x630)"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent/compute.json",
+      "description": "Batch compute via the agent JSON alias: POST {\"batch\":[...]} (up to 50 sets). Same envelope as POST /api/compute.",
+      "requestSchema": "{ batch: [{ model, ...params }] } (max 50 items)",
+      "responseSchema": "{ batch: true, count, okCount, errorCount, results: [{ index, ok, result | error }] }"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mcp",
+      "description": "MCP server metadata: GET returns the server implementation info and capability listing; the JSON-RPC surface itself is POST /api/mcp.",
+      "responseSchema": "{ jsonrpc: '2.0', id, result } (JSON-RPC 2.0)"
+    },
+    {
+      "method": "POST",
+      "path": "/api/watch/dispatch",
+      "description": "Cron-friendly webhook delivery: for each watch with a webhookUrl, POST unseen matching runs as a watch.new_runs payload. Set WATCH_DISPATCH_SECRET env var to require ?secret=. Also accepts POST.",
+      "responseSchema": "{ dispatched, totalNewRuns, results[{watchId, newRuns, delivered}], schemaNote, previewPayload }"
     }
-  ]
+  ],
+  "agentsManifest": "/agents.json"
 }

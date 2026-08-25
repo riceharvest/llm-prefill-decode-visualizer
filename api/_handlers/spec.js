@@ -52,7 +52,8 @@ const ENFORCED_PATHS = new Set([
   '/api/parse-constraints',
   '/api/watch',
   '/api/watch/rss.xml',
-  '/api/watch/dispatch'
+  '/api/watch/dispatch',
+  '/api/calc/{id}'
 ]);
 
 function xRateLimit(enforced) {
@@ -434,7 +435,7 @@ const COMPUTE_RESULT = {
       items: {
         type: 'object',
         properties: {
-          code: { type: 'string', enum: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor'] },
+          code: { type: 'string', enum: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor', 'context_exceeds_model_limit'] },
           message: { type: 'string' }
         },
         additionalProperties: true
@@ -683,7 +684,7 @@ export default function handler(req, res) {
             { name: 'powerDrawWatts', in: 'query', schema: { type: 'number' }, description: 'cost: whole-rig wall power under load' },
             { name: 'amortizationMonths', in: 'query', schema: { type: 'number' }, description: 'cost: months to spread hardware price over, default 36' },
             { name: 'architecture', in: 'query', schema: { type: 'string', enum: ['llama70b', 'llama8b', 'qwen72b', 'mistral7b'] }, description: 'kvCache preset arch' },
-            { name: 'contextLength', in: 'query', schema: { type: 'integer' }, description: 'kvCache' },
+            { name: 'contextLength', in: 'query', schema: { type: 'integer' }, description: 'kvCache (must be >= 1; checked against the architecture max context — overflow emits a warning plus contextWindow.withinLimit/overflowTokens)' },
             { name: 'precisionBytes', in: 'query', schema: { type: 'number', enum: [2, 1, 0.5] }, description: 'kvCache: FP16/FP8/INT4' },
             { name: 'flags', in: 'query', schema: { type: 'string' }, description: 'flagged: comma-separated engine flag ids (flash-attn,kv-q8,kv-q4,no-mmap,vllm-fp8-kv,vllm-o3). Documented heuristic deltas; response carries a per-flag audit trail.' },
             { name: 'dry_run', in: 'query', schema: { type: 'boolean' }, description: 'Validate + echo parsed params (defaults filled in) without executing any math. Returns { dry_run: true, model, inputs, id?, note }; the id matches the real call. Also applies per-item inside a batch via "dry_run": true in the POST body.' }
@@ -922,7 +923,24 @@ export default function handler(req, res) {
           operationId: 'createWatch',
           summary: 'Create a watch for a hardware+model combo (#109)',
           description: 'Body: { model?, hardware?, quant?, webhookUrl? } — at least one of model/hardware required; webhookUrl must be https. Returns 201 with watchId + secret (shown exactly once; required to DELETE, sent to your webhook as X-Watch-Secret) and a ready-made rssUrl. RSS polling needs no webhook: GET /api/watch/rss.xml?model=&hardware=&quant=.',
-          requestBody: { required: true, content: { 'application/json': { example: { model: 'Qwen3 32B', hardware: 'RTX 4090', quant: 'q4_k_m', webhookUrl: 'https://example.com/hooks/llm-watch' } } } },
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    model: { type: 'string', maxLength: 160, description: 'Model name filter (e.g. "Qwen3 32B")' },
+                    hardware: { type: 'string', maxLength: 160, description: 'Hardware name filter (e.g. "RTX 4090")' },
+                    quant: { type: 'string', maxLength: 60, description: 'Quantization filter (e.g. "q4_k_m")' },
+                    webhookUrl: { type: 'string', format: 'uri', description: 'https URL to POST when new matching runs land' }
+                  },
+                  anyOf: [{ required: ['model'] }, { required: ['hardware'] }]
+                },
+                example: { model: 'Qwen3 32B', hardware: 'RTX 4090', quant: 'q4_k_m', webhookUrl: 'https://example.com/hooks/llm-watch' }
+              }
+            }
+          },
           responses: {
             '201': { description: 'Watch created (watchId, secret, rssUrl, matchingExistingRuns preview)' },
             '400': { description: 'Invalid body (code validation_failed with per-field errors)' },
@@ -1112,7 +1130,8 @@ export default function handler(req, res) {
                           estimateUsd: 1650,
                           lowUsd: 1400,
                           highUsd: 1900,
-                          perGpu: [{ gpu: 'RTX 4090', estimateUsd: 1650 }],
+                          perGpu: { estimateUsd: 1650, lowUsd: 1400, highUsd: 1900 },
+                          gpuCount: 1,
                           asOf: '2026-08-01',
                           links: {
                             ebay: 'https://www.ebay.com/sch/i.html?_nkw=rtx+4090',

@@ -8,6 +8,8 @@
 
 export const DISMISSAL_STORAGE_KEY = 'changelog.dismissedId';
 
+import { noteStorageFailure, noteStorageSuccess } from './storageHealth.js';
+
 /**
  * Pick the newest entry from a parsed changelog feed.
  * Entries carry an ISO `date`; ties fall back to feed order (newest first),
@@ -36,8 +38,11 @@ export function getDismissedId() {
 export function setDismissedId(id) {
   try {
     globalThis.localStorage?.setItem(DISMISSAL_STORAGE_KEY, String(id));
+    noteStorageSuccess();
   } catch {
-    // storage full/blocked — banner just comes back next visit
+    // storage full/blocked — banner just comes back next visit; the failure
+    // is recorded for persistence-aware UI instead of being swallowed (#779)
+    noteStorageFailure(DISMISSAL_STORAGE_KEY);
   }
 }
 

@@ -1,4 +1,5 @@
 import { formatTime, formatTokens } from './presets.js';
+import { noteStorageFailure, noteStorageSuccess } from './storageHealth.js';
 
 // Concept-check quizzes (issue: "Include interactive concept-check quizzes").
 // Prediction-then-reveal: each prompt asks the user to guess an outcome BEFORE
@@ -133,8 +134,11 @@ export function recordAnswer(tab, checkId, wasCorrect) {
     const progress = getProgress();
     progress[tab] = { ...(progress[tab] || {}), [checkId]: Boolean(wasCorrect) };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    noteStorageSuccess();
   } catch {
-    // storage unavailable — progress just lives in component state for this visit
+    // storage unavailable — progress just lives in component state for this
+    // visit, but the failure is now visible to persistence-aware UI (#779)
+    noteStorageFailure(STORAGE_KEY);
   }
 }
 

@@ -174,8 +174,15 @@ export const ROUTES = [
   {
     path: '/version',
     methods: ['GET'],
-    description: 'Machine-readable version report: service name, app version (package.json), wire schemaVersion, generatedAt timestamp and links to /api/spec, CHANGELOG-API.md and CHANGELOG.json.',
-    returns: '{ service, version, schemaVersion, generatedAt, links{} }',
+    description: 'Machine-readable version report: service name, app version (package.json), wire schema_version (single spelling, stamped by the API layer), generatedAt timestamp and links to /api/versions, /api/spec, CHANGELOG-API.md and CHANGELOG.json.',
+    returns: '{ service, version, generatedAt, links{} } + universal schema_version stamp',
+    sinceVersion: '2.6.0',
+  },
+  {
+    path: '/versions',
+    methods: ['GET'],
+    description: 'Version discovery (#685): every served URL prefix (/api, /v1) with its wire schema_version and lifecycle status (current|deprecated, canonical flag, deprecatedAt, sunset). Pin a prefix whose status is "current"; deprecated prefixes also carry Deprecation/Sunset headers on every response.',
+    returns: '{ description, generatedAt, current, versions[]{prefix, schema_version, status, canonical, deprecatedAt, sunset}, links{} }',
     sinceVersion: '2.6.0',
   },
   {
@@ -220,6 +227,21 @@ export const ROUTES = [
     description: 'Alias for GET /api/agent/freshness.json — identical handler and response shape.',
     returns: 'same as /api/agent/freshness.json',
     sinceVersion: '2.6.0',
+  },
+  {
+    path: '/runs/:id',
+    methods: ['GET'],
+    description: 'Look up ONE community-measured run by its runId without downloading the full /api/runs dump. Unknown ids return a problem+json 404 (code NOT_FOUND).',
+    returns: '{ description, schemaVersion, generatedAt, run }',
+    sinceVersion: '2.6.0',
+  },
+  {
+    path: '/problems',
+    methods: ['GET'],
+    description:
+      'RFC 9457 problem-type documentation for every error code advertised in problem+json `type` URIs (/problems/<slug>, slug = lowercased CODE with _ → -). No argument returns the registry index; ?code=<slug|CODE> or /problems/<slug> returns { code, slug, type, title, status, description, spec }. Unknown codes return 404 with the available slugs.',
+    returns: '{ description, codes[] } index, or per-code { code, slug, type, title, status, description, spec }',
+    sinceVersion: '2.6.1',
   },
 ];
 

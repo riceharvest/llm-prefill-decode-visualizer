@@ -258,8 +258,19 @@ shape (`api/_handlers/agent_freshness.js`). Same filters and schema.
 ### GET /api/version
 
 Machine-readable version report (`api/_handlers/version.js`): service name,
-app `version` (package.json), `schemaVersion`, `generatedAt`, links to
-`/api/spec`, `CHANGELOG-API.md` and machine-readable `CHANGELOG.json`.
+app `version` (package.json), the wire `schema_version` (single spelling —
+stamped by the API layer on every JSON response), `generatedAt`, links to
+`/api/versions`, `/api/spec`, `CHANGELOG-API.md` and machine-readable
+`CHANGELOG.json`.
+
+### GET /api/versions
+
+Version discovery (`api/_handlers/versions.js`): every served URL prefix
+(`/api`, `/v1`) with its wire `schema_version`, lifecycle `status`
+(`current|deprecated`), `canonical` flag, `deprecatedAt` and `sunset`.
+Deprecated prefixes carry `Deprecation`/`Sunset`/`Link rel="deprecation"`
+headers on every response (stamped centrally by
+`applyVersionTrustHeaders` in `api/_versions.js`).
 
 ### GET /api/benchmarks
 

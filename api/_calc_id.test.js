@@ -10,6 +10,7 @@ function mockRes() {
     headers: {},
     body: null,
     setHeader(k, v) { this.headers[k] = v; },
+    getHeader(k) { return this.headers[k]; },
     status(c) { this.statusCode = c; return this; },
     end(b) { this.body = b ? JSON.parse(b) : null; }
   };
@@ -17,8 +18,8 @@ function mockRes() {
 
 async function callCalc(pathId, query = {}) {
   const res = mockRes();
-  await calcHandler({ method: 'GET', query: { ...query, id: pathId } }, res);
-  return { status: res.statusCode, body: res.body };
+  await calcHandler({ method: 'GET', headers: {}, query: { ...query, id: pathId } }, res);
+  return { status: res.statusCode, body: res.body, headers: res.headers };
 }
 
 test('ids are stable regardless of parameter order or number encoding', () => {
@@ -92,7 +93,7 @@ test('compute ids match the pure hash of the effective request', () => {
 
 test('/api/calc/<id> verifies a correct replay', async () => {
   const minted = computeResponse({ model: 'kvCache', architecture: 'llama70b', contextLength: 65536 }).body;
-  const { status, body } = await callCalc(minted.id, {
+  const { status, body, headers } = await callCalc(minted.id, {
     model: 'kvCache',
     architecture: 'llama70b',
     contextLength: '65536'
@@ -101,6 +102,23 @@ test('/api/calc/<id> verifies a correct replay', async () => {
   assert.equal(body.verified, true);
   assert.equal(body.id, minted.id);
   assert.equal(typeof body.totalGb, 'number');
+});
+
+// #957: the success replay must be the same versioned envelope as the cited
+// response — schema_version + X-Schema-Version + rate_limit — and must NOT be
+// publicly cacheable (a cached body would assert verified:true without the
+// hash check re-running).
+test('/api/calc success replay keeps the shared envelope and is not publicly cacheable (#957)', async () => {
+  const minted = computeResponse({ model: 'singleTurn', promptTokens: 4096, outputTokens: 512 }).body;
+  const { status, body, headers } = await callCalc(minted.id, { model: 'singleTurn', promptTokens: '4096', outputTokens: 512 });
+  assert.equal(status, 200);
+  assert.equal(body.schema_version, '1');
+  assert.equal(headers['X-Schema-Version'], '1');
+  assert.ok(body.rate_limit, 'success replay carries the rate_limit block');
+  assert.equal(typeof body.rate_limit.limit, 'number');
+  assert.equal(headers['X-RateLimit-Limit'], String(body.rate_limit.limit));
+  assert.match(headers['Cache-Control'] || '', /private|no-store/);
+  assert.doesNotMatch(headers['Cache-Control'] || '', /public/);
 });
 
 test('/api/calc/<id> detects tampered parameters', async () => {
@@ -128,4 +146,40 @@ test('/api/calc rejects malformed ids and unknown endpoints', async () => {
   const badEp = await callCalc(computeCalcId('compute', { model: 'x' }), { endpoint: 'nope', model: 'x' });
   assert.equal(badEp.status, 400);
   assert.match(badEp.body.error, /Unknown endpoint/);
+});
+
+// #1056: any Number()-acceptable numeric spelling must collapse onto its
+// decimal value — the handlers execute it identically, so the calc id (and
+// /api/calc/<id> replay + dedup-by-id) must not distinguish spellings.
+test('#1056 Number()-spellings of the same value hash to one calc id', () => {
+  assert.deepEqual(
+    normalizeParams({ promptTokens: '+2048' }),
+    { promptTokens: 2048 }
+  );
+  assert.deepEqual(
+    normalizeParams({ promptTokens: '0x800' }),
+    { promptTokens: 2048 }
+  );
+  const decimal = computeCalcId('compute', { model: 'singleTurn', promptTokens: 2048 });
+  assert.equal(computeCalcId('compute', { model: 'singleTurn', promptTokens: '0x800' }), decimal);
+  assert.equal(computeCalcId('compute', { model: 'singleTurn', promptTokens: '+2048' }), decimal);
+});
+
+test('#1056 non-numeric and empty strings are not Number()-collapsed', () => {
+  // Empty / whitespace-only strings mean "default" and must stay strings
+  // (Number('') === 0 would wrongly mint the zero).
+  assert.deepEqual(normalizeParams({ model: '' }), {});
+  assert.deepEqual(normalizeParams({ q: '   ' }), { q: '   ' });
+  assert.deepEqual(normalizeParams({ model: 'qwen3.6-27b' }), { model: 'qwen3.6-27b' });
+  assert.deepEqual(normalizeParams({ engine: 'TRUE' }), { engine: 'TRUE' });
+  // Non-finite coercions stay verbatim.
+  assert.deepEqual(normalizeParams({ v: 'Infinity' }), { v: 'Infinity' });
+  assert.deepEqual(normalizeParams({ v: '12abc' }), { v: '12abc' });
+});
+
+test('#1056 batch items with different numeric spellings mint the same per-item id', () => {
+  const plain = computeResponse({ batch: [{ model: 'singleTurn', promptTokens: 2048 }] }).body.results[0];
+  const hex = computeResponse({ batch: [{ model: 'singleTurn', promptTokens: '0x800' }] }).body.results[0];
+  assert.equal(hex.ok, true);
+  assert.equal(hex.result.id, plain.result.id);
 });

@@ -18,7 +18,10 @@ const outPath = path.join(here, '..', 'public', 'agents.json');
 
 /** Static, non-route metadata preserved verbatim from the committed file. */
 const STATIC_METADATA = {
-  $schema: 'https://spec.agentproviders.dev/schemas/agents.v1.json',
+  // $schema must be fetchable (#469): spec.agentproviders.dev has no DNS
+  // record, so the manifest points at the schema this site serves itself
+  // (public/agents.v1.schema.json) — same origin as the manifest's own url.
+  $schema: 'https://llm-prefill-decode-visualizer.vercel.app/agents.v1.schema.json',
   name: 'llm-prefill-decode-visualizer',
   description:
     'LLM inference performance math: TTFT, TPOT, walltime for single-turn chat, agentic loops, batched serving, speculative decoding, and KV-cache VRAM. Includes community-measured hardware benchmarks.',
@@ -26,6 +29,9 @@ const STATIC_METADATA = {
   baseURL: 'https://llm-prefill-decode-visualizer.vercel.app',
   servers: [{ url: 'https://llm-prefill-decode-visualizer.vercel.app' }],
   docs: '/llms.txt — also see /api/agent/capabilities.json for the machine-readable surface list',
+  // Cross-reference the sibling hand-maintained per-endpoint index so agents
+  // holding either discovery document can find the other (issue #887).
+  endpointIndex: '/api/agent/index.json',
 };
 
 /** Build the full agents.json document from the route table. */

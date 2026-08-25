@@ -1,0 +1,36 @@
+{
+  "description": "Machine-readable palette/tokens for the LLM Prefill & Decode Speed Visualizer (#924). Chart fills and UI colors reference these values via CSS custom properties defined in src/index.css (:root). Values are hex where the token is opaque; rgba() tokens are omitted.",
+  "schemaVersion": 1,
+  "theme": "dark",
+  "source": "src/index.css :root custom properties",
+  "colors": {
+    "--bg-app": "#0A0D11",
+    "--bg-panel": "#10151B",
+    "--bg-inset": "#0C1015",
+    "--bg-raised": "#161C24",
+    "--bg-hover": "#1B222C",
+    "--text-main": "#E6EAF0",
+    "--text-muted": "#97A3B2",
+    "--text-subtle": "#5E6A78",
+    "--border": "#212B36",
+    "--border-strong": "#31404F",
+    "--border-focus": "#22D3EE",
+    "--accent": "#22D3EE",
+    "--accent-strong": "#67E8F9",
+    "--accent-ink": "#06222A",
+    "--prefill": "#38BDF8",
+    "--decode": "#34D399",
+    "--agent": "#FBBF24",
+    "--danger": "#F87171",
+    "--warn": "#F59E0B"
+  },
+  "roles": {
+    "prefillPhase": "--prefill",
+    "decodePhase": "--decode",
+    "agenticLoop": "--agent",
+    "failureOrOom": "--danger",
+    "warning": "--warn",
+    "actionAccent": "--accent"
+  },
+  "ogCardNote": "/api/og share cards currently bake a separate legacy navy/sky palette that does NOT match these tokens; the mapping between card pixels and page pixels is undefined until og.js is aligned."
+}

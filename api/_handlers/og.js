@@ -8,12 +8,18 @@
 //   ?preset=<hardware-id>&prefill=<tok/s>&decode=<tok/s>&scenario=<preset-id>
 //
 // Responses are cached twice over: an in-memory LRU keyed by a sha256 of the
-// normalized params (cheap on warm instances) and long-lived public
-// Cache-Control headers so the CDN absorbs everything else.
+// normalized params and long-lived public Cache-Control headers. HONESTY
+// NOTE (issue #930): the CDN keys responses by the RAW query string, not this
+// config hash — distinct spellings of the same config occupy separate edge
+// keys and each pays a render wherever the edge misses. The sha256 LRU is
+// per-instance (serverless instances share no memory) with a small cap, and
+// the `v:` bump below invalidates only in-memory entries — it cannot purge
+// already-cached edge copies. Treat the edge TTL as the real cache contract.
 import { createHash } from 'node:crypto';
 import { ImageResponse } from '@vercel/og';
 import { HARDWARE_PRESETS, SCENARIO_PRESETS } from '../../src/utils/presets.js';
 import { sendProblemFromError } from '../_errors.js';
+import { enforceRateLimit } from '../_ratelimit.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -48,11 +54,26 @@ export function parseOgParams(searchParams) {
   const prefill = clampSpeed(sp.get('prefill')) ?? preset.prefillSpeed;
   const decode = clampSpeed(sp.get('decode')) ?? preset.decodeSpeed;
 
-  const scenario = SCENARIO_PRESETS.find(s => s.id === String(sp.get('scenario') || '').toLowerCase()) ||
+  // Scenario preset: an explicitly-provided id that matches nothing is
+  // REJECTED (handler returns 400) instead of silently rendering a chart
+  // labeled with the chat fallback (#769) — a typo'd id used to produce a
+  // confidently-wrong image byte-identical to omitting the param.
+  const scenarioParam = sp.get('scenario');
+  const scenario = SCENARIO_PRESETS.find(s => s.id === String(scenarioParam || '').toLowerCase()) ||
     SCENARIO_PRESETS.find(s => s.id === 'chat');
+  const scenarioUnknown = Boolean(scenarioParam) &&
+    !SCENARIO_PRESETS.some(s => s.id === String(scenarioParam).toLowerCase());
   const promptTokens = clampSpeed(sp.get('prompt'), 10_000_000) ?? scenario.promptTokens;
 
-  return { preset, prefill, decode, scenarioLabel: scenario.label, promptTokens };
+  return {
+    preset,
+    prefill,
+    decode,
+    scenarioLabel: scenario.label,
+    promptTokens,
+    scenarioRequested: scenarioUnknown ? String(scenarioParam) : null,
+    scenarioUnknown
+  };
 }
 
 /** Stable cache key: sha256 over the normalized config (not raw params). */
@@ -253,16 +274,29 @@ export default async function handler(req, res) {
       }));
     }
 
+    // Meter PNG renders like every other endpoint (issue #921): a render is a
+    // full satori layout + rasterization, and the param space is effectively
+    // infinite. OPTIONS above stays free so browser preflights keep working.
+    if (!enforceRateLimit(req, res)) return;
+
     const url = new URL(req.url, 'http://localhost');
     const cfg = parseOgParams(url.searchParams);
+    // Unknown scenario ids are rejected with problem+json instead of silently
+    // rendering the chat fallback (#769).
+    if (cfg.scenarioUnknown) {
+      return sendProblemFromError(res, req, Object.assign(new Error(`unknown scenario id "${cfg.scenarioRequested}"`), {
+        status: 400,
+        code: 'UNKNOWN_SCENARIO'
+      }));
+    }
     const png = await renderPng(cfg);
 
     res.statusCode = 200;
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Content-Length', String(png.length));
     res.setHeader('Access-Control-Allow-Origin', '*');
-    // Config-hash-addressed content: immutable at the CDN for a week,
-    // stale-while-revalidate so shares always get a fast first byte.
+    // Edge caches key by raw URL (see the header comment): these headers are
+    // the actual cache contract, per-URL — not config-hash-addressed.
     res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400, immutable');
     return res.end(png);
   } catch (err) {

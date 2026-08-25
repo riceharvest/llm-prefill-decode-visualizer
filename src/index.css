@@ -44,7 +44,94 @@
   --radius-lg: 8px;
 
   --shadow-panel: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px -12px rgba(0,0,0,0.6);
-}* {
+}
+
+/* ---------- Theme palettes (issues #662 #668) ----------
+   theme.js writes the resolved palette onto <html data-theme="…">; these
+   override blocks make that attribute actually drive rendering. They sit
+   after :root so equal specificity resolves in their favor. Agents can read
+   document.documentElement.dataset.theme or deep-link ?theme=light|dark|
+   high-contrast (validated against src/utils/theme.js THEMES). */
+
+[data-theme='light'] {
+  --bg-app: #F5F7FA;
+  --bg-panel: #FFFFFF;
+  --bg-inset: #EDF0F4;
+  --bg-raised: #FFFFFF;
+  --bg-hover: #E2E7EE;
+
+  --text-main: #10161D;
+  --text-muted: #4A5563;
+  --text-subtle: #77828F;
+
+  --border: #D6DDE5;
+  --border-strong: #B9C4CF;
+  --border-focus: #0891B2;
+
+  --accent: #0891B2;
+  --accent-strong: #155E75;
+  --accent-dim: rgba(8, 145, 178, 0.10);
+  --accent-ink: #ECFEFF;
+
+  --prefill: #0369A1;
+  --prefill-dim: rgba(3, 105, 161, 0.08);
+  --prefill-border: rgba(3, 105, 161, 0.35);
+
+  --decode: #059669;
+  --decode-dim: rgba(5, 150, 105, 0.08);
+  --decode-border: rgba(5, 150, 105, 0.35);
+
+  --agent: #B45309;
+  --agent-dim: rgba(180, 83, 9, 0.08);
+  --agent-border: rgba(180, 83, 9, 0.35);
+
+  --danger: #DC2626;
+  --warn: #B45309;
+
+  --shadow-panel: 0 1px 0 rgba(255,255,255,0.6) inset, 0 8px 24px -12px rgba(15,23,42,0.18);
+}
+
+/* Pure black/white high-contrast palette for low-vision users and agents
+   that need maximum-luminance separation. */
+[data-theme='high-contrast'] {
+  --bg-app: #000000;
+  --bg-panel: #000000;
+  --bg-inset: #000000;
+  --bg-raised: #0A0A0A;
+  --bg-hover: #1A1A1A;
+
+  --text-main: #FFFFFF;
+  --text-muted: #E6E6E6;
+  --text-subtle: #CCCCCC;
+
+  --border: #666666;
+  --border-strong: #999999;
+  --border-focus: #00E5FF;
+
+  --accent: #00E5FF;
+  --accent-strong: #7DF9FF;
+  --accent-dim: rgba(0, 229, 255, 0.18);
+  --accent-ink: #000000;
+
+  --prefill: #67E8F9;
+  --prefill-dim: rgba(103, 232, 249, 0.16);
+  --prefill-border: rgba(103, 232, 249, 0.7);
+
+  --decode: #6EE7B7;
+  --decode-dim: rgba(110, 231, 183, 0.16);
+  --decode-border: rgba(110, 231, 183, 0.7);
+
+  --agent: #FDE047;
+  --agent-dim: rgba(253, 224, 71, 0.16);
+  --agent-border: rgba(253, 224, 71, 0.7);
+
+  --danger: #FF7B7B;
+  --warn: #FFBF47;
+
+  --shadow-panel: none;
+}
+
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -59,6 +146,12 @@ html {
   overflow-x: clip;
 }
 
+/* data-theme drives the UA color-scheme too, so form controls and scrollbars
+   match the palette the page actually renders (issues #662 #668). */
+html[data-theme='light'] {
+  color-scheme: light;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--bg-app);
@@ -66,6 +159,9 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  /* Issue #1016: live viewport height — 100vh tracks the largest iOS viewport,
+     so every page was born ~toolbar-height taller than visible. */
+  min-height: 100dvh;
   /* Issue #80: hidden .why-pop tooltips are absolutely positioned and can poke
      past the right edge at large font scales. `clip` (not `hidden`: no
      scroll-container side effects) stops them widening or panning the page.
@@ -111,10 +207,28 @@ a { color: var(--accent); }
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #3A4757;
-}/* ---------- Layout ---------- */
+}
+
+/* Theme-aware scrollbar thumbs (the base rules above hardcode dark colors) */
+[data-theme='light'] ::-webkit-scrollbar-thumb {
+  background: #C3CCD6;
+}
+[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
+  background: #A8B4C2;
+}
+[data-theme='high-contrast'] ::-webkit-scrollbar-thumb {
+  background: #999999;
+}
+[data-theme='high-contrast'] ::-webkit-scrollbar-thumb:hover {
+  background: #CCCCCC;
+}
+
+/* ---------- Layout ---------- */
 
 .app-shell {
   min-height: 100vh;
+  /* Issue #1016: see the matching note on body above. */
+  min-height: 100dvh;
   background: var(--bg-app);
   padding-bottom: 32px;
 }
@@ -256,6 +370,15 @@ a { color: var(--accent); }
 }
 
 .btn:hover { background: var(--bg-hover); border-color: #3E4F61; }
+
+/* Compact button variant (#841): keeps the small padding/type of the old
+   inline styles but deliberately sets NO min-height, so the coarse-pointer
+   44px touch-target rule below still applies on phones. */
+.btn-sm {
+  min-height: 0;
+  padding: 5px 12px;
+  font-size: 0.76rem;
+}
 
 .btn-accent {
   background: var(--accent);
@@ -1086,7 +1209,10 @@ input[type="range"]::-moz-range-thumb {
 
   .waterfall-rows {
     overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    /* Issue #1014: legacy iOS momentum scrolling has been the default since
+       iOS 13 — the property that actually stops this scroller chaining its
+       scroll to the page edge is overscroll-behavior-x. */
+    overscroll-behavior-x: contain;
     padding-bottom: 6px;
   }
   .waterfall-rows > * { min-width: 26.875rem; }
@@ -1094,7 +1220,8 @@ input[type="range"]::-moz-range-thumb {
   /* Tables keep their horizontal scroll affordance visible */
   .table-wrap {
     overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    /* Issue #1014: see the matching note on .waterfall-rows above. */
+    overscroll-behavior-x: contain;
   }
 }
 
@@ -1109,6 +1236,24 @@ input[type="range"]::-moz-range-thumb {
    Audited controls: time-scale segmented buttons (.seg), the prefix-caching /
    chunked-prefill / analogy / spec-decode toggles (.btn), tab buttons, icon-only
    buttons, concept-check choices, and range-slider thumbs. */
+
+/* Double-tap-zoom guard (issue #1092): on real iOS Safari the second tap of a
+   rapid pair is consumed as a zoom gesture unless the element opts out with
+   touch-action: manipulation. Applied globally (not just pointer:coarse —
+   Safari does not always report coarse for Apple Pencil / trackpad setups),
+   it only disables double-tap-zoom, never pinch-zoom or scrolling. */
+.btn,
+.tab-btn,
+.seg button,
+.concept-choice,
+.btn-icon,
+.misconception-dismiss,
+select,
+input[type='range'],
+a {
+  touch-action: manipulation;
+}
+
 @media (pointer: coarse) {
   .btn,
   .tab-btn,
@@ -1468,6 +1613,9 @@ kbd {
    attribution line linking back to the full app. */
 .embed-shell {
   min-height: 100vh;
+  /* Issue #1016: live-viewport height (100vh fallback above) — inside a
+     third-party iframe the iOS toolbar delta applies to the embedder's page. */
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }

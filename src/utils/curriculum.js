@@ -13,6 +13,8 @@
 
 export const CURRICULUM_STORAGE_KEY = 'llmpd-curriculum-progress';
 
+import { noteStorageFailure, noteStorageSuccess } from './storageHealth.js';
+
 export const LESSONS = [
   {
     id: 'ttft-basics',
@@ -110,8 +112,8 @@ export const LESSONS = [
     ],
     correctIndex: 1,
     explanation:
-      'Effective tok/s = decodeSpeed × (1 + k·α) ÷ (1 + k·draftCost) = 105 × 3.8 ÷ 1.8 ≈ 220. Not 5×, because each round still pays for drafting and rejects ~30% of proposals. Drop acceptance below the breakeven point (~draftCost ≈ 0.2) in the sim and the speedup vanishes entirely.',
-    verify: 'Read the effective tok/s shown next to the spec controls, then drag acceptance down toward 20%.',
+      'Effective tok/s = decodeSpeed × (1 + k·α) ÷ (1 + k·draftCost) = 105 × 3.8 ÷ 1.8 ≈ 220. Not 5×, because each round still pays for drafting and rejects ~30% of proposals. The breakeven sits at α ≈ draftCost ≈ 0.2: below it speculation loses to plain decoding. The simulator clamps acceptance no lower than 30%, so drag the slider to that floor and watch nearly all of the ~2× speedup evaporate.',
+    verify: 'Read the effective tok/s shown next to the spec controls, then drag acceptance down to its 30% minimum and compare.',
     demo: { tab: 'single', preset: 'rtx4090_exl2', prefill: 3800, decode: 105, prompt: 1024, output: 512, spec: '1', draftK: 4, acc: 0.7, sim: 10 }
   },
   {
@@ -151,30 +153,54 @@ function safeStorage() {
   }
 }
 
-/** Progress shape: { completed: { [lessonId]: completionTimestamp } }. */
+/** Progress shape: { completed: { [lessonId]: completionTimestamp },
+ *  attempted: { [lessonId]: checkCount } } — attempted tracks wrong answers
+ *  too (issue #1022: success-only storage conflated "never tried" with
+ *  "tried and failed"). */
 export function loadProgress(storage = safeStorage()) {
   try {
     const parsed = JSON.parse(storage?.getItem(CURRICULUM_STORAGE_KEY) || '');
     if (parsed && typeof parsed === 'object') {
-      return { completed: parsed.completed && typeof parsed.completed === 'object' ? parsed.completed : {} };
+      return {
+        completed: parsed.completed && typeof parsed.completed === 'object' ? parsed.completed : {},
+        attempted: parsed.attempted && typeof parsed.attempted === 'object' ? parsed.attempted : {}
+      };
     }
   } catch {
     // missing/corrupt entry falls through to a fresh record
   }
-  return { completed: {} };
+  return { completed: {}, attempted: {} };
 }
 
 export function saveProgress(progress, storage = safeStorage()) {
   try {
     storage?.setItem(CURRICULUM_STORAGE_KEY, JSON.stringify(progress));
+    noteStorageSuccess();
   } catch {
-    // ignore — progress just won't persist
+    // ignore — progress just won't persist, but the failure is recorded for
+    // persistence-aware UI instead of being swallowed silently (#779)
+    noteStorageFailure(CURRICULUM_STORAGE_KEY);
   }
   return progress;
 }
 
 export function isComplete(progress, lessonId) {
   return Boolean(progress?.completed?.[lessonId]);
+}
+
+/** Record one answer check — correct or not — against a lesson (#1022). */
+export function markAttempted(progress, lessonId) {
+  const attempted = { ...(progress?.attempted || {}) };
+  attempted[lessonId] = (attempted[lessonId] || 0) + 1;
+  return {
+    completed: progress?.completed || {},
+    attempted
+  };
+}
+
+/** How many times a lesson's answer was checked, right or wrong (#1022). */
+export function attemptCount(progress, lessonId) {
+  return progress?.attempted?.[lessonId] || 0;
 }
 
 /** Index of the first unfinished lesson (for "continue where you left off"), or -1. */

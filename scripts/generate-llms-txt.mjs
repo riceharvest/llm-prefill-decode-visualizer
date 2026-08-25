@@ -18,6 +18,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { PERSISTENCE_REGISTRY } from '../src/utils/sessionState.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'public', 'llms.txt');
@@ -36,6 +37,8 @@ const INTERACTIVE_HEADING = '### Interactive page';
  * label: display label from src/components/Header.jsx MODES.
  * purpose / surfaces: what the tab shows, for agents deciding where to look.
  * endpoints: API endpoints whose data the tab visualizes ([] = pure explainer).
+ * params: deep-link URL params the tab reads and writes back into the share
+ *   link (#399) — optional; only tabs with addressable state list any.
  */
 export const TABS = [
   {
@@ -51,13 +54,33 @@ export const TABS = [
     purpose: 'Simulate a multi-turn tool-calling loop that re-ingests growing history every turn; compare walltime growth with and without prefix caching.',
     surfaces: ['turn-by-turn timeline', 'per-turn token breakdown', 'prefix-caching toggle', 'cumulative walltime chart'],
     endpoints: ['GET /api/compute?model=agentic'],
+    // #424: the tab's share-link params use abbreviated names; publish the
+    // mechanical mapping to the documented /api/compute params so agents can
+    // turn any share link into an instant API call without reverse-engineering.
+    paramMap: [
+      { shareParam: 'turns', apiParam: 'numTurns' },
+      { shareParam: 'sprompt', apiParam: 'basePromptTokens' },
+      { shareParam: 'tool', apiParam: 'toolOutputTokensPerTurn' },
+      { shareParam: 'thought', apiParam: 'decodeTokensPerTurn' },
+      { shareParam: 'cache=1|0', apiParam: 'enablePrefixCaching=true|false' },
+    ],
   },
   {
     id: 'batching',
     label: 'Batching',
-    purpose: 'Show concurrent users sharing one accelerator: per-user decode decays roughly B^0.25 with batch size while aggregate throughput climbs.',
-    surfaces: ['batch-size slider', 'per-user vs aggregate throughput meters', 'shared-compute animation'],
-    endpoints: ['GET /api/compute?model=batched'],
+    purpose: 'Discrete-event simulation of continuous batching + chunked prefill: concurrent requests share one accelerator, queue for batch slots, and suffer ITL spikes when a step carries a prefill chunk.',
+    surfaces: ['workload controls: concurrent requests (breqs), mean prompt (bprompt) / output tokens (bgen), max batch size (bmax), chunk size (bchunk, 0=off..8192), arrival interval ms (barr)', 'metrics: makespan, avg TTFT, worst ITL, aggregate decode tok/s, batch occupancy %, avg/worst queue wait', 'per-request Gantt timeline with queue/prefill/decode segments', 'continuous-vs-static-batching comparison banner'],
+    endpoints: ['GET /api/compute?model=batched (NOTE: a separate simpler B^0.25 decay approximation — it does NOT power this tab; the on-page scheduler has no API surface yet)'],
+    // Issue #399: deep-link URL params the tab reads and writes back into the share link.
+    params: [
+      'breqs=<2–48> — concurrent requests in the batch',
+      'bprompt=<128–32768> — mean prompt tokens per request',
+      'bgen=<32–4096> — mean output tokens per request',
+      'bmax=<1–32> — maximum batch size (concurrent decodes)',
+      'bchunk=<0|128|256|512|1024|2048|4096|8192> — chunked-prefill chunk size; 0 disables chunking. The UI slider is indexed by these stops, so DOM slider position ≠ token value',
+      'barr=<0–2000, ms> — interval between request arrivals',
+      'sim=<1|2|5|20|instant> — playback time-scale multiplier shared by all animated tabs',
+    ],
   },
   {
     id: 'compare',
@@ -77,7 +100,7 @@ export const TABS = [
     id: 'diff',
     label: 'Diff',
     purpose: 'Diff two community benchmark runs (or two constraint sets via what-if mode) and read per-metric deltas plus a plain-language summary.',
-    surfaces: ['run A/B selectors', 'delta table', 'what-if constraint diffing'],
+    surfaces: ['run A/B free-text id inputs', 'per-metric delta rows with ratios', 'plain-language summary', 'deep links (?tab=diff&runA&runB) auto-execute on load'],
     endpoints: ['GET /api/diff?runA=<id>&runB=<id>', 'GET /api/diff?mode=whatif'],
   },
   {
@@ -110,13 +133,37 @@ export function renderMetaBlock(tabs = TABS) {
     META_START,
     `Base-URL: ${BASE_URL}`,
     'OpenAPI-Spec: /api/spec',
+    'Agent-Manifest: /agents.json',
+    'Endpoint-Index: /api/agent/index.json',
     `Tabs: ${ids}`,
     'Tab-URL-Template: {Base-URL}/?tab={id}',
     'Tab-Section-Header-Format: ### Tab: {id} — {label}',
+    `Persisted-State-Keys: ${PERSISTENCE_REGISTRY.map(e => e.key).join(',')}`,
     `Repo: ${REPO_URL}`,
     META_END,
     '',
   ].join('\n');
+}
+
+/**
+ * Documented inventory of every browser-localStorage key the app persists
+ * (#751): share links carry URL params only, so this agent-relevant state is
+ * invisible to links unless spelled out here. Single source of truth is
+ * PERSISTENCE_REGISTRY in src/utils/sessionState.js.
+ */
+export function renderPersistenceSection() {
+  const lines = [
+    '## Persisted client state',
+    '',
+    'These browser-localStorage keys hold state that share links do NOT carry.',
+    'Checkpoint/restore a whole session with serializeSessionState()/restoreSessionState()',
+    'in src/utils/sessionState.js ({ schemaVersion, capturedAt, state: { [key]: rawStorageString } }).',
+    '',
+  ];
+  for (const e of PERSISTENCE_REGISTRY) {
+    lines.push(`- \`${e.key}\` — owner ${e.owner} — shape ${e.shape} — affects rendered output for the same URL: ${e.affectsOutput ? 'YES' : 'no'} — ${e.description}`);
+  }
+  return lines.join('\n');
 }
 
 /** Render one stable per-tab section. Keyed by `### Tab: <id>` for parsing. */
@@ -134,6 +181,15 @@ export function renderTabSection(tab) {
   } else {
     lines.push('- Endpoints: none (static explainer content)');
   }
+  // Issue #399: document deep-link URL params so agents can construct and
+  // verify preconfigured links without reverse-engineering the share link.
+  if (tab.params?.length) {
+    lines.push('- URL params:');
+    for (const p of tab.params) lines.push(`  - ${p}`);
+  }
+  if (Array.isArray(tab.paramMap) && tab.paramMap.length > 0) {
+    lines.push(`- Share-param map: ${tab.paramMap.map(p => `${p.shareParam}→${p.apiParam}`).join(', ')} (tab share-link param → equivalent ${String(tab.endpoints[0] || '/api/compute').split('?')[0]} parameter; values are identical)`);
+  }
   return lines.join('\n');
 }
 
@@ -143,6 +199,15 @@ export function renderTabsTail(tabs = TABS) {
     '## App tabs (interactive page)',
     '',
     'The human-facing UI is this same site. Deep links carry state via URL params: `?tab=<id>`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.',
+    '',
+    '### Instant results on animated tabs (escape hatches)',
+    '',
+    'The single-turn, agentic, batching and A/B tabs animate their simulation (seconds to minutes at 1x). Two supported ways to get the final completed DOM immediately:',
+    '',
+    '- `?sim=instant` — URL-addressable; every animated view jumps straight to the completed state (<1 s). Works on `/` and `/embed` and composes with `autoplay=1` (e.g. `/?tab=agentic&sim=instant&autoplay=1`).',
+    '- `prefers-reduced-motion: reduce` — the OS-level media query is honored by all four animated views and also forces instant completion. In headless browsers: Playwright context option `reducedMotion: \'reduce\'` or CDP `Emulation.setEmulatedMedia({features:[{name:\'prefers-reduced-motion\', value:\'reduce\'}]})`. This is environment-based (not shareable via URL), so prefer `?sim=instant` when you control the link.',
+    '',
+    'Both hatches produce the identical final DOM state as a full-speed run; completion is detectable via the view\'s status text ("Run complete" / phase labels).',
     '',
     '<!-- tabs-section:start -->',
     ...tabs.map(t => `${renderTabSection(t)}\n`),
@@ -180,7 +245,13 @@ function main() {
   const anchors = [INTERACTIVE_HEADING, '## App tabs (interactive page)'];
   const idx = anchors.map(a => doc.indexOf(a)).filter(i => i !== -1).sort((a, b) => a - b)[0];
   if (idx === undefined) throw new Error('Interactive page / App tabs section not found in llms.txt');
-  doc = doc.slice(0, idx) + renderTabsTail();
+  // The persistence inventory (#751) sits between the tab sections and the
+  // Source footer; on re-runs it is inside the regenerated tail anyway.
+  let tail = renderTabsTail();
+  const footer = `Source: ${REPO_URL}`;
+  const footIdx = tail.indexOf(footer);
+  tail = tail.slice(0, footIdx) + renderPersistenceSection() + '\n\n' + tail.slice(footIdx);
+  doc = doc.slice(0, idx) + tail;
 
   writeFileSync(OUT, doc);
   console.log(`[llms-txt] wrote ${TABS.length} tab sections + agent meta -> ${OUT}`);

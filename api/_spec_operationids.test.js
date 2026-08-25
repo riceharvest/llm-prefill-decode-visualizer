@@ -44,11 +44,16 @@ function operationIdMap(spec) {
 // commit as a changelog note in CHANGELOG-API.md).
 const LOCKED_OPERATION_IDS = {
   'GET /api/compute': 'computeInference',
+  'POST /api/compute': 'computeInferenceBatch',
   'GET /api/vram': 'estimateVram',
+  'POST /api/vram': 'estimateVramFromBody',
   'GET /api/calc/{id}': 'replayCalculation',
+  'POST /api/calc/{id}': 'replayCalculationFromBody',
   'GET /api/presets': 'listPresets',
   'GET /api/localmaxxing': 'listBenchmarkRuns',
+  'POST /api/localmaxxing': 'submitBenchmarkRun',
   'GET /api/runs': 'dumpRunIndex',
+  'GET /api/runs/{runId}': 'lookupRun',
   'GET /api/watch': 'listWatches',
   'POST /api/watch': 'createWatch',
   'DELETE /api/watch': 'deleteWatch',
@@ -58,8 +63,16 @@ const LOCKED_OPERATION_IDS = {
   'GET /api/best': 'getBestConfigs',
   'GET /api/health': 'getHealth',
   'GET /api/sizing': 'getSizingRecommendation',
+  'POST /api/sizing': 'createSizingRecommendation',
   'GET /api/parse-constraints': 'parseConstraints',
-  'GET /api/snapshots': 'listDatasetSnapshots'
+  'GET /api/snapshots': 'listDatasetSnapshots',
+  'GET /api/diff': 'diffRuns',
+  'POST /api/diff': 'diffWhatifConstraintSets',
+  'GET /api/export': 'exportRunIndex',
+  'GET /api/version': 'getServiceVersion',
+  'GET /api/mcp': 'getMcpEndpointInfo',
+  'POST /api/mcp': 'postMcpJsonRpc',
+  'GET /api/og': 'renderOgImage'
 };
 
 test('every operation in the spec carries an operationId', () => {

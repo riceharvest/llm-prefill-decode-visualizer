@@ -97,6 +97,8 @@ test('every advertised endpoint path exists as a route in the API dispatcher', (
 
     if (route === '/calc/:id') {
       assert.ok(routes.has('/calc/:id'), `manifest advertises ${ep.path} but dispatcher has no /calc/<id> route`);
+    } else if (route === '/runs/:id') {
+      assert.ok(routes.has('/runs/:id'), `manifest advertises ${ep.path} but dispatcher has no /runs/<id> route`);
     } else if (!routes.has(concrete)) {
       assert.fail(
         `manifest advertises ${ep.method} ${ep.path} but no such route exists in api/[...path].js ` +

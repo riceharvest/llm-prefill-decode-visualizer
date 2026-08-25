@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Status — LLM Prefill &amp; Decode Speed Visualizer</title>
 <meta name="description" content="Live service status for the LLM Prefill &amp; Decode Speed Visualizer: API availability, upstream benchmark-data freshness, last sync time and cache age. Machine-readable equivalent: /api/health.">
-<!-- Utility page: keep out of search indexes. -->
-<meta name="robots" content="noindex">
 <link rel="canonical" href="https://llm-prefill-decode-visualizer.vercel.app/status.html">
 <script type="application/ld+json">
 {
@@ -14,7 +12,12 @@
   "@type": "WebPage",
   "name": "Status — LLM Prefill & Decode Speed Visualizer",
   "url": "https://llm-prefill-decode-visualizer.vercel.app/status.html",
-  "description": "Live service status: API availability, upstream data freshness and cache age. Auto-refreshes every 60 seconds."
+  "description": "Live service status: API availability, upstream data freshness and cache age. Auto-refreshes every 60 seconds. Machine-readable equivalent: /api/health.",
+  "mainEntity": {
+    "@type": "WebAPI",
+    "name": "Health API",
+    "url": "https://llm-prefill-decode-visualizer.vercel.app/api/health"
+  }
 }
 </script>
 <style>
@@ -73,10 +76,21 @@
     </table>
   </div>
 
+  <noscript>
+    <div class="card">
+      <p>This page needs JavaScript to render live values. Machine-readable status:</p>
+      <ul>
+        <li><a href="/api/health"><code>/api/health</code></a> — availability, upstream freshness, cache age</li>
+        <li><a href="/api/agent/freshness.json"><code>/api/agent/freshness.json</code></a> — per-group freshness/confidence report</li>
+      </ul>
+    </div>
+  </noscript>
+
   <footer>
     Auto-refreshes every 60s ·
     Data source: <a href="https://www.localmaxxing.com" rel="noopener">localmaxxing.com</a> ·
-    Machine-readable endpoint: <a href="/api/health"><code>/api/health</code></a>
+    Machine-readable endpoint: <a href="/api/health"><code>/api/health</code></a> ·
+    Freshness report: <a href="/api/agent/freshness.json"><code>/api/agent/freshness.json</code></a>
   </footer>
 </main>
 
@@ -85,6 +99,9 @@
   'use strict';
 
   var REFRESH_MS = 60000;
+  // Last-known-good health payload, retained so a transient failed poll
+  // never erases the last successful sync values (#918).
+  var lastGood = null;
 
   function el(id) { return document.getElementById(id); }
 
@@ -126,12 +143,43 @@
     else setState('ok', 'All systems operational');
   }
 
+  // API responded with a non-2xx status. Show the failure as an API error —
+  // NOT as upstream "No data yet" cold start — and keep last-known-good
+  // freshness/sync values in place rather than rewriting them (#918).
+  function renderApiError(status) {
+    el('api-status').innerHTML = '<span style="color:var(--bad)">Error' + (status != null ? ' (HTTP ' + status + ')' : '') + '</span>';
+    el('freshness').innerHTML = '<span style="color:var(--bad)">Unknown — API error</span>';
+
+    var f = (lastGood && lastGood.upstreamFreshness) || {};
+    el('last-sync').textContent = f.fetchedAt ? fmtTime(f.fetchedAt) : '—';
+    el('cache-age').textContent = f.ageSeconds != null ? fmtAge(f.ageSeconds) + ' ago' : '—';
+    el('row-count').textContent = f.rowCount != null ? f.rowCount.toLocaleString() : '—';
+    el('checked-at').textContent = new Date().toLocaleString();
+
+    setState('bad', 'API error');
+  }
+
   function check() {
     document.body.classList.add('refreshing');
     fetch('/api/health', { cache: 'no-store' })
-      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
-      .then(function (r) { render(r.ok ? r.body : { ok: false }); })
+      .then(function (r) {
+        // Read as text and parse defensively: WAF/challenge layers may answer
+        // with HTML, which must surface as an API error, not as
+        // "unreachable" (#918 mode 3).
+        return r.text().then(function (t) {
+          var body = null;
+          try { body = JSON.parse(t); } catch (e) {}
+          return { ok: r.ok, status: r.status, body: body };
+        });
+      })
+      .then(function (r) {
+        if (r.ok && r.body) { lastGood = r.body; render(r.body); }
+        else renderApiError(r.ok ? null : r.status);
+      })
       .catch(function () {
+        // Network-level failure: keep every detail row at its last-known-good
+        // value, only flag the headline + API row (#918 mode 2).
+        el('api-status').innerHTML = '<span style="color:var(--bad)">Unreachable</span>';
         setState('bad', 'Unreachable — could not reach the API');
         el('checked-at').textContent = new Date().toLocaleString();
       })

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { parseComparePath, prettifySlug, slugify } from '../utils/compareSlug.js'
+import { collectGroupedItems, dedupeByKey } from '../utils/benchmarksIndex'
 
 // SEO comparison page for /compare/:a-vs-:b (rewritten to compare.html by
 // vercel.json). Numbers come live from /api/benchmarks?groupBy=hardware so
 // every indexed pair always renders current community data — no per-pair
-// build step needed.
-const BENCHMARKS_URL = '/api/benchmarks?groupBy=hardware&limit=200'
+// build step needed. Pagination is followed until has_more=false (#772) so a
+// hardware-count growth spurt past one 200-row page can't silently drop
+// slower rigs into "No measured runs yet" holes on indexed pages.
 
 function fmt(n) {
   return Number.isFinite(n) ? n.toLocaleString('en-US') : '—'
@@ -29,9 +31,9 @@ function useDocumentMeta(title, description) {
   }, [title, description])
 }
 
-function StatCard({ title, children }) {
+function StatCard({ title, testId, children }) {
   return (
-    <div style={{
+    <div data-testid={testId} style={{
       flex: '1 1 260px',
       border: '1px solid var(--border, #2a2f3a)',
       borderRadius: 12,
@@ -52,12 +54,13 @@ export default function ComparePage() {
   useEffect(() => {
     if (!parsed) return
     const controller = new AbortController()
-    fetch(BENCHMARKS_URL, { signal: controller.signal })
-      .then(res => {
-        if (!res.ok) throw new Error(`/api/benchmarks returned ${res.status}`)
-        return res.json()
-      })
-      .then(data => setGroups(data.items || []))
+    const fetchPage = async (query) => {
+      const res = await fetch(`/api/benchmarks?${query}`, { signal: controller.signal })
+      if (!res.ok) throw new Error(`/api/benchmarks returned ${res.status}`)
+      return res.json()
+    }
+    collectGroupedItems(fetchPage, { groupBy: 'hardware', limit: 200 })
+      .then(({ items }) => setGroups(dedupeByKey(items)))
       .catch(err => {
         if (err.name !== 'AbortError') setError(err.message)
       })
@@ -91,7 +94,7 @@ export default function ComparePage() {
 
   if (!parsed) {
     return (
-      <main style={{ maxWidth: 900, margin: '0 auto', padding: '48px 20px' }}>
+      <main style={{ maxWidth: 900, margin: '0 auto', padding: '48px 20px' }} data-testid="compare-page">
         <h1>Hardware comparison</h1>
         <p>This page compares two hardware setups, e.g. <code>/compare/rtx-3090-vs-rtx-4090</code>.</p>
         <p><a href="/">Open the LLM Prefill &amp; Decode Visualizer →</a></p>
@@ -110,7 +113,7 @@ export default function ComparePage() {
     a.decode.ci95.lo <= b.decode.ci95.hi && b.decode.ci95.lo <= a.decode.ci95.hi
 
   return (
-    <main style={{ maxWidth: 900, margin: '0 auto', padding: '40px 20px 64px', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <main style={{ maxWidth: 900, margin: '0 auto', padding: '40px 20px 64px', fontFamily: 'Inter, system-ui, sans-serif' }} data-testid="compare-page">
       <p style={{ marginBottom: 4 }}><a href="/">← LLM Prefill &amp; Decode Visualizer</a></p>
       <h1 style={{ fontSize: 'clamp(24px, 4vw, 34px)', lineHeight: 1.2 }}>
         {nameA} vs {nameB}: LLM inference speed
@@ -121,12 +124,12 @@ export default function ComparePage() {
       </p>
 
       {error && (
-        <p role="alert" style={{ color: '#f87171' }}>Could not load benchmarks ({error}). Try refreshing.</p>
+        <p role="alert" data-testid="compare-error" style={{ color: '#f87171' }}>Could not load benchmarks ({error}). Try refreshing.</p>
       )}
-      {!loaded && !error && <p>Loading live benchmark data…</p>}
+      {!loaded && !error && <p data-testid="compare-loading">Loading live benchmark data…</p>}
       {loaded && (!a || !b) && (
         <>
-          <p role="alert" style={{ color: '#fbbf24' }}>
+          <p role="alert" data-testid="compare-not-found" style={{ color: '#fbbf24' }}>
             No measured runs yet for {!a ? `"${nameA}"` : `"${nameB}"`}. Comparisons are generated for hardware in the
             benchmark database — check the spelling or browse the visualizer.
           </p>
@@ -138,7 +141,7 @@ export default function ComparePage() {
         <>
           {tied
             ? (
-              <div style={{
+              <div data-testid="compare-verdict" style={{
                 border: '1px solid #f59e0b55', background: '#f59e0b18', borderRadius: 12,
                 padding: '14px 16px', margin: '20px 0',
               }}>
@@ -147,7 +150,7 @@ export default function ComparePage() {
               </div>
             )
             : winner && (
-              <div style={{
+              <div data-testid="compare-verdict" style={{
                 border: '1px solid #10b98155', background: '#10b98118', borderRadius: 12,
                 padding: '14px 16px', margin: '20px 0',
               }}>
@@ -158,9 +161,9 @@ export default function ComparePage() {
               </div>
             )}
 
-          <section style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 24 }}>
-            {[{ name: nameA, g: a }, { name: nameB, g: b }].map(({ name, g }) => (
-              <StatCard key={name} title={name}>
+          <section style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 24 }} data-testid="compare-stats">
+            {[{ name: nameA, g: a, tid: 'compare-card-a' }, { name: nameB, g: b, tid: 'compare-card-b' }].map(({ name, g, tid }) => (
+              <StatCard key={name} title={name} testId={tid}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
                   <tbody>
                     <tr>

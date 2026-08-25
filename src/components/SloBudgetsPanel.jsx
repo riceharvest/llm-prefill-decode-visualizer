@@ -8,22 +8,36 @@ import { t } from '../i18n/strings';
  * localStorage so budgets persist across reloads and are shared by every tab —
  * the panel lives once in App, above the tab content, and the resulting object
  * is passed down to each visualizer for badge evaluation.
+ *
+ * Returns [budgets, update, persisted]; persisted is false when the last write
+ * failed (private browsing / quota-full) so the UI can warn instead of letting
+ * verdict badges silently revert on reload (#779).
  */
 export function useSloBudgets() {
   const [budgets, setBudgets] = useState(() => loadSloBudgets());
+  const [persisted, setPersisted] = useState(() => loadSloBudgetsPersisted());
   const update = (next) => {
     const clean = sanitizeBudgets(next);
     setBudgets(clean);
-    saveSloBudgets(clean); // storage failures are non-fatal (private mode)
+    setPersisted(saveSloBudgets(clean)); // boolean result is honored now (#779)
   };
-  return [budgets, update];
+  return [budgets, update, persisted];
+}
+
+/** Did budgets load from storage (true) or fall back to defaults? */
+function loadSloBudgetsPersisted() {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('llmpdv.slo-budgets-v1') != null;
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Compact budget editor. Empty or zero input disables that metric's check —
  * its badges disappear and it never counts as failing.
  */
-export default function SloBudgetsPanel({ budgets, onChange }) {
+export default function SloBudgetsPanel({ budgets, onChange, persisted = true }) {
   const [open, setOpen] = useState(false);
 
   const setField = (key, raw) => {
@@ -41,6 +55,11 @@ export default function SloBudgetsPanel({ budgets, onChange }) {
 
   return (
     <section className="panel" aria-label={t('slo.panelAria')}>
+      {!persisted && (
+        <p role="status" className="hint-text" style={{ margin: '0 0 8px', fontSize: '0.72rem', color: 'var(--danger)' }}>
+          Browser storage unavailable (private mode or quota full) — these budgets will NOT survive a reload; verdict badges will revert to defaults.
+        </p>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <button
           onClick={() => setOpen(!open)}

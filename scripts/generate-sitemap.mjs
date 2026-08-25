@@ -12,9 +12,43 @@
 // domain is pinned down. Sitemap URLs must be absolute.
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
-const SITE_URL = (process.env.SITE_URL || 'https://llm-prefill-decode-visualizer.vercel.app').replace(/\/+$/, '');
+export const DEFAULT_SITE_URL = 'https://llm-prefill-decode-visualizer.vercel.app';
+const SITE_URL = resolveSiteUrl(process.env);
+
+/**
+ * Base origin for sitemap/robots URLs (#925). Env-overridable so self-hosted
+ * deployments regenerate discovery artifacts bound to THEIR host instead of
+ * funnelling crawlers at production. Exported pure for tests.
+ */
+export function resolveSiteUrl(env = process.env) {
+  return String(env.SITE_URL || DEFAULT_SITE_URL).replace(/\/+$/, '');
+}
+
+/**
+ * The robots.txt `Sitemap:` line for a given base origin (#925). The rest of
+ * robots.txt is static; only this directive bakes in the host.
+ */
+export function robotsSitemapLine(siteUrl = SITE_URL) {
+  return `Sitemap: ${siteUrl}/sitemap.xml`;
+}
+
+/** Rewrite only the `Sitemap:` line of public/robots.txt to match SITE_URL. */
+export function syncRobotsSitemapLine(siteUrl = SITE_URL, {
+  read = (f) => readFileSync(f, 'utf8'),
+  write = (f, c) => writeFileSync(f, c),
+  robotsPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'robots.txt'),
+} = {}) {
+  const content = read(robotsPath);
+  const line = robotsSitemapLine(siteUrl);
+  if (/^Sitemap: /m.test(content)) {
+    write(robotsPath, content.replace(/^Sitemap: .*$/m, line));
+  } else {
+    write(robotsPath, content.replace(/\n*$/, `\n\n${line}\n`));
+  }
+}
+
 const TOP_N = 10;
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'sitemap.xml');
 
@@ -86,10 +120,16 @@ async function main() {
   ].join('\n');
 
   writeFileSync(OUT, xml);
+  syncRobotsSitemapLine();
   console.log(`[sitemap] wrote ${paths.length} URLs (${source}) -> ${OUT}`);
 }
 
-main().catch(err => {
-  // Never break the build over SEO niceties.
-  console.warn(`[sitemap] skipped: ${err.message}`);
-});
+// Run only when executed directly (node scripts/generate-sitemap.mjs), so
+// tests can import the pure helpers without triggering a build.
+const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
+if (isDirectRun) {
+  main().catch(err => {
+    // Never break the build over SEO niceties.
+    console.warn(`[sitemap] skipped: ${err.message}`);
+  });
+}

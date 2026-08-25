@@ -31,5 +31,8 @@
   "walltimePhase": "Phase",
   "time": "Time",
   "shareOfWalltime": "Share of walltime",
-  "totalWalltimeRow": "Total"
+  "totalWalltimeRow": "Total",
+  "itlHistogramCaption": "ITL distribution histogram: token count per inter-token-latency bin in milliseconds",
+  "itlBin": "ITL bin (ms)",
+  "tokenCount": "Tokens"
 }

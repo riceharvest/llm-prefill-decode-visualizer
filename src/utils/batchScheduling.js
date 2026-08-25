@@ -24,6 +24,33 @@
 //   early finishers waste slots and later arrivals idle in queue.
 
 const MAX_STEPS = 20000; // safety cap: malformed params can't hang the tab
+export const MAX_STEPS_LIMIT = MAX_STEPS; // exposed so consumers can explain summary.truncated
+
+// max() over a plain loop — Math.max(...arr) throws RangeError once the
+// spread exceeds the call-stack argument limit (~150k numbers at
+// breqs=48 × bgen=4096; issue #572).
+function maxOf(arr) {
+  let m = -Infinity;
+  for (const v of arr) if (v > m) m = v;
+  return arr.length ? m : 0;
+}
+
+// Chunk-size slider stops. 0 = chunked prefill OFF (whole prompt per step).
+// Lives here (not in the component) so URL-param resolution is unit-testable.
+export const CHUNK_STOPS = [0, 128, 256, 512, 1024, 2048, 4096, 8192];
+export const DEFAULT_CHUNK_STOP_INDEX = CHUNK_STOPS.indexOf(512);
+
+/**
+ * Resolve the ?bchunk= URL param to a slider stop index (#580).
+ * A valid stop maps to itself; anything else (garbage, out-of-set values)
+ * falls back to the SAME default as omitting the param entirely (512 tok) —
+ * never to an arbitrary other stop.
+ */
+export function resolveChunkStopIndex(value) {
+  const n = value == null || value === '' ? NaN : Number(value);
+  const idx = CHUNK_STOPS.indexOf(n);
+  return idx >= 0 ? idx : DEFAULT_CHUNK_STOP_INDEX;
+}
 
 // Deterministic PRNG (mulberry32) so a given seed always renders the same
 // workload — shareable URLs and screenshots stay reproducible.
@@ -87,6 +114,7 @@ export function simulateBatching({
     remainingPrompt: r.promptTokens,
     decoded: 0,
     firstTokenTime: null,
+    firstServiceTime: null, // start of the first prefill chunk (#576 queue wait)
     itls: [],
     lastTokenTime: null,
     finishTime: null
@@ -121,6 +149,7 @@ export function simulateBatching({
     for (const id of running) {
       const s = state.get(id);
       if (s.remainingPrompt > 0) {
+        if (s.firstServiceTime === null) s.firstServiceTime = t; // step start (tEnd - duration)
         const tokens = chunkingOn
           ? Math.min(chunkSize, s.remainingPrompt)
           : s.remainingPrompt; // unchunked: entire remaining prompt at once
@@ -189,11 +218,32 @@ export function simulateBatching({
       firstTokenTime: s.firstTokenTime,
       finishTime: s.finishTime,
       ttft: s.firstTokenTime !== null ? s.firstTokenTime - s.arrivalTime : null,
+      // Time spent waiting in queue before the first prefill chunk started
+      // (#576). null when the request never got served (e.g. step-cap hit).
+      queueWait: s.firstServiceTime !== null
+        ? Math.max(0, s.firstServiceTime - s.arrivalTime)
+        : null,
       itls: s.itls
     };
   });
 
-  return { steps, requests: enriched, makespan: t, summary: summarize(enriched, steps, maxBatchSize) };
+  // Truncation telemetry (#574): when the MAX_STEPS safety cap cuts the
+  // simulation short, say so machine-readably instead of presenting a partial
+  // schedule as final. `truncated` is true only while work remains.
+  const truncated = steps.length >= MAX_STEPS &&
+    order.some(id => state.get(id).finishTime === null);
+
+  return {
+    steps,
+    requests: enriched,
+    makespan: t,
+    summary: summarize(enriched, steps, maxBatchSize, {
+      truncated,
+      stepsUsed: steps.length,
+      maxSteps: MAX_STEPS,
+      unfinishedRequests: truncated ? order.filter(id => state.get(id).finishTime === null).length : 0
+    })
+  };
 }
 
 /**
@@ -266,27 +316,35 @@ export function simulateStaticBatching({ requests, maxBatchSize, prefillSpeed, d
   return { steps, requests: enriched, makespan, summary: summarize(enriched, steps, maxBatchSize) };
 }
 
-/** Aggregate metrics shared by both scheduling modes. */
-function summarize(requests, steps, maxBatchSize) {
+/** Aggregate metrics shared by both scheduling modes. `extra` merges
+ *  mode-specific telemetry into the summary (e.g. truncation flags, #574). */
+function summarize(requests, steps, maxBatchSize, extra = {}) {
   const done = requests.filter(r => r.finishTime !== null);
-  const makespan = done.length ? Math.max(...done.map(r => r.finishTime)) : 0;
+  const makespan = done.length ? maxOf(done.map(r => r.finishTime)) : 0;
   const totalOutput = done.reduce((acc, r) => acc + r.outputTokens, 0);
   const ttfts = done.map(r => r.ttft).filter(Number.isFinite);
   const itls = done.flatMap(r => r.itls);
+  // Queue wait (#576): arrival → first prefill chunk start, per request.
+  const queueWaits = requests.map(r => r.queueWait).filter(v => v !== null && Number.isFinite(v));
   const busySteps = steps.filter(s => s.batchSize > 0);
   return {
     makespan,
     totalOutputTokens: totalOutput,
     throughput: makespan > 0 ? totalOutput / makespan : 0,
     avgTTFT: ttfts.length ? ttfts.reduce((a, b) => a + b, 0) / ttfts.length : 0,
-    maxTTFT: ttfts.length ? Math.max(...ttfts) : 0,
+    maxTTFT: ttfts.length ? maxOf(ttfts) : 0,
     avgITL: itls.length ? itls.reduce((a, b) => a + b, 0) / itls.length : 0,
-    maxITL: itls.length ? Math.max(...itls) : 0,
+    maxITL: itls.length ? maxOf(itls) : 0,
+    avgQueueWait: queueWaits.length
+      ? queueWaits.reduce((a, b) => a + b, 0) / queueWaits.length
+      : 0,
+    maxQueueWait: queueWaits.length ? maxOf(queueWaits) : 0,
     occupancyPct: busySteps.length
       ? (busySteps.reduce((acc, s) => acc + s.batchSize, 0) / busySteps.length / maxBatchSize) * 100
       : 0,
     stalledStepPct: steps.length
       ? (steps.filter(s => s.prefill !== null).length / steps.length) * 100
-      : 0
+      : 0,
+    ...extra
   };
 }

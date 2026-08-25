@@ -17,7 +17,8 @@
 // plus the shared ?context_band=, ?max_age=, ?limit=, ?cursor= and
 // ?snapshot= parameters.
 import { resolveRuns } from '../_snapshots.js';
-import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError } from '../_pagination.js';
+import { normalizeQueryModel } from '../_normalize.js';
+import { parsePagination, paginate, descNumAscStrCmp, InvalidCursorError, paginationScope } from '../_pagination.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson } from '../_schema.js';
 import { sendProblem, sendProblemFromError } from '../_errors.js';
@@ -72,7 +73,7 @@ export default async function handler(req, res) {
     const q = req.query || {};
 
     const hardware = q.hardware ? String(q.hardware).toLowerCase() : null;
-    const model = q.model ? String(q.model).toLowerCase() : null;
+    const model = q.model ? normalizeQueryModel(q.model) : null;
     const quant = q.quant ? String(q.quant).toLowerCase() : null;
 
     const snapshotAt = new Date();
@@ -89,10 +90,17 @@ export default async function handler(req, res) {
     if (maxAgeDays) runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
     runs = filterByContextBand(runs, contextBand);
 
-    const { limit, cursor } = parsePagination(q, { defaultLimit: 25, maxLimit: 200 });
+    // Cursor fingerprinting (#740 #755) — same scoping as /api/localmaxxing.
+    const scope = paginationScope('agent_benchmarks', {
+      hardware, model, quant,
+      maxAgeDays: maxAgeDays ?? '',
+      contextBand: contextBand ?? '',
+      snapshot: snapshot?.id ?? ''
+    });
+    const { limit, cursor } = parsePagination(q, { defaultLimit: 25, maxLimit: 200, scope });
 
     runs.sort((a, b) => descNumAscStrCmp(RUN_KEY(a), RUN_KEY(b)));
-    const page = paginate({ items: runs, limit, cursor, keyOf: RUN_KEY, cmp: descNumAscStrCmp });
+    const page = paginate({ items: runs, limit, cursor, keyOf: RUN_KEY, cmp: descNumAscStrCmp, scope });
 
     return json(res, {
       description: 'Community-measured single-stream LLM benchmark runs (one record per measured hardware+model+quant+engine combination, from localmaxxing.com). Speeds are tok/s. Filter with ?hardware=<rig substring>&model=<model family or HF id substring>&quant=<exact quant>&context_band=lt1k|1k-8k|8k-32k|32k+&max_age=<days>. Runs are sorted fastest decode first with cursor pagination (follow next_cursor until has_more is false); staleness tiers: fresh <90d, aging <1y, stale >=1y. For medians + confidence use /api/benchmarks, for ranked answers /api/best.',

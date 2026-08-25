@@ -3,8 +3,11 @@
 //
 // Contract (see AGENTS.md "Rate limits" and public/llms.txt):
 //   - Every handler calls enforceRateLimit(req, res) FIRST.
-//   - Every JSON body sent via sendJson() afterwards carries `rate_limit`:
-//     { limit, remaining, reset, window_seconds, policy }.
+//   - Every UNCACHED JSON body sent via sendJson() afterwards carries
+//     `rate_limit`: { limit, remaining, reset, window_seconds, policy }.
+//   - Publicly (shared-)cacheable responses (#590) carry neither the body
+//     field nor the X-RateLimit-* headers — per-client counters must never
+//     be edge-replayed to other clients.
 //   - Bodies from handlers that skipped enforceRateLimit carry no field
 //     (additive field, schema_version stays "1").
 
@@ -34,6 +37,7 @@ function mockRes() {
     ended: false,
     setHeader(k, v) { headers[k] = v; },
     getHeader(k) { return headers[k]; },
+    removeHeader(k) { delete headers[k]; },
     end(b) { if (b !== undefined) mock.body = b; mock.ended = true; }
   };
   return mock;
@@ -103,7 +107,7 @@ test('sendJson never clobbers a rate_limit field the handler set itself', () => 
   assert.deepEqual(parsed.rate_limit, { limit: 1, remaining: 0 });
 });
 
-test('real agent endpoint response (/api/parse-constraints) carries rate_limit', async () => {
+test('real agent endpoint (/api/parse-constraints) omits per-client quota on its public-cacheable response (#590)', async () => {
   _resetRateLimits();
   const req = mockReq('7.7.7.7');
   req.method = 'GET';
@@ -115,9 +119,9 @@ test('real agent endpoint response (/api/parse-constraints) carries rate_limit',
   assert.equal(res.statusCode, 200);
   const parsed = JSON.parse(res.body);
   assert.ok(parsed.constraints, 'sanity: handler produced its normal payload');
-  assert.ok(parsed.rate_limit, 'agent response must expose rate_limit in the body');
-  assert.equal(parsed.rate_limit.limit, RATE_LIMIT);
-  assert.equal(typeof parsed.rate_limit.remaining, 'number');
-  assert.ok(parsed.rate_limit.remaining <= RATE_LIMIT);
-  assert.equal(parsed.rate_limit.window_seconds, 60);
+  // The endpoint serves Cache-Control: public, max-age=3600 — the edge would
+  // replay one client's counters to every other client, so neither the body
+  // field nor the X-RateLimit-* headers may carry them (issue #590).
+  assert.equal(parsed.rate_limit, undefined);
+  assert.equal(res.headers['X-RateLimit-Remaining'], undefined);
 });

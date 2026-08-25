@@ -18,6 +18,7 @@
 // translations never render blank UI.
 
 import { createTranslator } from './translate.js';
+import { localeCoverage } from './coverage.js';
 import { getPlainMode } from '../utils/plainLanguage.js';
 
 let localeModules = {};
@@ -73,12 +74,26 @@ export const getLocale = translator.getLocale;
 /** Layout direction for the active locale ('ltr' | 'rtl'). */
 export const getDirection = translator.getDirection;
 
-/** Reflect the active locale onto the document: lang + direction. RTL
- *  locales flip the entire layout via [dir='rtl'] CSS logical properties. */
+const stripMeta = (locale) => {
+  const { meta: _meta, ...namespaces } = locale || {};
+  return namespaces;
+};
+
+/** Translation coverage of the ACTIVE locale vs English (#797): leaf keys
+ *  resolving in the locale / total English leaf keys. English → fraction 1. */
+export function getCoverage() {
+  const current = locales[translator.getLocale()] ? translator.getLocale() : 'en';
+  return localeCoverage(stripMeta(locales.en), stripMeta(locales[current]));
+}
+
+/** Reflect the active locale onto the document: lang + direction + a
+ *  machine-readable coverage signal (data-locale-coverage, percent) so agents
+ *  can tell a complete translation from a mostly-English partial one (#797). */
 export function syncDocument() {
   if (typeof document === 'undefined') return;
   document.documentElement.lang = getLocale();
   document.documentElement.dir = getDirection();
+  document.documentElement.dataset.localeCoverage = String(Math.round(getCoverage().fraction * 100));
 }
 
 // --- Plain-language mode (#79): rewrite dense jargon using plain equivalents.

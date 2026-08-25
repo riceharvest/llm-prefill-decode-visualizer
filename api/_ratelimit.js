@@ -11,6 +11,8 @@
 //
 // Algorithm: fixed-window counter keyed by client IP (X-Forwarded-For).
 
+import { problemBody } from './_errors.js';
+
 // Documented budget: 120 requests per minute per client IP (per instance).
 // Keep in sync with the "Rate limits" section of public/llms.txt and api/spec.js.
 export const RATE_LIMIT = Number(process.env.RATE_LIMIT_MAX) || 120;
@@ -69,14 +71,43 @@ function send429(res, info) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Retry-After', String(info.retryAfterSec));
+  const detail = `Rate limit exceeded: max ${info.limit} requests per ${RATE_WINDOW_MS / 1000}s per client (per serverless instance). Retry after ${info.retryAfterSec}s.`;
+  // Documented contract (spec x-error-codes + watch/parse-constraints 429
+  // responses): the body carries the machine-readable RATE_LIMITED problem
+  // members so agents can branch on `code` instead of string-matching the
+  // error prose. Legacy flat fields are kept alongside for existing clients.
+  const problem = problemBody({ code: 'RATE_LIMITED', status: 429, detail });
   res.end(JSON.stringify({
-    error: `Rate limit exceeded: max ${info.limit} requests per ${RATE_WINDOW_MS / 1000}s per client (per serverless instance). Retry after ${info.retryAfterSec}s.`,
+    ...problem,
+    error: detail,
     limit: info.limit,
     remaining: 0,
     reset: info.resetEpochSec,
     retryAfterSeconds: info.retryAfterSec,
     note: 'See /llms.txt for the documented budget. Headers: X-RateLimit-Limit / -Remaining / -Reset (epoch seconds).'
   }, null, 2));
+}
+
+/** Stamp the X-RateLimit-Limit/-Remaining/-Reset trio for `info` on `res`. */
+export function applyRateLimitHeaders(res, info) {
+  res.setHeader('X-RateLimit-Limit', String(info.limit));
+  res.setHeader('X-RateLimit-Remaining', String(info.remaining));
+  res.setHeader('X-RateLimit-Reset', String(info.resetEpochSec));
+}
+
+/**
+ * Rate-limit snapshot for responses whose request path never ran
+ * enforceRateLimit (helpers that predate it, router-level 404/500, ...).
+ * Reports the documented budget WITHOUT consuming from any bucket, so the
+ * public/llms.txt contract — "Every /api/* response carries rate-limit
+ * headers" — holds even where per-client accounting does not apply.
+ */
+export function defaultRateLimitInfo(now = Date.now()) {
+  return {
+    limit: RATE_LIMIT,
+    remaining: RATE_LIMIT,
+    resetEpochSec: Math.ceil((now + RATE_WINDOW_MS) / 1000)
+  };
 }
 
 /**
@@ -91,9 +122,7 @@ export function enforceRateLimit(req, res, { key } = {}) {
   // machine-readable `rate_limit` object in agent-facing JSON bodies (see
   // _schema.js). Plain property so node --test mock responses work too.
   res.rateLimitInfo = info;
-  res.setHeader('X-RateLimit-Limit', String(info.limit));
-  res.setHeader('X-RateLimit-Remaining', String(info.remaining));
-  res.setHeader('X-RateLimit-Reset', String(info.resetEpochSec));
+  applyRateLimitHeaders(res, info);
   if (!info.allowed) {
     send429(res, info);
     return false;

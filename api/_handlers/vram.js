@@ -14,6 +14,11 @@
 //   /api/vram?hfId=...&context=...&vramGb=24            → fits + max context
 //   /api/vram?hfId=...&numTurns=40&tokensPerTurn=1200   → per-turn KV growth
 //                                                          with overflow turns
+//
+// Units (#738 #866): every memory figure in the response is GiB (binary,
+// 1024-based), never decimal GB. The response states this explicitly in its
+// top-level `units` block so agents budgeting against spec-sheet decimal-GB
+// numbers can't mis-read it.
 
 import { resolveModel } from '../_hfconfig.js';
 import { resolveQuant } from '../_quant.js';
@@ -56,7 +61,9 @@ async function estimate(params) {
         error: 'missing hfId — pass ?hfId=org/model (e.g. meta-llama/Llama-3.1-8B-Instruct)',
         params: ['hfId (required)', 'context (tokens, default 32768)', 'quant (default q4_k_m)',
           'batchSize (default 1)', 'kvPrecisionBytes (default 2 = FP16)', 'vramGb (optional budget)',
+          'overheadFraction (optional 0–1 framework reserve applied to weights+KV, e.g. 0.25)',
           'numTurns + tokensPerTurn (optional per-turn KV projection)'],
+        units: 'all memory figures are GiB (binary, 1024-based), not decimal GB',
         examples: [
           '/api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m',
           '/api/vram?hfId=Qwen/Qwen2.5-32B&context=131072&quant=q4_k_m&vramGb=24'
@@ -93,6 +100,28 @@ async function estimate(params) {
   const batchSize = Math.max(1, Math.round(num(params.batchSize, 1)));
   const kvPrecisionBytes = num(params.kvPrecisionBytes, 2);
 
+  // Framework-overhead knob (#819): previously ?overheadFraction= was silently
+  // ignored and total.breakdown carried no overhead component at all. When the
+  // caller passes a fraction in [0,1], weights+KV are scaled by (1+f) —
+  // matching how /api/sizing and the UI ledger reserve framework headroom
+  // (vLLM PagedAttention tables, CUDA context, activation buffers). Absent →
+  // legacy behavior byte-stable, with overheadModel:'none' + isUpperBound so
+  // the omission is machine-readable instead of prose-only.
+  let overheadFraction = null;
+  if (params.overheadFraction != null && params.overheadFraction !== '') {
+    const f = Number(params.overheadFraction);
+    if (!Number.isFinite(f) || f < 0 || f > 1) {
+      return {
+        status: 400,
+        body: {
+          error: `invalid overheadFraction '${params.overheadFraction}' — pass a fraction in [0, 1] (e.g. 0.25 reserves 25% of weights+KV for framework overhead; vLLM gpu_memory_utilization=0.9 ≈ 0.11)`
+        }
+      };
+    }
+    overheadFraction = f;
+  }
+  const overheadMultiplier = overheadFraction != null ? 1 + overheadFraction : 1;
+
   const { architecture: arch } = resolved;
 
   // Weights: params × quant bytes when we have a parameter count; otherwise
@@ -115,7 +144,9 @@ async function estimate(params) {
 
   const weightsGb = weights.gb;
   const kvGb = round(kvBytesTotal / GB);
-  const totalGb = weightsGb != null ? round(weightsGb + kvGb) : null;
+  const baseGb = weightsGb != null ? weightsGb + kvGb : null;
+  const overheadGb = baseGb != null && overheadFraction != null ? round(baseGb * overheadFraction) : null;
+  const totalGb = baseGb != null ? round(baseGb * overheadMultiplier) : null;
 
   // Context-window check against the model's own max_position_embeddings.
   const maxCtx = arch.maxContextLength;
@@ -135,11 +166,13 @@ async function estimate(params) {
     fits = {
       vramGb,
       fits: totalGb <= vramGb,
-      headroomGb: round((budgetBytes - weightsGb * GB - kvBytesTotal) / GB),
+      headroomGb: round(vramGb - totalGb),
       maxContextTokens: bytesPerCtxToken > 0
-        ? Math.max(0, Math.floor((budgetBytes - weightsGb * GB) / bytesPerCtxToken))
+        ? Math.max(0, Math.floor(((budgetBytes / overheadMultiplier) - weightsGb * GB) / bytesPerCtxToken))
         : null,
-      note: 'maxContextTokens ignores activation/overhead — treat as an upper bound'
+      note: overheadFraction != null
+        ? `headroom and maxContextTokens reserve ${Math.round(overheadFraction * 100)}% framework overhead (overheadFraction=${overheadFraction})`
+        : 'maxContextTokens ignores activation/overhead — treat as an upper bound'
     };
   }
 
@@ -166,6 +199,15 @@ async function estimate(params) {
     projection = {
       tokensPerTurn,
       numTurns: turns.length,
+      // (#651) Echo what was asked and flag the silent 200-turn window cap so
+      // a "no overflow" verdict can't be read as covering an unprojected tail.
+      requestedNumTurns: numTurns,
+      ...(numTurns > turns.length
+        ? {
+            truncated: true,
+            note: `projection window capped at ${turns.length} of ${numTurns} requested turns — first*OverflowTurn verdicts cover only the projected window`
+          }
+        : {}),
       perTurnKvGb: round((bytesPerToken * tokensPerTurn * batchSize) / GB),
       turns,
       firstContextOverflowTurn,
@@ -176,10 +218,17 @@ async function estimate(params) {
   return {
     status: 200,
     body: {
+      units: {
+        memory: 'GiB',
+        note: 'all memory figures (weights, KV cache, totals, headroom, vramGb budgets) are GiB — binary, 1024-based, NOT decimal GB',
+        kvRate: 'bytes/token'
+      },
       inputs: {
         hfId: resolved.hfId, context, quant: params.quant ?? 'q4_k_m',
         resolvedQuant: quant.key, quantAssumed: quant.assumed,
-        batchSize, kvPrecisionBytes, ...(vramGb != null ? { vramGb } : {})
+        batchSize, kvPrecisionBytes,
+        ...(overheadFraction != null ? { overheadFraction } : {}),
+        ...(vramGb != null ? { vramGb } : {})
       },
       model: {
         hfId: resolved.hfId,
@@ -205,9 +254,19 @@ async function estimate(params) {
       total: {
         gb: totalGb,
         breakdown: weightsGb != null
-          ? { weightsGb, kvCacheGb: kvGb }
+          ? {
+              weightsGb,
+              kvCacheGb: kvGb,
+              // #819: framework reserve is 0 unless ?overheadFraction= is passed.
+              frameworkOverheadGb: overheadGb ?? 0
+            }
           : { weightsGb: null, kvCacheGb: kvGb, note: 'weight size unresolvable for this repo' }
       },
+      // #819: machine-readable statement of which overhead model produced
+      // these numbers ('none' = weights+KV only — an upper bound; 'fraction' =
+      // (weights+KV) × (1 + inputs.overheadFraction)).
+      overheadModel: overheadFraction != null ? 'fraction' : 'none',
+      isUpperBound: overheadFraction == null,
       contextWindow,
       fits,
       projection

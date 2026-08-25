@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildShortlist, effectiveVramGb } from './hardwareShortlist.js';
+import { buildShortlist, effectiveVramGb, quantizationMatches } from './hardwareShortlist.js';
 
 function run(overrides = {}) {
   return {
@@ -65,4 +65,20 @@ test('groups rig × model pairs and ranks by median decode with source links', (
   assert.equal(list[0].medianDecodeTokPerSec, 35); // median of 30 & 40
   assert.equal(list[0].runsInGroup, 2);
   assert.match(list[0].source, /\/runs\/a$/); // links to the fastest run
+});
+
+// --- #817: ?sq= share-link quant filter must be case-insensitive on BOTH
+// sides, parity with /api/best?quant= which lowercases row + query. ---
+
+test('quantizationMatches folds case on both row and query (#817)', () => {
+  // lowercase URL value vs uppercase corpus string — the #817 repro
+  assert.equal(quantizationMatches('Q4_K_M', 'q4_k_m'), true);
+  assert.equal(quantizationMatches('FP8', 'fp8'), true);
+  // uppercase restored sq vs lowercase rows
+  assert.equal(quantizationMatches('q4_k_m', 'Q4_K_M'), true);
+  // genuine mismatch still filters
+  assert.equal(quantizationMatches('Q4_K_M', 'q8_0'), false);
+  // empty/absent quant = no filter
+  assert.equal(quantizationMatches('Q4_K_M', ''), true);
+  assert.equal(quantizationMatches(undefined, 'q4'), false);
 });

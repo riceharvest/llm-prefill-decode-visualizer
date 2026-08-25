@@ -48,13 +48,52 @@ export function sanityWarnings({ promptTokens = 0, prefillSpeed = 0, decodeSpeed
   return warnings;
 }
 
+// Non-positive speed guard (#443): a zero/negative speed is not an error —
+// it produces warnings:[] while every metric that divides by the speed came back
+// null/∞ or sign-flipped. Callers pass their RESOLVED speeds (omit a key
+// when the model has no such concept); each non-positive value yields one
+// {code,message} warning. Never alters the math.
+export function nonPositiveSpeedWarnings({ prefillSpeed, decodeSpeed } = {}) {
+  const warnings = [];
+  if (prefillSpeed !== undefined && !(prefillSpeed > 0)) {
+    warnings.push({
+      code: 'prefill_speed_nonpositive',
+      message: `Prefill speed ${prefillSpeed} tok/s is zero or negative — TTFT and any metric divided by prefill throughput are null/meaningless. Pass a positive measured tok/s.`
+    });
+  }
+  if (decodeSpeed !== undefined && !(decodeSpeed > 0)) {
+    warnings.push({
+      code: 'decode_speed_nonpositive',
+      message: `Decode speed ${decodeSpeed} tok/s is zero or negative — TPOT/decode-time/effective-throughput metrics are null, ∞ or sign-flipped. Pass a positive measured tok/s.`
+    });
+  }
+  return warnings;
+}
+
 export function singleTurn({ promptTokens = 2048, outputTokens = 512, prefillSpeed = 3800, decodeSpeed = 105 } = {}) {
-  const ttft = promptTokens / prefillSpeed;
+  // Zero-prompt guard (#846): promptTokens=0 with prefillSpeed=0 is 0/0=NaN,
+  // which poisoned totalWalltimeSeconds even though the decode phase was fully
+  // computable. A zero/empty-prompt turn has NO prefill phase → ttft = 0 and
+  // total = decodeSeconds; only tokens>0 with speed≤0 stays genuinely
+  // impossible (Infinity).
+  const ttft = promptTokens > 0
+    ? (prefillSpeed > 0 ? promptTokens / prefillSpeed : Infinity)
+    : 0;
+  const warnings = [
+    ...sanityWarnings({ promptTokens, prefillSpeed, decodeSpeed }),
+    ...nonPositiveSpeedWarnings({ prefillSpeed, decodeSpeed })
+  ];
+  if (promptTokens <= 0 && prefillSpeed <= 0) {
+    warnings.push({
+      code: 'degenerate_zero_prompt_ttft',
+      message: 'promptTokens=0 with prefillSpeed=0 is a 0/0 degenerate case — TTFT substituted as 0 (no prefill phase); total walltime equals decode time.'
+    });
+  }
   const decodeTime = outputTokens / decodeSpeed;
   const total = ttft + decodeTime;
   return {
     inputs: { promptTokens, outputTokens, prefillSpeed, decodeSpeed },
-    warnings: sanityWarnings({ promptTokens, prefillSpeed, decodeSpeed }),
+    warnings,
     ttftSeconds: round(ttft),
     tpotMs: round(decodeSpeed > 0 ? 1000 / decodeSpeed : Infinity),
     decodeSeconds: round(decodeTime),
@@ -71,9 +110,22 @@ export function speculative({ baseDecodeSpeed = 105, draftTokens = 4, acceptance
   const tokensPerStep = 1 + k * alpha;
   const stepsPerSecond = baseDecodeSpeed / (1 + k * draftCostFraction);
   const effective = stepsPerSecond * tokensPerStep;
+  const warnings = [
+    ...sanityWarnings({ decodeSpeed: baseDecodeSpeed }),
+    // A non-positive base speed makes effective throughput negative while the
+    // ratio-based speedupVsVanilla still prints > 1 — flag the contradiction
+    // instead of shipping a ">2× speedup" on a negative tok/s (#444).
+    ...nonPositiveSpeedWarnings({ decodeSpeed: baseDecodeSpeed })
+  ];
+  if (draftTokens < 1) {
+    warnings.push({
+      code: 'draft_tokens_clamped_to_minimum',
+      message: `draftTokens=${draftTokens} is below the minimum of 1 — clamped to 1 (requested value echoed nowhere else).`
+    });
+  }
   return {
     inputs: { baseDecodeSpeed, draftTokens: k, acceptanceRate: alpha, draftCostFraction },
-    warnings: sanityWarnings({ decodeSpeed: baseDecodeSpeed }),
+    warnings,
     effectiveDecodeTokPerSec: round(effective),
     speedupVsVanilla: round(effective / baseDecodeSpeed),
     tokensPerVerifyStep: round(tokensPerStep),
@@ -91,7 +143,10 @@ export function batched({ prefillSpeed = 3800, decodeSpeed = 105, batchSize = 1,
   const decodeTime = outputTokens / perUserDecode;
   return {
     inputs: { prefillSpeed, decodeSpeed, batchSize: b, promptTokens, outputTokens, decodeDecayExponent },
-    warnings: sanityWarnings({ promptTokens, prefillSpeed, decodeSpeed }),
+    warnings: [
+      ...sanityWarnings({ promptTokens, prefillSpeed, decodeSpeed }),
+      ...nonPositiveSpeedWarnings({ prefillSpeed, decodeSpeed })
+    ],
     perUserDecodeTokPerSec: round(perUserDecode),
     aggregateDecodeTokPerSec: round(b * perUserDecode),
     ttftSeconds: round(ttft),
@@ -143,7 +198,10 @@ export function agentic(options = {}) {
 
   return {
     inputs: options,
-    warnings: sanityWarnings({ promptTokens: basePromptTokens, prefillSpeed, decodeSpeed }),
+    warnings: [
+      ...sanityWarnings({ promptTokens: basePromptTokens, prefillSpeed, decodeSpeed }),
+      ...nonPositiveSpeedWarnings({ prefillSpeed, decodeSpeed })
+    ],
     turns,
     finalContextTokens: turns.length ? turns[turns.length - 1].totalPromptTokens + decodeTokensPerTurn : 0,
     totalWalltimeSeconds: round(cumulativeWalltime),
@@ -170,6 +228,11 @@ export function cost({
   const hourlyTotal = hourlyHardware + hourlyElectricity;
   const requestsPerHour = total > 0 ? 3600 / total : 0;
 
+  // $/1M tokens: hourly cost → per-second ($/3600), then ÷ tok/s throughput,
+  // ×1e6 (#868 — the missing hours→seconds conversion inflated this exactly
+  // 3600×; kept consistent with costUsdPerThousandRequests below).
+  const costUsdPerMillionTokens = throughput > 0 ? ((hourlyTotal / 3600) / throughput) * 1e6 : null;
+
   return {
     inputs: {
       hardwarePriceUsd, electricityRatePerKwh, powerDrawWatts, amortizationMonths,
@@ -180,7 +243,7 @@ export function cost({
     hardwareCostUsdPerHour: round(hourlyHardware),
     electricityCostUsdPerHour: round(hourlyElectricity),
     totalCostUsdPerHour: round(hourlyTotal),
-    costUsdPerMillionTokens: round(throughput > 0 ? (hourlyTotal / throughput) * 1e6 : null),
+    costUsdPerMillionTokens: round(costUsdPerMillionTokens),
     costUsdPerThousandRequests: round(requestsPerHour > 0 ? (hourlyTotal / requestsPerHour) * 1000 : null)
   };
 }
@@ -191,6 +254,9 @@ export function kvCache({ numLayers = 80, kvHeads = 8, headDim = 128, contextLen
   return {
     inputs: { numLayers, kvHeads, headDim, contextLength, precisionBytes, batchSize },
     bytesPerToken,
+    // Binary (1024-based) units under historically SI-looking names — declared
+    // explicitly so agents don't convert totalGb with ×1e9 (#738 #866).
+    units: { memory: 'GiB', kbPerToken: 'KiB', totalMb: 'MiB', note: 'all values are binary (÷1024ⁿ), NOT decimal KB/MB/GB' },
     kbPerToken: round(bytesPerToken / 1024),
     totalGb: round(totalBytes / (1024 ** 3)),
     totalMb: round(totalBytes / (1024 ** 2)),

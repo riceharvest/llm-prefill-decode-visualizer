@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Play, Pause, Zap, Gauge, FileText, RotateCcw, Image as ImageIcon, FileDown, Copy, FileJson } from 'lucide-react';
 import { formatTime, formatTokens, SCENARIO_PRESETS } from '../utils/presets';
+import { resolveActiveScenario } from '../utils/scenarioIdentity';
 import {
   IMAGE_RESOLUTION_PRESETS,
   TOKENS_PER_TILE,
@@ -8,6 +9,7 @@ import {
   estimateImageTokens
 } from '../utils/multimodal';
 import { readParamNum, readParam, readParamBool, writeParams } from '../utils/urlState';
+import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
@@ -109,9 +111,15 @@ export default function SingleTurnVisualizer({
     setAcceptance(pairAcceptance(pair));
   };
 
-  const activeScenario = SCENARIO_PRESETS.find(s => s.promptTokens === promptTokens && s.outputTokens === outputTokens);
+  // The active scenario chip is STORED identity first (#786): the id of the
+  // preset actually applied wins over the old order-dependent token-count
+  // reverse-match, so colliding token pairs or preset reordering can't
+  // silently reassign which chip the DOM reports as active.
+  const [appliedScenarioId, setAppliedScenarioId] = useState(null);
+  const activeScenario = resolveActiveScenario(SCENARIO_PRESETS, appliedScenarioId, promptTokens, outputTokens);
 
   const applyScenario = (scenario) => {
+    setAppliedScenarioId(scenario.id);
     setPromptTokens(scenario.promptTokens);
     setOutputTokens(scenario.outputTokens);
     handleReset();
@@ -158,7 +166,11 @@ export default function SingleTurnVisualizer({
   // Vision-encoder tokens from attached images are ingested during prefill
   // too — they extend the KV cache before the first text token can emerge.
   const totalPrefillTokens = safePromptTokens + totalImageTokens;
-  const expectedTTFT = totalPrefillTokens / prefillSpeed; // seconds
+  // Zero-prompt guard (#846): mirror of api/_math.js singleTurn — a 0/0
+  // prompt/prefill combination means "no prefill phase" (TTFT 0), not NaN.
+  const expectedTTFT = totalPrefillTokens > 0
+    ? (prefillSpeed > 0 ? totalPrefillTokens / prefillSpeed : Infinity) // seconds
+    : 0;
   // Context scaling: token i of the output is produced with the KV cache at
   // depth totalPrefillTokens + i, so per-token time grows linearly and the
   // decode phase no longer runs at a single constant speed. Walltime uses the
@@ -422,6 +434,7 @@ export default function SingleTurnVisualizer({
   const throughputAnchorText = throughputAnchor(throughputNow);
   // Markdown walkthrough export (download + clipboard)
   const [mdCopied, setMdCopied] = useState(false);
+  const [mdCopyFailed, setMdCopyFailed] = useState(false);
   const buildMarkdown = () => buildSingleTurnMarkdown({
     promptTokens,
     outputTokens,
@@ -431,6 +444,13 @@ export default function SingleTurnVisualizer({
     draftTokens,
     acceptance,
     effectiveDecodeSpeed,
+    ctxScaleEnabled,
+    ctxHalf,
+    imagesEnabled,
+    imageCount,
+    imageResId,
+    jitterEnabled,
+    jitterPct,
     deepLink: buildDeepLink('single')
   });
   const handleExportMd = () => downloadMarkdown(buildMarkdown(), 'single-turn-simulation.md');
@@ -443,15 +463,23 @@ export default function SingleTurnVisualizer({
     draftTokens,
     acceptance,
     effectiveDecodeSpeed,
+    ctxScaleEnabled,
+    ctxHalf,
+    imagesEnabled,
+    imageCount,
+    imageResId,
+    jitterEnabled,
+    jitterPct,
     deepLink: buildDeepLink('single')
   });
   const handleExportJson = () => downloadJson(buildJson(), 'single-turn-simulation.json');
   const handleCopyMd = async () => {
     const ok = await copyMarkdownToClipboard(buildMarkdown());
-    if (ok) {
-      setMdCopied(true);
-      setTimeout(() => setMdCopied(false), 2000);
-    }
+    // Issue #401: surface failure explicitly — silent no-feedback on a failed
+    // copy is how agents lose the report without knowing it.
+    setMdCopied(ok);
+    setMdCopyFailed(!ok);
+    setTimeout(() => { setMdCopied(false); setMdCopyFailed(false); }, 2000);
   };
 
   // Token stream windowing: derive the visible words from the real decode
@@ -552,7 +580,7 @@ export default function SingleTurnVisualizer({
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
       {/* Issue #63: live narration of the animated run for screen readers */}
-      <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
+      <div className="visually-hidden" role="status" aria-live="polite" data-testid="run-state">{srSummary}</div>
 
       {/* Top Parameter Cards */}
       <section className="panel" aria-label={t('singleTurn.paramsPanelAria')}>
@@ -1065,7 +1093,12 @@ export default function SingleTurnVisualizer({
       ))}
 
       {/* Main Visualizer Stage */}
-      <section className="panel" aria-label={t('singleTurn.simStageAria')}>
+      <section
+        className="panel"
+        aria-label={t('singleTurn.simStageAria')}
+        data-state={phaseToRunState(phase)}
+        aria-busy={runStateToBusy(phaseToRunState(phase))}
+      >
 
         {/* Status Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
@@ -1122,7 +1155,7 @@ export default function SingleTurnVisualizer({
               aria-label="Copy markdown walkthrough to clipboard"
             >
               <Copy size={15} />
-              {mdCopied ? 'Copied!' : 'Copy MD'}
+              {mdCopied ? 'Copied!' : mdCopyFailed ? 'Copy failed' : 'Copy MD'}
             </button>
           </div>
         </div>
@@ -1325,6 +1358,7 @@ export default function SingleTurnVisualizer({
                     <div
                       role="img"
                       aria-label={t('singleTurn.itlHistogramAria')}
+                      data-max-bin-count={maxBinCount}
                       style={{
                         position: 'relative',
                         height: '4rem',
@@ -1341,6 +1375,10 @@ export default function SingleTurnVisualizer({
                         <div
                           key={i}
                           data-tooltip={`${b.count.toLocaleString()} tok · ${b.from.toFixed(1)}–${b.to.toFixed(1)} ms`}
+                          data-bin={i}
+                          data-count={b.count}
+                          data-from-ms={b.from}
+                          data-to-ms={b.to}
                           style={{
                             flex: 1,
                             height: `${Math.max(b.count > 0 ? 3 : 0, (b.count / maxBinCount) * 100)}%`,
@@ -1371,6 +1409,20 @@ export default function SingleTurnVisualizer({
                       <span>mean {itlSummary.mean.toFixed(1)} ms · avg = TPOT, tail = jitter</span>
                       <span>{itlHistogram.max.toFixed(1)} ms</span>
                     </div>
+                    {/* Chart-to-table alternative (#820): every bin's exact
+                        count + ms range, sr-only until keyboard focus — the
+                        bars' data-tooltip attrs never reach the AX tree. */}
+                    <ChartDataTable
+                      caption={t('chartTable.itlHistogramCaption')}
+                      rowHeaderLabel={t('chartTable.itlBin')}
+                      columns={[{ key: 'count', label: t('chartTable.tokenCount'), numeric: true }]}
+                      mode="sr-only"
+                      rows={itlHistogram.bins.map((b, i) => ({
+                        id: `bin-${i}`,
+                        label: `${b.from.toFixed(1)}–${b.to.toFixed(1)}`,
+                        cells: { count: b.count.toLocaleString() }
+                      }))}
+                    />
                     <p className="hint-text" style={{ marginTop: '6px' }}>
                       {t('singleTurn.itlStreamHint')}
                     </p>

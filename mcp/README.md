@@ -11,6 +11,17 @@ MCP server (stdio transport) wrapping the [LLM Prefill & Decode Visualizer API](
 | `best_configs` | `GET /api/best` | Ranked hardware×model configs by median measured decode/prefill speed |
 | `compare_hardware` | `GET /api/best` ×2 | A-vs-B rig comparison: per-model-family deltas + verdict |
 
+> **Not the hosted HTTP MCP server.** This README describes the optional local
+> **stdio** server in `mcp/server.js`. There is also a **hosted** Streamable-HTTP
+> MCP server at `https://llm-prefill-decode-visualizer.vercel.app/api/mcp`
+> (manifest: `/.well-known/mcp.json`) whose toolset is different — it exposes
+> 8 tools: `compute_single_turn`, `compute_agentic_loop`, `kv_cache_vram`,
+> `vram_from_hf_id`, `hardware_presets`, `benchmarks`, `cost_per_1m`,
+> `engine_flags`. Tool names do NOT match between the two servers (e.g. run
+> search is `search_runs` here but `benchmarks` there). Always call
+> `tools/list` on whichever endpoint you are talking to before scripting
+> against it.
+
 ## Configuration
 
 - `VISUALIZER_API_URL` — API base URL. Defaults to `https://llm-prefill-decode-visualizer.vercel.app`. Point it at a local dev server (`http://localhost:3000`) or a self-hosted deployment.
