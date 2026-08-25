@@ -57,11 +57,20 @@ export function buildDecodeAnnouncement() {
   return t('a11y.decoding');
 }
 
-// "Done: TTFT 0.40s, TPOT 18 ms, total 9.21s"
+// One TPOT formatter for every surface (#551): the done line used Math.round
+// ("TPOT 10 ms") while the decode-phase header and phase panel render
+// tpotMs.toFixed(1) ("9.5 ms/tok" / "TPOT 9.5 ms") — the same quantity at two
+// precisions in one view, and neither matched the API's 9.52381. All surfaces
+// now share this 1-decimal format so scraped text agrees with /api/compute.
+export function formatTpotMs(tpotMs) {
+  return Number.isFinite(tpotMs) ? `${tpotMs.toFixed(1)} ms` : '∞ ms';
+}
+
+// "Done: TTFT 0.40s, TPOT 18.0 ms, total 9.21s"
 export function buildDoneAnnouncement({ ttftSec, tpotMs, totalSec }) {
   return t('a11y.doneSummary', {
     ttft: formatTime(ttftSec),
-    tpot: Number.isFinite(tpotMs) ? `${Math.round(tpotMs)} ms` : '∞',
+    tpot: formatTpotMs(tpotMs),
     total: formatTime(totalSec)
   });
 }
@@ -77,7 +86,7 @@ export function buildAgenticDoneAnnouncement({ turns, ttftSec, tpotMs, totalSec 
   return t('a11y.agenticDoneSummary', {
     turns,
     ttft: formatTime(ttftSec),
-    tpot: Number.isFinite(tpotMs) ? `${Math.round(tpotMs)} ms` : '∞',
+    tpot: formatTpotMs(tpotMs),
     total: formatTime(totalSec)
   });
 }

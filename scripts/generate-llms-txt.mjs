@@ -193,6 +193,10 @@ export function renderTabsTail(tabs = TABS) {
   return [
     '## App tabs (interactive page)',
     '',
+    '## Data dumps and the comparable subset',
+    '',
+    'legacy `GET /api/export` returns exactly this dump with `?comparable=true`; the full run index (comparable AND non-comparable) is at `GET /api/runs`. The comparable subset feeds /api/best medians.',
+    '',
     'The human-facing UI is this same site. Deep links carry state via URL params: `?tab=<id>`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.',
     '',
     '**Deep-link id vocabularies (authoritative sources):**',

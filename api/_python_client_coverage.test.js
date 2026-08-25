@@ -64,7 +64,11 @@ test('ComputeResponse is a flat object schema, not allOf+siblings (#1083)', () =
 test('committed Python client ships all 17 operation modules (#1083)', () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const ops = new Set();
-  for (const item of Object.values(spec.paths)) {
+  // #543 doc-only paths (agent capability guides) have no generated client
+  // modules; exclude them from the operation-module coverage check.
+  const DOC_ONLY = new Set(['/api/spec', '/api/agent/capabilities.json', '/api/agent/compute.json', '/api/agent/benchmarks.json', '/api/agent/scenario.json', '/api/agent/freshness.json', '/api/agent/confidence.json']);
+  for (const [pth, item] of Object.entries(spec.paths)) {
+    if (DOC_ONLY.has(pth)) continue;
     for (const op of Object.values(item)) {
       if (op && typeof op === 'object' && op.operationId) ops.add(op.operationId);
     }

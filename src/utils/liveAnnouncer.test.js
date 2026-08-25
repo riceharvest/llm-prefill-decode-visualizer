@@ -7,6 +7,7 @@ import {
   buildPrefillAnnouncement,
   buildDecodeAnnouncement,
   buildDoneAnnouncement,
+  formatTpotMs,
   buildTurnAnnouncement,
   buildAgenticDoneAnnouncement
 } from './liveAnnouncer.js';
@@ -57,12 +58,24 @@ test('message builders produce the issue-shaped strings', () => {
   assert.equal(buildDecodeAnnouncement(), 'Decoding…');
   assert.match(
     buildDoneAnnouncement({ ttftSec: 0.4, tpotMs: 18, totalSec: 9.2 }),
-    /^Done: TTFT .+, TPOT 18 ms, total .+$/
+    /^Done: TTFT .+, TPOT 18\.0 ms, total .+$/
   );
   assert.equal(buildTurnAnnouncement({ turn: 3, turns: 12, phase: 'decoding' }), 'Turn 3 of 12: decoding…');
   assert.equal(buildTurnAnnouncement({ turn: 1, turns: 12, phase: 'prefilling' }), 'Turn 1 of 12: prefilling…');
   assert.match(
     buildAgenticDoneAnnouncement({ turns: 4, ttftSec: 0.5, tpotMs: 18, totalSec: 30 }),
-    /^Done: 4 turns, TTFT .+, TPOT 18 ms, total .+$/
+    /^Done: 4 turns, TTFT .+, TPOT 18\.0 ms, total .+$/
   );
+});
+
+test('#551: done-line TPOT uses the same 1-decimal precision as the phase panel/header', () => {
+  // API ground truth tpotMs=9.52381 renders "9.5 ms" in the decode-phase
+  // header (tpotMs.toFixed(1) ms/tok) and phase panel — the done line used to
+  // Math.round to "TPOT 10 ms", a three-way mismatch for one quantity.
+  assert.match(
+    buildDoneAnnouncement({ ttftSec: 1.08, tpotMs: 9.52381, totalSec: 5.95 }),
+    /TPOT 9\.5 ms,/
+  );
+  assert.match(formatTpotMs(9.52381), /^9\.5 ms$/);
+  assert.match(formatTpotMs(Infinity), /^∞/);
 });

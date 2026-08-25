@@ -651,6 +651,170 @@ const SCHEMAS = {
   BestListEnvelope: BEST_LIST_ENVELOPE
 };
 
+
+export const X_EXAMPLES = {
+  '/api/compute': {
+    get: {
+      request: 'curl -s "$BASE/api/compute?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105"'
+    },
+    post: {
+      request: `curl -s -X POST "$BASE/api/compute" -H 'Content-Type: application/json' -d '{"batch":[{"model":"singleTurn","promptTokens":4096,"outputTokens":512,"prefillSpeed":3800,"decodeSpeed":105},{"model":"singleTurn","promptTokens":16384,"outputTokens":512,"prefillSpeed":3800,"decodeSpeed":105}]}'`,
+      requestBody: { batch: [ { model: 'singleTurn', promptTokens: 4096, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 }, { model: 'singleTurn', promptTokens: 16384, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 } ] },
+      response: {
+        batch: true, count: 2, okCount: 2, errorCount: 0,
+        results: [
+          { index: 0, ok: true, result: { id: 'calc_9536a8f7358a', inputs: { promptTokens: 4096, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 }, warnings: [], ttftSeconds: 1.077895, tpotMs: 9.52381, decodeSeconds: 4.87619, totalWalltimeSeconds: 5.954085, effectiveThroughputTokPerSec: 773.922414, prefillSharePct: 18.103448, decodeSharePct: 81.896552, schema_version: '1' } },
+          { index: 1, ok: true, result: { id: 'calc_57a57c67634c', inputs: { promptTokens: 16384, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 }, warnings: [], ttftSeconds: 4.311579, tpotMs: 9.52381, decodeSeconds: 4.87619, totalWalltimeSeconds: 9.187769, effectiveThroughputTokPerSec: 1841.724137, prefillSharePct: 46.921797, decodeSharePct: 53.078203, schema_version: '1' } }
+        ]
+      }
+    }
+  },
+  '/api/vram': {
+    get: {
+      request: 'curl -s "$BASE/api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m&vramGb=24"',
+      response: {
+        units: { memory: 'GiB', note: 'all memory figures (weights, KV cache, totals, headroom, vramGb budgets) are GiB — binary, 1024-based, NOT decimal GB', kvRate: 'bytes/token' },
+        inputs: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', context: 65536, quant: 'q4_k_m', resolvedQuant: 'q4_k_m', quantAssumed: false, batchSize: 1, kvPrecisionBytes: 2, vramGb: 24 },
+        model: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', family: 'llama', resolutionSource: 'builtin-table', architecture: { numLayers: 32, kvHeads: 8, headDim: 128 }, paramsTotal: 8030261312, paramsB: 8.03, notes: [] },
+        weights: { gb: 4.49, source: '8,030,261,312 params × 0.56 bpw', sourceKind: 'params×quant', quant: 'q4_k_m', bytesPerParam: 0.56 },
+        kvCache: { bytesPerToken: 131072, kbPerToken: 128, mbPerToken: 0.125, gbAtContext: 8, formula: '2 × 32 layers × 8 KV heads × 128 dim × 2B × 65,536 ctx × 1 batch' },
+        total: { gb: 12.49, breakdown: { weightsGb: 4.49, kvCacheGb: 8 } },
+        contextWindow: 131072,
+        fits: { vramGb: 24, fits: true, maxContextTokens: 155648 },
+        projection: null
+      }
+    }
+  },
+  '/api/calc/{id}': {
+    get: {
+      request: 'curl -s "$BASE/api/calc/calc_9536a8f7358a?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105"',
+      response: {
+        id: 'calc_9536a8f7358a', verified: true,
+        inputs: { promptTokens: 4096, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 },
+        warnings: [], ttftSeconds: 1.077895, tpotMs: 9.52381, decodeSeconds: 4.87619, totalWalltimeSeconds: 5.954085, effectiveThroughputTokPerSec: 773.922414, prefillSharePct: 18.103448, decodeSharePct: 81.896552, schema_version: '1'
+      }
+    }
+  },
+  '/api/presets': {
+    get: { request: 'curl -s "$BASE/api/presets"' }
+  },
+  '/api/localmaxxing': {
+    get: {
+      request: 'curl -s "$BASE/api/localmaxxing?model=qwen3.6-27b&quant=q4_k_m&limit=50"'
+    },
+    post: {
+      request: `curl -s -X POST "$BASE/api/localmaxxing" -H 'Content-Type: application/json' -d '{"model":"unsloth/Qwen3.6-27B-MTP-GGUF","quant":"q4_k_m","hardware":"RTX 4090 24GB","hwClass":"discrete_gpu","prefillTokPerSec":3820,"decodeTokPerSec":108,"engine":"llama.cpp","engineVersion":"b6123","contextLength":8192}'`,
+      requestBody: { model: 'unsloth/Qwen3.6-27B-MTP-GGUF', quant: 'q4_k_m', hardware: 'RTX 4090 24GB', hwClass: 'discrete_gpu', prefillTokPerSec: 3820, decodeTokPerSec: 108, engine: 'llama.cpp', engineVersion: 'b6123', contextLength: 8192 },
+      response: {
+        description: 'Run accepted and queued for manual review. It will appear in GET /api/localmaxxing only after approval.',
+        status: 'queued',
+        reviewStatus: 'pending',
+        submissionId: 'sub_9f3ce2a17b84'
+      }
+    }
+  },
+  '/api/benchmarks': {
+    get: { request: 'curl -s "$BASE/api/benchmarks?groupBy=hardware&limit=25"' }
+  },
+  '/api/best': {
+    get: { request: 'curl -s "$BASE/api/best?by=decode&maxParamsB=8&quant=q4_k_m&limit=10"' }
+  },
+  '/api/watch': {
+    get: { request: 'curl -s "$BASE/api/watch"' },
+    post: {
+      request: `curl -s -X POST "$BASE/api/watch" -H 'Content-Type: application/json' -d '{"model":"Qwen3 32B","hardware":"RTX 4090","quant":"q4_k_m","webhookUrl":"https://example.com/hooks/llm-watch"}'`,
+      requestBody: { model: 'Qwen3 32B', hardware: 'RTX 4090', quant: 'q4_k_m', webhookUrl: 'https://example.com/hooks/llm-watch' },
+      response: {
+        description: 'Watch created. Poll the rssUrl for new runs; if you registered a webhookUrl, POST /api/watch/dispatch delivers unseen matching runs to it. The secret is shown once — it is required to DELETE and is sent to your webhook as X-Watch-Secret.',
+        watchId: 'watch_abc123_x9', secret: 'wsec_4f8d21c9b7',
+        rssUrl: '/api/watch/rss.xml?model=Qwen3+32B&hardware=RTX+4090&quant=q4_k_m',
+        matchingExistingRuns: []
+      }
+    },
+    delete: {
+      request: 'curl -s -X DELETE "$BASE/api/watch?id=watch_abc123_x9&secret=wsec_4f8d21c9b7"',
+      response: '(204 No Content)'
+    }
+  },
+  '/api/watch/rss.xml': {
+    get: {
+      request: 'curl -s "$BASE/api/watch/rss.xml?model=Qwen3+32B&hardware=RTX+4090&quant=q4_k_m"',
+      response: '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>Community benchmark runs — Qwen3 32B on RTX 4090</title><item><title>108 tok/s decode · q4_k_m · llama.cpp b6123</title><link>https://localmaxxing.com/en/runs/58213</link><pubDate>Wed, 30 Jul 2026 18:22:41 GMT</pubDate></item></channel></rss>'
+    }
+  },
+  '/api/watch/dispatch': {
+    get: {
+      request: 'curl -s "$BASE/api/watch/dispatch"',
+      response: {
+        dispatched: 1, totalNewRuns: 2,
+        results: [{ watchId: 'watch_abc123_x9', newRuns: 2, delivered: true }],
+        schemaNote: 'Payload shape per webhook is the watch.new_runs object echoed in previewPayload.',
+        previewPayload: { type: 'watch.new_runs', watchId: 'watch_abc123_x9', runs: [], deliveredAt: '2026-08-23T09:00:00.000Z' }
+      }
+    }
+  },
+  '/api/health': {
+    get: {
+      request: 'curl -s "$BASE/api/health"',
+      response: {
+        ok: true, service: 'llm-prefill-decode-visualizer', time: '2026-08-23T09:00:00.000Z',
+        upstreamFreshness: { status: 'fresh', fetchedAt: '2026-08-23T08:58:00.000Z', ageSeconds: 120, ttlSeconds: 600, rowCount: 3642, source: 'localmaxxing.com' },
+        cacheAge: 120
+      }
+    }
+  },
+  '/api/sizing': {
+    get: {
+      request: 'curl -s "$BASE/api/sizing?model=qwen&contextLength=32768&concurrency=4&maxTtftSeconds=2&maxTpotMs=50&maxVramGb=48"',
+      response: {
+        description: 'Ranked hardware sizing for a workload spec. VRAM fit = weights + KV cache at target context × concurrency + overhead. Expected TTFT/TPOT come from aggregated benchmark medians (single-stream); confidence reflects sample count. All memory figures are GiB — binary, 1024-based, not decimal GB.',
+        units: { memory: 'GiB', note: 'all memory figures are GiB — binary, 1024-based, NOT decimal GB' },
+        workload: { model: 'qwen', contextLength: 32768, concurrency: 4, promptTokens: 2048, outputTokens: 512 },
+        slo: { maxTtftSeconds: 2, maxTpotMs: 50, maxVramGb: 48 },
+        matchedRuns: 214,
+        assumptions: { kvArchitecture: 'estimated from parameter count (exposed per recommendation in vramFit)', precisionBytes: 2, overheadGb: 1.5, memoryUnits: 'GiB — every memory figure (overheadGb, vramFit) is binary GiB, not decimal GB', quantBitsFallback: 'unparseable quantization labels assume 4.25 bits-per-weight' },
+        recommendations: [{
+          hardware: 'RTX 4090 24GB', hardwareKey: 'rtx4090', hwClass: 'discrete_gpu', gpu: 'RTX 4090', gpuCount: 1,
+          modelFamily: 'qwen3.6-27b', exampleModel: 'unsloth/Qwen3.6-27B-MTP-GGUF', quantization: 'q4_k_m', engine: 'llama.cpp',
+          vramFit: { bitsPerWeightAssumed: 4.25, kvCacheGb: 28, kvCacheAt: '32768 ctx × 4 concurrent', availableGb: 24, fits: false },
+          expected: { perUserDecodeTokPerSec: 70.2, aggregateDecodeTokPerSec: 280.8, ttftIqr: [0.53, 0.57], tpotIqrMs: [13.51, 15.29], measuredSingleStream: true, note: 'measured speeds are single-stream; per-user decode decayed ~B^-0.25 for concurrency' },
+          confidence: { runsInGroup: 14, level: 'high' },
+          meetsSlo: { ttft: true, tpot: true, vram: false, all: false },
+          explain: 'Estimated fit: ~16GB weights + ~28GB KV at 32768 ctx × 4 concurrent exceeds 24GB — consider a smaller context or fewer concurrent streams; measured 105 tok/s single-stream decode across 14 runs.',
+          source: 'https://localmaxxing.com/en/runs/58213'
+        }]
+      }
+    }
+  },
+  '/api/parse-constraints': {
+    get: {
+      request: 'curl -s "$BASE/api/parse-constraints?q=self-hosted%20Qwen%2027B%20at%20Q4%20for%2010%20users%20under%20%241500"',
+      response: {
+        input: 'self-hosted Qwen 27B at Q4 for 10 users under $1500',
+        recognizedCount: 5,
+        constraints: { deployment: 'self-hosted', modelFamily: 'qwen', paramsB: 27, quantization: 'q4', contextLength: null, concurrency: 10, budgetUsdMax: 1500, minDecodeTokPerSec: null, maxVramGb: null, hwClass: null },
+        ambiguities: [{ field: 'concurrency', message: '10 users: assume 1 stream each or batched?' }],
+        sizingQuery: 'model=qwen&paramsB=27&quant=q4&concurrency=10&budgetUsdMax=1500'
+      }
+    }
+  },
+  '/api/snapshots': {
+    get: {
+      request: 'curl -s "$BASE/api/snapshots"',
+      response: {
+        description: 'Content-addressed dataset snapshots. Pin any data endpoint with ?snapshot=<id> for reproducible results. Snapshot IDs are stable for identical run sets within a fetch-time bucket; instances keep a bounded in-memory ring, so old IDs may expire.',
+        current: 'snapshot-2026-08-21-a1b2c3d4',
+        snapshots: [{ id: 'snapshot-2026-08-21-a1b2c3d4', createdAt: '2026-08-21T09:14:03.000Z', runCount: 3642 }]
+      }
+    }
+  },
+  '/api/runs': {
+    get: {
+      request: 'curl -s "$BASE/api/runs?format=json&comparable=true"'
+    }
+  }
+};
+
 export default function handler(req, res) {
   if (!enforceRateLimit(req, res)) return;
   const spec = {
@@ -1262,6 +1426,62 @@ export default function handler(req, res) {
           description: 'Lists content-addressed dataset snapshots (e.g. snapshot-2026-08-21-a1b2c3d4). Pass any listed ID as ?snapshot= on /api/localmaxxing, /api/benchmarks or /api/best to get reproducible numbers. Snapshot IDs are stable for identical run sets within a fetch-time bucket; instances keep a bounded in-memory ring, so old IDs may expire.',
           responses: { '200': { description: '{current, snapshots[]}' } }
         }
+      },
+      '/api/spec': {
+        get: {
+          operationId: 'getOpenApiSpec',
+          summary: 'This OpenAPI document',
+          description: 'Machine-readable OpenAPI 3.1 description of the live API. Derive clients from this document; it is the authoritative endpoint contract alongside /agents.json and /api/agent/index.json.',
+          responses: { '200': { description: 'This document as application/json' } }
+        }
+      },
+      '/api/agent/capabilities.json': {
+        get: {
+          operationId: 'getAgentCapabilitiesDoc',
+          summary: 'Agent capability index',
+          description: 'Self-describing capability manifest for agents: service description, base URL, auth (none), CORS and rate-limit policy, versioning policy, docs links, and a surfaces[] list describing every API surface. Also available at /.well-known/ai-plugin.json-adjacent discovery paths; see /agents.json.',
+          responses: { '200': { description: '{ok, service, description, base_url, auth, cors, rateLimit, versioning, docs, surfaceCount, surfaces[]}' } }
+        }
+      },
+      '/api/agent/compute.json': {
+        get: {
+          operationId: 'getAgentComputeDoc',
+          summary: 'Compute endpoint agent guide',
+          description: 'Flat self-describing guide to GET/POST /api/compute: parameter reference per model, dry_run usage, caveats and related endpoints. Same math as /api/compute and the MCP compute tools.',
+          responses: { '200': { description: '{description, openapiSpec, relatedEndpoints, ...model docs}' } }
+        }
+      },
+      '/api/agent/benchmarks.json': {
+        get: {
+          operationId: 'getAgentBenchmarksDoc',
+          summary: 'Flat community run search',
+          description: 'One flat record per measured community run (same data as GET /api/localmaxxing): filters mirror it (?hardware=/?model=/?quant= substring/exact plus ?context_band=, ?max_age=, ?limit=, ?cursor=, ?snapshot=). Sorted fastest decode first.',
+          responses: { '200': { description: '{description, snapshot, filters, total, count, runs[], has_more, next_cursor, caveats, relatedEndpoints}' } }
+        }
+      },
+      '/api/agent/scenario.json': {
+        get: {
+          operationId: 'getAgentScenarioDoc',
+          summary: 'Scenario presets doc',
+          description: 'Machine-readable scenario preset catalog (chat, codegen, summarization, RAG, vision) with token workloads and related endpoints; unknown ?scenario= ids return 400 with availableIds[].',
+          responses: { '200': { description: '{description, scenarios[], relatedEndpoints, nextSteps[]}' } }
+        }
+      },
+      '/api/agent/freshness.json': {
+        get: {
+          operationId: 'getAgentFreshnessDoc',
+          summary: 'Dataset freshness report',
+          description: 'Per-group freshness tiers for the community dataset (fresh <90d | aging <1y | stale ≥1y), newest measurement ages and dataset snapshot metadata, so agents can judge data staleness before citing medians.',
+          responses: { '200': { description: '{description, snapshot, generatedAt, groups[], caveats}' } }
+        }
+      },
+      '/api/agent/confidence.json': {
+        get: {
+          operationId: 'getAgentConfidenceDoc',
+          summary: 'Confidence grades report',
+          description: 'Confidence-grade view of the same report served at /api/agent/freshness.json (alias route): how well-measured each group is, for agents deciding how much to trust a median.',
+          responses: { '200': { description: 'Same shape as /api/agent/freshness.json' } }
+        }
       }
     },
     components: {
@@ -1282,169 +1502,18 @@ export default function handler(req, res) {
   // derived from handler code and /llms.txt (no invented fields). Operations
   // that already carry an inline `example` on their 2xx response reuse it;
   // entries in X_EXAMPLES below only supply what is not already in the spec.
-  const X_EXAMPLES = {
-    '/api/compute': {
-      get: {
-        request: 'curl -s "$BASE/api/compute?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105"'
-      },
-      post: {
-        request: `curl -s -X POST "$BASE/api/compute" -H 'Content-Type: application/json' -d '{"batch":[{"model":"singleTurn","promptTokens":4096,"outputTokens":512,"prefillSpeed":3800,"decodeSpeed":105},{"model":"singleTurn","promptTokens":16384,"outputTokens":512,"prefillSpeed":3800,"decodeSpeed":105}]}'`,
-        requestBody: { batch: [ { model: 'singleTurn', promptTokens: 4096, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 }, { model: 'singleTurn', promptTokens: 16384, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 } ] },
-        response: {
-          batch: true, count: 2, okCount: 2, errorCount: 0,
-          results: [
-            { index: 0, ok: true, result: { id: 'calc_9536a8f7358a', inputs: { promptTokens: 4096, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 }, warnings: [], ttftSeconds: 1.077895, tpotMs: 9.52381, decodeSeconds: 4.87619, totalWalltimeSeconds: 5.954085, effectiveThroughputTokPerSec: 773.922414, prefillSharePct: 18.103448, decodeSharePct: 81.896552, schema_version: '1' } },
-            { index: 1, ok: true, result: { id: 'calc_1c62d9a04b17', inputs: { promptTokens: 16384, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 }, warnings: [], ttftSeconds: 4.311579, tpotMs: 9.52381, decodeSeconds: 4.87619, totalWalltimeSeconds: 9.187769, effectiveThroughputTokPerSec: 1841.724137, prefillSharePct: 46.921797, decodeSharePct: 53.078203, schema_version: '1' } }
-          ]
-        }
-      }
-    },
-    '/api/vram': {
-      get: {
-        request: 'curl -s "$BASE/api/vram?hfId=meta-llama/Llama-3.1-8B-Instruct&context=65536&quant=q4_k_m&vramGb=24"',
-        response: {
-          units: { memory: 'GiB', note: 'all memory figures (weights, KV cache, totals, headroom, vramGb budgets) are GiB — binary, 1024-based, NOT decimal GB', kvRate: 'bytes/token' },
-          inputs: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', context: 65536, quant: 'q4_k_m', resolvedQuant: 'q4_k_m', quantAssumed: false, batchSize: 1, kvPrecisionBytes: 2, vramGb: 24 },
-          model: { hfId: 'meta-llama/Llama-3.1-8B-Instruct', family: 'llama', resolutionSource: 'builtin-table', architecture: { numLayers: 32, kvHeads: 8, headDim: 128 }, paramsTotal: 8030261312, paramsB: 8.03, notes: [] },
-          weights: { gb: 4.49, source: '8,030,261,312 params × 0.56 bpw', sourceKind: 'params×quant', quant: 'q4_k_m', bytesPerParam: 0.56 },
-          kvCache: { bytesPerToken: 131072, kbPerToken: 128, mbPerToken: 0.125, gbAtContext: 8, formula: '2 × 32 layers × 8 KV heads × 128 dim × 2B × 65,536 ctx × 1 batch' },
-          total: { gb: 12.49, breakdown: { weightsGb: 4.49, kvCacheGb: 8 } },
-          contextWindow: 131072,
-          fits: { vramGb: 24, fits: true, maxContextTokens: 155648 },
-          projection: null
-        }
-      }
-    },
-    '/api/calc/{id}': {
-      get: {
-        request: 'curl -s "$BASE/api/calc/calc_9536a8f7358a?model=singleTurn&promptTokens=4096&outputTokens=512&prefillSpeed=3800&decodeSpeed=105"',
-        response: {
-          id: 'calc_9536a8f7358a', verified: true,
-          inputs: { promptTokens: 4096, outputTokens: 512, prefillSpeed: 3800, decodeSpeed: 105 },
-          warnings: [], ttftSeconds: 1.077895, tpotMs: 9.52381, decodeSeconds: 4.87619, totalWalltimeSeconds: 5.954085, effectiveThroughputTokPerSec: 773.922414, prefillSharePct: 18.103448, decodeSharePct: 81.896552, schema_version: '1'
-        }
-      }
-    },
-    '/api/presets': {
-      get: { request: 'curl -s "$BASE/api/presets"' }
-    },
-    '/api/localmaxxing': {
-      get: {
-        request: 'curl -s "$BASE/api/localmaxxing?model=qwen3.6-27b&quant=q4_k_m&limit=50"'
-      },
-      post: {
-        request: `curl -s -X POST "$BASE/api/localmaxxing" -H 'Content-Type: application/json' -d '{"model":"unsloth/Qwen3.6-27B-MTP-GGUF","quant":"q4_k_m","hardware":"RTX 4090 24GB","hwClass":"discrete_gpu","prefillTokPerSec":3820,"decodeTokPerSec":108,"engine":"llama.cpp","engineVersion":"b6123","contextLength":8192}'`,
-        requestBody: { model: 'unsloth/Qwen3.6-27B-MTP-GGUF', quant: 'q4_k_m', hardware: 'RTX 4090 24GB', hwClass: 'discrete_gpu', prefillTokPerSec: 3820, decodeTokPerSec: 108, engine: 'llama.cpp', engineVersion: 'b6123', contextLength: 8192 },
-        response: {
-          description: 'Run accepted and queued for manual review. It will appear in GET /api/localmaxxing only after approval.',
-          status: 'queued',
-          reviewStatus: 'pending',
-          submissionId: 'sub_9f3ce2a17b84'
-        }
-      }
-    },
-    '/api/benchmarks': {
-      get: { request: 'curl -s "$BASE/api/benchmarks?groupBy=hardware&limit=25"' }
-    },
-    '/api/best': {
-      get: { request: 'curl -s "$BASE/api/best?by=decode&maxParamsB=8&quant=q4_k_m&limit=10"' }
-    },
-    '/api/watch': {
-      get: { request: 'curl -s "$BASE/api/watch"' },
-      post: {
-        request: `curl -s -X POST "$BASE/api/watch" -H 'Content-Type: application/json' -d '{"model":"Qwen3 32B","hardware":"RTX 4090","quant":"q4_k_m","webhookUrl":"https://example.com/hooks/llm-watch"}'`,
-        requestBody: { model: 'Qwen3 32B', hardware: 'RTX 4090', quant: 'q4_k_m', webhookUrl: 'https://example.com/hooks/llm-watch' },
-        response: {
-          description: 'Watch created. Poll the rssUrl for new runs; if you registered a webhookUrl, POST /api/watch/dispatch delivers unseen matching runs to it. The secret is shown once — it is required to DELETE and is sent to your webhook as X-Watch-Secret.',
-          watchId: 'watch_abc123_x9', secret: 'wsec_4f8d21c9b7',
-          rssUrl: '/api/watch/rss.xml?model=Qwen3+32B&hardware=RTX+4090&quant=q4_k_m',
-          matchingExistingRuns: []
-        }
-      },
-      delete: {
-        request: 'curl -s -X DELETE "$BASE/api/watch?id=watch_abc123_x9&secret=wsec_4f8d21c9b7"',
-        response: '(204 No Content)'
-      }
-    },
-    '/api/watch/rss.xml': {
-      get: {
-        request: 'curl -s "$BASE/api/watch/rss.xml?model=Qwen3+32B&hardware=RTX+4090&quant=q4_k_m"',
-        response: '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>Community benchmark runs — Qwen3 32B on RTX 4090</title><item><title>108 tok/s decode · q4_k_m · llama.cpp b6123</title><link>https://localmaxxing.com/en/runs/58213</link><pubDate>Wed, 30 Jul 2026 18:22:41 GMT</pubDate></item></channel></rss>'
-      }
-    },
-    '/api/watch/dispatch': {
-      get: {
-        request: 'curl -s "$BASE/api/watch/dispatch"',
-        response: {
-          dispatched: 1, totalNewRuns: 2,
-          results: [{ watchId: 'watch_abc123_x9', newRuns: 2, delivered: true }],
-          schemaNote: 'Payload shape per webhook is the watch.new_runs object echoed in previewPayload.',
-          previewPayload: { type: 'watch.new_runs', watchId: 'watch_abc123_x9', runs: [], deliveredAt: '2026-08-23T09:00:00.000Z' }
-        }
-      }
-    },
-    '/api/health': {
-      get: {
-        request: 'curl -s "$BASE/api/health"',
-        response: {
-          ok: true, service: 'llm-prefill-decode-visualizer', time: '2026-08-23T09:00:00.000Z',
-          upstreamFreshness: { status: 'fresh', fetchedAt: '2026-08-23T08:58:00.000Z', ageSeconds: 120, ttlSeconds: 600, rowCount: 3642, source: 'localmaxxing.com' },
-          cacheAge: 120
-        }
-      }
-    },
-    '/api/sizing': {
-      get: {
-        request: 'curl -s "$BASE/api/sizing?model=qwen&contextLength=32768&concurrency=4&maxTtftSeconds=2&maxTpotMs=50&maxVramGb=48"',
-        response: {
-          description: 'Ranked hardware sizing for a workload spec. VRAM fit = weights + KV cache at target context × concurrency + overhead. Expected TTFT/TPOT come from aggregated benchmark medians (single-stream); confidence reflects sample count. All memory figures are GiB — binary, 1024-based, not decimal GB.',
-          units: { memory: 'GiB', note: 'all memory figures are GiB — binary, 1024-based, NOT decimal GB' },
-          workload: { model: 'qwen', contextLength: 32768, concurrency: 4, promptTokens: 2048, outputTokens: 512 },
-          slo: { maxTtftSeconds: 2, maxTpotMs: 50, maxVramGb: 48 },
-          matchedRuns: 214,
-          assumptions: { kvArchitecture: 'estimated from parameter count (exposed per recommendation in vramFit)', precisionBytes: 2, overheadGb: 1.5, memoryUnits: 'GiB — every memory figure (overheadGb, vramFit) is binary GiB, not decimal GB', quantBitsFallback: 'unparseable quantization labels assume 4.25 bits-per-weight' },
-          recommendations: [{
-            hardware: 'RTX 4090 24GB', hardwareKey: 'rtx4090', hwClass: 'discrete_gpu', gpu: 'RTX 4090', gpuCount: 1,
-            modelFamily: 'qwen3.6-27b', exampleModel: 'unsloth/Qwen3.6-27B-MTP-GGUF', quantization: 'q4_k_m', engine: 'llama.cpp',
-            vramFit: { bitsPerWeightAssumed: 4.25, kvCacheGb: 28, kvCacheAt: '32768 ctx × 4 concurrent', availableGb: 24, fits: false },
-            expected: { perUserDecodeTokPerSec: 70.2, aggregateDecodeTokPerSec: 280.8, ttftIqr: [0.53, 0.57], tpotIqrMs: [13.51, 15.29], measuredSingleStream: true, note: 'measured speeds are single-stream; per-user decode decayed ~B^-0.25 for concurrency' },
-            confidence: { runsInGroup: 14, level: 'high' },
-            meetsSlo: { ttft: true, tpot: true, vram: false, all: false },
-            explain: 'Estimated fit: ~16GB weights + ~28GB KV at 32768 ctx × 4 concurrent exceeds 24GB — consider a smaller context or fewer concurrent streams; measured 105 tok/s single-stream decode across 14 runs.',
-            source: 'https://localmaxxing.com/en/runs/58213'
-          }]
-        }
-      }
-    },
-    '/api/parse-constraints': {
-      get: {
-        request: 'curl -s "$BASE/api/parse-constraints?q=self-hosted%20Qwen%2027B%20at%20Q4%20for%2010%20users%20under%20%241500"',
-        response: {
-          input: 'self-hosted Qwen 27B at Q4 for 10 users under $1500',
-          recognizedCount: 5,
-          constraints: { deployment: 'self-hosted', modelFamily: 'qwen', paramsB: 27, quantization: 'q4', contextLength: null, concurrency: 10, budgetUsdMax: 1500, minDecodeTokPerSec: null, maxVramGb: null, hwClass: null },
-          ambiguities: [{ field: 'concurrency', message: '10 users: assume 1 stream each or batched?' }],
-          sizingQuery: 'model=qwen&paramsB=27&quant=q4&concurrency=10&budgetUsdMax=1500'
-        }
-      }
-    },
-    '/api/snapshots': {
-      get: {
-        request: 'curl -s "$BASE/api/snapshots"',
-        response: {
-          description: 'Content-addressed dataset snapshots. Pin any data endpoint with ?snapshot=<id> for reproducible results. Snapshot IDs are stable for identical run sets within a fetch-time bucket; instances keep a bounded in-memory ring, so old IDs may expire.',
-          current: 'snapshot-2026-08-21-a1b2c3d4',
-          snapshots: [{ id: 'snapshot-2026-08-21-a1b2c3d4', createdAt: '2026-08-21T09:14:03.000Z', runCount: 3642 }]
-        }
-      }
-    },
-    '/api/runs': {
-      get: {
-        request: 'curl -s "$BASE/api/runs?format=json&comparable=true"'
-      }
-    }
-  };
 
+  // #543: curl-style examples for the agent-discovery doc paths.
+  const AGENT_PATH_EXAMPLES = {
+    '/api/spec': { get: { request: "curl -s https://llm-prefill-decode-visualizer.vercel.app/api/spec | jq '.info.version'", response: '{ openapi, info, paths, components }' } },
+    '/api/agent/capabilities.json': { get: { request: "curl -s https://llm-prefill-decode-visualizer.vercel.app/api/agent/capabilities.json", response: '{ ok, service, description, base_url, auth, cors, rateLimit, versioning, docs, surfaceCount, surfaces[] }' } },
+    '/api/agent/compute.json': { get: { request: "curl -s https://llm-prefill-decode-visualizer.vercel.app/api/agent/compute.json", response: '{ description, openapiSpec, relatedEndpoints }' } },
+    '/api/agent/benchmarks.json': { get: { request: "curl -s 'https://llm-prefill-decode-visualizer.vercel.app/api/agent/benchmarks.json?model=qwen'", response: '{ description, snapshot, filters, total, count, runs[], has_more, next_cursor }' } },
+    '/api/agent/scenario.json': { get: { request: "curl -s https://llm-prefill-decode-visualizer.vercel.app/api/agent/scenario.json", response: '{ description, scenarios[], relatedEndpoints, nextSteps[] }' } },
+    '/api/agent/freshness.json': { get: { request: "curl -s https://llm-prefill-decode-visualizer.vercel.app/api/agent/freshness.json", response: '{ description, snapshot, generatedAt, groups[], caveats }' } },
+    '/api/agent/confidence.json': { get: { request: "curl -s https://llm-prefill-decode-visualizer.vercel.app/api/agent/confidence.json", response: 'Same shape as /api/agent/freshness.json' } }
+  };
+  Object.assign(X_EXAMPLES, AGENT_PATH_EXAMPLES);
   // Attach x-examples to every operation. Response defaults to the inline
   // example already present on the 2xx response, so GET endpoints whose spec
   // entry already documents an exact payload need no X_EXAMPLES entry.
@@ -1479,3 +1548,4 @@ export default function handler(req, res) {
   // (see _schema.js / CHANGELOG-API.md). The spec itself is no exception.
   return sendJson(res, spec, { cacheTtl: 3600 });
 }
+

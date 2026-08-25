@@ -16,12 +16,34 @@ export const MAX_PLAUSIBLE_PREFILL_TOK_PER_SEC = 500000;
 // framework overhead (~2 ms). A computed TTFT below this floor means the
 // prefill speed / prompt length combination is physically impossible.
 export const MIN_PLAUSIBLE_TTFT_SECONDS = 0.002;
+// Token counts above this are almost certainly a unit bug (bits, bytes or a
+// raw float passed as a token count); below 1 they are non-physical (#550).
+export const MAX_PLAUSIBLE_TOKEN_COUNT = 1e9;
 
 // Non-blocking sanity checks. Returns an array of { code, message } — empty
 // when every input sits inside plausible bounds. Never throws, never alters
 // the math; consumers surface the warnings alongside the results.
-export function sanityWarnings({ promptTokens = 0, prefillSpeed = 0, decodeSpeed = 0 } = {}) {
+export function sanityWarnings({ promptTokens = null, outputTokens = null, prefillSpeed = 0, decodeSpeed = 0 } = {}) {
   const warnings = [];
+
+  // Token-count sanity (#550): the documented promptTokens/outputTokens params
+  // used to flow into the math unvalidated, so negative counts produced
+  // negative TTFT/walltime and ~1e12 counts produced multi-year walltimes —
+  // both with warnings: []. Flag them without changing the math or status.
+  for (const [field, value] of [['promptTokens', promptTokens], ['outputTokens', outputTokens]]) {
+    if (value == null) continue;
+    if (value < 1) {
+      warnings.push({
+        code: 'tokens_implausible',
+        message: `${field}=${value} is not a usable token count (must be ≥ 1) — results are computed anyway but are not physically meaningful. Check for a negative or zero value leaking into your request.`
+      });
+    } else if (value > MAX_PLAUSIBLE_TOKEN_COUNT) {
+      warnings.push({
+        code: 'tokens_implausible',
+        message: `${field}=${value} exceeds any real workload (> ${MAX_PLAUSIBLE_TOKEN_COUNT.toExponential()} tokens) — check for a unit mixup (e.g. bytes or a raw float passed as a token count).`
+      });
+    }
+  }
 
   if (decodeSpeed > MAX_PLAUSIBLE_DECODE_TOK_PER_SEC) {
     warnings.push({
@@ -105,7 +127,7 @@ export function batched({ prefillSpeed = 3800, decodeSpeed = 105, batchSize = 1,
   const decodeTime = outputTokens / perUserDecode;
   return {
     inputs: { prefillSpeed, decodeSpeed, batchSize: b, promptTokens, outputTokens, decodeDecayExponent },
-    warnings: sanityWarnings({ promptTokens, prefillSpeed, decodeSpeed }),
+    warnings: sanityWarnings({ promptTokens, outputTokens, prefillSpeed, decodeSpeed }),
     perUserDecodeTokPerSec: round(perUserDecode),
     aggregateDecodeTokPerSec: round(b * perUserDecode),
     ttftSeconds: round(ttft),
