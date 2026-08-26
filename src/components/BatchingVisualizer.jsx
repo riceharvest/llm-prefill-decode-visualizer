@@ -9,6 +9,7 @@ import Metric from './Metric';
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
 import { shouldCompleteInstantly } from '../utils/simPlayback';
 import { requestRowAttrs, queueWaitAttrs, segmentAttrs, occupancyBarAttrs, itlBarAttrs } from '../utils/batchingChartAttrs';
+import { createFrameScheduler, runStateFor } from '../utils/playback';
 import { t } from '../i18n/strings';
 import { buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { downloadJson } from '../utils/exportJson';
@@ -137,8 +138,14 @@ export default function BatchingVisualizer({
   }, [steps, requests]);
 
   // --- Playback: rAF clock over the simulated makespan (same pattern as the
-  // agentic visualizer). elapsedSim positions the playhead on every chart. ---
+  // agentic visualizer). elapsedSim positions the playhead on every chart.
+  // Ticks run through the shared frame scheduler (#860): while the tab is
+  // hidden the scheduler drives them from a wall-clock timer so playback
+  // advances instead of freezing at the first frame. ---
   const [elapsedSim, setElapsedSim] = useState(0);
+  const framesRef = useRef(null);
+  if (!framesRef.current) framesRef.current = createFrameScheduler();
+  useEffect(() => () => framesRef.current?.dispose(), []);
   const animFrameRef = useRef(null);
   const lastTickRef = useRef(null);
   const simTimeRef = useRef(0);
@@ -173,9 +180,18 @@ export default function BatchingVisualizer({
 
   const prefersReducedMotion = usePrefersReducedMotion();
 
+  // Auto-start the simulation when the page was opened via a "try it" demo
+  // link (#861: batching previously ignored ?autoplay=1 entirely).
+  useEffect(() => {
+    if (readParam('autoplay') === '1') {
+      const timer = setTimeout(() => setIsPlaying(true), 250);
+      return () => clearTimeout(timer);
+    }
+  }, [setIsPlaying]);
+
   useEffect(() => {
     if (!isPlaying) {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animFrameRef.current) framesRef.current.cancel(animFrameRef.current);
       lastTickRef.current = null;
       return;
     }
@@ -198,7 +214,7 @@ export default function BatchingVisualizer({
     const tick = (now) => {
       if (!lastTickRef.current) {
         lastTickRef.current = now;
-        animFrameRef.current = requestAnimationFrame(tick);
+        animFrameRef.current = framesRef.current.request(tick);
         return;
       }
       const realDelta = (now - lastTickRef.current) / 1000;
@@ -211,12 +227,12 @@ export default function BatchingVisualizer({
         return;
       }
       setElapsedSim(simTimeRef.current);
-      animFrameRef.current = requestAnimationFrame(tick);
+      animFrameRef.current = framesRef.current.request(tick);
     };
 
-    animFrameRef.current = requestAnimationFrame(tick);
+    animFrameRef.current = framesRef.current.request(tick);
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animFrameRef.current) framesRef.current.cancel(animFrameRef.current);
     };
   }, [isPlaying, simSpeedMultiplier, prefersReducedMotion, makespan, setIsPlaying]);
 
@@ -345,7 +361,15 @@ export default function BatchingVisualizer({
       : `${srFinishedCount} of ${numRequests} requests finished, ${runningIds.length} currently running. About ${srElapsedBucket * 25} percent of the ${formatTime(makespan)} schedule elapsed.`;
 
   return (
-    <div className="stack">
+    <div
+      className="stack"
+      data-state={runStateFor({
+        isPlaying,
+        hasStarted: elapsedSim > 0,
+        hasFinished: makespan > 0 && elapsedSim >= makespan
+      })}
+      aria-busy={isPlaying || undefined}
+    >
 
       {/* Issue #63: live narration of the animated playhead for screen readers */}
       <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>

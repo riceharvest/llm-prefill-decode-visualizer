@@ -14,6 +14,7 @@ import { downloadJson } from '../utils/exportJson';
 import { buildAbMarkdown, buildAbJson } from '../utils/exportAb';
 import { shouldCompleteInstantly } from '../utils/simPlayback';
 import { fmtEn } from '../utils/numfmt';
+import { createFrameScheduler, runStateFor } from '../utils/playback';
 
 // Map an /api/presets hardware entry onto the internal preset shape so the
 // fetched agent data can seed/extend the lane selectors exactly like the
@@ -166,8 +167,13 @@ export default function ABReplay({
   // system's tail is visible instead of being cut off at the winner's finish.
   const masterTotal = Math.max(totalA, totalB);
 
-  // Shared timeline scrubber state
+  // Shared timeline scrubber state. Ticks run through the shared frame
+  // scheduler (#860): while the tab is hidden the scheduler drives them
+  // from a wall-clock timer so playback advances instead of freezing.
   const [simTime, setSimTime] = useState(0);
+  const framesRef = useRef(null);
+  if (!framesRef.current) framesRef.current = createFrameScheduler();
+  useEffect(() => () => framesRef.current?.dispose(), []);
   const animFrameRef = useRef(null);
   const lastTickRef = useRef(null);
   const simTimeRef = useRef(0);
@@ -199,10 +205,19 @@ export default function ABReplay({
 
   const prefersReducedMotion = usePrefersReducedMotion();
 
+  // Auto-start the simulation when the page was opened via a "try it" demo
+  // link (#861: the compare tab previously ignored ?autoplay=1 entirely).
+  useEffect(() => {
+    if (readParam('autoplay') === '1') {
+      const timer = setTimeout(() => setIsPlaying(true), 250);
+      return () => clearTimeout(timer);
+    }
+  }, [setIsPlaying]);
+
   // Single frame-synchronized playback loop for BOTH lanes
   useEffect(() => {
     if (!isPlaying) {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animFrameRef.current) framesRef.current.cancel(animFrameRef.current);
       lastTickRef.current = null;
       return;
     }
@@ -226,7 +241,7 @@ export default function ABReplay({
     const tick = (now) => {
       if (!lastTickRef.current) {
         lastTickRef.current = now;
-        animFrameRef.current = requestAnimationFrame(tick);
+        animFrameRef.current = framesRef.current.request(tick);
         return;
       }
       const realDeltaSec = (now - lastTickRef.current) / 1000;
@@ -240,12 +255,12 @@ export default function ABReplay({
       }
       simTimeRef.current = next;
       setSimTime(next);
-      animFrameRef.current = requestAnimationFrame(tick);
+      animFrameRef.current = framesRef.current.request(tick);
     };
 
-    animFrameRef.current = requestAnimationFrame(tick);
+    animFrameRef.current = framesRef.current.request(tick);
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animFrameRef.current) framesRef.current.cancel(animFrameRef.current);
     };
   }, [isPlaying, simSpeedMultiplier, prefersReducedMotion, masterTotal, setIsPlaying]);
 
@@ -411,7 +426,15 @@ export default function ABReplay({
   );
 
   return (
-    <div className="stack">
+    <div
+      className="stack"
+      data-state={runStateFor({
+        isPlaying,
+        hasStarted: simTime > 0,
+        hasFinished: masterTotal > 0 && Number.isFinite(masterTotal) && simTime >= masterTotal
+      })}
+      aria-busy={isPlaying || undefined}
+    >
 
       {/* Issue #63: live narration of the synchronized replay for screen readers */}
       <div className="visually-hidden" role="status" aria-live="polite">{srSummary}</div>
