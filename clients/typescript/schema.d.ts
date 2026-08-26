@@ -883,15 +883,20 @@ export interface components {
             } & {
                 [key: string]: unknown;
             })[];
-            /** @description Time to first token (singleTurn/batched/agentic/kvCache/cost modes) */
-            ttftSeconds?: number;
-            /** @description Time per output token in ms */
-            tpotMs?: number;
-            decodeSeconds?: number;
-            totalWalltimeSeconds?: number;
+            /** @description Time to first token (singleTurn/batched/agentic/kvCache/cost modes); null when a degenerate input (e.g. zero prefill speed) makes the quantity infinite/undefined — the UI renders this state as ∞ */
+            ttftSeconds?: number | null;
+            /** @description Time per output token in ms; null when degenerate input makes it undefined (∞ in the UI) */
+            tpotMs?: number | null;
+            /** @description Decode walltime; null when the decode speed is zero/negative (∞ in the UI) */
+            decodeSeconds?: number | null;
+            /** @description Prefill + decode walltime; null when any component is undefined (∞ in the UI) */
+            totalWalltimeSeconds?: number | null;
+            /** @description Total tokens / total walltime for the scenario shape; fabricated as 0 (not null) on degenerate inputs where walltime is undefined */
             effectiveThroughputTokPerSec?: number;
-            prefillSharePct?: number;
-            decodeSharePct?: number;
+            /** @description Share of scenario walltime spent prefilling; null when walltime is undefined */
+            prefillSharePct?: number | null;
+            /** @description Share of scenario walltime spent decoding; null when walltime is undefined */
+            decodeSharePct?: number | null;
         } & {
             [key: string]: unknown;
         };
@@ -911,12 +916,15 @@ export interface components {
             } & {
                 [key: string]: unknown;
             })[];
-            /** @description Time to first token (singleTurn/batched/agentic/kvCache/cost modes) */
-            ttftSeconds?: number;
-            /** @description Time per output token in ms */
-            tpotMs?: number;
-            decodeSeconds?: number;
-            totalWalltimeSeconds?: number;
+            /** @description Time to first token (singleTurn/batched/agentic/kvCache/cost modes); null when a degenerate input (e.g. zero prefill speed) makes the quantity infinite/undefined — the UI renders this state as ∞ */
+            ttftSeconds?: number | null;
+            /** @description Time per output token in ms; null when degenerate input makes it undefined (∞ in the UI) */
+            tpotMs?: number | null;
+            /** @description Decode walltime; null when the decode speed is zero/negative (∞ in the UI) */
+            decodeSeconds?: number | null;
+            /** @description Prefill + decode walltime; null when any component is undefined (∞ in the UI) */
+            totalWalltimeSeconds?: number | null;
+            /** @description Total tokens / total walltime for the scenario shape; fabricated as 0 (not null) on degenerate inputs where walltime is undefined */
             effectiveThroughputTokPerSec?: number;
             prefillSharePct?: number;
             decodeSharePct?: number;
@@ -1069,11 +1077,31 @@ export interface components {
              * @enum {string|null}
              */
             contextBand?: "lt1k" | "1k-8k" | "8k-32k" | "32k+" | null;
+            /**
+             * @description Lowercased ?scenario= value as sent, even when unknown (null when unset). An unknown id is ignored with a warnings[] entry.
+             */
+            requestedScenario?: string | null;
             caveats: components["schemas"]["Caveat"][];
-            /** @description Human-readable group-level warnings (mixed engine versions / context bands) */
+            /** @description Human-readable group-level warnings (mixed engine versions / context bands / unknown ?scenario= ids) */
             warnings: string[];
             results: components["schemas"]["BestResult"][];
             rate_limit?: components["schemas"]["RateLimit"];
+            /** @description Resolved workload shape used for walltime projections (by=walltime only). Explicit ?promptTokens/?outputTokens override the ?scenario= preset per axis (#836). */
+            workload?: {
+                promptTokens: number;
+                outputTokens: number;
+                /** @description 'query' (both token axes overridden), 'scenario:<id>' (pure preset), 'mixed:<id>+query' (preset + one axis overridden), 'mixed:default+query' (default chat + one axis overridden), or 'default:chat' */
+                source: string;
+                /** @description Human label of the applied scenario preset (present only when a known ?scenario= was applied) */
+                scenario?: string;
+                /**
+                 * @description Axes taken from explicit query params rather than the preset/default
+                 * @enum {string}
+                 */
+                overrides: ("promptTokens" | "outputTokens")[];
+                /** @description Lowercased ?scenario= value as sent, even when unknown (null when unset) */
+                requestedScenario?: string | null;
+            };
             /** @constant */
             schema_version?: "1";
         };

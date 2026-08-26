@@ -478,6 +478,12 @@ export async function bestBody(query = {}) {
       warnings.push(`Unknown ?scenario=${workload.requestedScenario} — not one of ${SCENARIO_PRESETS.map(s => s.id).join('|')}; the default ${CHAT_PRESET.promptTokens}/${CHAT_PRESET.outputTokens} chat shape was used instead.`);
     }
 
+    // Unknown ?scenario= ids are silently ignored by resolveWorkload (#840) —
+    // name the rejected id in warnings[] so a typo'd preset is visible.
+    if (workload.requestedScenario && !workload.scenarioKnown) {
+      warnings.push(`Unknown ?scenario=${workload.requestedScenario} — not one of ${SCENARIO_PRESETS.map(s => s.id).join('|')}; the default ${CHAT_PRESET.promptTokens}/${CHAT_PRESET.outputTokens} chat shape was used instead.`);
+    }
+
     const filters = { by, limit };
     if (q.model) filters.model = String(q.model).toLowerCase();
     if (q.maxParamsB) filters.maxParamsB = Number(q.maxParamsB);
