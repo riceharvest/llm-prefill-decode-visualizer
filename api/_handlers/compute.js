@@ -23,6 +23,7 @@ import {
   evaluateSlo
 } from '../_single_turn_features.js';
 import { resolveVisionInputs } from '../_vision.js';
+import { generateRequests, simulateBatching } from '../../src/utils/batchScheduling.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -297,6 +298,109 @@ function withPresetMeta(params, body) {
   };
 }
 
+// Cap on how many engine steps are returned in the simulation block, so a
+// pathological workload can't produce a multi-megabyte response.
+export const MAX_SCHEDULE_STEPS_RETURNED = 500;
+
+const r6 = (x) => Number.isFinite(x) ? Math.round(x * 1e6) / 1e6 : x;
+
+/**
+ * Extend the batched model with the Batching view's discrete scheduler
+ * (issue #529): chunked prefill, staggered arrivals, continuous-batching
+ * admission and queueing. Runs src/utils/batchScheduling.js — the exact
+ * module the UI animates — so API numbers and the tab agree. The legacy
+ * aggregate curve stays in the response; the schedule rides additively in
+ * `simulation`.
+ */
+function batchedWithSchedule(sim) {
+  const requests = generateRequests({
+    numRequests: sim.numRequests,
+    meanPromptTokens: sim.promptTokens,
+    meanOutputTokens: sim.outputTokens,
+    arrivalIntervalMs: sim.arrivalIntervalMs,
+    seed: sim.seed
+  });
+  const { steps, requests: timeline, makespan, summary } = simulateBatching({
+    requests,
+    maxBatchSize: sim.maxBatchSize,
+    // chunkTokens=0 disables chunked prefill (whole prompt per step).
+    chunkSize: sim.chunkTokens > 0 ? sim.chunkTokens : NaN,
+    prefillSpeed: sim.prefillSpeed,
+    decodeSpeed: sim.decodeSpeed
+  });
+
+  // Per-step queue depth: arrivals seen by step end minus cumulative
+  // admissions (every arrived request is admitted or queued).
+  let arrivedIdx = 0;
+  let admittedTotal = 0;
+  const stepsOut = steps.map(s => {
+    while (arrivedIdx < timeline.length && timeline[arrivedIdx].arrivalTime <= s.tEnd + 1e-12) arrivedIdx++;
+    admittedTotal += s.admitted.length;
+    return {
+      index: s.index,
+      tStartSeconds: r6(s.tStart),
+      tEndSeconds: r6(s.tEnd),
+      durationSeconds: r6(s.duration),
+      phase: s.prefill ? (s.decoded.length > 0 ? 'prefill+decode' : 'prefill') : 'decode',
+      batchSize: s.batchSize,
+      queued: Math.max(0, arrivedIdx - admittedTotal),
+      admitted: s.admitted,
+      finished: s.finished,
+      prefill: s.prefill ? { id: s.prefill.id, tokens: s.prefill.tokens } : null,
+      decodedCount: s.decoded.length
+    };
+  });
+
+  return {
+    ...batched({
+      promptTokens: sim.promptTokens,
+      outputTokens: sim.outputTokens,
+      batchSize: sim.batchSize,
+      prefillSpeed: sim.prefillSpeed,
+      decodeSpeed: sim.decodeSpeed,
+      decodeDecayExponent: sim.decodeDecayExponent
+    }),
+    scheduling: 'engine-step simulation (chunked prefill + arrivals + queueing) — same model as the Batching view; supersedes the B^0.25 approximation when chunking/arrivals matter',
+    simulation: {
+      inputs: {
+        numRequests: sim.numRequests,
+        maxBatchSize: sim.maxBatchSize,
+        promptTokens: sim.promptTokens,
+        outputTokens: sim.outputTokens,
+        prefillSpeed: sim.prefillSpeed,
+        decodeSpeed: sim.decodeSpeed,
+        chunkTokens: sim.chunkTokens,
+        arrivalIntervalMs: sim.arrivalIntervalMs,
+        seed: sim.seed
+      },
+      stepCount: steps.length,
+      stepsTruncated: steps.length > MAX_SCHEDULE_STEPS_RETURNED,
+      makespanSeconds: r6(makespan),
+      summary: {
+        totalOutputTokens: summary.totalOutputTokens,
+        throughputTokPerSec: r6(summary.throughput),
+        avgTTFTSeconds: r6(summary.avgTTFT),
+        maxTTFTSeconds: r6(summary.maxTTFT),
+        avgITLSeconds: r6(summary.avgITL),
+        maxITLSeconds: r6(summary.maxITL),
+        occupancyPct: r6(summary.occupancyPct),
+        stalledStepPct: r6(summary.stalledStepPct)
+      },
+      steps: stepsOut.slice(0, MAX_SCHEDULE_STEPS_RETURNED),
+      requests: timeline.map(r => ({
+        id: r.id,
+        promptTokens: r.promptTokens,
+        outputTokens: r.outputTokens,
+        arrivalTimeSeconds: r6(r.arrivalTime),
+        firstTokenTimeSeconds: r6(r.firstTokenTime),
+        finishTimeSeconds: r6(r.finishTime),
+        ttftSeconds: r.ttft === null ? null : r6(r.ttft),
+        itlCount: Array.isArray(r.itls) ? r.itls.length : 0
+      }))
+    }
+  };
+}
+
 // Run one parameter set. Returns { status, body } — never throws for
 // expected input problems; unexpected math errors bubble up to the caller.
 // With dryRun, each branch validates + echoes its parsed inputs instead of
@@ -353,7 +457,27 @@ function computeOne(params, dryRun = false) {
         outputTokens: num(params.outputTokens, 512, 'outputTokens'),
         decodeDecayExponent: num(params.decodeDecayExponent, 0.25, 'decodeDecayExponent')
       };
-      return withId('batched', inputs, withPresetMeta(params, batched(inputs)), dryRun, subs);
+// Scheduling mode (issue #529): any of these optional params switches
+      // the response from the smooth B^0.25 aggregate curve to a discrete
+      // engine-step schedule (chunked prefill + staggered arrivals +
+      // queueing), the same model the Batching view animates. Absent params
+      // keep the legacy response byte-compatible.
+      if (
+        params.chunkTokens !== undefined ||
+        params.arrivalIntervalMs !== undefined ||
+        params.numRequests !== undefined
+      ) {
+        const simInputs = {
+          ...inputs,
+          numRequests: Math.min(50, Math.max(1, Math.round(num(params.numRequests, Math.max(inputs.batchSize, 1))))),
+          maxBatchSize: Math.min(50, Math.max(1, Math.round(num(params.maxBatchSize ?? params.batchSize, inputs.batchSize)))),
+          chunkTokens: Math.max(0, num(params.chunkTokens, 512)),
+          arrivalIntervalMs: Math.max(0, num(params.arrivalIntervalMs, 0)),
+          seed: Math.round(num(params.seed, 42))
+        };
+        return withId('batched', simInputs, batchedWithSchedule(simInputs), dryRun);
+      }
+      return withId('batched', inputs, batched(inputs), dryRun, subs);
     }
 
     case 'agentic': {
@@ -811,8 +935,16 @@ export default function handler(req, res) {
   }
   if (!enforceRateLimit(req, res)) return;
 
-  // Accept both GET (?model=singleTurn&promptTokens=...) and POST (JSON body)
-  const params = req.method === 'POST' ? (req.body || {}) : req.query;
+  // Accept both GET (?model=singleTurn&promptTokens=...) and POST (JSON body).
+  // Malformed / non-object bodies are client errors: normalize them into a
+  // 400 problem+json instead of the historical off-contract failure
+  // (issue #537).
+  let params;
+  try {
+    params = req.method === 'POST' ? normalizeJsonBody(req.body) : req.query;
+  } catch (err) {
+    return sendProblemFromError(res, req, err);
+  }
 
   try {
     const { status, body } = computeBody(params);
@@ -821,4 +953,31 @@ export default function handler(req, res) {
   } catch (err) {
     return sendProblemFromError(res, req, err);
   }
+}
+
+/**
+ * Normalize a POST body into a plain parameter object (issue #537):
+ *  - absent/empty body → {} (same as before);
+ *  - a string body (how unparsed/malformed JSON arrives from some runtimes)
+ *    is JSON.parse'd; a parse failure throws INVALID_PARAMS (400);
+ *  - any non-object body (array, number, boolean, null-after-parse) throws
+ *    INVALID_PARAMS (400) — previously `[] fell through to a 200 capability
+ *    index and a malformed string produced an off-contract 500.
+ */
+export function normalizeJsonBody(body) {
+  if (body === undefined || body === null) return {};
+  let parsed = body;
+  if (typeof body === 'string') {
+    const raw = body.trim();
+    if (!raw) return {};
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new ApiError('INVALID_PARAMS', 'request body must be valid JSON (could not parse the request body)');
+    }
+  }
+  if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new ApiError('INVALID_PARAMS', 'request body must be a JSON object mapping parameter names to values');
+  }
+  return parsed;
 }

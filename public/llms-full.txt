@@ -2,8 +2,11 @@
 
 > Single-file compilation of every agent-facing document in this repository:
 > the llms.txt capability index, README, full API guide (/llms.txt), API
-> changelog and MCP server docs, concatenated in one flat markdown file.
+> changelog, MCP server docs and the Theory tab's explainer/glossary
+> content, concatenated in one flat markdown file.
 > Individual sources are marked with `<!-- source: <path> -->` comments.
+> Links to files served at the site root point at their deployed URLs;
+> links to repository-only files are shown as plain `repo/path` text.
 
 <!-- source: llms.txt -->
 
@@ -13,32 +16,38 @@
 
 ## Docs
 
-- [README](README.md): features, setup and architecture overview
-- [Full API guide (llms.txt)](public/llms.txt): every endpoint with parameters, curl examples, response shapes, statistical caveats, error codes and rate limits
-- [API changelog](CHANGELOG-API.md): schema-versioning policy and endpoint change history
-- [Full documentation (llms-full.txt)](public/llms-full.txt): every agent-facing doc above compiled into one flat markdown file, served at `/llms-full.txt`
+- README (`README.md`): features, setup and architecture overview
+- [Full API guide (llms.txt)](https://llm-prefill-decode-visualizer.vercel.app/llms.txt): every endpoint with parameters, curl examples, response shapes, statistical caveats, error codes and rate limits
+- API changelog (`CHANGELOG-API.md`): schema-versioning policy and endpoint change history
+- [Full documentation (llms-full.txt)](https://llm-prefill-decode-visualizer.vercel.app/llms-full.txt): every agent-facing doc above compiled into one flat markdown file, served at `/llms-full.txt`
 
 ## Machine-readable surfaces
 
 - [OpenAPI spec](https://llm-prefill-decode-visualizer.vercel.app/api/spec): derive every endpoint programmatically (identical under `/v1/spec`)
-- [Agent manifest](public/agents.json)
-- [MCP server](mcp/server.js): Streamable HTTP JSON-RPC at `/api/mcp`; usage in the [MCP README](mcp/README.md)
-- [Changelog feed](public/changelog.json)
-- [Status page](public/status.html)
+- [Agent manifest](https://llm-prefill-decode-visualizer.vercel.app/agents.json): machine-readable manifest of every agent-facing endpoint, generated from the route table
+- [Agent endpoint index](https://llm-prefill-decode-visualizer.vercel.app/api/agent/index.json): complete per-endpoint index with request/response shape sketches (sibling of the agent manifest)
+- Compare slug manifest (`public/compare-hardware-slugs.json`): every measured hardware group's slug — join any two as `/compare/:slugA-vs-:slugB`; invalid pairs return HTTP 404
+- MCP server (`mcp/server.js`): Streamable HTTP JSON-RPC at `/api/mcp`; usage in the MCP README (`mcp/README.md`)
+- [Changelog feed](https://llm-prefill-decode-visualizer.vercel.app/changelog.json)
+- [Status page](https://llm-prefill-decode-visualizer.vercel.app/status.html)
+
+These static surfaces send strong `ETag` validators: send `If-None-Match` to revalidate — unchanged content returns `304` with zero bytes.
+
+These static surfaces send strong `ETag` validators: send `If-None-Match` to revalidate — unchanged content returns `304` with zero bytes.
 
 ## Source map
 
-- [Frontend app](src/App.jsx): React UI with nine tabs — single-turn, agentic loop, batching, compare, A/B replay, run diff, hardware shortlist, KV-cache calculator, theory
-- [Standalone compare page](compare.html)
-- [Serverless API](api/_router.js): all `/api/*` routes and handlers (compute simulators, vram fit, best/sizing recommendations, localmaxxing benchmarks, watch feeds, snapshots)
-- [Shared math library](lib/)
-- [Python client](clients/python/pyproject.toml)
-- [TypeScript schema types](clients/typescript/schema.d.ts)
-- [Build & codegen scripts](scripts/generate-sitemap.mjs)
+- Frontend app (`src/App.jsx`): React UI with nine tabs — single-turn, agentic loop, batching, compare, A/B replay, run diff, hardware shortlist, KV-cache calculator, theory
+- [Standalone compare page](/compare.html)
+- Serverless API (`api/_router.js`): all `/api/*` routes and handlers (compute simulators, vram fit, best/sizing recommendations, localmaxxing benchmarks, watch feeds, snapshots)
+- Shared math library (`lib/`)
+- Python client (`clients/python/pyproject.toml`)
+- TypeScript schema types (`clients/typescript/schema.d.ts`)
+- Build & codegen scripts (`scripts/generate-sitemap.mjs`)
 
 ## Typical agent workflow
 
-1. Read [the full API guide](public/llms.txt) once — it documents batching, dry-run validation, snapshot pinning and the `/v1/` prefix policy.
+1. Read [the full API guide](https://llm-prefill-decode-visualizer.vercel.app/llms.txt) once — it documents batching, dry-run validation, snapshot pinning and the `/v1/` prefix policy.
 2. `GET /api/spec`, then call `/api/vram?hfId=…&context=…&vramGb=…` for fit checks or `/api/sizing?model=…` for ranked hardware recommendations.
 3. Model request shapes with `GET|POST /api/compute?model=singleTurn|agentic|kvCache|cost|…`.
 
@@ -153,9 +162,12 @@ An interactive tool for understanding LLM inference performance: prefill (comput
 <!-- agent-parseable:meta -->
 Base-URL: https://llm-prefill-decode-visualizer.vercel.app
 OpenAPI-Spec: /api/spec
+Agent-Manifest: /agents.json
+Endpoint-Index: /api/agent/index.json
 Tabs: single,agentic,batching,compare,ab,diff,shortlist,kvcache,theory
 Tab-URL-Template: {Base-URL}/?tab={id}
 Tab-Section-Header-Format: ### Tab: {id} — {label}
+Persisted-State-Keys: llmpd-theme,llmpdv.slo-budgets-v1,llmpdv.snapshots.v1,llmpd-plain-mode,llmpd-analogy-mode,changelog.dismissedId,llmpd-concept-checks-v1,llmpd-curriculum-progress
 Repo: https://github.com/riceharvest/llm-prefill-decode-visualizer
 <!-- /agent-parseable:meta -->
 
@@ -395,7 +407,27 @@ The machine-readable registry also lives in `/api/spec` (`x-error-codes` + the `
 
 ## App tabs (interactive page)
 
-The human-facing UI is this same site. Deep links carry state via URL params: `?tab=<id>`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`, `theme=<name>`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
+## Data dumps and the comparable subset
+
+legacy `GET /api/export` returns exactly this dump with `?comparable=true`; the full run index (comparable AND non-comparable) is at `GET /api/runs`. The comparable subset feeds /api/best medians.
+
+The human-facing UI is this same site. Deep links carry state via URL params: `?tab=<id>`, `preset=<hardware-id>`, `prompt=`, `output=`, `spec=1&draftK=&acc=`. Keyboard: Space play/pause, R reset, Ctrl+Z undo, Ctrl+Shift+Z redo, 1–9 and 0 switch tabs, ? opens the shortcuts dialog.
+
+**Deep-link id vocabularies (authoritative sources):**
+
+- `preset=<hardware-id>` (global): valid ids are the `hardware[].id` enum from **GET /api/presets** (`rtx4090_exl2`, `dual_rtx3090`, `rtx3090_llamacpp`, `mac_ultra`, `rtx3060_entry`, `groq`, `h100`, `rpi5`, `custom`). A value starting with `lmx:` selects a measured LocalMaxxing run.
+- On the `kvcache` tab: `gpu=` takes a GPU-catalog id (`rtx5090`, `rtx4090`, `rtx3090`, `rx7900xtx`, `rtx5070ti`, `rtx4060ti16`, `rtx4060`, `rtx6000ada`, `l40s`, `a100`, `h100`, `m4max128`, `m2ultra192`) and `wp=` takes one of `fp16`, `q8`, `q4`.
+- **Unknown-id behavior:** an unknown `preset=`, `gpu=` or `wp=` value is never silently swapped for a default and never erased from the URL. The app keeps the original value in the link, shows a visible warning banner, sets `data-invalid-param="<name>=<value>"` on the content root, logs a `console.warn`, and displays default speeds/hardware until you pick a valid id.
+Playback speed is deep-linkable on every animated tab: `sim=instant` completes the animation immediately (<1 s; alias `inst` accepted — both spellings work), and numeric multipliers map to the speed buttons as `sim=1|2|5|20`. Combine with `autoplay=1` to start the run on load, e.g. `/?tab=single&autoplay=1&sim=instant` lands on finished output without waiting through real-time animation.
+
+### Instant results on animated tabs (escape hatches)
+
+The single-turn, agentic, batching and A/B tabs animate their simulation (seconds to minutes at 1x). Two supported ways to get the final completed DOM immediately:
+
+- `?sim=instant` — URL-addressable; every animated view jumps straight to the completed state (<1 s). Works on `/` and `/embed` and composes with `autoplay=1` (e.g. `/?tab=agentic&sim=instant&autoplay=1`).
+- `prefers-reduced-motion: reduce` — the OS-level media query is honored by all four animated views and also forces instant completion. In headless browsers: Playwright context option `reducedMotion: 'reduce'` or CDP `Emulation.setEmulatedMedia({features:[{name:'prefers-reduced-motion', value:'reduce'}]})`. This is environment-based (not shareable via URL), so prefer `?sim=instant` when you control the link.
+
+Both hatches produce the identical final DOM state as a full-speed run; completion is detectable via the view's status text ("Run complete" / phase labels).
 
 <!-- tabs-section:start -->
 ### Tab: single — Single-turn
@@ -405,6 +437,26 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Purpose: Animate one chat request end to end: prompt ingestion (prefill) sets TTFT, then token-by-token generation (decode) sets TPOT and total walltime.
 - Surfaces: request timeline animation; speed controls + hardware presets; TTFT/TPOT/walltime metrics; chart + data table; SLO budget checks
 - Endpoints: GET /api/compute?model=singleTurn; GET /api/presets
+- URL params:
+  - ctx=<1024–1048576> — context length (tokens)
+  - ctxHalf=<1024–1048576> — cache depth at half speed (C½) for context-scaling decay
+  - img=<0|1> — attached images on/off
+  - imgN=<1–8> — number of attached images
+  - imgRes=`720p`|`1080p`|`1440p`|`4k`> — per-image resolution preset (from multimodal.js IMAGE_PRESETS)
+  - jit=<0|1> — ITL jitter on/off
+  - jitPct=<5–60, step 5> — jitter percentage
+  - autoplay=1|0 — start the simulation automatically on load
+
+| Param | Meaning |
+| --- | --- |
+| `ctx` | ctx=<1024–1048576> — context length (tokens) |
+| `ctxHalf` | ctxHalf=<1024–1048576> — cache depth at half speed (C½) for context-scaling decay |
+| `img` | img=<0|1> — attached images on/off |
+| `imgN` | imgN=<1–8> — number of attached images |
+| `imgRes` | imgRes=`720p`|`1080p`|`1440p`|`4k`> — per-image resolution preset (from multimodal.js IMAGE_PRESETS) |
+| `jit` | jit=<0|1> — ITL jitter on/off |
+| `jitPct` | jitPct=<5–60, step 5> — jitter percentage |
+| `autoplay` | autoplay=1|0 — start the simulation automatically on load |
 
 ### Tab: agentic — Agentic loop
 
@@ -413,6 +465,11 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Purpose: Simulate a multi-turn tool-calling loop that re-ingests growing history every turn; compare walltime growth with and without prefix caching.
 - Surfaces: turn-by-turn timeline; per-turn token breakdown; prefix-caching toggle; cumulative walltime chart
 - Endpoints: GET /api/compute?model=agentic
+- URL params:
+  - turns=<n> — number of loop turns
+  - sprompt=<int> — base prompt tokens per turn
+  - tool=<int> — tool-output tokens added per turn
+  - thought=<int> — decode tokens generated per turn
 
 ### Tab: batching — Batching
 
@@ -421,6 +478,14 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Purpose: Show concurrent users sharing one accelerator: per-user decode decays as batchSize^(−decodeDecayExponent) with batch size while aggregate throughput climbs — a heuristic power law with NO saturation point, so it must not be used alone to pick an optimal batch size.
 - Surfaces: batch-size slider; per-user vs aggregate throughput meters; shared-compute animation
 - Endpoints: GET /api/compute?model=batched
+- URL params:
+  - breqs=<2–48> — concurrent requests in the batch
+  - bprompt=<128–32768> — mean prompt tokens per request
+  - bgen=<32–4096> — mean output tokens per request
+  - bmax=<1–32> — maximum batch size (concurrent decodes)
+  - bchunk=<0|128|256|512|1024|2048|4096|8192> — chunked-prefill chunk size; 0 disables chunking. The UI slider is indexed by these stops, so DOM slider position ≠ token value
+  - barr=<0–2000, ms> — interval between request arrivals
+  - sim=<1|2|5|20|instant> — playback time-scale multiplier shared by all animated tabs
 
 ### Tab: compare — Compare
 
@@ -429,6 +494,13 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Purpose: Side-by-side hardware comparison at fixed workload shapes, blending built-in presets with measured community benchmark medians.
 - Surfaces: hardware preset table; measured-speed columns; apply-measured-speeds action; community run counts
 - Endpoints: GET /api/benchmarks; GET /api/best; GET /api/localmaxxing; GET /api/presets
+- URL params:
+  - hwA=<preset-id>&hwB=<preset-id> — compared systems
+  - cp=<int>&co=<int> — test workload prompt/output tokens
+  - batch=<n> — batch size for the comparison
+  - piA=<$/Mtok>&poA=<…>&piB=<…>&poB=<…> — optional token prices per side
+  - qtm=<model-family> — quant tradeoff matrix family filter
+  - tcoHw=<id>&tcoW=<watts>&tcoKwh=<$/kWh>&tcoCloud=<$/Mtok>&tcoCapex=<usd>&tcoAmort=<months> — TCO calculator
 
 ### Tab: ab — A/B
 
@@ -437,6 +509,9 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Purpose: Replay two hardware configs head-to-head on the identical workload so prefill/decode differences are visible as a race.
 - Surfaces: A/B config pickers; synchronized replay animation; per-phase winner callouts
 - Endpoints: GET /api/compute?model=singleTurn
+- URL params:
+  - abA=<preset-id>&abB=<preset-id> — lane configs
+  - abp=<int>&abo=<int> — shared workload prompt/output tokens
 
 ### Tab: diff — Diff
 
@@ -445,6 +520,8 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Purpose: Diff two community benchmark runs (or two constraint sets via what-if mode) and read per-metric deltas plus a plain-language summary.
 - Surfaces: run A/B free-text id inputs; per-metric delta rows with ratios; plain-language summary; deep links (?tab=diff&runA&runB) auto-execute on load
 - Endpoints: GET /api/diff?runA=<id>&runB=<id>; GET /api/diff?mode=whatif
+- URL params:
+  - runA=<runId>&runB=<runId> — measured run ids from GET /api/localmaxxing or /api/runs
 
 ### Tab: shortlist — Find HW
 
@@ -453,6 +530,12 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Purpose: Turn a workload spec into a ranked hardware shortlist: VRAM fit, expected latency vs SLO budgets, and confidence from sample counts.
 - Surfaces: workload/constraint form; ranked shortlist table; VRAM fit check; confidence badges
 - Endpoints: GET /api/sizing; GET /api/best; GET /api/vram; GET /api/parse-constraints
+- URL params:
+  - sd=<tok/s> — minimum acceptable decode speed
+  - sv=<GB> — maximum VRAM budget
+  - sm=<substring> — model family filter
+  - sq=<quantization> — exact quantization match
+  - API mapping: sd→GET /api/best?minDecode=, sv→&maxVramGb=, sm→&model=, sq→&quant=
 
 ### Tab: kvcache — KV cache
 
@@ -461,29 +544,59 @@ The human-facing UI is this same site. Deep links carry state via URL params: `?
 - Purpose: Compute KV-cache VRAM for a model architecture across context lengths and quantizations, including GQA head layout.
 - Surfaces: architecture/model picker; context × precision matrix; quant tradeoff matrix; multi-GPU planner
 - Endpoints: GET /api/vram; GET /api/compute?model=kvCache
+- URL params:
+  - model=<arch-preset-id> — architecture preset
+  - ctx=<int> — context length
+  - prec=<2|1|0.5> — KV cache bytes per value (fp16/fp8/int4)
+  - batch=<n> — batch size
+  - vram=<GB>&gpu=<gpu-id> — budget ledger override + GPU card
+  - wp=<weight-preset-id>&wgb=<GB> — weight precision preset / override
+  - oh=<pct> — overhead fraction (%)
+  - planner: gpus=<n>&par=tp|pp&bus=<interconnect>&card=<card-id>&wprec=<bytes>
 
 ### Tab: theory — Theory
 
 - Tab-ID: theory
 - URL: /?tab=theory
 - Purpose: Plain-language guide to why prefill is compute-bound and decode is bandwidth-bound, with analogies, glossary and misconception callouts.
-- Surfaces: concept walkthrough; analogies toggle; jargon glossary; misconception callouts
+- Surfaces: concept walkthrough; plain-language mode via ?plain=1 (off: ?plain=0); analogies via ?analogy=1 (off: ?analogy=0); jargon glossary; misconception callouts
 - Endpoints: none (static explainer content)
 
 <!-- tabs-section:end -->
 
-## Rendering modes (theming)
+**The page route is HTML-only.** Every `/?tab=...` deep link returns the same SPA shell regardless of query params; `?format=json` and `Accept: application/json` are NOT honored, and all numbers are computed client-side after JavaScript executes. To get results over plain HTTP, use the `/api/compute` model listed in each tab's Endpoints line - it runs the same math server-side.
 
-Three palettes ship: `dark` (default, the `:root` tokens), `light`, and `high-contrast` (pure black/white). The active palette always drives rendering — every color token in the stylesheet is keyed off `<html data-theme>`.
+**Global URL params (any tab):** `tab=<id>` (view id) - `preset=<hardware-preset-id>` or `preset=lmx:<runId>` - bind a built-in preset OR a measured LocalMaxxing run (runId from GET /api/localmaxxing; explicit prefill/decode override its speeds) - `prefill=<tok/s>` - `decode=<tok/s>` - `sim=<multiplier>|instant` - `flags=<id,id,...>` (engine-flag preview) - `autoplay=1` - `lang=en|ar` (unsupported values fall back to English and set data-lang-fallback) - `title=<text>` (cosmetic share-link title).
 
-Machine-readable theme state (issues #662 #668):
+**Embed shell:** `/embed?tab=<id>` renders the same views chrome-free inside an <iframe>, reading the identical URL params. Its tab vocabulary includes `?tab=curriculum`, the guided-lessons quiz view.
 
-- **Detect:** read `document.documentElement.dataset.theme` — one of `dark`, `light`, `high-contrast`. It matches what actually renders.
-- **Set via URL:** append `?theme=dark|light|high-contrast` (validated; unknown values are ignored). A `?theme=` deep link wins over stored preferences and OS settings, and does not persist.
-- **Set via storage:** write localStorage key `llmpd-theme` to one of the three names before load for a persistent pick.
-- **Change event:** the window fires `llmpd-theme-change` (`detail.theme`) on programmatic switches.
+## Embedding (/embed)
 
-Without any of these signals the theme follows OS preferences: `prefers-contrast: more` → `high-contrast`, else `prefers-color-scheme: light` → `light`, otherwise `dark`.
+`/embed?tab=<id>&…` serves the chrome-less visualizer for cross-origin `<iframe>` embedding. The frame talks back over `window.postMessage`; every message is a `{ type, … }` object:
+
+- Frame → parent: `{ "type": "llmpdv:ready", "tab": "<id>" }` on mount, and `{ "type": "llmpdv:state", "tab": "<id>", "playing": true|false }` whenever the tab or playback state changes.
+- Parent → frame: `{ "type": "llmpdv:command", "action": "play" | "pause" | "reset" | "setTab", "tab": "<id>" }` (`tab` required only for `setTab`, ignored otherwise). Commands are accepted only from the direct parent window; anything else is dropped.
+
+There is no dedicated completion event yet — start a run (`autoplay=1` or a `play` command) and watch `llmpdv:state` until `playing` flips back to `false`.
+
+## Trust assumptions (subresource integrity)
+
+No `integrity=` SRI pins ship anywhere today. Same-origin bundles under `/assets/` are content-hash-addressed by filename but not pinned in the HTML, and the Google Fonts CSS plus font binaries load cross-origin from `fonts.googleapis.com` / `fonts.gstatic.com` with no integrity attribute (their responses are UA-dependent, so no stable hash exists — self-host/proxy them if you need verifiable subresources). There is also no Content-Security-Policy header yet. This trust assumption applies to every route, including `/embed`.
+
+## Persisted client state
+
+These browser-localStorage keys hold state that share links do NOT carry.
+Checkpoint/restore a whole session with serializeSessionState()/restoreSessionState()
+in src/utils/sessionState.js ({ schemaVersion, capturedAt, state: { [key]: rawStorageString } }).
+
+- `llmpd-theme` — owner src/utils/theme.js — shape "dark" | "light" | "high-contrast" — affects rendered output for the same URL: no — Color theme choice; OS preference followed until user picks.
+- `llmpdv.slo-budgets-v1` — owner src/utils/slo.js — shape { ttftMs: number|null, tpotMs: number|null, walltimeSec: number|null } — affects rendered output for the same URL: YES — SLO budget thresholds backing the pass/fail verdict badges.
+- `llmpdv.snapshots.v1` — owner src/utils/settingsHistory.js — shape Array<{ id, label, at, settings }> — affects rendered output for the same URL: no — Named named-snapshot library shown in the Snapshots panel.
+- `llmpd-plain-mode` — owner src/utils/plainLanguage.js — shape "1" | absent — affects rendered output for the same URL: YES — Plain-language mode rewrites jargon in every UI string app-wide.
+- `llmpd-analogy-mode` — owner src/utils/analogies.js — shape "1" | absent — affects rendered output for the same URL: YES — Analogy-chip preference in Theory view content.
+- `changelog.dismissedId` — owner src/utils/changelog.js — shape string (changelog entry id) — affects rendered output for the same URL: YES — Changelog banner entry the visitor dismissed.
+- `llmpd-concept-checks-v1` — owner src/utils/conceptChecks.js — shape { [tab]: { [checkId]: boolean } } — affects rendered output for the same URL: no — Per-tab theory quiz answers.
+- `llmpd-curriculum-progress` — owner src/utils/curriculum.js — shape { completed: { [lessonId]: epochMs } } — affects rendered output for the same URL: no — Curriculum lesson completion timestamps.
 
 Source: https://github.com/riceharvest/llm-prefill-decode-visualizer
 
@@ -725,7 +838,7 @@ migrate before `Sunset`. Agents can discover the current policy at
 
 # llm-prefill-decode-visualizer MCP server
 
-MCP server (stdio transport) wrapping the [LLM Prefill & Decode Visualizer API](https://llm-prefill-decode-visualizer.vercel.app/llms.txt). Lets any MCP client run inference math and query community-measured hardware benchmarks without hand-rolling HTTP calls.
+This repo ships a **stdio** MCP server (`mcp/server.js`) that wraps the [LLM Prefill & Decode Visualizer API](https://llm-prefill-decode-visualizer.vercel.app/llms.txt) for local/desktop clients. It is NOT the same surface as the hosted MCP server the site itself serves at `/api/mcp` (Streamable HTTP) — see ["Hosted server"](#hosted-server) below for the 8 hosted tools. Lets any MCP client run inference math and query community-measured hardware benchmarks without hand-rolling HTTP calls.
 
 ## Tools
 
@@ -735,6 +848,28 @@ MCP server (stdio transport) wrapping the [LLM Prefill & Decode Visualizer API](
 | `search_runs` | `GET /api/localmaxxing` | Raw community-measured benchmark runs, filterable by hardware/model/quant |
 | `best_configs` | `GET /api/best` | Ranked hardware×model configs by median measured decode/prefill speed |
 | `compare_hardware` | `GET /api/best` ×2 | A-vs-B rig comparison: per-model-family deltas + verdict |
+
+## Hosted server
+
+The deployed site also runs its own MCP server over **Streamable HTTP** at
+`/api/mcp` (manifest: `/.well-known/mcp.json`). It is a different, larger
+toolset — point a Streamable-HTTP-capable client there instead of running this
+stdio wrapper when you want live access:
+
+| Hosted tool | Wraps |
+|---|---|
+| `compute_single_turn` | `GET /api/compute?model=singleTurn` |
+| `compute_agentic_loop` | `GET /api/compute?model=agentic` |
+| `kv_cache_vram` | KV-cache VRAM math (compute model=kvCache) |
+| `vram_from_hf_id` | VRAM fit from a Hugging Face model id (`/api/vram`) |
+| `hardware_presets` | `GET /api/presets` |
+| `benchmarks` | `GET /api/benchmarks` (grouped medians) |
+| `cost_per_1m` | `GET /api/compute?model=cost` |
+| `engine_flags` | Engine launch-flag deltas + flagged simulation |
+
+The two servers are independent: tool names, argument schemas and transports
+differ, so configure the one your client supports (stdio → this folder,
+Streamable HTTP → `/api/mcp`).
 
 ## Configuration
 
@@ -793,3 +928,93 @@ printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion
 ```
 
 ---
+
+<!-- source: src/i18n/locales/en/theory.json + src/i18n/locales/en/plainLanguage.json -->
+
+# Theory tab content
+
+> LLM Inference Mechanics · Prefill vs Decode. Compiled verbatim from the English locale files
+> that power the interactive Theory tab (`src/i18n/locales/en/theory.json`
+> and `plainLanguage.json`), so this text cannot drift from what the UI
+> renders.
+
+## 1 · Prefill — prompt ingestion
+
+During prefill, the LLM processes the entire input prompt (all prompt tokens) at once. The attention mechanism builds the initial Key-Value (KV) cache for every prompt token.
+
+- Bottleneck: compute-bound (tensor cores / FLOPs).
+- Operation: matrix-matrix multiplication (GEMM). High arithmetic intensity.
+- TTFT (time to first token): TTFT = prompt tokens / prefill speed
+
+## 2 · Decode — autoregressive generation
+
+During decode, tokens are generated strictly one by one. For every generated token, the GPU must read all model parameters and previous KV cache vectors from VRAM into compute registers.
+
+- Bottleneck: memory bandwidth-bound (VRAM transfer rate).
+- Operation: matrix-vector multiplication (GEMV). Low arithmetic intensity.
+- TPOT (time per output token): TPOT = 1000 / decode speed (ms/token)
+
+## Why agentic loops require per-turn walltime measurement
+
+An AI agent operates in a loop: Plan → Tool Call → Tool Execution → Process Result → Next Action. With each turn, the conversation context grows because previous tool inputs and outputs are appended to the prompt.
+
+### Without prefix caching
+
+On turn k, the inference server must re-prefill the entire accumulated history Pk. Prefill latency increases linearly/quadratically per turn, causing high turn walltime.
+
+### With prefix caching (RadixAttention)
+
+The server reuses existing KV cache blocks for turns 1..k-1. It only prefills the new tool response tokens ΔPk-1, keeping turn walltimes consistently low.
+
+## Community FAQ — speed setups
+
+Compiled from the questions local-LLM users most often ask on X. Use the tabs above to reproduce each scenario.
+
+### Why is my first token so slow, then the rest are fast?
+
+That is normal. The first token waits for the prefill phase: the whole prompt is processed at once (compute-bound). On a mid GPU that is hundreds of ms. After that, decode runs at one token per step, so it feels fast per token — but every token reads the full model weights from VRAM, which is why decode is bandwidth-bound.
+
+### What is a good tok/s for a local model?
+
+It depends on the model size and your memory bandwidth. Rule of thumb: decode speed ≈ usable VRAM bandwidth ÷ model size in bytes. A 24 GB/s-class card with a 4-bit 8B model does roughly 30-60 tok/s. If you are below ~10 tok/s on an 8B, something is off (CPU offload, no GPU layers, wrong build).
+
+### Why is decode so much slower than prefill?
+
+Prefill is a big parallel matrix-matrix multiply (GEMM) — perfect for tensor cores. Decode is one matrix-vector multiply (GEMV) per token and is dominated by reading weights + KV cache from VRAM. You cannot fix decode speed with more compute; you need more memory bandwidth or a smaller/faster quantized model.
+
+### How much VRAM do I need for model + context?
+
+VRAM ≈ weights + KV cache + ~1-2 GB overhead. Weights: model bytes × quant size (e.g. 70B at Q4 ≈ 35-40 GB). KV cache: use the KV Cache Calculator tab — a dense 70B at 32k context FP16 is about 10 GB, so it often does not fit on 24 GB together with weights. Lower KV precision (FP8/INT4) or a shorter context is the lever.
+
+### Why does my context length run out of memory?
+
+Because KV cache grows linearly with context and is allocated for every layer. Long prompts with agents (tool outputs, history) fill it fast. Solutions: quantize the KV cache (--cache-type-k/v q8_0 or q4_0), shorten the system prompt, enable prefix caching, or pick a model with MLA / linear attention (they need far less KV per token).
+
+### Does flash attention speed up prefill or decode?
+
+Flash attention mainly accelerates prefill and long-context attention compute, and it reduces memory use. It has little effect on the decode bottleneck (bandwidth-bound GEMV). It can also free VRAM, which indirectly lets you use a bigger context. Benchmark both — the gain is model- and context-dependent.
+
+### Is a higher quant always slower?
+
+Usually yes but not by much. Q8 vs Q4 changes decode speed roughly by the bandwidth ratio of the sizes read per token. On a 4090-class card, 70B Q4 vs Q8 can differ 10-30%. Quality also differs: use the largest quant that fits your VRAM budget — Q4_K_M is the common sweet spot.
+
+### Why is my Mac / CPU box slower than the GPU numbers I see?
+
+Unified memory and system RAM have far lower bandwidth than GDDR/HBM (e.g. ~100 GB/s vs 1000+ GB/s). Decode speed tracks that bandwidth. Also check the backend actually uses GPU layers (Metal/CUDA) and not CPU fallback, and that you are comparing the same quant and context.
+
+## Jargon glossary
+
+Every term this mode rewrites, with its plain equivalent and the technical meaning behind it.
+
+- **Prefill** → reading the whole prompt first: Prefill — the parallel pass where the model ingests every prompt token at once and builds the KV cache. Sets TTFT.
+- **Decode** → writing one word piece at a time: Decode — autoregressive generation: one token per step, with every step re-reading the model weights and KV cache from VRAM.
+- **TTFT** → wait before the first word appears: TTFT (Time To First Token) — how long from sending your prompt until the first output token shows up. Set by prefill speed.
+- **TPOT** → time to write each following word piece: TPOT (Time Per Output Token) — average time to generate each token after the first. Set by decode speed.
+- **GEMM** → bulk parallel math step: GEMM (matrix-matrix multiplication) — many multiply-accumulate operations executed at once. High arithmetic intensity, so it is compute-bound; prefill is dominated by it.
+- **GEMV** → memory-speed math step: GEMV (matrix-vector multiplication) — one row of math per token whose speed is capped by memory bandwidth; decode is dominated by it.
+- **KV cache** → notes on everything read so far: KV cache — per-token Key/Value vectors kept in VRAM so already-processed tokens don't have to be recomputed. Grows linearly with context length.
+- **Prefix caching** → reusing earlier reading notes: Prefix caching — reusing the KV cache of a shared prompt prefix across requests or turns instead of recomputing it from scratch.
+- **VRAM** → graphics-card memory: VRAM — the memory on the graphics card that holds model weights, the KV cache and activation buffers.
+- **token** → word piece: Token — the chunk of text (~¾ of a word) that a model reads and writes; prompts and outputs are counted in tokens.
+- **compute-bound (tensor cores / FLOPs)** → limited by processor speed: Compute-bound — the math units (tensor cores / FLOPs), not memory, set the pace. Prefill usually is compute-bound.
+- **bandwidth-bound (memory transfer rate)** → limited by memory speed: Bandwidth-bound — moving weights and cache from VRAM is the bottleneck, not math. Decode usually is bandwidth-bound.
