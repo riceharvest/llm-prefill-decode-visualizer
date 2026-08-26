@@ -21,6 +21,7 @@ import SloBadge from './SloBadge';
 import { evaluateAgenticSlo, evaluateMetric, formatSloMs } from '../utils/slo.js';
 
 import usePrefersReducedMotion from '../utils/usePrefersReducedMotion';
+import { createFrameScheduler, runStateFor } from '../utils/playback';
 import { buildAgenticMarkdown, buildDeepLink, downloadMarkdown, copyMarkdownToClipboard } from '../utils/exportMarkdown';
 import { buildAgenticJson, downloadJson, serializeJson } from '../utils/exportJson';
 import { waterfallAriaSummary } from '../utils/agenticChartA11y';
@@ -285,7 +286,12 @@ export default function AgenticVisualizer({
     setTimeout(() => { setMdCopied(false); setMdCopyFailed(false); }, 2000);
   };
 
-  // Ref for timer
+  // Ref for timer. Ticks run through the shared frame scheduler (#860):
+  // while the tab is hidden the scheduler drives them from a wall-clock
+  // timer so playback advances instead of freezing at the first frame.
+  const framesRef = useRef(null);
+  if (!framesRef.current) framesRef.current = createFrameScheduler();
+  useEffect(() => () => framesRef.current?.dispose(), []);
   const animFrameRef = useRef(null);
   const lastTickRef = useRef(null);
   const simTimeRef = useRef(0);
@@ -332,7 +338,7 @@ export default function AgenticVisualizer({
   // Simulation runner effect
   useEffect(() => {
     if (!isPlaying) {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animFrameRef.current) framesRef.current.cancel(animFrameRef.current);
       lastTickRef.current = null;
       return;
     }
@@ -365,7 +371,7 @@ export default function AgenticVisualizer({
     const tick = (now) => {
       if (!lastTickRef.current) {
         lastTickRef.current = now;
-        animFrameRef.current = requestAnimationFrame(tick);
+        animFrameRef.current = framesRef.current.request(tick);
         return;
       }
 
@@ -435,13 +441,13 @@ export default function AgenticVisualizer({
         }
       }
 
-      animFrameRef.current = requestAnimationFrame(tick);
+      animFrameRef.current = framesRef.current.request(tick);
     };
 
-    animFrameRef.current = requestAnimationFrame(tick);
+    animFrameRef.current = framesRef.current.request(tick);
 
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animFrameRef.current) framesRef.current.cancel(animFrameRef.current);
     };
   }, [
     isPlaying,
@@ -507,7 +513,15 @@ export default function AgenticVisualizer({
         : `Agent loop complete in ${formatTime(totalAgentWalltime)} across ${numTurns} turns.`;
 
   return (
-    <div className="stack">
+    <div
+      className="stack"
+      data-state={runStateFor({
+        isPlaying,
+        hasStarted: activeTurn > 0 || currentPhase !== 'idle',
+        hasFinished: currentPhase === 'completed'
+      })}
+      aria-busy={isPlaying || undefined}
+    >
 
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />

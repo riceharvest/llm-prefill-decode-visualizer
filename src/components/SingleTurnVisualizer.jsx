@@ -13,6 +13,7 @@ import { readTokenCount } from '../utils/urlState';
 import { shouldCompleteInstantly } from '../utils/simPlayback';
 import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { buildDecayCurveSamples } from '../utils/ctxDecayCurve';
+import { createFrameScheduler, runStateFor } from '../utils/playback';
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
@@ -300,7 +301,12 @@ export default function SingleTurnVisualizer({
     "is", "key", "to", "low-latency", "LLM", "inference."
   ];
 
-  // Ref for timer
+  // Ref for timer. Ticks run through the shared frame scheduler (#860):
+  // while the tab is hidden the scheduler drives them from a wall-clock
+  // timer so playback advances instead of freezing at the first frame.
+  const framesRef = useRef(null);
+  if (!framesRef.current) framesRef.current = createFrameScheduler();
+  useEffect(() => () => framesRef.current?.dispose(), []);
   const animFrameRef = useRef(null);
   const lastTickRef = useRef(null);
   const simTimeRef = useRef(0); // simulated seconds elapsed
@@ -330,7 +336,7 @@ export default function SingleTurnVisualizer({
   // Start / Resume simulation
   useEffect(() => {
     if (!isPlaying) {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animFrameRef.current) framesRef.current.cancel(animFrameRef.current);
       lastTickRef.current = null;
       return;
     }
@@ -368,7 +374,7 @@ export default function SingleTurnVisualizer({
     const tick = (now) => {
       if (!lastTickRef.current) {
         lastTickRef.current = now;
-        animFrameRef.current = requestAnimationFrame(tick);
+        animFrameRef.current = framesRef.current.request(tick);
         return;
       }
 
@@ -416,13 +422,13 @@ export default function SingleTurnVisualizer({
         return;
       }
 
-      animFrameRef.current = requestAnimationFrame(tick);
+      animFrameRef.current = framesRef.current.request(tick);
     };
 
-    animFrameRef.current = requestAnimationFrame(tick);
+    animFrameRef.current = framesRef.current.request(tick);
 
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animFrameRef.current) framesRef.current.cancel(animFrameRef.current);
     };
   }, [isPlaying, simSpeedMultiplier, prefersReducedMotion, promptTokens, outputTokens, prefillSpeed, decodeSpeed, effectiveDecodeSpeed, expectedTTFT, expectedTotalTime, totalPrefillTokens, safeOutputTokens, itlSchedule, ctxScaleEnabled, ctxHalfSafe]);
 
@@ -659,7 +665,15 @@ export default function SingleTurnVisualizer({
 
 
   return (
-    <div className="stack">
+    <div
+      className="stack"
+      data-state={runStateFor({
+        isPlaying,
+        hasStarted: phase !== 'idle',
+        hasFinished: phase === 'completed'
+      })}
+      aria-busy={isPlaying || undefined}
+    >
 
       {/* Issue #73: screen-reader progress announcements (visually hidden) */}
       <AriaLiveRegion message={liveMessage} />
