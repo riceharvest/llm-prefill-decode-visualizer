@@ -152,19 +152,6 @@
   ],
   "headers": [
     {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        }
-      ]
-    },
-    {
       "source": "/llms.txt",
       "headers": [
         {
@@ -201,6 +188,19 @@
       ]
     },
     {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    },
+    {
       "source": "/api/agent/index.json",
       "headers": [
         {
@@ -215,6 +215,33 @@
         {
           "key": "Vary",
           "value": "Accept-Encoding"
+        }
+      ]
+    },
+    {
+      "source": "/llms.txt",
+      "headers": [
+        {
+          "key": "X-Agent-Endpoints",
+          "value": "/api/spec, /llms.txt, /agents.json, /api/mcp, /api/agent/index.json"
+        }
+      ]
+    },
+    {
+      "source": "/agents.json",
+      "headers": [
+        {
+          "key": "X-Agent-Endpoints",
+          "value": "/api/spec, /llms.txt, /agents.json, /api/mcp, /api/agent/index.json"
+        }
+      ]
+    },
+    {
+      "source": "/api/agent/index.json",
+      "headers": [
+        {
+          "key": "X-Agent-Endpoints",
+          "value": "/api/spec, /llms.txt, /agents.json, /api/mcp, /api/agent/index.json"
         }
       ]
     },

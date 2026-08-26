@@ -37,6 +37,22 @@ function numSloCap(v) {
 }
 
 /**
+ * Parse the SLO/budget caps from query params into the response `slo` echo
+ * block (#1052): TTFT/TPOT caps plus the VRAM budget cap, so agents can
+ * audit which constraints were registered. Returns the echo object and the
+ * numeric maxVramGb used for filtering.
+ */
+export function buildSlo(params) {
+  const slo = {
+    maxTtftSeconds: params.maxTtftSeconds != null ? num(params.maxTtftSeconds, null) : null,
+    maxTpotMs: params.maxTpotMs != null ? num(params.maxTpotMs, null) : null
+  };
+  const maxVramGb = Number(params.maxVramGb);
+  if (Number.isFinite(maxVramGb)) slo.maxVramGb = maxVramGb;
+  return { slo, maxVramGb };
+}
+
+/**
  * Estimate bits-per-weight from a quantization label (q4_k_m → ~4.25,
  * q8_0 → 8.25-ish is wrong so plain digits win: 8 + 0.25 only for _k quants).
  * Unknown labels fall back to 4.25 — the typical community GGUF.

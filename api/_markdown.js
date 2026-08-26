@@ -27,11 +27,82 @@ function formatParam(req) {
   }
 }
 
-/** True when the request's Accept header (or ?format=) asks for markdown. */
+const MARKDOWN_TYPES = new Set(['text/markdown', 'application/markdown']);
+const JSON_TYPES = new Set(['application/json']);
+
+/**
+ * Parse an Accept header into ordered media ranges with quality values
+ * (RFC 9110 §12.5.1): `[{ type, q, order }]`. Malformed entries and
+ * non-finite q values are skipped; q defaults to 1 when absent.
+ */
+export function parseAccept(accept) {
+  if (!accept) return [];
+  return String(accept)
+    .split(',')
+    .map((part, i) => {
+      const [range, ...params] = part.split(';');
+      const type = range.trim().toLowerCase();
+      if (!type || !type.includes('/')) return null;
+      let q = 1;
+      for (const p of params) {
+        const m = /^\s*q\s*=\s*([^\s]+)\s*$/i.exec(p);
+        if (m) {
+          const v = Number(m[1]);
+          if (!Number.isFinite(v)) return null;
+          q = Math.max(0, Math.min(1, v));
+        }
+      }
+      return { type, q, order: i };
+    })
+    .filter(Boolean);
+}
+
+/** Highest-q entry whose range matches `type` exactly or via wildcard. */
+function bestMatch(ranges, type) {
+  const [major, minor] = type.split('/');
+  let best = null;
+  for (const r of ranges) {
+    if (r.q <= 0) continue;
+    const matches =
+      r.type === `${major}/${minor}` ||
+      r.type === `${major}/*` && minor !== '*' ||
+      r.type === '*/*';
+    if (matches && (!best || r.q > best.q)) best = r;
+  }
+  return best;
+}
+
+/**
+ * True only when a markdown variant is the client's preferred acceptable
+ * representation: markdown must be explicitly acceptable with a strictly
+ * higher q-value than JSON (ties keep the JSON default). An explicit
+ * `q=0` refusal is honored, junk types like `text/markdownx` never match,
+ * and unsatisfiable Accept headers fall back to the JSON default.
+ */
 export function wantsMarkdown(req) {
-  const accept = req?.headers?.accept || '';
-  if (MARKDOWN_RE.test(accept)) return true;
-  return FORMAT_MD_RE.test(formatParam(req));
+  // ?format=md / ?format=markdown is the query-param spelling of the same
+  // negotiation (#604); it wins over a plain `application/json` Accept, but an
+  // explicit Accept with text/markdown still wins over ?format=json.
+  const fmt = formatParam(req);
+  const ranges = parseAccept(req?.headers?.accept);
+  // ?format=md/markdown wins over a plain application/json Accept (#604).
+  // ?format=json/csv wins over an Accept that doesn't clearly prefer markdown.
+  if (FORMAT_MD_RE.test(fmt)) return true;
+  if (/^(json|csv)$/i.test(fmt) && ranges.length && !/text\/markdown/i.test(req?.headers?.accept || '')) return false;
+  if (!ranges.length) return false;
+  let md = null;
+  for (const t of MARKDOWN_TYPES) {
+    const m = bestMatch(ranges, t);
+    if (m && (!md || m.q > md.q)) md = m;
+  }
+  if (!md || md.q <= 0) return false;
+  let json = null;
+  for (const t of JSON_TYPES) {
+    const m = bestMatch(ranges, t);
+    if (m && (!json || m.q > json.q)) json = m;
+  }
+  if (json && json.q >= md.q) return false;
+  return true;
 }
 
 /** Escape pipe characters so table cells don't break. */
