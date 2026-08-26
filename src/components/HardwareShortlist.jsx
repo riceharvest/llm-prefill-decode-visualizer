@@ -1,19 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-<<<<<<< ours
-import { ListFilter, ExternalLink, RotateCcw } from 'lucide-react';
-import { readParam, readParamNum, writeParams } from '../utils/urlState';
+import { ListFilter, ExternalLink, RotateCcw, Download, ClipboardCopy } from 'lucide-react';
+import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
 import { quantizationMatches } from '../utils/hardwareShortlist';
 import { formatTime } from '../utils/presets';
 import { fetchHardwareShortlist, qualitySignals, qualitySummaryText } from '../utils/hardwareShortlist';
 import { fetchStateAttrs } from '../utils/fetchState';
-=======
-import { ListFilter, ExternalLink, RotateCcw, Download, ClipboardCopy } from 'lucide-react';
-import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
-import ChartDataTable from './ChartDataTable';
-import { downloadJson } from '../utils/exportJson';
-import { copyMarkdownToClipboard } from '../utils/exportMarkdown';
-import { buildShortlistJson, buildShortlistMarkdown } from '../utils/shortlistExport';
->>>>>>> theirs
 
 // Constraint-driven hardware shortlist ("find me hardware").
 //
@@ -127,80 +118,10 @@ export default function HardwareShortlist() {
       .map(([q]) => q);
   }, [optionRows]);
 
-<<<<<<< ours
   // Issue #832: constraints are applied server-side now (or by the client-side
   // fallback aggregator inside fetchHardwareShortlist), so the ranked rows ARE
   // the shortlist — no second client-side filter on top.
   const shortlist = rows;
-=======
-  const isSingleRun = (row) => (row.runsInGroup ?? 1) < 2;
-
-  const excludedSingleRunGroups = useMemo(() => (
-    requireMinRuns ? rows.filter(isSingleRun).length : 0
-  ), [rows, requireMinRuns]);
-
-  const shortlist = useMemo(() => rows.filter(row => {
-    if (requireMinRuns && isSingleRun(row)) return false;
-    if (minDecode !== '' && row.medianDecodeTokPerSec < Number(minDecode)) return false;
-    if (quant && (row.quantization || 'Unknown') !== quant) return false;
-    if (maxVram !== '') {
-      const vram = effectiveVramGb(row);
-      if (vram === null || vram > Number(maxVram)) return false;
-    }
-    return true;
-  }), [rows, minDecode, maxVram, quant, requireMinRuns]);
-
-  // Export payloads mirror the rendered ranking exactly (#442).
-  const exportRows = useMemo(() => shortlist.map(row => ({
-    ...row,
-    rig: rigLabel(row),
-    singleRunCaveat: isSingleRun(row)
-  })), [shortlist]);
-  const exportFilters = useMemo(() => ({
-    ...(minDecode !== '' ? { minDecodeTokPerSec: Number(minDecode) } : {}),
-    ...(maxVram !== '' ? { maxVramGb: Number(maxVram) } : {}),
-    ...(model.trim() ? { modelFamily: model.trim() } : {}),
-    ...(quant ? { quantization: quant } : {}),
-    minRunsInGroup: requireMinRuns ? 2 : 1
-  }), [minDecode, maxVram, model, quant, requireMinRuns]);
-
-  const handleExportJson = () => downloadJson(
-    buildShortlistJson({
-      rows: exportRows,
-      filters: exportFilters,
-      matchedRuns,
-      excludedSingleRunGroups
-    }),
-    'hardware-shortlist.json'
-  );
-
-  const handleCopyMd = async () => {
-    try {
-      await copyMarkdownToClipboard(buildShortlistMarkdown({
-        rows: exportRows,
-        filters: exportFilters,
-        matchedRuns,
-        excludedSingleRunGroups
-      }));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  };
-
-  const tableRows = useMemo(() => exportRows.map((row, i) => ({
-    id: `${row.hardwareKey}|${row.modelFamily}|${row.quantization}`,
-    label: `#${i + 1} ${row.rig}`,
-    cells: {
-      family: row.modelFamily || '—',
-      engineQuant: `${row.engine || '—'} · ${row.quantization || '—'}`,
-      medianDecode: `${Math.round(row.medianDecodeTokPerSec).toLocaleString()} tok/s`,
-      medianPrefill: `${Math.round(row.medianPrefillTokPerSec || 0).toLocaleString()} tok/s`,
-      runs: String(row.runsInGroup ?? '—') + (row.singleRunCaveat ? ' (n=1)' : '')
-    }
-  })), [exportRows]);
->>>>>>> theirs
 
   const rowStyle = { display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '0.82rem' };
   const numStyle = { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 };
@@ -331,19 +252,12 @@ export default function HardwareShortlist() {
               {excludedSingleRunGroups > 0 && ` · ${excludedSingleRunGroups} single-run group${excludedSingleRunGroups === 1 ? '' : 's'} hidden (uncheck "Require ≥ 2 runs per rig" to show them)`}
             </div>
 
-<<<<<<< ours
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {shortlist.map((row, i) => {
                 const q = qualitySignals(row);
                 const qualityLine = qualitySummaryText(q);
                 return (
                 <div key={`${row.hardwareKey}|${row.modelFamily}|${row.quantization}`} className="panel-inset">
-=======
-            <div role="region" aria-live="polite" aria-label="Ranked hardware shortlist results">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {shortlist.map((row, i) => (
-                  <div key={`${row.hardwareKey}|${row.modelFamily}|${row.quantization}`} className="panel-inset">
->>>>>>> theirs
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
                     <div>
                       <span style={{ color: 'var(--text-subtle)', fontSize: '0.72rem', marginRight: '8px' }}>#{i + 1}</span>
@@ -369,22 +283,13 @@ export default function HardwareShortlist() {
 
                   {qualityLine && (
                     <div data-quality-signals style={{
-                      marginTop: '7px', fontSize: '0.72rem', lineHeight: 1.5,
-                      color: (q.flagged || q.grade === 'low') ? 'var(--warn)' : 'var(--text-muted)'
-                    }}>
-                      {qualityLine}
-                    </div>
-                  )}
-
-                  <div style={{ ...rowStyle, marginTop: '9px', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>
-                    <span>Prefill (median)</span>
-                    <span style={{ ...numStyle, color: 'var(--prefill)' }}>
-                      {Math.round(row.medianPrefillTokPerSec || 0).toLocaleString()} tok/s
-                    </span>
-                  </div>
-                  <div style={rowStyle}>
-                    <span>Best measured decode</span>
-                    <span style={{ ...numStyle, color: 'var(--agent)' }}>
+                      marginTop: '7px',             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {shortlist.map((row, i) => {
+                const q = qualitySignals(row);
+                const qualityLine = qualitySummaryText(q);
+                return (
+                <div key={`${row.hardwareKey}|${row.modelFamily}|${row.quantization}`} className="panel-inset">
+      <span style={{ ...numStyle, color: 'var(--agent)' }}>
                       {Math.round(row.bestDecodeTokPerSec || 0).toLocaleString()} tok/s
                     </span>
                   </div>
@@ -448,20 +353,15 @@ export default function HardwareShortlist() {
                     </span>
                   </div>
                 </div>
-<<<<<<< ours
                 );
               })}
-=======
-              ))}
-              </div>
->>>>>>> theirs
             </div>
 
             {/* Table semantics + export path for agents/AT (#442) */}
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px' }}>
-              <button className="btn" onClick={handleExportJson} title="Export this ranked shortlist as machine-readable JSON (download)">
-                <Download size={14} />
-                Export JSON
+              <button className="btn" onClick={handleExportJson} title="Export t                );
+              })}
+  Export JSON
               </button>
               <button className="btn" onClick={handleCopyMd} title="Copy this ranked shortlist as a markdown table">
                 <ClipboardCopy size={14} />
@@ -508,3 +408,5 @@ export default function HardwareShortlist() {
     </div>
   );
 }
+                );
+              })}

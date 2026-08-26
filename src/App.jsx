@@ -35,17 +35,24 @@ import {
 import SnapshotsSidebar from './components/SnapshotsSidebar';
 import KeyboardShortcutsDialog from './components/KeyboardShortcutsDialog';
 import { useFocusPanelHeading } from './utils/focus';
-import { setLocale, syncDocument, t } from './i18n/strings';
+import { setLocale, syncDocument, t, isKnownLocale } from './i18n/strings';
 import { installTouchTooltips } from './utils/touchTooltips';
+import CurriculumMode from './components/CurriculumMode';
 
 // Every valid view id, in tab-bar order. Doubled as 1-9 keyboard-shortcut
 // targets and as the allow-list for the `?tab=` query param: an unknown
 // value falls back to 'single' instead of rendering a blank content area.
 const TABS = ['single', 'agentic', 'batching', 'compare', 'ab', 'diff', 'shortlist', 'kvcache', 'theory'];
 
+// ?tab= allow-list (issue #532): the header tabs plus `curriculum`, the
+// guided-lessons quiz view that the /embed shell has always accepted.
+// Both shells now resolve the identical vocabulary so a real view can no
+// longer be reachable on one route and a silent fallback on the other.
+const TAB_PARAM_ALLOWLIST = [...TABS, 'curriculum'];
+
 function readTabParam() {
   const v = readParam('tab');
-  return TABS.includes(v) ? v : 'single';
+  return TAB_PARAM_ALLOWLIST.includes(v) ? v : 'single';
 }
 
 export default function App() {
@@ -62,9 +69,18 @@ export default function App() {
 
   // Locale + touch tooltips: one-time setup. `?lang=` overrides the default
   // locale; direction is applied to <html> so RTL locales flip the layout.
+  // Unsupported lang values are reported (issue #533) instead of silently
+  // staying English: console.warn + data-lang-fallback on <html>.
   useEffect(() => {
     const lang = readParam('lang');
-    if (lang) setLocale(lang);
+    if (lang) {
+      setLocale(lang);
+      if (!isKnownLocale(lang)) {
+        // eslint-disable-next-line no-console
+        console.warn(`[i18n] ?lang=${lang} has no translation catalog — staying in English (known: en, ar)`);
+        document.documentElement.dataset.langFallback = 'true';
+      }
+    }
     syncDocument();
     installTouchTooltips();
   }, []);
@@ -150,8 +166,7 @@ export default function App() {
       : undefined,
     modelId: selectedLmxRun?.model?.hfId || localMaxxingContext.modelId,
     quantization: selectedLmxRun?.engine?.quantization || localMaxxingContext.quantization,
-<<<<<<< ours
-    promptTokens: Number(readParam('prompt')) || undefined,
+    promptTokens: Math.floor(Number(readParam('prompt'))) || undefined,
     activeTab,
     // Issue #630: on Find HW the title must describe the constraint set the
     // recipient lands on (?sd=&sv=&sm=&sq=), not simulator globals.
@@ -163,10 +178,6 @@ export default function App() {
           quant: readParam('sq')
         }
       : undefined
-=======
-    promptTokens: Math.floor(Number(readParam('prompt'))) || undefined,
-    activeTab
->>>>>>> theirs
   }), [selectedPreset, selectedLmxRun, localMaxxingContext.modelId, localMaxxingContext.quantization, activeTab]);
 
   // Share-link tamper-evidence (#917): permalinkHref() signs the params it
@@ -671,6 +682,12 @@ export default function App() {
 
         {activeTab === 'theory' && (
           <TheoryGuide />
+        )}
+
+        {/* Guided curriculum (issue #532): reachable via ?tab=curriculum on
+            both / and /embed; intentionally absent from the header nav. */}
+        {activeTab === 'curriculum' && (
+          <CurriculumMode />
         )}
       </main>
 

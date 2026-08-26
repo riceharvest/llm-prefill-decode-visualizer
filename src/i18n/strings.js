@@ -71,6 +71,11 @@ export function setLocale(locale) {
 
 export const getLocale = translator.getLocale;
 
+/** True when a locale id has a shipped translation catalog ('en' always). */
+export function isKnownLocale(locale) {
+  return typeof locale === 'string' && Object.prototype.hasOwnProperty.call(locales, locale);
+}
+
 /** Layout direction for the active locale ('ltr' | 'rtl'). */
 export const getDirection = translator.getDirection;
 

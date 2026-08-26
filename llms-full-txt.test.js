@@ -5,13 +5,11 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-
+import { SOURCES, THEORY_SOURCES } from './scripts/generate-llms-full.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const fullPath = join(root, 'public', 'llms-full.txt');
 const content = existsSync(fullPath) ? readFileSync(fullPath, 'utf8') : '';
-
-const SOURCES = ['llms.txt', 'README.md', 'public/llms.txt', 'CHANGELOG-API.md', 'mcp/README.md'];
 
 test('llms-full.txt exists in public/ (served at the site root as /llms-full.txt)', () => {
   assert.ok(existsSync(fullPath), 'public/llms-full.txt must exist so vite build ships it');
@@ -71,10 +69,28 @@ test('llms-full.txt has no dead repo-relative links — every link resolves on t
   );
 });
 
+test('Theory tab content (explainer + FAQ + glossary) is compiled in (#530)', () => {
+  assert.ok(
+    content.includes('# Theory tab content'),
+    'generated theory section missing from llms-full.txt',
+  );
+  const theory = JSON.parse(readFileSync(join(root, 'src/i18n/locales/en/theory.json'), 'utf8'));
+  const plain = JSON.parse(readFileSync(join(root, 'src/i18n/locales/en/plainLanguage.json'), 'utf8'));
+  // Every FAQ question (the misconception callouts) must be present.
+  for (const item of theory.faq) {
+    assert.ok(content.includes(item.q), `FAQ question missing: ${item.q}`);
+    assert.ok(content.includes(item.a), 'FAQ answer missing');
+  }
+  // Glossary terms (short → plain → long) must be present.
+  for (const term of Object.values(plain.terms)) {
+    assert.ok(content.includes(term.short) && content.includes(term.long), `glossary term missing: ${term.short}`);
+  }
+});
+
 test('committed llms-full.txt is fresh — regenerating reproduces it byte-for-byte', () => {
   // Build a minimal scratch tree (generator + its inputs) so the real file is
   // only compared, never rewritten mid-test, and no node_modules copy is made.
-  const scratchSources = ['scripts/generate-llms-full.mjs', ...SOURCES];
+  const scratchSources = ['scripts/generate-llms-full.mjs', ...SOURCES, ...THEORY_SOURCES];
   for (const src of scratchSources) {
     const dest = join(tmpdir(), 'llms-full-scratch', src);
     mkdirSync(dirname(dest), { recursive: true });

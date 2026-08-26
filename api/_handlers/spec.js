@@ -1353,6 +1353,7 @@ export default function handler(req, res) {
             { name: 'outputTokens', in: 'query', schema: { type: 'integer', default: 512 }, description: 'tokens decoded per request' },
             { name: 'maxTtftSeconds', in: 'query', schema: { type: 'number' }, description: 'SLO cap on expected TTFT' },
             { name: 'maxTpotMs', in: 'query', schema: { type: 'number' }, description: 'SLO cap on expected TPOT' },
+            { name: 'minDecode', in: 'query', schema: { type: 'number' }, description: 'minimum acceptable median decode speed (tok/s); rigs below are excluded from the ranking' },
             { name: 'maxVramGb', in: 'query', schema: { type: 'number' }, description: 'budget cap, GiB (binary): rig memory (VRAM or unified) must fit under this' },
             { name: 'numLayers', in: 'query', schema: { type: 'integer' }, description: 'explicit KV arch (with kvHeads+headDim skips the per-param-count estimate)' },
             { name: 'kvHeads', in: 'query', schema: { type: 'integer' } },

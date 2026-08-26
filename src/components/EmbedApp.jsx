@@ -12,7 +12,7 @@ import CurriculumMode from './CurriculumMode';
 import { HARDWARE_PRESETS } from '../utils/presets';
 import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
 import { clampPrefill, clampDecode } from '../utils/settingsHistory';
-import { setLocale, getLocale, getDirection, t } from '../i18n/strings';
+import { setLocale, getLocale, getDirection, t, isKnownLocale } from '../i18n/strings';
 import { EMBED_EVENTS, postEmbedEvent, installEmbedBridge } from '../utils/embedBridge';
 
 // Embeddable widget view (issue #108): served at /embed?tab=…&preset=… it
@@ -32,9 +32,17 @@ export default function EmbedApp() {
   });
 
   // Locale handling mirrors App: ?lang= overrides, direction goes on <html>.
+  // Unsupported lang values are reported (issue #533), not silently ignored.
   useEffect(() => {
     const lang = readParam('lang');
-    if (lang) setLocale(lang);
+    if (lang) {
+      setLocale(lang);
+      if (!isKnownLocale(lang)) {
+        // eslint-disable-next-line no-console
+        console.warn(`[i18n] ?lang=${lang} has no translation catalog — staying in English (known: en, ar)`);
+        document.documentElement.dataset.langFallback = 'true';
+      }
+    }
     document.documentElement.lang = getLocale();
     document.documentElement.dir = getDirection();
   }, []);

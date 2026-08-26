@@ -72,7 +72,13 @@ export const TABS = [
       { shareParam: 'sprompt', apiParam: 'basePromptTokens' },
       { shareParam: 'tool', apiParam: 'toolOutputTokensPerTurn' },
       { shareParam: 'thought', apiParam: 'decodeTokensPerTurn' },
-      { shareParam: 'cache=1|0', apiParam: 'enablePrefixCaching=true|false' },
+      { shareParam: 'cache=1|0', apiParam: 'enablePrefixCaching=true|false' }
+    ],
+    params: [
+      'turns=<n> — number of loop turns',
+      'sprompt=<int> — base prompt tokens per turn',
+      'tool=<int> — tool-output tokens added per turn',
+      'thought=<int> — decode tokens generated per turn'
     ],
   },
   {
@@ -97,6 +103,14 @@ export const TABS = [
     purpose: 'Side-by-side hardware comparison at fixed workload shapes, blending built-in presets with measured community benchmark medians.',
     surfaces: ['hardware preset table', 'measured-speed columns', 'apply-measured-speeds action', 'community run counts'],
     endpoints: ['GET /api/benchmarks', 'GET /api/best', 'GET /api/localmaxxing', 'GET /api/presets'],
+    params: [
+      'hwA=<preset-id>&hwB=<preset-id> — compared systems',
+      'cp=<int>&co=<int> — test workload prompt/output tokens',
+      'batch=<n> — batch size for the comparison',
+      'piA=<$/Mtok>&poA=<…>&piB=<…>&poB=<…> — optional token prices per side',
+      'qtm=<model-family> — quant tradeoff matrix family filter',
+      'tcoHw=<id>&tcoW=<watts>&tcoKwh=<$/kWh>&tcoCloud=<$/Mtok>&tcoCapex=<usd>&tcoAmort=<months> — TCO calculator',
+    ],
   },
   {
     id: 'ab',
@@ -104,6 +118,10 @@ export const TABS = [
     purpose: 'Replay two hardware configs head-to-head on the identical workload so prefill/decode differences are visible as a race.',
     surfaces: ['A/B config pickers', 'synchronized replay animation', 'per-phase winner callouts'],
     endpoints: ['GET /api/compute?model=singleTurn'],
+    params: [
+      'abA=<preset-id>&abB=<preset-id> — lane configs',
+      'abp=<int>&abo=<int> — shared workload prompt/output tokens',
+    ],
   },
   {
     id: 'diff',
@@ -111,6 +129,9 @@ export const TABS = [
     purpose: 'Diff two community benchmark runs (or two constraint sets via what-if mode) and read per-metric deltas plus a plain-language summary.',
     surfaces: ['run A/B free-text id inputs', 'per-metric delta rows with ratios', 'plain-language summary', 'deep links (?tab=diff&runA&runB) auto-execute on load'],
     endpoints: ['GET /api/diff?runA=<id>&runB=<id>', 'GET /api/diff?mode=whatif'],
+    params: [
+      'runA=<runId>&runB=<runId> — measured run ids from GET /api/localmaxxing or /api/runs',
+    ],
   },
   {
     id: 'shortlist',
@@ -118,6 +139,13 @@ export const TABS = [
     purpose: 'Turn a workload spec into a ranked hardware shortlist: VRAM fit, expected latency vs SLO budgets, and confidence from sample counts.',
     surfaces: ['workload/constraint form', 'ranked shortlist table', 'VRAM fit check', 'confidence badges'],
     endpoints: ['GET /api/sizing', 'GET /api/best', 'GET /api/vram', 'GET /api/parse-constraints'],
+    params: [
+      'sd=<tok/s> — minimum acceptable decode speed',
+      'sv=<GB> — maximum VRAM budget',
+      'sm=<substring> — model family filter',
+      'sq=<quantization> — exact quantization match',
+      'API mapping: sd→GET /api/best?minDecode=, sv→&maxVramGb=, sm→&model=, sq→&quant=',
+    ],
   },
   {
     id: 'kvcache',
@@ -125,6 +153,16 @@ export const TABS = [
     purpose: 'Compute KV-cache VRAM for a model architecture across context lengths and quantizations, including GQA head layout.',
     surfaces: ['architecture/model picker', 'context × precision matrix', 'quant tradeoff matrix', 'multi-GPU planner'],
     endpoints: ['GET /api/vram', 'GET /api/compute?model=kvCache'],
+    params: [
+      'model=<arch-preset-id> — architecture preset',
+      'ctx=<int> — context length',
+      'prec=<2|1|0.5> — KV cache bytes per value (fp16/fp8/int4)',
+      'batch=<n> — batch size',
+      'vram=<GB>&gpu=<gpu-id> — budget ledger override + GPU card',
+      'wp=<weight-preset-id>&wgb=<GB> — weight precision preset / override',
+      'oh=<pct> — overhead fraction (%)',
+      'planner: gpus=<n>&par=tp|pp&bus=<interconnect>&card=<card-id>&wprec=<bytes>',
+    ],
   },
   {
     id: 'theory',
@@ -132,6 +170,9 @@ export const TABS = [
     purpose: 'Plain-language guide to why prefill is compute-bound and decode is bandwidth-bound, with analogies, glossary and misconception callouts.',
     surfaces: ['concept walkthrough', 'plain-language mode via ?plain=1 (off: ?plain=0)', 'analogies via ?analogy=1 (off: ?analogy=0)', 'jargon glossary', 'misconception callouts'],
     endpoints: [],
+    notes: [
+      'Content: the full explainer text, FAQ answers and glossary are compiled into /llms-full.txt under the "Theory tab content" section (generated from src/i18n/locales/en/theory.json + plainLanguage.json so they cannot drift from the UI).',
+    ],
   },
 ];
 
@@ -222,7 +263,13 @@ export function renderTabsTail(tabs = TABS) {
     '<!-- tabs-section:end -->',
     '',
     // #894: window-message contract for cross-origin /embed iframes.
-    '## Embedding (/embed)',
+        '**The page route is HTML-only.** Every `/?tab=…` deep link returns the same SPA shell regardless of query params; `?format=json` and `Accept: application/json` are NOT honored, and all numbers are computed client-side after JavaScript executes. To get results over plain HTTP, use the `/api/compute` model listed in each tab\'s Endpoints line — it runs the same math server-side.',
+    '',
+    '**Global URL params (any tab):** `tab=<id>` (view id) · `preset=<hardware-preset-id>` or `preset=lmx:<runId>` — bind a built-in preset OR a measured LocalMaxxing run (runId from GET /api/localmaxxing; explicit prefill/decode override its speeds) · `prefill=<tok/s>` · `decode=<tok/s>` · `sim=<multiplier>|instant` · `flags=<id,id,…>` (engine-flag preview) · `autoplay=1` · `lang=en|ar` (unsupported values fall back to English and set data-lang-fallback) · `title=<text>` (cosmetic share-link title).',
+    '',
+    '**Embed shell:** `/embed?tab=<id>` renders the same views chrome-free inside an <iframe>, reading the identical URL params. Its tab vocabulary includes `?tab=curriculum`, the guided-lessons quiz view.',
+    '',
+'## Embedding (/embed)',
     '',
     '`/embed?tab=<id>&…` serves the chrome-less visualizer for cross-origin `<iframe>` embedding. The frame talks back over `window.postMessage`; every message is a `{ type, … }` object:',
     '',
