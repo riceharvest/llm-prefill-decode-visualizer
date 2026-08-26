@@ -141,6 +141,7 @@ export async function getDataset() {
 
 // Exported for tests (#593): the exact-speed fields must mirror the raw
 // upstream floats the wizard applies, not the integer-rounded legacy ones.
+// Exported for schema-drift tests (/api/export COLUMNS parity, #746).
 export function slim(r) {
   const h = r.hardware || {};
   return {

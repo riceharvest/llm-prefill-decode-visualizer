@@ -67,6 +67,7 @@ export const MODEL_OUTPUTS = {
     { field: 'hurtsVsVanilla', unit: 'boolean' }
   ],
   batched: [
+    { field: 'assumedDefaults', unit: 'object - workload params silently defaulted (#742); present only when defaults engaged' },
     { field: 'ttftSeconds', unit: 'seconds (batch leader)' },
     { field: 'perUserDecodeSeconds', unit: 'seconds' },
     { field: 'perUserTotalSeconds', unit: 'seconds' },
@@ -92,6 +93,7 @@ export const MODEL_OUTPUTS = {
     { field: 'contextWindow', unit: 'object — withinLimit/overflowTokens vs the architecture max context (present when the limit is known)' }
   ],
   flagged: [
+    { field: 'assumedDefaults', unit: 'object - workload params silently defaulted; present only when defaults engaged' },
     { field: 'adjusted', unit: 'object — effective prefill/decode tok/s after flag deltas' },
     { field: 'totalPrefillDeltaPct', unit: '% change vs base' },
     { field: 'totalDecodeDeltaPct', unit: '% change vs base' },
@@ -99,6 +101,7 @@ export const MODEL_OUTPUTS = {
     { field: 'simulation', unit: 'object — full single-turn simulation under the adjusted speeds (ttftSeconds, tpotMs, totalWalltimeSeconds, …)' }
   ],
   cost: [
+    { field: 'assumedDefaults', unit: 'object - workload params silently defaulted; present only when defaults engaged' },
     { field: 'effectiveThroughputTokPerSec', unit: 'tok/s' },
     { field: 'requestsPerHour', unit: 'requests/hour' },
     { field: 'hardwareCostUsdPerHour', unit: 'USD/hour' },
@@ -229,6 +232,21 @@ export function resolveHardwarePreset(params = {}) {
     warning: undefined
   };
 }
+
+// #742: implicit workload defaults differ per model — batched defaults
+// promptTokens=4096 while singleTurn/flagged/cost default 2048. When an agent
+// omits promptTokens, the math silently runs on 2x the prompt of its
+// singleTurn comparison call. Surface which workload params were defaulted.
+export const PROMPT_TOKEN_DEFAULTS = { singleTurn: 2048, batched: 4096, flagged: 2048, cost: 2048 };
+
+export function withAssumedDefaults(params, out) {
+  const model = params?.model || params?.m || '';
+  const d = PROMPT_TOKEN_DEFAULTS[model];
+  const raw = params?.promptTokens;
+  if (!d || out?.status !== 200 || !out.body || !(raw === undefined || raw === null || raw === '')) return out;
+  return { ...out, body: { ...out.body, assumedDefaults: { ...(out.body.assumedDefaults || {}), promptTokens: d } } };
+}
+
 
 // Attach the ?preset= echo + any unknown-preset warning to a result body.
 // Purely additive fields; absent when no preset was requested.
@@ -729,7 +747,7 @@ export function computeBody(params = {}) {
   }
 
   try {
-    const out = computeOne(params, dryRun);
+    const out = withAssumedDefaults(params, computeOne(params, dryRun));
     if (out.status === 200 && out.body) {
       out.body = { id: computeCalcId('compute', { model: params.model || params.m || '', ...params }), ...out.body };
     }

@@ -1,0 +1,77 @@
+{
+  "panelAria": "Theory and equations",
+  "panelTitle": "LLM Inference Mechanics · Prefill vs Decode",
+  "prefillHeading": "1 · Prefill — prompt ingestion",
+  "prefillIntroBefore": "During prefill, the LLM processes the entire input prompt (all ",
+  "subPrompt": "prompt",
+  "prefillIntroAfter": " tokens) at once. The attention mechanism builds the initial Key-Value (KV) cache for every prompt token.",
+  "bottleneckLabel": "Bottleneck:",
+  "operationLabel": "Operation:",
+  "userMetricLabel": "User metric — ",
+  "bottleneckCompute": "compute-bound (tensor cores / FLOPs).",
+  "operationGemm": "matrix-matrix multiplication (GEMM). High arithmetic intensity.",
+  "metricTtft": "TTFT (time to first token):",
+  "formulaTtft": "TTFT = prompt tokens / prefill speed",
+  "decodeHeading": "2 · Decode — autoregressive generation",
+  "decodeIntroBefore": "During decode, tokens are generated strictly one by one. For every generated token, the GPU must read all model parameters and previous KV cache vectors from VRAM into compute registers.",
+  "bottleneckBandwidth": "memory bandwidth-bound (VRAM transfer rate).",
+  "operationGemv": "matrix-vector multiplication (GEMV). Low arithmetic intensity.",
+  "metricTpot": "TPOT (time per output token):",
+  "formulaTpot": "TPOT = 1000 / decode speed (ms/token)",
+  "agenticHeading": "Why agentic loops require per-turn walltime measurement",
+  "agenticIntroBefore": "An AI agent operates in a loop: ",
+  "loopStages": "Plan → Tool Call → Tool Execution → Process Result → Next Action",
+  "agenticIntroAfter": ". With each turn, the conversation context grows because previous tool inputs and outputs are appended to the prompt.",
+  "withoutCaching": "Without prefix caching",
+  "withoutCachingBodyBefore": "On turn k, the inference server must re-prefill the entire accumulated history P",
+  "subK": "k",
+  "withoutCachingBodyAfter": ". Prefill latency increases linearly/quadratically per turn, causing high turn walltime.",
+  "withCaching": "With prefix caching (RadixAttention)",
+  "withCachingBodyBefore": "The server reuses existing KV cache blocks for turns 1..k-1. It only prefills the new tool response tokens ΔP",
+  "withCachingBodyAfter": ", keeping turn walltimes consistently low.",
+  "faqHeading": "Community FAQ — speed setups",
+  "faqIntro": "Compiled from the questions local-LLM users most often ask on X. Use the tabs above to reproduce each scenario.",
+  "tryIt": "Try it in the visualizer",
+  "faq": [
+    {
+      "id": "first-token-slow",
+      "q": "Why is my first token so slow, then the rest are fast?",
+      "a": "That is normal. The first token waits for the prefill phase: the whole prompt is processed at once (compute-bound). On a mid GPU that is hundreds of ms. After that, decode runs at one token per step, so it feels fast per token — but every token reads the full model weights from VRAM, which is why decode is bandwidth-bound."
+    },
+    {
+      "id": "good-toks",
+      "q": "What is a good tok/s for a local model?",
+      "a": "It depends on the model size and your memory bandwidth. Rule of thumb: decode speed ≈ usable VRAM bandwidth ÷ model size in bytes. A 24 GB/s-class card with a 4-bit 8B model does roughly 30-60 tok/s. If you are below ~10 tok/s on an 8B, something is off (CPU offload, no GPU layers, wrong build)."
+    },
+    {
+      "id": "decode-vs-prefill",
+      "q": "Why is decode so much slower than prefill?",
+      "a": "Prefill is a big parallel matrix-matrix multiply (GEMM) — perfect for tensor cores. Decode is one matrix-vector multiply (GEMV) per token and is dominated by reading weights + KV cache from VRAM. You cannot fix decode speed with more compute; you need more memory bandwidth or a smaller/faster quantized model."
+    },
+    {
+      "id": "vram-needed",
+      "q": "How much VRAM do I need for model + context?",
+      "a": "VRAM ≈ weights + KV cache + ~1-2 GB overhead. Weights: model bytes × quant size (e.g. 70B at Q4 ≈ 35-40 GB). KV cache: use the KV Cache Calculator tab — a dense 70B at 32k context FP16 is about 10 GB, so it often does not fit on 24 GB together with weights. Lower KV precision (FP8/INT4) or a shorter context is the lever."
+    },
+    {
+      "id": "context-oom",
+      "q": "Why does my context length run out of memory?",
+      "a": "Because KV cache grows linearly with context and is allocated for every layer. Long prompts with agents (tool outputs, history) fill it fast. Solutions: quantize the KV cache (--cache-type-k/v q8_0 or q4_0), shorten the system prompt, enable prefix caching, or pick a model with MLA / linear attention (they need far less KV per token)."
+    },
+    {
+      "id": "flash-attention",
+      "q": "Does flash attention speed up prefill or decode?",
+      "a": "Flash attention mainly accelerates prefill and long-context attention compute, and it reduces memory use. It has little effect on the decode bottleneck (bandwidth-bound GEMV). It can also free VRAM, which indirectly lets you use a bigger context. Benchmark both — the gain is model- and context-dependent."
+    },
+    {
+      "id": "quant-speed",
+      "q": "Is a higher quant always slower?",
+      "a": "Usually yes but not by much. Q8 vs Q4 changes decode speed roughly by the bandwidth ratio of the sizes read per token. On a 4090-class card, 70B Q4 vs Q8 can differ 10-30%. Quality also differs: use the largest quant that fits your VRAM budget — Q4_K_M is the common sweet spot."
+    },
+    {
+      "id": "mac-cpu-bandwidth",
+      "q": "Why is my Mac / CPU box slower than the GPU numbers I see?",
+      "a": "Unified memory and system RAM have far lower bandwidth than GDDR/HBM (e.g. ~100 GB/s vs 1000+ GB/s). Decode speed tracks that bandwidth. Also check the backend actually uses GPU layers (Metal/CUDA) and not CPU fallback, and that you are comparing the same quant and context."
+    }
+  ]
+}

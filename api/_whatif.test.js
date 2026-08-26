@@ -15,8 +15,8 @@ function mk(hardwareKey, modelFamily, overrides = {}) {
   };
 }
 
-test('optionKey is stable rig × family identity', () => {
-  assert.equal(optionKey(mk('rtx4090', 'llama-3-8b')), 'rtx4090|llama-3-8b');
+test('optionKey is stable rig × family × quant identity (#739)', () => {
+  assert.equal(optionKey(mk('rtx4090', 'llama-3-8b')), 'rtx4090|llama-3-8b|q4_k_m');
 });
 
 test('identical sets produce no deltas', () => {
@@ -38,12 +38,12 @@ test('options entering and leaving are detected order-independently', () => {
 
   // left: in A only
   assert.equal(d.left.length, 1);
-  assert.equal(d.left[0].key, 'b|m2');
+  assert.equal(d.left[0].key, 'b|m2|q4_k_m');
   assert.equal(d.left[0].rankA, 2); // position in A's ranking
 
   // entered: in B only
   const enteredKeys = d.entered.map(o => o.key).sort();
-  assert.deepEqual(enteredKeys, ['d|m4', 'e|m5']);
+  assert.deepEqual(enteredKeys, ['d|m4|q4_k_m', 'e|m5|q4_k_m']);
   assert.ok(d.entered.every(o => typeof o.rankB === 'number'));
 
   // shared options carry both ranks
@@ -65,24 +65,41 @@ test('headroom deltas and fit flips are reported for shared options', () => {
   const d = computeWhatIfDiff(rowsA, rowsB);
 
   assert.equal(d.headroom.length, 3);
-  assert.equal(d.headroom[0].key, 'small|m2'); // biggest |delta| first
+  assert.equal(d.headroom[0].key, 'small|m2|q4_k_m'); // biggest |delta| first
   assert.equal(d.headroom[0].headroomDeltaGb, -6); // -1.75 − 4.25
   assert.equal(d.headroom[0].fitsA, true);
   assert.equal(d.headroom[0].fitsB, false);
   // flat option: zero delta, no flip → still listed but last
-  const flat = d.headroom.find(h => h.key === 'flat|m3');
+  const flat = d.headroom.find(h => h.key === 'flat|m3|q4_k_m');
   assert.equal(flat.headroomDeltaGb, 0);
 
   assert.match(d.summary, /flip their estimated fit verdict/);
   assert.match(d.summary, /Largest headroom shift: SMALL \(m2\) loses 6 GB/);
 });
 
-test('shared options without any fit data are omitted from headroom', () => {
-  const rowsA = [mk('a', 'm1')];
-  const rowsB = [mk('a', 'm1', { quantization: 'q8_0' })];
+test('quant-only change is reported as enter/leave churn, not silent identity (#739)', () => {
+  // Regression for #739: previously optionKey ignored quantization, so this
+  // pair collapsed to one "shared" option ("no what-if deltas") — or paired
+  // cross-quant rows under a single quant label in headroom.
+  const rowsA = [mk('m3max', 'qwen', { quantization: 'Q4_K_M', vramFit: { fits: true, headroomGb: 10 } })];
+  const rowsB = [mk('m3max', 'qwen', { quantization: 'Q8_0', vramFit: { fits: true, headroomGb: 2 } })];
   const d = computeWhatIfDiff(rowsA, rowsB);
-  assert.equal(d.headroom.length, 0);
+  assert.deepEqual(d.counts, { aOnly: 1, bOnly: 1, shared: 0 });
+  assert.equal(d.left[0].key, 'm3max|qwen|Q4_K_M');
+  assert.equal(d.entered[0].key, 'm3max|qwen|Q8_0');
+  assert.equal(d.headroom.length, 0); // no cross-quant headroom pairing
+});
+
+test('same-quant rows still share identity across constraint sets (#739)', () => {
+  const row = () => mk('m3max', 'qwen', { vramFit: { fits: true, headroomGb: 10 } });
+  const d = computeWhatIfDiff([row()], [row()]);
+  assert.deepEqual(d.counts, { aOnly: 0, bOnly: 0, shared: 1 });
   assert.match(d.summary, /no what-if deltas/);
+});
+
+test('rows without a quantization field keep a stable key', () => {
+  const row = { hardwareKey: 'a', modelFamily: 'm1' };
+  assert.equal(optionKey(row), 'a|m1|');
 });
 
 test('empty inputs are handled', () => {

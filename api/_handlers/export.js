@@ -2,7 +2,8 @@ import { getAllRuns } from '../_localmaxxing.js';
 import { csvEscape, toCsv, csvPreamble, buildJsonPayload, COLUMNS, DATASET_VERSION, CSV_BOM } from '../_export.js';
 import { problemBody } from '../_errors.js';
 import { requireEnum } from '../_params.js';
-import { sendProblemFromError } from '../_errors.js';
+import { sendProblem, sendProblemFromError } from '../_errors.js';
+import { enforceRateLimit } from '../_ratelimit.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -12,8 +13,28 @@ export const config = { runtime: 'nodejs' };
  * ?format=csv|json   default csv
  * CSV: RFC 4180, `#`-comment preamble carrying metadata + data dictionary.
  * JSON: envelope with structured dataDictionary + runs array.
+ *
+ * Errors follow the shared problem+json contract (code UPSTREAM_UNAVAILABLE
+ * on transient dataset-fetch failures), and the endpoint is method-guarded +
+ * rate-limited like its sibling dump endpoint /api/runs (#737).
  */
 export default async function handler(req, res) {
+  // CORS preflight + method guard (agents/crawlers are first-class consumers).
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    return res.status(204).end();
+  }
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET, OPTIONS');
+    return sendProblem(res, req, {
+      code: 'METHOD_NOT_ALLOWED',
+      detail: `${req.method} is not supported here. Use GET to download the export file.`
+    });
+  }
+
+  if (!enforceRateLimit(req, res)) return;
+
   try {
     // Same strict enum contract as /api/runs (see _params.js requireEnum):
     // an unknown ?format is a 400 problem+json, never a silent CSV fallback

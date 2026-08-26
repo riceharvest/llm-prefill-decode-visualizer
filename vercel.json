@@ -54,6 +54,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/v1/api/:path*",
+      "destination": "/api/:path*"
+    },
+    {
       "source": "/v1/:path*",
       "destination": "/api/:path*"
     },

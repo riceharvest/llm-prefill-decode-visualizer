@@ -15,9 +15,15 @@
 const round = (x, places = 3) =>
   Number.isFinite(x) ? Math.round(x * 10 ** places) / 10 ** places : null;
 
-/** Stable identity of an option: hardware rig × model family. */
+/**
+ * Stable identity of an option: hardware rig × model family × quantization.
+ * Quantization is part of the identity (#739): `quant=` is a first-class
+ * /api/best constraint, so a quant-only constraint change must show up as
+ * enter/leave churn on the quant-specific options — never as cross-quant
+ * headroom pairing presented under a single quant label.
+ */
 export function optionKey(row) {
-  return `${row.hardwareKey}|${row.modelFamily}`;
+  return `${row.hardwareKey}|${row.modelFamily}|${row.quantization ?? ''}`;
 }
 
 /** Slim public projection of an option (no per-row stats bloat). */
