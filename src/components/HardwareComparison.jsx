@@ -375,8 +375,14 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   // "dry_run": true it previews without executing.
   const chartRef = useRef(null);
   const [copiedLang, setCopiedLang] = useState('');
+<<<<<<< ours
   const [copyFailedLang, setCopyFailedLang] = useState('');
   const [pngExportNote, setPngExportNote] = useState('');
+=======
+  // #1048: also render the last-requested snippet in a selectable <pre>, so
+  // the snippet is obtainable even when the clipboard is blocked/denied.
+  const [visibleSnippet, setVisibleSnippet] = useState('');
+>>>>>>> theirs
   const [embedOpen, setEmbedOpen] = useState(false);
   const copyTimer = useRef(null);
 
@@ -394,6 +400,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
   // agents with zero signal on either outcome. Success keeps the transient
   // "Copied!" state; failure shows "Copy failed" + an aria-live announcement.
   const copySnippet = async (lang) => {
+<<<<<<< ours
     const ok = await copyTextToClipboard(buildSnippet(lang, { origin: window.location.origin, body: snippetBody }));
     setCopiedLang(ok ? lang : '');
     setCopyFailedLang(ok ? '' : lang);
@@ -415,6 +422,15 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
     } catch {
       setPngExportNote(t('compare.exportFailedNote'));
     }
+=======
+    setVisibleSnippet(lang);
+    try {
+      await navigator.clipboard.writeText(buildSnippet(lang, { origin: window.location.origin, body: snippetBody }));
+      setCopiedLang(lang);
+      clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopiedLang(''), 2000);
+    } catch { /* clipboard unavailable (insecure context / denied) — snippet still shown below */ }
+>>>>>>> theirs
   };
 
   const exportBtnStyle = { padding: '2px 8px', fontSize: '0.68rem' };
@@ -550,6 +566,7 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
           </div>
         </div>
 
+<<<<<<< ours
         {/* Issue #501/#497: machine-detectable outcome for copy + PNG export */}
         {(copyFailedLang || pngExportNote) && (
           <p role="status" aria-live="polite" style={{ fontSize: '0.72rem', color: 'var(--agent)', margin: '4px 0 0' }}>
@@ -557,6 +574,23 @@ export default function HardwareComparison({ presets = HARDWARE_PRESETS, localMa
             {copyFailedLang && pngExportNote ? ' · ' : ''}
             {pngExportNote}
           </p>
+=======
+        {visibleSnippet && (
+          <div className="panel-inset" data-testid="compare-snippet" aria-label={t(`compare.copy${visibleSnippet === 'curl' ? 'Curl' : visibleSnippet === 'python' ? 'Python' : 'TypeScript'}`)}>
+            <pre
+              tabIndex={0}
+              style={{
+                margin: 0, padding: '10px 12px', background: 'var(--bg-inset)',
+                border: '1px solid var(--border)', borderRadius: '6px',
+                fontFamily: 'var(--font-mono)', fontSize: '0.66rem', lineHeight: 1.5,
+                color: 'var(--text-muted)', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                maxHeight: '160px', overflowY: 'auto'
+              }}
+            >
+              {buildSnippet(visibleSnippet, { origin: typeof window !== 'undefined' ? window.location.origin : '', body: snippetBody })}
+            </pre>
+          </div>
+>>>>>>> theirs
         )}
 
         {localMaxxingContext?.runs?.length > 0 && (
