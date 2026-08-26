@@ -2055,6 +2055,8 @@ export interface operations {
                 maxTtftSeconds?: number;
                 /** @description SLO cap on expected TPOT */
                 maxTpotMs?: number;
+                /** @description minimum acceptable median decode speed (tok/s); rigs below are excluded from the ranking */
+                minDecode?: number;
                 /** @description budget cap, GiB (binary): rig memory (VRAM or unified) must fit under this */
                 maxVramGb?: number;
                 /** @description explicit KV arch (with kvHeads+headDim skips the per-param-count estimate) */

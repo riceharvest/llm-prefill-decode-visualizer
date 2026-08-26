@@ -22,6 +22,7 @@ def _get_kwargs(
     output_tokens: int | Unset = 512,
     max_ttft_seconds: float | Unset = UNSET,
     max_tpot_ms: float | Unset = UNSET,
+    min_decode: float | Unset = UNSET,
     max_vram_gb: float | Unset = UNSET,
     num_layers: int | Unset = UNSET,
     kv_heads: int | Unset = UNSET,
@@ -50,6 +51,8 @@ def _get_kwargs(
     params["maxTtftSeconds"] = max_ttft_seconds
 
     params["maxTpotMs"] = max_tpot_ms
+
+    params["minDecode"] = min_decode
 
     params["maxVramGb"] = max_vram_gb
 
@@ -113,6 +116,7 @@ def sync_detailed(
     output_tokens: int | Unset = 512,
     max_ttft_seconds: float | Unset = UNSET,
     max_tpot_ms: float | Unset = UNSET,
+    min_decode: float | Unset = UNSET,
     max_vram_gb: float | Unset = UNSET,
     num_layers: int | Unset = UNSET,
     kv_heads: int | Unset = UNSET,
@@ -138,6 +142,7 @@ def sync_detailed(
         output_tokens (int | Unset):  Default: 512.
         max_ttft_seconds (float | Unset):
         max_tpot_ms (float | Unset):
+        min_decode (float | Unset):
         max_vram_gb (float | Unset):
         num_layers (int | Unset):
         kv_heads (int | Unset):
@@ -163,6 +168,7 @@ prompt_tokens=prompt_tokens,
 output_tokens=output_tokens,
 max_ttft_seconds=max_ttft_seconds,
 max_tpot_ms=max_tpot_ms,
+min_decode=min_decode,
 max_vram_gb=max_vram_gb,
 num_layers=num_layers,
 kv_heads=kv_heads,
@@ -190,6 +196,7 @@ async def asyncio_detailed(
     output_tokens: int | Unset = 512,
     max_ttft_seconds: float | Unset = UNSET,
     max_tpot_ms: float | Unset = UNSET,
+    min_decode: float | Unset = UNSET,
     max_vram_gb: float | Unset = UNSET,
     num_layers: int | Unset = UNSET,
     kv_heads: int | Unset = UNSET,
@@ -215,6 +222,7 @@ async def asyncio_detailed(
         output_tokens (int | Unset):  Default: 512.
         max_ttft_seconds (float | Unset):
         max_tpot_ms (float | Unset):
+        min_decode (float | Unset):
         max_vram_gb (float | Unset):
         num_layers (int | Unset):
         kv_heads (int | Unset):
@@ -240,6 +248,7 @@ prompt_tokens=prompt_tokens,
 output_tokens=output_tokens,
 max_ttft_seconds=max_ttft_seconds,
 max_tpot_ms=max_tpot_ms,
+min_decode=min_decode,
 max_vram_gb=max_vram_gb,
 num_layers=num_layers,
 kv_heads=kv_heads,
