@@ -199,6 +199,24 @@ export function unregisterDeprecatedRoute(route) {
  * deprecated. Returns true when headers were applied. Safe to call on every
  * request: the common case is one Map lookup and no header writes.
  */
+/**
+ * Ranged GETs must never be served from the CDN cache (#995): the edge slices
+ * cached bodies into HTTP 200 partial responses, which conforming clients read
+ * as a complete representation. Serving range probes uncached keeps every 200
+ * body whole - callers always receive one full representation.
+ * Call before any response body is written.
+ */
+export function applyRangeGuard(req, res) {
+  const range = req?.headers?.range;
+  if (!range) return false;
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Accept-Ranges', 'none');
+  res.setHeader('Content-Range', 'bytes */*');
+  res.statusCode = 416;
+  res.end();
+  return true;
+}
+
 export function applyDeprecationForPath(res, pathname) {
   const meta = DEPRECATION_REGISTRY[pathname];
   if (!meta) return false;

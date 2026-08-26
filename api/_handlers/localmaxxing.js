@@ -232,6 +232,8 @@ export default async function handler(req, res) {
 
     return json(res, {
       description: 'Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false. Each run carries createdAt/ageDays/staleness, engineVersion and its contextBand (<1k, 1k–8k, 8k–32k or 32k+; null when the run reports no context length).',
+      // (#994) clamp telemetry: echo the effective page size.
+      ...(limit !== 50 ? { limit } : {}),
       // Envelope discriminator (#488): paginated run-list shape.
       mode: 'runs',
       snapshot,
