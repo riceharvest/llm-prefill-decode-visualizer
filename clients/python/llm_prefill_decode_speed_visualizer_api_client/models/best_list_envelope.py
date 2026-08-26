@@ -47,6 +47,9 @@ class BestListEnvelope:
                 for reproducible numbers (see /api/snapshots).
             snapshot_at (datetime.datetime | None | Unset):
             matched_runs (int | Unset): Comparable runs that survived filtering
+            requested_scenario (None | str | Unset): Echoed ?scenario= id (null when unset)
+            fit_check (bool | Unset): Whether a fitCheck was requested via ?fitCheck=true
+            min_decode (float | None | Unset): Echoed minimum decode speed filter (#513)
             excluded_runs (int | None | Unset): Runs dropped by ?fitCheck= (present only with fitCheck)
             max_age_days (float | None | Unset): Echoed ?max_age= filter (null when unset)
             context_band (BestListEnvelopeContextBandType1 | BestListEnvelopeContextBandType2Type1 |
@@ -65,6 +68,9 @@ class BestListEnvelope:
     snapshot: SnapshotRef | Unset = UNSET
     snapshot_at: datetime.datetime | None | Unset = UNSET
     matched_runs: int | Unset = UNSET
+    requested_scenario: None | str | Unset = UNSET
+    fit_check: bool | Unset = UNSET
+    min_decode: float | None | Unset = UNSET
     excluded_runs: int | None | Unset = UNSET
     max_age_days: float | None | Unset = UNSET
     context_band: BestListEnvelopeContextBandType1 | BestListEnvelopeContextBandType2Type1 | BestListEnvelopeContextBandType3Type1 | None | Unset = UNSET
@@ -119,6 +125,20 @@ class BestListEnvelope:
 
         matched_runs = self.matched_runs
 
+        requested_scenario: None | str | Unset
+        if isinstance(self.requested_scenario, Unset):
+            requested_scenario = UNSET
+        else:
+            requested_scenario = self.requested_scenario
+
+        fit_check = self.fit_check
+
+        min_decode: float | None | Unset
+        if isinstance(self.min_decode, Unset):
+            min_decode = UNSET
+        else:
+            min_decode = self.min_decode
+
         excluded_runs: int | None | Unset
         if isinstance(self.excluded_runs, Unset):
             excluded_runs = UNSET
@@ -168,6 +188,12 @@ class BestListEnvelope:
             field_dict["snapshotAt"] = snapshot_at
         if matched_runs is not UNSET:
             field_dict["matchedRuns"] = matched_runs
+        if requested_scenario is not UNSET:
+            field_dict["requestedScenario"] = requested_scenario
+        if fit_check is not UNSET:
+            field_dict["fitCheck"] = fit_check
+        if min_decode is not UNSET:
+            field_dict["minDecode"] = min_decode
         if excluded_runs is not UNSET:
             field_dict["excludedRuns"] = excluded_runs
         if max_age_days is not UNSET:
@@ -254,6 +280,28 @@ class BestListEnvelope:
 
         matched_runs = d.pop("matchedRuns", UNSET)
 
+        def _parse_requested_scenario(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        requested_scenario = _parse_requested_scenario(d.pop("requestedScenario", UNSET))
+
+
+        fit_check = d.pop("fitCheck", UNSET)
+
+        def _parse_min_decode(data: object) -> float | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(float | None | Unset, data)
+
+        min_decode = _parse_min_decode(d.pop("minDecode", UNSET))
+
+
         def _parse_excluded_runs(data: object) -> int | None | Unset:
             if data is None:
                 return data
@@ -338,6 +386,9 @@ class BestListEnvelope:
             snapshot=snapshot,
             snapshot_at=snapshot_at,
             matched_runs=matched_runs,
+            requested_scenario=requested_scenario,
+            fit_check=fit_check,
+            min_decode=min_decode,
             excluded_runs=excluded_runs,
             max_age_days=max_age_days,
             context_band=context_band,

@@ -48,6 +48,7 @@ class RunListEnvelope:
                 RunListEnvelopeContextBandType3Type1 | Unset): Echoed ?context_band= filter (null when unset)
             caveats (list[Caveat] | Unset):
             mode (None | str | Unset): Echoed ?mode= filter (null when unset)
+            limit (int | Unset): Effective page size after the 200 hard cap
             warnings (list[Caveat] | Unset): Non-blocking implausibility or filter-substitution warnings
             next_cursor (None | str | Unset): Opaque keyset cursor; pass back as ?cursor=
             rate_limit (RateLimit | Unset): Machine-readable rate-limit state — the same numbers the X-RateLimit-* headers
@@ -65,6 +66,7 @@ class RunListEnvelope:
     context_band: None | RunListEnvelopeContextBandType1 | RunListEnvelopeContextBandType2Type1 | RunListEnvelopeContextBandType3Type1 | Unset = UNSET
     caveats: list[Caveat] | Unset = UNSET
     mode: None | str | Unset = UNSET
+    limit: int | Unset = UNSET
     warnings: list[Caveat] | Unset = UNSET
     next_cursor: None | str | Unset = UNSET
     rate_limit: RateLimit | Unset = UNSET
@@ -138,6 +140,8 @@ class RunListEnvelope:
         else:
             mode = self.mode
 
+        limit = self.limit
+
         warnings: list[dict[str, Any]] | Unset = UNSET
         if not isinstance(self.warnings, Unset):
             warnings = []
@@ -181,6 +185,8 @@ class RunListEnvelope:
             field_dict["caveats"] = caveats
         if mode is not UNSET:
             field_dict["mode"] = mode
+        if limit is not UNSET:
+            field_dict["limit"] = limit
         if warnings is not UNSET:
             field_dict["warnings"] = warnings
         if next_cursor is not UNSET:
@@ -319,6 +325,8 @@ class RunListEnvelope:
         mode = _parse_mode(d.pop("mode", UNSET))
 
 
+        limit = d.pop("limit", UNSET)
+
         _warnings = d.pop("warnings", UNSET)
         warnings: list[Caveat] | Unset = UNSET
         if _warnings is not UNSET:
@@ -366,6 +374,7 @@ class RunListEnvelope:
             context_band=context_band,
             caveats=caveats,
             mode=mode,
+            limit=limit,
             warnings=warnings,
             next_cursor=next_cursor,
             rate_limit=rate_limit,

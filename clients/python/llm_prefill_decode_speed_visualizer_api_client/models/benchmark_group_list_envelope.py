@@ -20,6 +20,7 @@ if TYPE_CHECKING:
   from ..models.benchmark_group import BenchmarkGroup
   from ..models.benchmark_group_list_envelope_outlier_policy import BenchmarkGroupListEnvelopeOutlierPolicy
   from ..models.benchmark_group_list_envelope_unit_audit import BenchmarkGroupListEnvelopeUnitAudit
+  from ..models.benchmark_group_list_envelope_units import BenchmarkGroupListEnvelopeUnits
   from ..models.caveat import Caveat
   from ..models.rate_limit import RateLimit
   from ..models.snapshot_ref import SnapshotRef
@@ -47,6 +48,9 @@ class BenchmarkGroupListEnvelope:
                 for reproducible numbers (see /api/snapshots).
             snapshot_at (datetime.datetime | None | Unset):
             matched_runs (int | Unset): Comparable runs that survived filtering before grouping
+            limit (int | Unset): Effective page size after the 200 hard cap (#994)
+            units (BenchmarkGroupListEnvelopeUnits | Unset): In-band unit declarations for every aggregate speed (all values
+                tok/s) (#776)
             caveats (list[Caveat] | Unset): Dataset-level flags (n=1 share, mixed engine versions)
             warnings (list[str] | Unset): Human-readable group-level warnings (mixed context bands within a group key)
             max_age_days (float | None | Unset): Echoed ?max_age= filter (null when unset)
@@ -74,6 +78,8 @@ class BenchmarkGroupListEnvelope:
     snapshot: SnapshotRef | Unset = UNSET
     snapshot_at: datetime.datetime | None | Unset = UNSET
     matched_runs: int | Unset = UNSET
+    limit: int | Unset = UNSET
+    units: BenchmarkGroupListEnvelopeUnits | Unset = UNSET
     caveats: list[Caveat] | Unset = UNSET
     warnings: list[str] | Unset = UNSET
     max_age_days: float | None | Unset = UNSET
@@ -97,6 +103,7 @@ class BenchmarkGroupListEnvelope:
         from ..models.benchmark_group import BenchmarkGroup
         from ..models.benchmark_group_list_envelope_outlier_policy import BenchmarkGroupListEnvelopeOutlierPolicy
         from ..models.benchmark_group_list_envelope_unit_audit import BenchmarkGroupListEnvelopeUnitAudit
+        from ..models.benchmark_group_list_envelope_units import BenchmarkGroupListEnvelopeUnits
         from ..models.caveat import Caveat
         from ..models.rate_limit import RateLimit
         from ..models.snapshot_ref import SnapshotRef
@@ -128,6 +135,12 @@ class BenchmarkGroupListEnvelope:
             snapshot_at = self.snapshot_at
 
         matched_runs = self.matched_runs
+
+        limit = self.limit
+
+        units: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.units, Unset):
+            units = self.units.to_dict()
 
         caveats: list[dict[str, Any]] | Unset = UNSET
         if not isinstance(self.caveats, Unset):
@@ -212,6 +225,10 @@ class BenchmarkGroupListEnvelope:
             field_dict["snapshotAt"] = snapshot_at
         if matched_runs is not UNSET:
             field_dict["matchedRuns"] = matched_runs
+        if limit is not UNSET:
+            field_dict["limit"] = limit
+        if units is not UNSET:
+            field_dict["units"] = units
         if caveats is not UNSET:
             field_dict["caveats"] = caveats
         if warnings is not UNSET:
@@ -248,6 +265,7 @@ class BenchmarkGroupListEnvelope:
         from ..models.benchmark_group import BenchmarkGroup
         from ..models.benchmark_group_list_envelope_outlier_policy import BenchmarkGroupListEnvelopeOutlierPolicy
         from ..models.benchmark_group_list_envelope_unit_audit import BenchmarkGroupListEnvelopeUnitAudit
+        from ..models.benchmark_group_list_envelope_units import BenchmarkGroupListEnvelopeUnits
         from ..models.caveat import Caveat
         from ..models.rate_limit import RateLimit
         from ..models.snapshot_ref import SnapshotRef
@@ -301,6 +319,18 @@ class BenchmarkGroupListEnvelope:
 
 
         matched_runs = d.pop("matchedRuns", UNSET)
+
+        limit = d.pop("limit", UNSET)
+
+        _units = d.pop("units", UNSET)
+        units: BenchmarkGroupListEnvelopeUnits | Unset
+        if isinstance(_units,  Unset):
+            units = UNSET
+        else:
+            units = BenchmarkGroupListEnvelopeUnits.from_dict(_units)
+
+
+
 
         _caveats = d.pop("caveats", UNSET)
         caveats: list[Caveat] | Unset = UNSET
@@ -429,6 +459,8 @@ class BenchmarkGroupListEnvelope:
             snapshot=snapshot,
             snapshot_at=snapshot_at,
             matched_runs=matched_runs,
+            limit=limit,
+            units=units,
             caveats=caveats,
             warnings=warnings,
             max_age_days=max_age_days,

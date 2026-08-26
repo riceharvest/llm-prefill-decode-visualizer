@@ -943,6 +943,8 @@ export interface components {
             caveats?: components["schemas"]["Caveat"][];
             /** @description Echoed ?mode= filter (null when unset) */
             mode?: string | null;
+            /** @description Effective page size after the 200 hard cap */
+            limit?: number;
             /** @description Non-blocking implausibility or filter-substitution warnings */
             warnings?: components["schemas"]["Caveat"][];
             items: components["schemas"]["Run"][];
@@ -992,6 +994,10 @@ export interface components {
             total: number;
             /** @description Comparable runs that survived filtering before grouping */
             matchedRuns?: number;
+            /** @description Effective page size after the 200 hard cap (#994) */
+            limit?: number;
+            /** @description In-band unit declarations for every aggregate speed (all values tok/s) (#776) */
+            units?: Record<string, never>;
             /** @description Dataset-level flags (n=1 share, mixed engine versions) */
             caveats?: components["schemas"]["Caveat"][];
             /** @description Human-readable group-level warnings (mixed context bands within a group key) */
@@ -1048,6 +1054,12 @@ export interface components {
             snapshotAt?: string | null;
             /** @description Comparable runs that survived filtering */
             matchedRuns?: number;
+            /** @description Echoed ?scenario= id (null when unset) */
+            requestedScenario?: string | null;
+            /** @description Whether a fitCheck was requested via ?fitCheck=true */
+            fitCheck?: boolean;
+            /** @description Echoed minimum decode speed filter (#513) */
+            minDecode?: number | null;
             /** @description Runs dropped by ?fitCheck= (present only with fitCheck) */
             excludedRuns?: number | null;
             /** @description Echoed ?max_age= filter (null when unset) */
