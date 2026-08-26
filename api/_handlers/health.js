@@ -15,6 +15,8 @@
 //               so watch/submission outages are visible without blind probes.
 import { getCacheInfo } from '../_localmaxxing.js';
 import { sendJson } from '../_schema.js';
+import { probeWatchStore } from '../_watch.js';
+import { probeSubmitQueue } from '../_submit.js';
 
 export const config = { runtime: 'nodejs' };
 
