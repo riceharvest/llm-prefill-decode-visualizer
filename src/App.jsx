@@ -150,6 +150,7 @@ export default function App() {
       : undefined,
     modelId: selectedLmxRun?.model?.hfId || localMaxxingContext.modelId,
     quantization: selectedLmxRun?.engine?.quantization || localMaxxingContext.quantization,
+<<<<<<< ours
     promptTokens: Number(readParam('prompt')) || undefined,
     activeTab,
     // Issue #630: on Find HW the title must describe the constraint set the
@@ -162,6 +163,10 @@ export default function App() {
           quant: readParam('sq')
         }
       : undefined
+=======
+    promptTokens: Math.floor(Number(readParam('prompt'))) || undefined,
+    activeTab
+>>>>>>> theirs
   }), [selectedPreset, selectedLmxRun, localMaxxingContext.modelId, localMaxxingContext.quantization, activeTab]);
 
   // Share-link tamper-evidence (#917): permalinkHref() signs the params it

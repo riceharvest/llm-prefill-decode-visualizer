@@ -1,10 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+<<<<<<< ours
 import { ListFilter, ExternalLink, RotateCcw } from 'lucide-react';
 import { readParam, readParamNum, writeParams } from '../utils/urlState';
 import { quantizationMatches } from '../utils/hardwareShortlist';
 import { formatTime } from '../utils/presets';
 import { fetchHardwareShortlist, qualitySignals, qualitySummaryText } from '../utils/hardwareShortlist';
 import { fetchStateAttrs } from '../utils/fetchState';
+=======
+import { ListFilter, ExternalLink, RotateCcw, Download, ClipboardCopy } from 'lucide-react';
+import { readParam, readParamNum, readParamBool, writeParams } from '../utils/urlState';
+import ChartDataTable from './ChartDataTable';
+import { downloadJson } from '../utils/exportJson';
+import { copyMarkdownToClipboard } from '../utils/exportMarkdown';
+import { buildShortlistJson, buildShortlistMarkdown } from '../utils/shortlistExport';
+>>>>>>> theirs
 
 // Constraint-driven hardware shortlist ("find me hardware").
 //
@@ -50,18 +59,23 @@ export default function HardwareShortlist() {
   });
   const [model, setModel] = useState(() => readParam('sm') || '');
   const [quant, setQuant] = useState(() => readParam('sq') || '');
+  // Issue #441: n=1 toy-model runs used to top the default ranking on raw
+  // median. Groups with a single source run are excluded by default (opt out
+  // via the checkbox); they stay visible — badged — when explicitly allowed.
+  const [requireMinRuns, setRequireMinRuns] = useState(() => readParamBool('smin', true));
 
   const [status, setStatus] = useState('loading'); // loading | ready | error
   const [error, setError] = useState(null);
   const [rows, setRows] = useState([]);       // ranked groups currently displayed
   const [optionRows, setOptionRows] = useState([]); // unconstrained top-50 (quant vocabulary)
   const [matchedRuns, setMatchedRuns] = useState(0);
+  const [copied, setCopied] = useState(false);
   const abortRef = useRef(null);
 
   // Shareable per-tab settings
   useEffect(() => {
-    writeParams({ sd: minDecode, sv: maxVram, sm: model, sq: quant });
-  }, [minDecode, maxVram, model, quant]);
+    writeParams({ sd: minDecode, sv: maxVram, sm: model, sq: quant, smin: requireMinRuns ? undefined : '0' });
+  }, [minDecode, maxVram, model, quant, requireMinRuns]);
 
   useEffect(() => {
     abortRef.current?.abort();
@@ -113,10 +127,80 @@ export default function HardwareShortlist() {
       .map(([q]) => q);
   }, [optionRows]);
 
+<<<<<<< ours
   // Issue #832: constraints are applied server-side now (or by the client-side
   // fallback aggregator inside fetchHardwareShortlist), so the ranked rows ARE
   // the shortlist — no second client-side filter on top.
   const shortlist = rows;
+=======
+  const isSingleRun = (row) => (row.runsInGroup ?? 1) < 2;
+
+  const excludedSingleRunGroups = useMemo(() => (
+    requireMinRuns ? rows.filter(isSingleRun).length : 0
+  ), [rows, requireMinRuns]);
+
+  const shortlist = useMemo(() => rows.filter(row => {
+    if (requireMinRuns && isSingleRun(row)) return false;
+    if (minDecode !== '' && row.medianDecodeTokPerSec < Number(minDecode)) return false;
+    if (quant && (row.quantization || 'Unknown') !== quant) return false;
+    if (maxVram !== '') {
+      const vram = effectiveVramGb(row);
+      if (vram === null || vram > Number(maxVram)) return false;
+    }
+    return true;
+  }), [rows, minDecode, maxVram, quant, requireMinRuns]);
+
+  // Export payloads mirror the rendered ranking exactly (#442).
+  const exportRows = useMemo(() => shortlist.map(row => ({
+    ...row,
+    rig: rigLabel(row),
+    singleRunCaveat: isSingleRun(row)
+  })), [shortlist]);
+  const exportFilters = useMemo(() => ({
+    ...(minDecode !== '' ? { minDecodeTokPerSec: Number(minDecode) } : {}),
+    ...(maxVram !== '' ? { maxVramGb: Number(maxVram) } : {}),
+    ...(model.trim() ? { modelFamily: model.trim() } : {}),
+    ...(quant ? { quantization: quant } : {}),
+    minRunsInGroup: requireMinRuns ? 2 : 1
+  }), [minDecode, maxVram, model, quant, requireMinRuns]);
+
+  const handleExportJson = () => downloadJson(
+    buildShortlistJson({
+      rows: exportRows,
+      filters: exportFilters,
+      matchedRuns,
+      excludedSingleRunGroups
+    }),
+    'hardware-shortlist.json'
+  );
+
+  const handleCopyMd = async () => {
+    try {
+      await copyMarkdownToClipboard(buildShortlistMarkdown({
+        rows: exportRows,
+        filters: exportFilters,
+        matchedRuns,
+        excludedSingleRunGroups
+      }));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const tableRows = useMemo(() => exportRows.map((row, i) => ({
+    id: `${row.hardwareKey}|${row.modelFamily}|${row.quantization}`,
+    label: `#${i + 1} ${row.rig}`,
+    cells: {
+      family: row.modelFamily || '—',
+      engineQuant: `${row.engine || '—'} · ${row.quantization || '—'}`,
+      medianDecode: `${Math.round(row.medianDecodeTokPerSec).toLocaleString()} tok/s`,
+      medianPrefill: `${Math.round(row.medianPrefillTokPerSec || 0).toLocaleString()} tok/s`,
+      runs: String(row.runsInGroup ?? '—') + (row.singleRunCaveat ? ' (n=1)' : '')
+    }
+  })), [exportRows]);
+>>>>>>> theirs
 
   const rowStyle = { display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '0.82rem' };
   const numStyle = { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 };
@@ -201,6 +285,21 @@ export default function HardwareShortlist() {
               ))}
             </select>
           </div>
+
+          <div className="panel-inset field">
+            <div className="field-head">
+              <span className="field-label">Sample size</span>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={requireMinRuns}
+                aria-label="Exclude single-run groups from the ranking"
+                onChange={(e) => setRequireMinRuns(e.target.checked)}
+              />
+              Require ≥ 2 runs per rig
+            </label>
+          </div>
         </div>
 
         {/* Results */}
@@ -229,14 +328,22 @@ export default function HardwareShortlist() {
           <>
             <div className="panel-inset" style={{ marginBottom: '12px', borderColor: 'var(--prefill-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: '0.76rem', fontWeight: 600 }}>
               {shortlist.length} rig{shortlist.length === 1 ? '' : 's'} match · ranked by median decode tok/s · medians are outlier-resistant, runsInGroup shows sample size
+              {excludedSingleRunGroups > 0 && ` · ${excludedSingleRunGroups} single-run group${excludedSingleRunGroups === 1 ? '' : 's'} hidden (uncheck "Require ≥ 2 runs per rig" to show them)`}
             </div>
 
+<<<<<<< ours
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {shortlist.map((row, i) => {
                 const q = qualitySignals(row);
                 const qualityLine = qualitySummaryText(q);
                 return (
                 <div key={`${row.hardwareKey}|${row.modelFamily}|${row.quantization}`} className="panel-inset">
+=======
+            <div role="region" aria-live="polite" aria-label="Ranked hardware shortlist results">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {shortlist.map((row, i) => (
+                  <div key={`${row.hardwareKey}|${row.modelFamily}|${row.quantization}`} className="panel-inset">
+>>>>>>> theirs
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
                     <div>
                       <span style={{ color: 'var(--text-subtle)', fontSize: '0.72rem', marginRight: '8px' }}>#{i + 1}</span>
@@ -328,6 +435,11 @@ export default function HardwareShortlist() {
                     <span>Source runs in group</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <span style={numStyle}>{row.runsInGroup}</span>
+                      {isSingleRun(row) && (
+                        <span title="Only one source run in this group — the median is a single measurement" style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--warn)', border: '1px solid var(--warn)', borderRadius: 'var(--radius-sm)', padding: '1px 6px' }}>
+                          n=1 · single run
+                        </span>
+                      )}
                       {row.source && (
                         <a href={row.source} target="_blank" rel="noreferrer" className="source-link" style={{ fontSize: '0.72rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                           View source run <ExternalLink size={11} />
@@ -336,9 +448,40 @@ export default function HardwareShortlist() {
                     </span>
                   </div>
                 </div>
+<<<<<<< ours
                 );
               })}
+=======
+              ))}
+              </div>
+>>>>>>> theirs
             </div>
+
+            {/* Table semantics + export path for agents/AT (#442) */}
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px' }}>
+              <button className="btn" onClick={handleExportJson} title="Export this ranked shortlist as machine-readable JSON (download)">
+                <Download size={14} />
+                Export JSON
+              </button>
+              <button className="btn" onClick={handleCopyMd} title="Copy this ranked shortlist as a markdown table">
+                <ClipboardCopy size={14} />
+                {copied ? 'Copied!' : 'Copy MD'}
+              </button>
+            </div>
+
+            <ChartDataTable
+              caption="Ranked hardware shortlist"
+              rowHeaderLabel="Rank and rig"
+              mode="sr-only"
+              columns={[
+                { key: 'family', label: 'Model family' },
+                { key: 'engineQuant', label: 'Engine · quant' },
+                { key: 'medianDecode', label: 'Median decode tok/s', numeric: true },
+                { key: 'medianPrefill', label: 'Median prefill tok/s', numeric: true },
+                { key: 'runs', label: 'Source runs' }
+              ]}
+              rows={tableRows}
+            />
           </>
         )}
 

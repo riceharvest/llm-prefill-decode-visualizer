@@ -47,6 +47,21 @@ export function readSimSpeed() {
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
+// Token counts are discrete (#386): a fractional ?prompt=2048.7 used to leak
+// into state where some panels rounded and others displayed the raw fraction,
+// so the same render disagreed with itself ("2,048.7 tok" vs "0 / 2,049 tok").
+// One policy at parse time: positive integers only, anything else falls back.
+// Token counts are discrete (#386): a fractional ?prompt=2048.7 used to leak
+// into state where some panels rounded and others displayed the raw fraction,
+// so the same render disagreed with itself ("2,048.7 tok" vs "0 / 2,049 tok").
+// One policy at parse time: positive integers only, anything else falls back.
+export function readTokenCount(name, fallback) {
+  const v = readParam(name);
+  if (v === null || v === '') return fallback;
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 export function readParamBool(name, fallback) {
   const v = readParam(name);
   if (v === null || v === '') return fallback;
