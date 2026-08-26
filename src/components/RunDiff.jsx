@@ -3,6 +3,7 @@ import { GitCompare } from 'lucide-react';
 import { readParam, writeParams } from '../utils/urlState';
 import { fetchJsonWithTimeout, FetchJsonError } from '../utils/fetchJson';
 import { winnerLabel, WINNER_LEGEND } from '../utils/diffWinner';
+import { fetchStateAttrs, runDiffViewState } from '../utils/fetchState';
 
 // Minimal run-diff panel: two LocalMaxxing run ids in, per-metric deltas,
 // ratios and the API's plain-language summary out. Data comes from
@@ -72,7 +73,11 @@ export default function RunDiff() {
   ] : [];
 
   return (
-    <section className="panel" aria-label="Run diff">
+    <section
+      className="panel"
+      aria-label="Run diff"
+      {...fetchStateAttrs(runDiffViewState({ loading, error, result }))}
+    >
       <h2 className="panel-title" style={{ marginBottom: '14px' }} tabIndex={-1} data-panel-heading>
         <GitCompare size={16} />
         <span>Run Diff (measured A vs B)</span>

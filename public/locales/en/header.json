@@ -1,0 +1,20 @@
+{
+  "brandTitle": "LLM Prefill & Decode Speed Visualizer",
+  "brandSubtitle": "Measure walltime, TTFT & TPOT across single-turn chat and multi-turn agentic loops",
+  "presetLabel": "Preset",
+  "viewAriaLabel": "Switch visualizer view",
+  "localMaxxingRun": "LocalMaxxing measured run",
+  "shareTooltip": "Copy share link with current settings",
+  "shareCopied": "Share link copied",
+  "shareCopyFailed": "Copy failed — clipboard unavailable",
+  "shortcutsTooltip": "Keyboard shortcuts (?)",
+  "themeLabel": "Theme",
+  "themeAriaLabel": "Color theme (dark, light, or high contrast)",
+  "themes": {
+    "dark": "Dark",
+    "light": "Light",
+    "high-contrast": "High contrast"
+  },
+  "navAriaLabel": "Visualizer sections",
+  "embedTooltip": "Copy embeddable iframe snippet with current settings"
+}

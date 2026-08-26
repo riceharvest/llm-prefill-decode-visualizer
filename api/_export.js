@@ -31,7 +31,15 @@ export const COLUMNS = [
   { key: 'promptTokens', type: 'number', description: 'Prompt length in tokens for the benchmark run' },
   { key: 'outputTokens', type: 'number', description: 'Generated length in tokens for the benchmark run' },
   { key: 'contextLength', type: 'number', description: 'Context length used for the run; empty when unreported' },
-  { key: 'source', type: 'string', description: 'URL of the original run page on localmaxxing.com' }
+  { key: 'source', type: 'string', description: 'URL of the original run page on localmaxxing.com' },
+  { key: 'contextBand', type: 'string', description: 'Context-length band id derived from contextLength (e.g. <=8k, 8k-32k); empty when the run reports no usable contextLength' },
+  { key: 'createdAt', type: 'string', description: 'ISO-8601 timestamp of the upstream measurement; empty when unreported' },
+  { key: 'engineVersion', type: 'string', description: 'Inference engine build/version as reported by the submitter; empty when unreported' },
+  { key: 'batchSize', type: 'number', description: 'Batch size reported by the runner (1 = single-stream)' },
+  { key: 'concurrency', type: 'number', description: 'Concurrent requests reported by the runner' },
+  { key: 'numParallel', type: 'number', description: 'Parallel sequences reported by the runner' },
+  { key: 'prefillTokPerSecExact', type: 'number', description: 'Unrounded measured prompt-processing speed (tok/s)' },
+  { key: 'decodeTokPerSecExact', type: 'number', description: 'Unrounded measured decode speed (tok/s)' },
 ];
 
 /** Escape a single CSV field per RFC 4180 (quote when needed, double inner quotes). */

@@ -1,0 +1,10 @@
+{
+  "name": "English",
+  "direction": "ltr",
+  "coverage": {
+    "total": 686,
+    "translated": 686,
+    "missing": 0,
+    "note": "English is the fallback source locale; every key resolves here by definition."
+  }
+}

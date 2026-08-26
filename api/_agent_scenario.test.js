@@ -86,9 +86,11 @@ test('isValidScenario rejects drift in the shared preset source', () => {
 
 test('toAgentScenario bakes token math into field names (no nested objects)', () => {
   const out = toAgentScenario({ id: 'chat', label: 'Standard chat', promptTokens: 2048, outputTokens: 512 });
-  assert.deepEqual(Object.keys(out).sort(), ['id', 'label', 'outputTokens', 'prefillShare', 'promptTokens', 'totalTokens']);
+  // prefillSharePct added alongside the legacy fraction (#741)
+  assert.deepEqual(Object.keys(out).sort(), ['id', 'label', 'outputTokens', 'prefillShare', 'prefillSharePct', 'promptTokens', 'totalTokens']);
   assert.equal(out.totalTokens, 2560);
   assert.equal(out.prefillShare, 0.8);
+  assert.equal(out.prefillSharePct, 80);
 });
 
 test('router serves /api/agent/scenario.json', async () => {

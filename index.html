@@ -31,6 +31,31 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="https://llm-prefill-decode-visualizer.vercel.app/api/og" />
 
+    <!-- Per-route identity (#702): the static canonical/og:url above are the
+         bare-root default served to crawlers without JS. This inline script
+         rewrites them to the ACTUAL deep-link URL (+ ?title= into the titles)
+         so a shared ~50-param permalink stops declaring itself a duplicate of
+         / and its human title reaches unfurlers that execute JS. -->
+    <script>
+      (function () {
+        try {
+          var u = new URL(location.href);
+          var identity = u.origin + u.pathname + u.search;
+          var canonical = document.querySelector('link[rel="canonical"]');
+          if (canonical) canonical.setAttribute('href', identity);
+          var ogUrl = document.querySelector('meta[property="og:url"]');
+          if (ogUrl) ogUrl.setAttribute('content', identity);
+          var params = new URLSearchParams(u.search);
+          var title = params.get('title');
+          if (title) {
+            document.title = title + ' — LLM Prefill & Decode Speed Visualizer';
+            var ogTitle = document.querySelector('meta[property="og:title"]');
+            if (ogTitle) ogTitle.setAttribute('content', title);
+          }
+        } catch (e) { /* keep static defaults */ }
+      })();
+    </script>
+
     <!-- JSON-LD: SoftwareApplication identity (agent readiness #6) -->
     <script type="application/ld+json">
     {
