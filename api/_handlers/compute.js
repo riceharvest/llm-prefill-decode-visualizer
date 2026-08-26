@@ -163,15 +163,21 @@ const COMPUTE_CACHE_TTL_SECONDS = 600;
 // With dryRun, skip the math entirely and echo the parsed inputs instead
 // (#17): the id is the SAME hash a real call with these inputs would
 // return, so a dry run can be swapped for the real call 1:1.
-function withId(model, inputs, result, dryRun = false) {
+function withId(model, inputs, result, dryRun = false, substitutions = []) {
   const id = computeCalcId('compute', { model, ...normalizeParams(inputs) });
+  // #385: present-but-unparseable numeric params produce machine-readable
+  // substitution warnings (param/requested/used + message) on real AND dry_run.
+  const subs = inputSubstitutionWarnings(substitutions);
   if (dryRun) {
     // #601: validation-time warnings computed during the case must surface in
     // the dry-run echo too — the whole point is previewing what would happen.
     const { warnings } = result;
-    return { status: 200, body: { ...dryRunBody(model, inputs, id), ...(warnings?.length ? { warnings } : {}) } };
+    return { status: 200, body: {
+      ...dryRunBody(model, inputs, id),
+      ...(subs.length ? { warnings: [...subs, ...(warnings || [])] } : (warnings?.length ? { warnings } : {}))
+    } };
   }
-  return { status: 200, body: { id, ...result } };
+  return { status: 200, body: mergeInputWarnings({ id, ...result }, substitutions) };
 }
 
 // dry_run: validate + echo, never execute (#17). Accepts the shared boolean
@@ -197,9 +203,40 @@ function dryRunBody(model, inputs, id) {
   };
 }
 
-function num(v, fallback) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
+// Issue #385: a present-but-unparseable numeric param silently mapped to its
+// default with warnings:[] — an agent sending a typo'd/unit-broken value got
+// confident-looking numbers for the wrong workload. trackNum() behaves exactly
+// like num() but records every substitution so the handler can surface it.
+// Valid inputs are untouched: responses stay byte-identical and calc ids
+// (hashed from resolved inputs) never change.
+function trackNum(substitutions) {
+  return (v, fallback, field) => {
+    if (v === undefined || v === null || v === '') return fallback;
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+    substitutions.push({ param: field, requested: String(v), used: fallback });
+    return fallback;
+  };
+}
+
+export function inputSubstitutionWarnings(substitutions) {
+  return substitutions.map(s => ({
+    code: 'input_not_numeric_default_used',
+    param: s.param,
+    requested: s.requested,
+    used: s.used,
+    message: `Parameter '${s.param}=${s.requested}' is not a finite number — used default ${s.used}. Resend with a numeric value for an exact prediction.`
+  }));
+}
+
+// Prepend input-substitution warnings to a result body, keeping any
+// physics/sanity warnings that follow. No-op when every param parsed clean.
+function mergeInputWarnings(result, substitutions) {
+  if (!substitutions.length) return result;
+  return {
+    ...result,
+    warnings: [...inputSubstitutionWarnings(substitutions), ...(result.warnings || [])]
+  };
 }
 
 /**
@@ -266,15 +303,18 @@ function withPresetMeta(params, body) {
 // executing the simulation (#17).
 function computeOne(params, dryRun = false) {
   const model = params.model || params.m || '';
+  // #385: per-request substitution log, fed by the branch-local trackNum().
+  const subs = [];
+  const num = trackNum(subs);
 
   switch (model) {
     case 'singleTurn': {
       const { speeds } = resolveHardwarePreset(params);
       const inputs = {
-        promptTokens: num(params.promptTokens, 2048),
-        outputTokens: num(params.outputTokens, 512),
-        prefillSpeed: num(params.prefillSpeed, speeds.prefillSpeed ?? 3800),
-        decodeSpeed: num(params.decodeSpeed, speeds.decodeSpeed ?? 105)
+        promptTokens: num(params.promptTokens, 2048, 'promptTokens'),
+        outputTokens: num(params.outputTokens, 512, 'outputTokens'),
+        prefillSpeed: num(params.prefillSpeed, speeds.prefillSpeed ?? 3800, 'prefillSpeed'),
+        decodeSpeed: num(params.decodeSpeed, speeds.decodeSpeed ?? 105, 'decodeSpeed')
       };
       // Engine features (#472): ITL jitter / context scaling / attached
       // images — opt-in; when none requested the plain math runs untouched.
@@ -290,34 +330,34 @@ function computeOne(params, dryRun = false) {
         tpotMs: body.tpotMs
       });
       if (slo) body = { ...body, slo };
-      return withId('singleTurn', inputs, withPresetMeta(params, body), dryRun);
+      return withId('singleTurn', inputs, withPresetMeta(params, body), dryRun, subs);
     }
 
     case 'speculative': {
       const inputs = {
-        baseDecodeSpeed: num(params.baseDecodeSpeed ?? params.decodeSpeed, 105),
-        draftTokens: num(params.draftTokens, 4),
-        acceptanceRate: num(params.acceptanceRate, 0.7),
-        draftCostFraction: num(params.draftCostFraction, 0.2)
+        baseDecodeSpeed: num(params.baseDecodeSpeed ?? params.decodeSpeed, 105, 'baseDecodeSpeed'),
+        draftTokens: num(params.draftTokens, 4, 'draftTokens'),
+        acceptanceRate: num(params.acceptanceRate, 0.7, 'acceptanceRate'),
+        draftCostFraction: num(params.draftCostFraction, 0.2, 'draftCostFraction')
       };
-      return withId('speculative', inputs, speculative(inputs), dryRun);
+      return withId('speculative', inputs, speculative(inputs), dryRun, subs);
     }
 
     case 'batched': {
       const { speeds: bSpeeds } = resolveHardwarePreset(params);
       const inputs = {
-        prefillSpeed: num(params.prefillSpeed, bSpeeds.prefillSpeed ?? 3800),
-        decodeSpeed: num(params.decodeSpeed, bSpeeds.decodeSpeed ?? 105),
-        batchSize: num(params.batchSize, 1),
-        promptTokens: num(params.promptTokens, 4096),
-        outputTokens: num(params.outputTokens, 512),
-        decodeDecayExponent: num(params.decodeDecayExponent, 0.25)
+        prefillSpeed: num(params.prefillSpeed, bSpeeds.prefillSpeed ?? 3800, 'prefillSpeed'),
+        decodeSpeed: num(params.decodeSpeed, bSpeeds.decodeSpeed ?? 105, 'decodeSpeed'),
+        batchSize: num(params.batchSize, 1, 'batchSize'),
+        promptTokens: num(params.promptTokens, 4096, 'promptTokens'),
+        outputTokens: num(params.outputTokens, 512, 'outputTokens'),
+        decodeDecayExponent: num(params.decodeDecayExponent, 0.25, 'decodeDecayExponent')
       };
-      return withId('batched', inputs, withPresetMeta(params, batched(inputs)), dryRun);
+      return withId('batched', inputs, withPresetMeta(params, batched(inputs)), dryRun, subs);
     }
 
     case 'agentic': {
-      const requested = Math.min(50, Math.max(1, num(params.numTurns, 4)));
+      const requested = Math.min(50, Math.max(1, num(params.numTurns, 4, 'numTurns')));
       // #783: the spec declares numTurns an integer but fractional values
       // were accepted, floored silently by the turn loop, and echoed back
       // verbatim in inputs (so the calc id hashed a count that never ran).
@@ -327,11 +367,11 @@ function computeOne(params, dryRun = false) {
       const { speeds } = resolveHardwarePreset(params);
       const inputs = {
         numTurns,
-        basePromptTokens: num(params.basePromptTokens, 1500),
-        toolOutputTokensPerTurn: num(params.toolOutputTokensPerTurn, 800),
-        decodeTokensPerTurn: num(params.decodeTokensPerTurn, 250),
-        prefillSpeed: num(params.prefillSpeed, speeds.prefillSpeed ?? 3800),
-        decodeSpeed: num(params.decodeSpeed, speeds.decodeSpeed ?? 105),
+        basePromptTokens: num(params.basePromptTokens, 1500, 'basePromptTokens'),
+        toolOutputTokensPerTurn: num(params.toolOutputTokensPerTurn, 800, 'toolOutputTokensPerTurn'),
+        decodeTokensPerTurn: num(params.decodeTokensPerTurn, 250, 'decodeTokensPerTurn'),
+        prefillSpeed: num(params.prefillSpeed, speeds.prefillSpeed ?? 3800, 'prefillSpeed'),
+        decodeSpeed: num(params.decodeSpeed, speeds.decodeSpeed ?? 105, 'decodeSpeed'),
         enablePrefixCaching: params.enablePrefixCaching !== 'false' && params.enablePrefixCaching !== false
       };
       let result = agentic(inputs);
@@ -350,7 +390,7 @@ function computeOne(params, dryRun = false) {
         tpotMs: inputs.decodeSpeed > 0 ? 1000 / inputs.decodeSpeed : null
       });
       if (slo) result = { ...result, slo };
-      return withId('agentic', inputs, withPresetMeta(params, result), dryRun);
+      return withId('agentic', inputs, withPresetMeta(params, result), dryRun, subs);
     }
 
     case 'kvCache': {
@@ -439,7 +479,7 @@ function computeOne(params, dryRun = false) {
           vision: { ...vision, textContextLength: inputs.contextLength - vision.visionTokens, totalKvContextLength: inputs.contextLength }
         });
       }
-      return withId('kvCache', inputs, result, dryRun);
+      return withId('kvCache', inputs, result, dryRun, subs);
 
     }
 
@@ -453,16 +493,16 @@ function computeOne(params, dryRun = false) {
       // pass the real call uses so a dry run surfaces unknown ids and unmet
       // flag dependencies (warnings[]) instead of echoing garbage clean.
       const flaggedInputs = applyEngineFlags({
-        prefillSpeed: num(params.prefillSpeed, 3800),
-        decodeSpeed: num(params.decodeSpeed, 105),
+        prefillSpeed: num(params.prefillSpeed, 3800, 'prefillSpeed'),
+        decodeSpeed: num(params.decodeSpeed, 105, 'decodeSpeed'),
         flags
       });
       if (dryRun) {
         return { status: 200, body: {
           ...dryRunBody('flagged', {
             ...flaggedInputs.inputs,
-            promptTokens: num(params.promptTokens, 2048),
-            outputTokens: num(params.outputTokens, 512)
+            promptTokens: num(params.promptTokens, 2048, 'promptTokens'),
+            outputTokens: num(params.outputTokens, 512, 'outputTokens')
           }),
           warnings: flaggedInputs.warnings
         } };
@@ -488,14 +528,14 @@ function computeOne(params, dryRun = false) {
     case 'cost': {
       const { speeds: cSpeeds } = resolveHardwarePreset(params);
       const costInputs = {
-        hardwarePriceUsd: num(params.hardwarePriceUsd ?? params.price, 0),
-        electricityRatePerKwh: num(params.electricityRatePerKwh ?? params.electricityRate, 0.15),
-        powerDrawWatts: num(params.powerDrawWatts, 0),
-        amortizationMonths: num(params.amortizationMonths, 36),
-        promptTokens: num(params.promptTokens, 2048),
-        outputTokens: num(params.outputTokens, 512),
-        prefillSpeed: num(params.prefillSpeed, cSpeeds.prefillSpeed ?? 3800),
-        decodeSpeed: num(params.decodeSpeed, cSpeeds.decodeSpeed ?? 105)
+        hardwarePriceUsd: num(params.hardwarePriceUsd ?? params.price, 0, 'hardwarePriceUsd'),
+        electricityRatePerKwh: num(params.electricityRatePerKwh ?? params.electricityRate, 0.15, 'electricityRatePerKwh'),
+        powerDrawWatts: num(params.powerDrawWatts, 0, 'powerDrawWatts'),
+        amortizationMonths: num(params.amortizationMonths, 36, 'amortizationMonths'),
+        promptTokens: num(params.promptTokens, 2048, 'promptTokens'),
+        outputTokens: num(params.outputTokens, 512, 'outputTokens'),
+        prefillSpeed: num(params.prefillSpeed, cSpeeds.prefillSpeed ?? 3800, 'prefillSpeed'),
+        decodeSpeed: num(params.decodeSpeed, cSpeeds.decodeSpeed ?? 105, 'decodeSpeed')
       };
       if (dryRun) return { status: 200, body: dryRunBody('cost', costInputs) };
       // #736: bare model=cost calls default price AND power to 0, which makes
@@ -514,7 +554,8 @@ function computeOne(params, dryRun = false) {
           message: 'powerDrawWatts=0 (default) — electricity contributes nothing; pass ?powerDrawWatts= for a realistic $/1M tokens.'
         });
       }
-      return { status: 200, body: withPresetMeta(params, { ...cost(costInputs), warnings }) };
+      const costOut = { status: 200, body: mergeInputWarnings(withPresetMeta(params, { ...cost(costInputs), warnings }), subs) };
+        return costOut;
     }
 
     case '':
@@ -579,8 +620,8 @@ kvCache: withOutputs({ params: ['architecture|numLayers+kvHeads+headDim', 'conte
       example: { batch: [{ model: 'singleTurn', promptTokens: 4096 }, { model: 'kvCache', architecture: 'llama70b', contextLength: 131072 }] }
     },
     sanity: {
-      description: 'Non-blocking implausibility warnings. Every successful result carries a "warnings" array (empty when inputs are plausible) flagging outputs that violate known physical bounds: decode above the memory-bandwidth roofline, prefill above the compute roofline, TTFT below the kernel-launch floor, (kvCache) a contextLength beyond the architecture max context, or token counts below 1 / above 1e9. Warnings never change the math or the HTTP status.',
-      codes: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor', 'context_exceeds_model_limit', 'tokens_implausible'],
+      description: 'Non-blocking implausibility warnings. Every successful result carries a "warnings" array (empty when inputs are plausible) flagging outputs that violate known physical bounds: decode above the memory-bandwidth roofline, prefill above the compute roofline, TTFT below the kernel-launch floor, (kvCache) a contextLength beyond the architecture max context, or token counts below 1 / above 1e9. A present-but-unparseable numeric parameter additionally emits an input_not_numeric_default_used warning and runs on the documented default. Warnings never change the math or the HTTP status.',
+      codes: ['decode_above_bandwidth_roofline', 'prefill_above_compute_roofline', 'ttft_below_kernel_launch_floor', 'context_exceeds_model_limit', 'tokens_implausible', 'input_not_numeric_default_used'],
       example: '/api/compute?model=singleTurn&promptTokens=64&prefillSpeed=900000&decodeSpeed=5000'
     },
     dryRun: {
