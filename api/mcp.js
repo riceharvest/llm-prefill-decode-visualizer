@@ -11,6 +11,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { fetchWithTimeout, UPSTREAM_TIMEOUTS } from './_upstream_timeout.js';
 import { clientKey, rateLimit, RATE_WINDOW_MS } from './_ratelimit.js';
 import { applySchemaHeaders, SCHEMA_VERSION } from './_schema.js';
 
@@ -526,7 +527,7 @@ async function callTool(name, args, base) {
   // their own origin (#833: base resolves from the request, not a hardcoded
   // production origin — self-hosted deployments serve their own data).
   const url = `${base}${route.path}?${route.query.toString()}`;
-  const upstream = await fetch(url, { headers: { accept: 'application/json' } });
+  const upstream = await fetchWithTimeout(url, { headers: { accept: 'application/json' } }, UPSTREAM_TIMEOUTS.mcpSelfFetch);
   const body = await upstream.text();
   const result = {
     content: [{ type: 'text', text: body }],

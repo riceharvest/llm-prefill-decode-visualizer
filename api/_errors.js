@@ -50,6 +50,11 @@ export const ERROR_CODES = {
     title: 'Batch failed',
     description: 'Every item in the batch failed (issue #707). The `errors` member carries one entry per failed item, each with its own stable `code` and HTTP `status`. Partial batches (at least one ok item) still return 200 with per-item ok/error entries.'
   },
+  UPSTREAM_TIMEOUT: {
+    status: 504,
+    title: 'Upstream timeout',
+    description: 'An upstream data source did not respond within its time budget, so the request was aborted server-side instead of hanging. Safe to retry with backoff.'
+  },
   INTERNAL: {
     status: 500,
     title: 'Internal server error',
