@@ -52,8 +52,8 @@ function restore() {
   globalThis.fetch = realFetch;
 }
 
-function mockReq(query = {}) {
-  return { url: '/api/runs', method: 'GET', query, headers: {}, socket: { remoteAddress: '10.0.0.1' } };
+function mockReq(query = {}, headers = {}) {
+  return { url: '/api/runs', method: 'GET', query, headers, socket: { remoteAddress: '10.0.0.1' } };
 }
 
 function mockRes() {
@@ -234,5 +234,32 @@ test('?format=csv honors the row cap and marks truncation in trailing comments',
     assert.equal(dataRows.length, 2); // header + 1 capped row
     assert.ok(lines.some(l => l.startsWith('# truncated:')));
     assert.ok(lines.some(l => l.includes('cursor=')));
+  } finally { restore(); }
+});
+
+// ---------- Range-request cache bypass (#995) ----------
+
+test('ranged GET bypasses the CDN cache and declares Accept-Ranges: none (#995)', async () => {
+  try {
+    // JSON path
+    const json = mockRes();
+    await handler(mockReq({}, { range: 'bytes=0-99' }), json);
+    assert.equal(json.statusCode, 200);
+    assert.equal(json.headers['cache-control'], 'no-store');
+    assert.equal(json.headers['accept-ranges'], 'none');
+    assert.equal(JSON.parse(json.bodyText).rowCount, 2); // full body, not a slice
+
+    // CSV path keeps its content headers while going uncached
+    const csv = mockRes();
+    await handler(mockReq({ format: 'csv' }, { range: 'bytes=0-99' }), csv);
+    assert.equal(csv.headers['cache-control'], 'no-store');
+    assert.equal(csv.headers['accept-ranges'], 'none');
+    assert.match(csv.headers['content-type'], /text\/csv/);
+
+    // Plain GETs keep the public cache policy untouched
+    const plain = mockRes();
+    await handler(mockReq({}), plain);
+    assert.equal(plain.headers['cache-control'], 'public, max-age=600');
+    assert.equal(plain.headers['accept-ranges'], undefined);
   } finally { restore(); }
 });

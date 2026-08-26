@@ -45,6 +45,8 @@ export default async function handler(req, res) {
     const q = req.query || {};
 
     // Filters
+    // (#443) machine-readable param warnings collected during parsing.
+    const warnings = [];
     const hardware = q.hardware ? String(q.hardware).toLowerCase() : null;
     // Normalize like /api/best + /api/localmaxxing (issue #970) so spaced or
     // dotted display spellings ("Qwen3.6 27B") resolve to the same stored
@@ -82,6 +84,9 @@ export default async function handler(req, res) {
       : groupByRaw === 'hardware' ? 'hardware'
       : groupByRaw === 'quant' ? 'quant'
       : 'hardwareModel'; // default: hardware × model family
+    if (groupByRaw && !['model', 'hardware', 'quant'].includes(groupByRaw)) {
+      warnings.push({ code: 'param_value_ignored', param: 'groupBy', requested: groupByRaw, used: 'hardwareModel' });
+    }
 
     // Outlier policy: runs further than N IQRs from their group median are
     // flagged and excluded from the stats by default; pass
@@ -127,7 +132,12 @@ export default async function handler(req, res) {
       includeOutliers,
       snapshot: snapshot?.id ?? ''
     });
-    const { limit, cursor } = parsePagination(q, { defaultLimit: 25, maxLimit: 200, scope });
+    const { limit, cursor, requestedLimit } = parsePagination(q, { defaultLimit: 25, maxLimit: 200 });
+    // (#994) clamp telemetry: echo the effective page size + requested limit.
+    const paginationEcho = {
+      limit,
+      ...(requestedLimit !== undefined && requestedLimit !== limit ? { requestedLimit } : {})
+    };
 
     // aggregate() sorts by median decode desc; enforce the full stable order
     const allGroups = aggregate(runs, keyFns[groupBy], { outlierIqrs, includeOutliers })
@@ -171,15 +181,15 @@ export default async function handler(req, res) {
     // goes in the payload, per-group detail rides on each group's dataQuality.
     const auditSummary = auditRuns(runs);
 
-    const warnings = groups.filter(g => g.mixedEngines)
+    const engineWarnings = groups.filter(g => g.mixedEngines)
       .map(g => `${g.key} mixes engine versions (${g.engines.join(', ')}) — treat delta with caution`);
-    warnings.push(...groups.filter(g => g.mixedContextBands)
+    engineWarnings.push(...groups.filter(g => g.mixedContextBands)
       .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
-    warnings.push(...boolWarnings([['crossEngine', q.crossEngine], ['include_outliers', includeOutliersRaw]]));
+    engineWarnings.push(...boolWarnings([['crossEngine', q.crossEngine], ['include_outliers', includeOutliersRaw]]));
 
     // Silent param-ignore signals (#443): a typo'd groupBy / non-numeric
     // max_age / invalid limit must not look like a successful default query.
-    warnings.push(...[
+    engineWarnings.push(...[
       enumParamWarning('groupBy', q.groupBy, GROUP_BY_VALUES, groupBy),
       positiveNumberParamWarning('max_age', q.max_age ?? q.maxAge, maxAgeDays || null),
       positiveNumberParamWarning('limit', q.limit, limit, `used the default of ${limit}`)
@@ -193,6 +203,7 @@ export default async function handler(req, res) {
       contextBand: contextBand || null,
       freshnessTiers: 'fresh <90d · aging <1y · stale ≥1y (per-group: staleness of newest run)',
       total: allGroups.length,
+      ...paginationEcho,
       matchedRuns: runs.length,
       distinctModelFamilies: [...new Set(runs.map(r => r.modelFamily))].length,
       distinctEngines: [...new Set(runs.map(r => engineTag(r)))],
@@ -201,7 +212,10 @@ export default async function handler(req, res) {
       // (#776): decode/prefill medians etc. are tokens per second — declared
       // in-band instead of only inside description/note prose.
       units: { speed: 'tok/s' },
-      warnings,
+      warnings: [
+        ...warnings,
+        ...engineWarnings
+      ],
       outlierPolicy: {
         thresholdIqrs: outlierIqrs,
         includeOutliers,

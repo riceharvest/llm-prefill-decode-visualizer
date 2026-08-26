@@ -135,3 +135,52 @@ test('crossCheck: group without single-GPU baseline reports nothing', () => {
   assert.equal(cc.relatedRigComparisons, 0);
   assert.deepEqual(cc.contradictions, []);
 });
+
+// ---------- crossCheck x mixed-GPU buckets (#992) ----------
+
+test('crossCheck (#992): singles of unrelated cards never baseline another card\'s multi rig', () => {
+  // A model-level bucket spanning cards: one fast RTX 3080 single + two slow
+  // RX 570s in a 2x rig. Pre-#992 the pooled single median (fast card) vetoed
+  // the budget-card dual rig as "likely misconfigured"; per-card bucketing
+  // must keep them apart (the RX 570 pair has no same-card baseline at all).
+  const runs = [
+    { ...run(328), gpu: 'RTX 3080', hardware: 'RTX 3080' },
+    run(90, { gpuCount: 2, gpu: 'RX 570' })
+  ];
+  const cc = crossCheck(runs);
+  assert.equal(cc.relatedRigComparisons, 0);
+  assert.deepEqual(cc.contradictions, []);
+});
+
+test('crossCheck (#992): like-for-like comparison still flags a real mismatch', () => {
+  // Same card on both sides → the baseline is valid and the slow dual rig is
+  // still caught.
+  const runs = [
+    run(130),
+    run(100, { gpuCount: 2, gpu: 'rtx 3090' }) // lowercase + no prefix
+  ];
+  const cc = crossCheck(runs);
+  assert.equal(cc.relatedRigComparisons, 1);
+  assert.equal(cc.contradictions.length, 1);
+  assert.equal(cc.contradictions[0].kind, 'slower_than_single');
+});
+
+test('crossCheck (#992): "2x Card" gpu labels normalize onto the single-card bucket', () => {
+  const runs = [
+    run(130),
+    run(250, { gpuCount: 2, gpu: '2x RTX 3090' })
+  ];
+  const cc = crossCheck(runs);
+  assert.equal(cc.relatedRigComparisons, 1);
+  assert.deepEqual(cc.contradictions, []);
+});
+
+test('crossCheck (#992): hardwareKey wins over the display label when present', () => {
+  const runs = [
+    { ...run(130), hardwareKey: 'rtx-3090', gpu: 'Some Label' },
+    { ...run(100, { gpuCount: 2, gpu: 'rtx 3090' }), hardwareKey: 'rtx-3090' }
+  ];
+  const cc = crossCheck(runs);
+  assert.equal(cc.relatedRigComparisons, 1);
+  assert.equal(cc.contradictions.length, 1);
+});

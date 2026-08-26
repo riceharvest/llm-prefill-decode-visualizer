@@ -207,6 +207,25 @@ export function applyDeprecationForPath(res, pathname) {
 }
 
 /**
+ * Ranged GETs must never be served from the CDN cache (#995): the edge slices
+ * cached bodies into HTTP 200 partial responses (a `content-range` header plus
+ * a truncated body), which conforming clients read as a complete
+ * representation. Serving range probes uncached keeps every 200 body whole —
+ * this API does not support partial content, so callers always receive one
+ * full representation with `Accept-Ranges: none` signalling that.
+ *
+ * Call before any response body is written. Later Cache-Control setters must
+ * respect an already-set header (sendJson and the handlers using this helper
+ * do). Returns true when the request carried a Range header.
+ */
+export function applyRangeGuard(req, res) {
+  if (!req?.headers?.range) return false;
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Accept-Ranges', 'none');
+  return true;
+}
+
+/**
  * Shared JSON sender used by every /api route: stamps the schema version,
  * sets the standard headers, and serializes with stable formatting.
  *

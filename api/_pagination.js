@@ -114,8 +114,12 @@ export function decodeCursor(cursor) {
  */
 export function parsePagination(q, { defaultLimit, maxLimit, scope = null }) {
   const n = Number(q?.limit);
-  const limit = Number.isFinite(n) && n >= 1
-    ? Math.min(maxLimit, Math.floor(n))
+  // Raw requested page size (integer, pre-clamp) or null when absent/invalid.
+  // Returned so handlers can tell a honored ?limit= from a silently clamped
+  // one (#994).
+  const requestedLimit = Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
+  const limit = requestedLimit != null
+    ? Math.min(maxLimit, requestedLimit)
     : defaultLimit;
 
   const raw = q?.cursor;
@@ -130,7 +134,7 @@ export function parsePagination(q, { defaultLimit, maxLimit, scope = null }) {
     }
     cursor = env.k;
   }
-  return { limit, cursor };
+  return { limit, cursor, requestedLimit };
 }
 
 /**

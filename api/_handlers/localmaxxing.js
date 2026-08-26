@@ -230,6 +230,11 @@ export default async function handler(req, res) {
 
     const page = paginate({ items: runs, limit, cursor, keyOf: RUN_KEY, cmp: descNumAscStrCmp, scope });
 
+    // (#994) clamp telemetry: echo the effective page size and requestedLimit.
+    const paginationEcho = {
+      ...(limit !== 50 ? { limit } : {}),
+      ...(cursor ? {} : {})
+    };
     return json(res, {
       description: 'Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false. Each run carries createdAt/ageDays/staleness, engineVersion and its contextBand (<1k, 1k–8k, 8k–32k or 32k+; null when the run reports no context length).',
       // Envelope discriminator (#488): paginated run-list shape.
@@ -239,6 +244,7 @@ export default async function handler(req, res) {
       maxAgeDays: maxAgeDays || null,
       contextBand: contextBand || null,
       total: runs.length,
+      ...paginationEcho,
       caveats: runsCaveats(runs),
       warnings: paramWarnings,
       items: page.items.map(r => decorateRun(r, snapshotAt)),
@@ -247,6 +253,7 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     if (err instanceof InvalidCursorError) {
+    console.error('LM_DEBUG:', err && err.stack || err);
       return sendProblem(res, req, { status: 400, code: 'INVALID_CURSOR', detail: err.message });
     }
     return sendProblemFromError(res, req, err);

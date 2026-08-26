@@ -1,7 +1,7 @@
 import { getAllRunsRaw } from '../_localmaxxing.js';
 import { runsCsvPreamble, toRunsCsv, buildRunsJsonPayload, RUNS_DATASET_VERSION, CSV_BOM } from '../_runs_dump.js';
 import { enforceRateLimit } from '../_ratelimit.js';
-import { sendJson } from '../_schema.js';
+import { sendJson, applyRangeGuard } from '../_schema.js';
 import { ApiError, sendProblem, sendProblemFromError } from '../_errors.js';
 import { parsePagination, paginate, paginationScope, InvalidCursorError } from '../_pagination.js';
 import { requireEnum } from '../_params.js';
@@ -54,6 +54,11 @@ export default async function handler(req, res) {
 
   if (!enforceRateLimit(req, res)) return;
 
+  // Ranged GETs bypass the CDN cache (#995): a cached body sliced by the edge
+  // into a 200-branded partial response is indistinguishable from the full
+  // dump for clients that only check the status code.
+  const ranged = applyRangeGuard(req, res);
+
   try {
     // Shared strict enum contract (see _params.js requireEnum): unknown
     // values are a 400 problem+json on BOTH dataset endpoints — /api/export
@@ -90,7 +95,8 @@ export default async function handler(req, res) {
       const suffix = mode === 'true' ? '-comparable' : mode === 'false' ? '-noncomparable' : '';
       res.statusCode = 200;
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'public, max-age=600');
+      res.setHeader('Cache-Control', ranged ? 'no-store' : 'public, max-age=600');
+      if (ranged) res.setHeader('Accept-Ranges', 'none');
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition',
         `attachment; filename="localmaxxing-all-runs-v${RUNS_DATASET_VERSION}${suffix}-${dateTag}.csv"`);
