@@ -941,6 +941,10 @@ export interface components {
             /** @description Total matching runs across all pages */
             total: number;
             caveats?: components["schemas"]["Caveat"][];
+            /** @description Echoed ?mode= filter (null when unset) */
+            mode?: string | null;
+            /** @description Non-blocking implausibility or filter-substitution warnings */
+            warnings?: components["schemas"]["Caveat"][];
             items: components["schemas"]["Run"][];
             has_more: boolean;
             /** @description Opaque keyset cursor; pass back as ?cursor= */

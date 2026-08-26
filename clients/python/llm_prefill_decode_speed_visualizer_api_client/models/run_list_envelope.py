@@ -47,6 +47,8 @@ class RunListEnvelope:
             context_band (None | RunListEnvelopeContextBandType1 | RunListEnvelopeContextBandType2Type1 |
                 RunListEnvelopeContextBandType3Type1 | Unset): Echoed ?context_band= filter (null when unset)
             caveats (list[Caveat] | Unset):
+            mode (None | str | Unset): Echoed ?mode= filter (null when unset)
+            warnings (list[Caveat] | Unset): Non-blocking implausibility or filter-substitution warnings
             next_cursor (None | str | Unset): Opaque keyset cursor; pass back as ?cursor=
             rate_limit (RateLimit | Unset): Machine-readable rate-limit state — the same numbers the X-RateLimit-* headers
                 carry, for clients that only parse bodies.
@@ -62,6 +64,8 @@ class RunListEnvelope:
     max_age_days: float | None | Unset = UNSET
     context_band: None | RunListEnvelopeContextBandType1 | RunListEnvelopeContextBandType2Type1 | RunListEnvelopeContextBandType3Type1 | Unset = UNSET
     caveats: list[Caveat] | Unset = UNSET
+    mode: None | str | Unset = UNSET
+    warnings: list[Caveat] | Unset = UNSET
     next_cursor: None | str | Unset = UNSET
     rate_limit: RateLimit | Unset = UNSET
     schema_version: Literal['1'] | Unset = UNSET
@@ -128,6 +132,21 @@ class RunListEnvelope:
 
 
 
+        mode: None | str | Unset
+        if isinstance(self.mode, Unset):
+            mode = UNSET
+        else:
+            mode = self.mode
+
+        warnings: list[dict[str, Any]] | Unset = UNSET
+        if not isinstance(self.warnings, Unset):
+            warnings = []
+            for warnings_item_data in self.warnings:
+                warnings_item = warnings_item_data.to_dict()
+                warnings.append(warnings_item)
+
+
+
         next_cursor: None | str | Unset
         if isinstance(self.next_cursor, Unset):
             next_cursor = UNSET
@@ -160,6 +179,10 @@ class RunListEnvelope:
             field_dict["contextBand"] = context_band
         if caveats is not UNSET:
             field_dict["caveats"] = caveats
+        if mode is not UNSET:
+            field_dict["mode"] = mode
+        if warnings is not UNSET:
+            field_dict["warnings"] = warnings
         if next_cursor is not UNSET:
             field_dict["next_cursor"] = next_cursor
         if rate_limit is not UNSET:
@@ -286,6 +309,28 @@ class RunListEnvelope:
                 caveats.append(caveats_item)
 
 
+        def _parse_mode(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        mode = _parse_mode(d.pop("mode", UNSET))
+
+
+        _warnings = d.pop("warnings", UNSET)
+        warnings: list[Caveat] | Unset = UNSET
+        if _warnings is not UNSET:
+            warnings = []
+            for warnings_item_data in _warnings:
+                warnings_item = Caveat.from_dict(warnings_item_data)
+
+
+
+                warnings.append(warnings_item)
+
+
         def _parse_next_cursor(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -320,6 +365,8 @@ class RunListEnvelope:
             max_age_days=max_age_days,
             context_band=context_band,
             caveats=caveats,
+            mode=mode,
+            warnings=warnings,
             next_cursor=next_cursor,
             rate_limit=rate_limit,
             schema_version=schema_version,
