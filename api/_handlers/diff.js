@@ -220,6 +220,18 @@ export default async function handler(req, res) {
     // actually passed at least one slo* budget param.
     const hasBudgets = [q.sloTtftMs, q.sloTpotMs, q.sloWalltimeSec].some(v => v !== undefined && v !== null && String(v).trim() !== '');
 
+    // Optional SLO budgets (#560): present-but-invalid values fail loudly
+    // instead of silently disabling the check (same policy as sizing's SLO caps).
+    const SLO_PARAM_NAMES = ['sloTtftMs', 'sloTpotMs', 'sloWalltimeSec'];
+    for (const name of SLO_PARAM_NAMES) {
+      const raw = q[name];
+      if (raw === undefined || raw === null || String(raw).trim() === '') continue;
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n <= 0) {
+        return json(res, { error: `invalid SLO budget ${name}=${raw}`, detail: `${name} must be a positive number (e.g. ${name}=400), or omit it to disable that check.` }, 400);
+      }
+    }
+
     return json(res, {
       description: `Diffs two measured runs. Time metrics are normalized to a reference workload (${REF_PROMPT_TOKENS}-token prompt, ${REF_OUTPUT_TOKENS}-token output); delta is B − A, ratio is B ÷ A, winner is from A's point of view. Time metrics (ttft/tpot/walltime) are SECONDS — join with /api/compute by multiplying tpot by 1000 for its tpotMs — throughputs are tok/s, and every deltaPct is a FRACTION (0.25 = 25%).`,
       ...(snapshot ? { snapshot } : {}),
