@@ -69,9 +69,18 @@ export function confidence(runs, now = Date.now()) {
 
 /**
  * Consistency checks between logically related rigs inside one aggregate
- * group: runs are bucketed by model family × quantization, and each
- * multi-GPU subset (gpuCount > 1) is compared against the single-GPU
+ * group: runs are bucketed by model family × quantization × GPU card, and
+ * each multi-GPU subset (gpuCount > 1) is compared against the single-GPU
  * baseline of the same bucket.
+ *
+ * The GPU-card axis matters (#992): under coarse groupings (e.g.
+ * /api/benchmarks?groupBy=model) a model+quant bucket can span many unrelated
+ * cards — iGPUs, laptops, flagship GPUs. Comparing a 2x budget-card rig
+ * against a median inflated by a faster card produced false "likely
+ * misconfigured run" verdicts on apples-to-oranges baselines. Bucketing by
+ * card keeps every single-vs-multi comparison like-for-like; the leading
+ * "N x" count prefix is stripped so "2x RTX 3090"-style labels match their
+ * single-card rows.
  *
  * Contradictions emitted:
  *  - 'slower_than_single': the multi-GPU rig's total decode is below the
@@ -80,10 +89,20 @@ export function confidence(runs, now = Date.now()) {
  *    single-card baseline — plausible for CPU-bound setups but suspicious
  *    enough to flag.
  */
+// Normalized GPU identity for one run: hardwareKey when present, else the gpu/
+// hardware label; lowercased with any leading count prefix ("2x ") removed so
+// multi-GPU rows land in the same bucket as single-card rows of the same card.
+function gpuKey(r) {
+  return String(r.hardwareKey || r.gpu || r.hardware || '')
+    .toLowerCase()
+    .replace(/^\d+\s*x\s*/, '')
+    .trim();
+}
+
 export function crossCheck(runs) {
   const buckets = new Map();
   for (const r of runs) {
-    const k = `${r.modelFamily}|${String(r.quantization || '').toLowerCase()}`;
+    const k = `${r.modelFamily}|${String(r.quantization || '').toLowerCase()}|${gpuKey(r)}`;
     if (!buckets.has(k)) buckets.set(k, []);
     buckets.get(k).push(r);
   }
@@ -125,7 +144,7 @@ export function crossCheck(runs) {
           multiTokPerSec: round(multiDecode),
           deltaPct: round(((multiDecode - baseDecode) / baseDecode) * 100),
           perGpuScalingPct,
-          note: `${n}-GPU rig reports less total decode than a single card on the same model/quant — likely misconfigured run`
+          note: `${n}-GPU rig reports less total decode than a single card on the same model/quant/card — likely misconfigured run`
         });
       } else if (perGpuScalingPct < 50) {
         contradictions.push({
@@ -150,7 +169,7 @@ export function crossCheck(runs) {
           multiTokPerSec: round(multiPrefill),
           deltaPct: round(((multiPrefill - basePrefill) / basePrefill) * 100),
           perGpuScalingPct: round(((multiPrefill / n) / basePrefill) * 100),
-          note: `${n}-GPU rig reports less total prefill than a single card on the same model/quant — likely misconfigured run`
+          note: `${n}-GPU rig reports less total prefill than a single card on the same model/quant/card — likely misconfigured run`
         });
       }
     }

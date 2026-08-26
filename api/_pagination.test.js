@@ -40,6 +40,20 @@ test('parsePagination applies documented default/max limits', () => {
   assert.equal(parsePagination({ limit: '10' }, { defaultLimit: 50, maxLimit: 500 }).limit, 10);
   assert.equal(parsePagination({ limit: '9999' }, { defaultLimit: 50, maxLimit: 500 }).limit, 500);
   assert.equal(parsePagination({ limit: '0' }, { defaultLimit: 50, maxLimit: 500 }).limit, 50);
+});
+
+test('parsePagination reports the pre-clamp requested limit (#994)', () => {
+  // absent / invalid input -> null requested limit
+  assert.equal(parsePagination({}, { defaultLimit: 25, maxLimit: 200 }).requestedLimit, null);
+  assert.equal(parsePagination({ limit: 'abc' }, { defaultLimit: 25, maxLimit: 200 }).requestedLimit, null);
+  assert.equal(parsePagination({ limit: '-5' }, { defaultLimit: 25, maxLimit: 200 }).requestedLimit, null);
+  // honored request echoes unchanged
+  assert.equal(parsePagination({ limit: '10' }, { defaultLimit: 25, maxLimit: 200 }).requestedLimit, 10);
+  // clamped request keeps the RAW value so handlers can flag the reduction
+  const clamped = parsePagination({ limit: '300' }, { defaultLimit: 25, maxLimit: 200 });
+  assert.equal(clamped.limit, 200);
+  assert.equal(clamped.requestedLimit, 300);
+  // extra invalid-input cases keep falling back to the default limit
   assert.equal(parsePagination({ limit: '-5' }, { defaultLimit: 50, maxLimit: 500 }).limit, 50);
   assert.equal(parsePagination({ limit: 'abc' }, { defaultLimit: 25, maxLimit: 200 }).limit, 25);
   assert.equal(parsePagination({ limit: '2.7' }, { defaultLimit: 25, maxLimit: 200 }).limit, 2);

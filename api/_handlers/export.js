@@ -40,14 +40,19 @@ export default async function handler(req, res) {
     // an unknown ?format is a 400 problem+json, never a silent CSV fallback
     // (#728). Case-insensitive + whitespace-tolerant ("JSON", "json ").
     const format = requireEnum(req.query?.format, ['json', 'csv'], 'format', 'csv');
-    const runs = await getAllRuns();
+
+    // Ranged GETs bypass the CDN cache (#995): a cached body sliced by the
+        // edge into a 200-branded partial response is indistinguishable from the
+        // full dump for clients that only check the status code.
+        applyRangeGuard(req, res);    const runs = await getAllRuns();
     const generatedAt = new Date().toISOString();
     const dateTag = generatedAt.slice(0, 10).replaceAll('-', '');
     const filename = `localmaxxing-comparable-runs-v${DATASET_VERSION}-${dateTag}.${format}`;
 
     res.statusCode = 200;
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=600');
+    res.setHeader('Cache-Control', ranged ? 'no-store' : 'public, max-age=600');
+    if (ranged) res.setHeader('Accept-Ranges', 'none');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
     if (format === 'json') {
@@ -69,11 +74,7 @@ export default async function handler(req, res) {
     // Invalid ?format renders as a 400 problem+json (INVALID_PARAMS);
     // genuine upstream failures keep the legacy JSON 502 shape.
     if (err && err.code === 'INVALID_PARAMS') return sendProblemFromError(res, req, err);
-    res.statusCode = 502;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'no-store');
-    res.end(JSON.stringify(problemBody({ code: 'INTERNAL', instance: req.url })));
+    return sendProblemFromError(res, req, Object.assign(new Error('upstream unavailable'), { status: 502, code: 'UPSTREAM_UNAVAILABLE' }));
   }
 }
 

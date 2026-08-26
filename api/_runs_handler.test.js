@@ -52,8 +52,8 @@ function restore() {
   globalThis.fetch = realFetch;
 }
 
-function mockReq(query = {}) {
-  return { url: '/api/runs', method: 'GET', query, headers: {}, socket: { remoteAddress: '10.0.0.1' } };
+function mockReq(query = {}, headers = {}) {
+  return { url: '/api/runs', method: 'GET', query, headers, socket: { remoteAddress: '10.0.0.1' } };
 }
 
 function mockRes() {
