@@ -3,6 +3,8 @@
 // so architecture numbers (block_count, head counts, embedding length) can
 // be resolved from GGUF-only repos that ship no config.json.
 
+import { fetchWithTimeout, UPSTREAM_TIMEOUTS } from './_upstream_timeout.js';
+
 const INITIAL_BYTES = 256 * 1024;
 const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -23,7 +25,11 @@ const STRING_TYPE = 8;
 const ARRAY_TYPE = 9;
 
 async function fetchChunk(url, nBytes) {
-  const res = await fetch(url, { headers: { range: `bytes=0-${nBytes - 1}` }, redirect: 'follow' });
+  const res = await fetchWithTimeout(
+    url,
+    { headers: { range: `bytes=0-${nBytes - 1}` }, redirect: 'follow' },
+    UPSTREAM_TIMEOUTS.ggufChunk
+  );
   if (!res.ok && res.status !== 206) {
     throw Object.assign(new Error(`gguf fetch failed (${res.status}) for ${url}`), { status: 502 });
   }

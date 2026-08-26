@@ -4,6 +4,7 @@
 import { normalizeModelId } from './_normalize.js';
 import { engineTags } from './_engine.js';
 import { ApiError } from './_errors.js';
+import { fetchWithTimeout, UPSTREAM_TIMEOUTS } from './_upstream_timeout.js';
 import { groupFreshness } from './_freshness.js';
 import { contextBandOf, contextBandMix } from './_contextbands.js';
 
@@ -90,9 +91,9 @@ export async function getDataset() {
     const seen = new Set();
     let truncated = false;
     for (let offset = 0; offset <= CRAWL_MAX_OFFSET; offset += PAGE) {
-      const res = await fetch(`${UPSTREAM}/leaderboard?limit=${PAGE}&offset=${offset}`, {
+      const res = await fetchWithTimeout(`${UPSTREAM}/leaderboard?limit=${PAGE}&offset=${offset}`, {
         headers: { accept: 'application/json' }
-      });
+      }, UPSTREAM_TIMEOUTS.leaderboardPage);
       if (!res.ok) throw new ApiError('UPSTREAM_UNAVAILABLE', `localmaxxing.com leaderboard returned HTTP ${res.status}`);
       const data = await res.json();
       const batch = data.rows || [];

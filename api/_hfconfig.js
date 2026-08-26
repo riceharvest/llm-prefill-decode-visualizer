@@ -9,6 +9,8 @@
 
 import { normalizeModelId } from './_normalize.js';
 import { readGgufMetadata, architectureFromGguf } from './_gguf.js';
+import { ApiError } from './_errors.js';
+import { fetchWithTimeout, UPSTREAM_TIMEOUTS } from './_upstream_timeout.js';
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 // Bound the in-memory cache (#608): warm instances resolve attacker-controlled
@@ -65,8 +67,13 @@ function pickTopLevel(cfg) {
 async function fetchJson(url, whatFor) {
   let res;
   try {
-    res = await fetch(url, { headers: { accept: 'application/json' }, redirect: 'follow' });
+    res = await fetchWithTimeout(
+      url,
+      { headers: { accept: 'application/json' }, redirect: 'follow' },
+      UPSTREAM_TIMEOUTS.hfConfig
+    );
   } catch (err) {
+    if (err instanceof ApiError) throw err; // already a problem+json shape (e.g. UPSTREAM_TIMEOUT)
     throw httpError(502, `could not reach huggingface.co for ${whatFor}: ${err.message}`);
   }
   if (res.status === 404 || res.status === 401 || res.status === 403) return null;
