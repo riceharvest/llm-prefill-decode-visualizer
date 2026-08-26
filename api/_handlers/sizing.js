@@ -198,9 +198,9 @@ export default async function handler(req, res) {
         code: 'NOT_FOUND',
         detail: `No comparable benchmark runs match model='${workload.model}'. Try a broader substring (e.g. 'qwen' instead of an exact hfId).`,
         error: `No comparable benchmark runs match model='${workload.model}'. Try a broader substring (e.g. 'qwen' instead of an exact hfId).`,
-        workload
-      });
-    }
+        workload,
+        ...(budgetCap ? { budgetCap } : {})
+      });    }
 
     const limit = Math.min(25, Math.max(1, Number(params.limit) || 5));
     const groups = aggregate(runs, r => `${r.hardwareKey}|${r.modelFamily}`);
@@ -361,6 +361,7 @@ const meetsWalltime = slo.maxWalltimeSeconds != null && walltimeSeconds != null
       ...(budgetUsdMax != null ? { budgetUsdMax } : {}),
       matchedRuns: runs.length,
       snapshot,
+      ...(budgetCap ? { budgetCap } : {}),
       assumptions: {
         kvArchitecture: explicitArch || 'estimated from parameter count (exposed per recommendation in vramFit)',
         precisionBytes: 2,
