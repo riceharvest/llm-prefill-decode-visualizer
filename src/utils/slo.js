@@ -8,6 +8,8 @@
 // means headroom left under the budget (green badge) and negative means the
 // run overran it (red badge).
 
+import { noteStorageFailure, noteStorageSuccess } from './storageHealth.js';
+
 export const SLO_STORAGE_KEY = 'llmpdv.slo-budgets-v1';
 
 // Defaults roughly match common interactive-chat targets:
@@ -76,13 +78,21 @@ export function loadSloBudgets(storage = typeof localStorage !== 'undefined' ? l
   }
 }
 
-/** Persist budgets; storage failures (private mode, quota) are non-fatal. */
+/** Persist budgets; storage failures are reported via the shared #779 health
+ *  registry (private mode, quota-full) AND returned as false so callers can
+ *  surface a visible "won't survive reload" warning instead of silently
+ *  reverting to defaults on next load. */
 export function saveSloBudgets(budgets, storage = typeof localStorage !== 'undefined' ? localStorage : undefined) {
-  if (!storage) return false;
+  if (!storage) {
+    noteStorageFailure(SLO_STORAGE_KEY);
+    return false;
+  }
   try {
     storage.setItem(SLO_STORAGE_KEY, JSON.stringify(sanitizeBudgets(budgets)));
+    noteStorageSuccess();
     return true;
   } catch {
+    noteStorageFailure(SLO_STORAGE_KEY);
     return false;
   }
 }

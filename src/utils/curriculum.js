@@ -13,6 +13,8 @@
 
 export const CURRICULUM_STORAGE_KEY = 'llmpd-curriculum-progress';
 
+import { noteStorageFailure, noteStorageSuccess } from './storageHealth.js';
+
 export const LESSONS = [
   {
     id: 'ttft-basics',
@@ -173,8 +175,11 @@ export function loadProgress(storage = safeStorage()) {
 export function saveProgress(progress, storage = safeStorage()) {
   try {
     storage?.setItem(CURRICULUM_STORAGE_KEY, JSON.stringify(progress));
+    noteStorageSuccess();
   } catch {
-    // ignore — progress just won't persist
+    // ignore — progress just won't persist, but the failure is recorded for
+    // persistence-aware UI instead of being swallowed silently (#779)
+    noteStorageFailure(CURRICULUM_STORAGE_KEY);
   }
   return progress;
 }

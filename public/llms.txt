@@ -10,6 +10,7 @@ Endpoint-Index: /api/agent/index.json
 Tabs: single,agentic,batching,compare,ab,diff,shortlist,kvcache,theory
 Tab-URL-Template: {Base-URL}/?tab={id}
 Tab-Section-Header-Format: ### Tab: {id} — {label}
+Persisted-State-Keys: llmpd-theme,llmpdv.slo-budgets-v1,llmpdv.snapshots.v1,llmpd-plain-mode,llmpd-analogy-mode,changelog.dismissedId,llmpd-concept-checks-v1,llmpd-curriculum-progress
 Repo: https://github.com/riceharvest/llm-prefill-decode-visualizer
 <!-- /agent-parseable:meta -->
 
@@ -386,5 +387,20 @@ There is no dedicated completion event yet — start a run (`autoplay=1` or a `p
 ## Trust assumptions (subresource integrity)
 
 No `integrity=` SRI pins ship anywhere today. Same-origin bundles under `/assets/` are content-hash-addressed by filename but not pinned in the HTML, and the Google Fonts CSS plus font binaries load cross-origin from `fonts.googleapis.com` / `fonts.gstatic.com` with no integrity attribute (their responses are UA-dependent, so no stable hash exists — self-host/proxy them if you need verifiable subresources). There is also no Content-Security-Policy header yet. This trust assumption applies to every route, including `/embed`.
+
+## Persisted client state
+
+These browser-localStorage keys hold state that share links do NOT carry.
+Checkpoint/restore a whole session with serializeSessionState()/restoreSessionState()
+in src/utils/sessionState.js ({ schemaVersion, capturedAt, state: { [key]: rawStorageString } }).
+
+- `llmpd-theme` — owner src/utils/theme.js — shape "dark" | "light" | "high-contrast" — affects rendered output for the same URL: no — Color theme choice; OS preference followed until user picks.
+- `llmpdv.slo-budgets-v1` — owner src/utils/slo.js — shape { ttftMs: number|null, tpotMs: number|null, walltimeSec: number|null } — affects rendered output for the same URL: YES — SLO budget thresholds backing the pass/fail verdict badges.
+- `llmpdv.snapshots.v1` — owner src/utils/settingsHistory.js — shape Array<{ id, label, at, settings }> — affects rendered output for the same URL: no — Named named-snapshot library shown in the Snapshots panel.
+- `llmpd-plain-mode` — owner src/utils/plainLanguage.js — shape "1" | absent — affects rendered output for the same URL: YES — Plain-language mode rewrites jargon in every UI string app-wide.
+- `llmpd-analogy-mode` — owner src/utils/analogies.js — shape "1" | absent — affects rendered output for the same URL: YES — Analogy-chip preference in Theory view content.
+- `changelog.dismissedId` — owner src/utils/changelog.js — shape string (changelog entry id) — affects rendered output for the same URL: YES — Changelog banner entry the visitor dismissed.
+- `llmpd-concept-checks-v1` — owner src/utils/conceptChecks.js — shape { [tab]: { [checkId]: boolean } } — affects rendered output for the same URL: no — Per-tab theory quiz answers.
+- `llmpd-curriculum-progress` — owner src/utils/curriculum.js — shape { completed: { [lessonId]: epochMs } } — affects rendered output for the same URL: no — Curriculum lesson completion timestamps.
 
 Source: https://github.com/riceharvest/llm-prefill-decode-visualizer

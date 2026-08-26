@@ -8,6 +8,7 @@ import {
 } from '../utils/quantMatrix';
 import { normalizeModelId } from '../../api/_normalize.js';
 import { t } from '../i18n/strings';
+import { collectGroupedItems, dedupeByKey } from '../utils/benchmarksIndex';
 
 // Quantization tradeoff matrix (issue #47).
 //
@@ -42,6 +43,7 @@ export default function QuantTradeoffMatrix({ localMaxxingContext, onApplySpeeds
   const [familyInput, setFamilyInput] = useState(() => readParam('qtm') || '');
   const [family, setFamily] = useState(() => readParam('qtm') || '');
   const [families, setFamilies] = useState([]);
+  const [familiesTruncated, setFamiliesTruncated] = useState(false);
   const [status, setStatus] = useState('idle'); // idle | loading | ready | error
   const [error, setError] = useState(null);
   const [groups, setGroups] = useState([]);
@@ -56,16 +58,20 @@ export default function QuantTradeoffMatrix({ localMaxxingContext, onApplySpeeds
     writeParams({ qtm: family });
   }, [family]);
 
-  // Family index for the datalist: one lightweight grouped call.
+  // Family index for the datalist: grouped call(s), following the documented
+  // cursor pagination until has_more=false (#772 — a single ?limit=200 page
+  // silently dropped 38 of 238 model families).
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/benchmarks?groupBy=model&limit=200', { signal: controller.signal })
-      .then(res => {
-        if (!res.ok) throw new Error(`/api/benchmarks returned ${res.status}`);
-        return res.json();
-      })
-      .then(data => {
-        const list = (data.items || [])
+    const fetchPage = async (query) => {
+      const res = await fetch(`/api/benchmarks?${query}`, { signal: controller.signal });
+      if (!res.ok) throw new Error(`/api/benchmarks returned ${res.status}`);
+      return res.json();
+    };
+    collectGroupedItems(fetchPage, { groupBy: 'model', limit: 200 })
+      .then(({ items, truncated }) => {
+        setFamiliesTruncated(truncated);
+        const list = dedupeByKey(items)
           .map(item => ({ family: item.key, runs: item.runs || 0 }))
           .sort((a, b) => b.runs - a.runs);
         setFamilies(list);
@@ -186,6 +192,11 @@ export default function QuantTradeoffMatrix({ localMaxxingContext, onApplySpeeds
               <option key={f.family} value={f.family}>{f.runs} {t('quant.runsCountSuffix')}</option>
             ))}
           </datalist>
+          {familiesTruncated && (
+            <p role="status" className="hint-text" style={{ margin: '6px 0 0', fontSize: '0.68rem' }}>
+              Family list hit the pagination guard before the corpus was exhausted — free-type any family name to query it anyway.
+            </p>
+          )}
         </div>
       </div>
 

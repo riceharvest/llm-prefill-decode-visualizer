@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { parseComparePath, prettifySlug, slugify } from '../utils/compareSlug.js'
+import { collectGroupedItems, dedupeByKey } from '../utils/benchmarksIndex'
 
 // SEO comparison page for /compare/:a-vs-:b (rewritten to compare.html by
 // vercel.json). Numbers come live from /api/benchmarks?groupBy=hardware so
 // every indexed pair always renders current community data — no per-pair
-// build step needed.
-const BENCHMARKS_URL = '/api/benchmarks?groupBy=hardware&limit=200'
+// build step needed. Pagination is followed until has_more=false (#772) so a
+// hardware-count growth spurt past one 200-row page can't silently drop
+// slower rigs into "No measured runs yet" holes on indexed pages.
 
 function fmt(n) {
   return Number.isFinite(n) ? n.toLocaleString('en-US') : '—'
@@ -79,12 +81,13 @@ export default function ComparePage() {
   useEffect(() => {
     if (!parsed) return
     const controller = new AbortController()
-    fetch(BENCHMARKS_URL, { signal: controller.signal })
-      .then(res => {
-        if (!res.ok) throw new Error(`/api/benchmarks returned ${res.status}`)
-        return res.json()
-      })
-      .then(data => setGroups(data.items || []))
+    const fetchPage = async (query) => {
+      const res = await fetch(`/api/benchmarks?${query}`, { signal: controller.signal })
+      if (!res.ok) throw new Error(`/api/benchmarks returned ${res.status}`)
+      return res.json()
+    }
+    collectGroupedItems(fetchPage, { groupBy: 'hardware', limit: 200 })
+      .then(({ items }) => setGroups(dedupeByKey(items)))
       .catch(err => {
         if (err.name !== 'AbortError') setError(err.message)
       })

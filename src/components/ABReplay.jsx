@@ -105,6 +105,15 @@ export default function ABReplay({
     return [...apiPresets, ...presets.filter(p => !seen.has(p.id))];
   }, [apiData, presets]);
 
+  // Per-lane measured-speed overrides (#782): the bundled presets are
+  // synthetic marketing constants that can contradict /api/benchmarks medians
+  // by ~10x. abApf/abAdc/abBpf/abBdc let agents pin a lane to real measured
+  // tok/s without touching the preset list.
+  const [speedOverrides] = useState(() => ({
+    A: { pf: readParamNum('abApf', NaN), dc: readParamNum('abAdc', NaN) },
+    B: { pf: readParamNum('abBpf', NaN), dc: readParamNum('abBdc', NaN) }
+  }));
+
   // If a saved/linked lane id no longer resolves anywhere, reseed it from the
   // first two distinct presets in the merged list.
   useEffect(() => {
@@ -118,14 +127,30 @@ export default function ABReplay({
 
   // Shareable per-tab settings
   useEffect(() => {
+    const pf = (lane, key) => {
+      const v = speedOverrides[lane][key];
+      return Number.isFinite(v) && v > 0 ? v : '';
+    };
     writeParams({
       abA: hardwareA, abB: hardwareB,
-      abp: promptTokens, abo: outputTokens
+      abp: promptTokens, abo: outputTokens,
+      abApf: pf('A', 'pf'), abAdc: pf('A', 'dc'),
+      abBpf: pf('B', 'pf'), abBdc: pf('B', 'dc')
     });
-  }, [hardwareA, hardwareB, promptTokens, outputTokens]);
+  }, [hardwareA, hardwareB, promptTokens, outputTokens, speedOverrides]);
 
-  const presetA = lanePresets.find(p => p.id === hardwareA) || lanePresets[0] || HARDWARE_PRESETS[0];
-  const presetB = lanePresets.find(p => p.id === hardwareB) || lanePresets[1] || HARDWARE_PRESETS[1];
+  const basePresetA = lanePresets.find(p => p.id === hardwareA) || lanePresets[0] || HARDWARE_PRESETS[0];
+  const basePresetB = lanePresets.find(p => p.id === hardwareB) || lanePresets[1] || HARDWARE_PRESETS[1];
+
+  // Apply per-lane URL speed overrides over the synthetic preset constants.
+  const applySpeedOverride = (preset, ov) => {
+    const pf = Number.isFinite(ov.pf) && ov.pf > 0 ? ov.pf : preset.prefillSpeed;
+    const dc = Number.isFinite(ov.dc) && ov.dc > 0 ? ov.dc : preset.decodeSpeed;
+    if (pf === preset.prefillSpeed && dc === preset.decodeSpeed) return preset;
+    return { ...preset, prefillSpeed: pf, decodeSpeed: dc, speedsOverridden: true };
+  };
+  const presetA = applySpeedOverride(basePresetA, speedOverrides.A);
+  const presetB = applySpeedOverride(basePresetB, speedOverrides.B);
 
   // Shared workload → per-lane walltime math (same model as HardwareComparison)
   const safePromptTokens = Math.max(0, promptTokens || 0);
@@ -237,7 +262,10 @@ export default function ABReplay({
     promptTokens: safePromptTokens, outputTokens: safeOutputTokens
   });
 
-  const activeScenario = scenarioPresets.find(s => s.promptTokens === promptTokens && s.outputTokens === outputTokens);
+  // Stored scenario identity first (#786) — same rationale as SingleTurn:
+  // the applied preset id wins over the order-dependent token-count match.
+  const [appliedScenarioId, setAppliedScenarioId] = useState(null);
+  const activeScenario = resolveActiveScenario(scenarioPresets, appliedScenarioId, promptTokens, outputTokens);
 
   const speedupTotal = totalA > 0 && Number.isFinite(totalA) ? totalB / totalA : 0;
   const winnerLabel = speedupTotal > 1
@@ -322,6 +350,11 @@ export default function ABReplay({
         <span>Decode</span>
         <span style={{ ...numStyle, color: 'var(--decode)' }}>{preset.decodeSpeed.toLocaleString()} tok/s</span>
       </div>
+      {preset.speedsOverridden && (
+        <p role="status" className="hint-text" style={{ margin: '-6px 0 10px', fontSize: '0.64rem' }}>
+          Speeds overridden via URL params (measured data) — not the synthetic preset constants.
+        </p>
+      )}
 
       {/* Prefill progress (rAF-driven width via sim clock — no CSS transition) */}
       <div className="field-head" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
@@ -400,7 +433,7 @@ export default function ABReplay({
           {scenarioPresets.map(s => (
             <button
               key={s.id}
-              onClick={() => { setPromptTokens(s.promptTokens); setOutputTokens(s.outputTokens); }}
+              onClick={() => { setAppliedScenarioId(s.id); setPromptTokens(s.promptTokens); setOutputTokens(s.outputTokens); }}
               className={activeScenario?.id === s.id ? 'active' : ''}
               aria-pressed={activeScenario?.id === s.id}
               title={`${s.promptTokens.toLocaleString()} prompt → ${s.outputTokens.toLocaleString()} output tokens`}

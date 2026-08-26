@@ -50,6 +50,10 @@ GET /api/diff?a=<calcId>&b=<calcId>
   verify it any time via `GET /api/calc/<id>?batchId=<batchId>`.
 - Every calculation returns an id you can re-fetch later:
   `GET /api/calc/<id>`
+- `/api/diff` compares two **measured leaderboard runs**, not calc ids —
+  the `runA`/`runB` ids come from `/api/localmaxxing` (`a=`/`b=` are accepted
+  aliases). Diffing two computed configs is not supported; use what-if mode
+  (`POST /api/diff`) for constraint-based comparisons.
 
 ### Measured data & recommendations
 
