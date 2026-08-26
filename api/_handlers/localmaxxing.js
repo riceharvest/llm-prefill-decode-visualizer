@@ -9,6 +9,7 @@ import { sendJson, applySchemaHeaders } from '../_schema.js';
 import { sendProblem, sendProblemFromError } from '../_errors.js';
 import { decorateRun, filterByMaxAge, groupFreshness, parseMaxAgeParam, resolveSnapshotAt } from '../_freshness.js';
 import { parseContextBandParam, filterByContextBand } from '../_contextbands.js';
+import { positiveNumberParamWarning, indexModeIgnoredParamsWarning } from '../_param_validation.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -161,8 +162,18 @@ export default async function handler(req, res) {
     if (maxAgeDays) runs = filterByMaxAge(runs, maxAgeDays, snapshotAt);
     runs = filterByContextBand(runs, contextBand);
 
+    // Silent param-ignore signals (#443): surface ignored/invalid params
+    // instead of returning a 200 that looks like a successful query.
+    const paramWarnings = [
+      positiveNumberParamWarning('max_age', q.max_age ?? q.maxAge, maxAgeDays || null)
+    ].filter(Boolean);
+
     if (!hardware && !model && !quant) {
-      // Summary: hardware groups with run counts and freshness metadata
+      // Summary: hardware groups with run counts and freshness metadata.
+      // ?limit=/&cursor= are inert here — say so instead of dropping them
+      // silently (#443 repro: `?limit=-5` → 200 summary).
+      const indexWarning = indexModeIgnoredParamsWarning(q);
+      if (indexWarning) paramWarnings.push(indexWarning);
       const groups = new Map();
       for (const r of runs) {
         if (!groups.has(r.hardwareKey)) {
@@ -177,12 +188,18 @@ export default async function handler(req, res) {
       }
       return json(res, {
         description: 'Community-measured single-stream LLM benchmark runs. Filter with ?hardware=&model=&quant=&context_band=&max_age=&limit=&cursor= for paginated runs. Aggregated stats: /api/benchmarks. Ranked answers: /api/best.',
+        // Envelope discriminator (#488): this endpoint returns one of two
+        // shapes depending on filters — "index" (hardware-group summary,
+        // no filter) vs "runs" (paginated run list). Sniff mode instead of
+        // guessing from items/hardwareGroups key presence.
+        mode: 'index',
         snapshot,
         snapshotAt: snapshotAt.toISOString(),
         maxAgeDays: maxAgeDays || null,
         contextBand: contextBand || null,
         totalComparableRuns: runs.length,
         caveats: runsCaveats(runs),
+        warnings: paramWarnings,
         hardwareGroups: [...groups.values()]
           .sort((a, b) => b.runs.length - a.runs.length)
           .map(g => {
@@ -215,12 +232,15 @@ export default async function handler(req, res) {
 
     return json(res, {
       description: 'Raw comparable runs (modelFamily collapses repo/quant variants of the same base model). Cursor pagination: follow next_cursor until has_more is false. Each run carries createdAt/ageDays/staleness, engineVersion and its contextBand (<1k, 1k–8k, 8k–32k or 32k+; null when the run reports no context length).',
+      // Envelope discriminator (#488): paginated run-list shape.
+      mode: 'runs',
       snapshot,
       snapshotAt: snapshotAt.toISOString(),
       maxAgeDays: maxAgeDays || null,
       contextBand: contextBand || null,
       total: runs.length,
       caveats: runsCaveats(runs),
+      warnings: paramWarnings,
       items: page.items.map(r => decorateRun(r, snapshotAt)),
       has_more: page.has_more,
       next_cursor: page.next_cursor

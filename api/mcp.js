@@ -124,7 +124,26 @@ const TOOLS = [
   {
     name: 'benchmarks',
     description: 'Live community benchmark runs grouped by hardware/model with median tok/s and CI95.',
-    inputSchema: { type: 'object', properties: { groupBy: { type: 'string' }, limit: { type: 'number' } } }
+    // Full filter surface (#484): these all work server-side (passthrough to
+    // GET /api/benchmarks) but were undiscoverable from the inputSchema.
+    inputSchema: {
+      type: 'object',
+      properties: {
+        groupBy: { type: 'string', enum: ['hardwareModel', 'hardware', 'model', 'quant'], description: 'Cohort key (default hardwareModel = hardware × model family × engine build)' },
+        limit: { type: 'number', description: 'Page size (default 25, max 200)' },
+        cursor: { type: 'string', description: 'Opaque next_cursor from the previous page' },
+        hardware: { type: 'string', description: 'Hardware substring filter, e.g. "rtx 3090"' },
+        model: { type: 'string', description: 'Model family or hfId substring, e.g. "qwen3.6-27b"' },
+        quant: { type: 'string', description: 'Exact quantization, e.g. q4_k_m' },
+        hwClass: { type: 'string', enum: ['discrete_gpu', 'unified', 'cpu_only'] },
+        engine: { type: 'string', description: 'Engine tag substring, e.g. "llama.cpp"' },
+        context_band: { type: 'string', enum: ['lt1k', '1k-8k', '8k-32k', '32k+'] },
+        max_age: { type: 'number', description: 'Exclude runs older than N days' },
+        crossEngine: { type: 'boolean', description: 'Merge cohorts across engine builds' },
+        include_outliers: { type: 'boolean', description: 'Include IQR-flagged runs in stats' },
+        outlierIqrs: { type: 'number', description: 'Outlier fence in IQRs (1-10, default 2.5)' }
+      }
+    }
   },
   {
     name: 'cost_per_1m',

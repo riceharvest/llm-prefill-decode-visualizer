@@ -108,7 +108,7 @@ Every `/api/compute` and `/api/best` response carries a deterministic `id` (`cal
 
 **GET /api/localmaxxing** — community-measured single-stream benchmark runs (3,600+).
 - No params: hardware-group summary (71 rigs, run counts).
-- `?hardware=rtx 3090&limit=50`: runs for rigs matching that substring.
+- `?hardware=rtx%203090&limit=50`: runs for rigs matching that substring.
 - `?model=qwen3.6-27b&limit=20`: runs for a model. `model` matches the **normalized family** — repo/quant/finetune variants collapse (`unsloth/Qwen3.6-27B-MTP-GGUF` and `mlx-community/Qwen3.6-27B-4bit` are both `qwen3.6-27b`).
 - `?quant=q4_k_m`: exact quantization filter.
 - Filtered calls are cursor-paginated: `{ total, items[], has_more, next_cursor }`, sorted by decode speed desc (runId tiebreak). Page size: `limit` (default 50, max 500). Follow `next_cursor` until `has_more` is false; cursors stay stable even when new runs land mid-scan.

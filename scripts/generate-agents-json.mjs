@@ -18,7 +18,10 @@ const outPath = path.join(here, '..', 'public', 'agents.json');
 
 /** Static, non-route metadata preserved verbatim from the committed file. */
 const STATIC_METADATA = {
-  $schema: 'https://spec.agentproviders.dev/schemas/agents.v1.json',
+  // $schema must be fetchable (#469): spec.agentproviders.dev has no DNS
+  // record, so the manifest points at the schema this site serves itself
+  // (public/agents.v1.schema.json) — same origin as the manifest's own url.
+  $schema: 'https://llm-prefill-decode-visualizer.vercel.app/agents.v1.schema.json',
   name: 'llm-prefill-decode-visualizer',
   description:
     'LLM inference performance math: TTFT, TPOT, walltime for single-turn chat, agentic loops, batched serving, speculative decoding, and KV-cache VRAM. Includes community-measured hardware benchmarks.',

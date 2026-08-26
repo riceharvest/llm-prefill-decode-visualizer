@@ -31,6 +31,13 @@ export default function handler(req, res) {
       prefillSpeedTokPerSec: p.prefillSpeed,
       decodeSpeedTokPerSec: p.decodeSpeed,
       vramBandwidth: p.vramBandwidth,
+      // Machine-readable fit-math inputs (#483): total VRAM and card count
+      // as numbers (null where not applicable — cloud/custom), so agents can
+      // do KV-cache fit checks against a preset without parsing the name.
+      gpuModel: p.gpuModel ?? null,
+      gpuCount: p.gpuCount ?? null,
+      vramGbPerGpu: p.vramGbPerGpu ?? null,
+      vramGbTotal: p.vramGbTotal ?? null,
       badge: p.badge,
       // Power/thermal guidance (#69): board power (TDP), typical whole-rig
       // wattage under sustained inference, and recommended PSU size —

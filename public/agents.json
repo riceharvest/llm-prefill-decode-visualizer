@@ -1,5 +1,5 @@
 {
-  "$schema": "https://spec.agentproviders.dev/schemas/agents.v1.json",
+  "$schema": "https://llm-prefill-decode-visualizer.vercel.app/agents.v1.schema.json",
   "name": "llm-prefill-decode-visualizer",
   "description": "LLM inference performance math: TTFT, TPOT, walltime for single-turn chat, agentic loops, batched serving, speculative decoding, and KV-cache VRAM. Includes community-measured hardware benchmarks.",
   "url": "https://llm-prefill-decode-visualizer.vercel.app",
