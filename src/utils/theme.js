@@ -18,6 +18,8 @@
 //   - window event `llmpd-theme-change` fires on programmatic switches
 
 const STORAGE_KEY = 'llmpd-theme';
+
+import { noteStorageFailure, noteStorageSuccess } from './storageHealth.js';
 export const THEME_CHANGE_EVENT = 'llmpd-theme-change';
 export const THEME_URL_PARAM = 'theme';
 export const THEMES = ['dark', 'light', 'high-contrast'];
@@ -36,8 +38,11 @@ function storageGet() {
 function storageSet(value) {
   try {
     localStorage.setItem(STORAGE_KEY, value);
+    noteStorageSuccess();
   } catch {
-    // ignore — theme just won't persist across reloads
+    // ignore — theme just won't persist across reloads; failure is recorded
+    // for persistence-aware UI instead of being swallowed silently (#779)
+    noteStorageFailure(STORAGE_KEY);
   }
 }
 

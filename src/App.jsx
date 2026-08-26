@@ -150,8 +150,7 @@ export default function App() {
       : undefined,
     modelId: selectedLmxRun?.model?.hfId || localMaxxingContext.modelId,
     quantization: selectedLmxRun?.engine?.quantization || localMaxxingContext.quantization,
-<<<<<<< ours
-    promptTokens: Number(readParam('prompt')) || undefined,
+    promptTokens: Math.floor(Number(readParam('prompt'))) || undefined,
     activeTab,
     // Issue #630: on Find HW the title must describe the constraint set the
     // recipient lands on (?sd=&sv=&sm=&sq=), not simulator globals.
@@ -163,10 +162,6 @@ export default function App() {
           quant: readParam('sq')
         }
       : undefined
-=======
-    promptTokens: Math.floor(Number(readParam('prompt'))) || undefined,
-    activeTab
->>>>>>> theirs
   }), [selectedPreset, selectedLmxRun, localMaxxingContext.modelId, localMaxxingContext.quantization, activeTab]);
 
   // Share-link tamper-evidence (#917): permalinkHref() signs the params it
@@ -593,7 +588,7 @@ export default function App() {
 
         {/* SLO budgets (issue #64): persisted targets checked on every tab */}
         <CollapsibleSection id="slo-budgets" title="SLO budgets">
-          <SloBudgetsPanel budgets={sloBudgets} onChange={setSloBudgets} />
+          <SloBudgetsPanel budgets={sloBudgets} onChange={setSloBudgets} persisted={sloPersisted} />
         </CollapsibleSection>
 
       {/* Tab Content */}

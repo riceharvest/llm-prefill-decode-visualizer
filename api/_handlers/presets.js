@@ -1,16 +1,33 @@
+import { createHash } from 'node:crypto';
 import { HARDWARE_PRESETS, SCENARIO_PRESETS } from '../../src/utils/presets.js';
 import { enforceRateLimit } from '../_ratelimit.js';
 import { sendJson, conditionalGet } from '../_schema.js';
 
 export const config = { runtime: 'nodejs' };
 
+/**
+ * Stable content hash over the preset tables (#769/#786).
+ * Agents citing "scenario chat = 2048/512" or a hardware speed can pin the
+ * citation against this revision and detect drift without scraping diffs.
+ */
+function presetsRevision(hardware, scenarios) {
+  return createHash('sha256')
+    .update(JSON.stringify({ hardware, scenarios }))
+    .digest('hex')
+    .slice(0, 12);
+}
+
 export default function handler(req, res) {
   if (!enforceRateLimit(req, res)) return;
   const body = {
     description: 'Built-in hardware speed presets and workload scenario presets. Use these values as inputs to /api/compute.',
+    presetsRevision: presetsRevision(HARDWARE_PRESETS, SCENARIO_PRESETS),
     hardware: HARDWARE_PRESETS.map(p => ({
       id: p.id,
       name: p.name,
+      // provenance: 'synthetic' marks marketing-estimate speeds (#782) - these
+      // are NOT community medians; measured runs live in /api/localmaxxing.
+      provenance: 'synthetic',
       prefillSpeedTokPerSec: p.prefillSpeed,
       decodeSpeedTokPerSec: p.decodeSpeed,
       vramBandwidth: p.vramBandwidth,

@@ -49,11 +49,26 @@ export function parseOgParams(searchParams) {
   const prefill = clampSpeed(sp.get('prefill')) ?? preset.prefillSpeed;
   const decode = clampSpeed(sp.get('decode')) ?? preset.decodeSpeed;
 
-  const scenario = SCENARIO_PRESETS.find(s => s.id === String(sp.get('scenario') || '').toLowerCase()) ||
+  // Scenario preset: an explicitly-provided id that matches nothing is
+  // REJECTED (handler returns 400) instead of silently rendering a chart
+  // labeled with the chat fallback (#769) — a typo'd id used to produce a
+  // confidently-wrong image byte-identical to omitting the param.
+  const scenarioParam = sp.get('scenario');
+  const scenario = SCENARIO_PRESETS.find(s => s.id === String(scenarioParam || '').toLowerCase()) ||
     SCENARIO_PRESETS.find(s => s.id === 'chat');
+  const scenarioUnknown = Boolean(scenarioParam) &&
+    !SCENARIO_PRESETS.some(s => s.id === String(scenarioParam).toLowerCase());
   const promptTokens = clampSpeed(sp.get('prompt'), 10_000_000) ?? scenario.promptTokens;
 
-  return { preset, prefill, decode, scenarioLabel: scenario.label, promptTokens };
+  return {
+    preset,
+    prefill,
+    decode,
+    scenarioLabel: scenario.label,
+    promptTokens,
+    scenarioRequested: scenarioUnknown ? String(scenarioParam) : null,
+    scenarioUnknown
+  };
 }
 
 /** Stable cache key: sha256 over the normalized config (not raw params). */
@@ -261,6 +276,14 @@ export default async function handler(req, res) {
 
     const url = new URL(req.url, 'http://localhost');
     const cfg = parseOgParams(url.searchParams);
+    // Unknown scenario ids are rejected with problem+json instead of silently
+    // rendering the chat fallback (#769).
+    if (cfg.scenarioUnknown) {
+      return sendProblemFromError(res, req, Object.assign(new Error(`unknown scenario id "${cfg.scenarioRequested}"`), {
+        status: 400,
+        code: 'UNKNOWN_SCENARIO'
+      }));
+    }
     const png = await renderPng(cfg);
 
     res.statusCode = 200;

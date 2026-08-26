@@ -385,18 +385,11 @@ export default function BatchingVisualizer({
               <input type="range" min="2" max="48" step="1" value={numRequests}
                 aria-labelledby="batching-label-requests"
                 aria-valuetext={`${numRequests} concurrent ${numRequests === 1 ? 'request' : 'requests'}`}
-                onChange={(e) => { setNumRequests(Number(e.target.value)); handleReset(); }}
+                onChange={(e) => { commitClampedNumber(setNumRequests, 2, 48); handleReset(); }}
                 style={{ flex: 1 }} />
-<<<<<<< ours
-              <input type="number" value={numRequests}
-                aria-labelledby="batching-label-requests"
-                onChange={(e) => { setNumRequests(Number(e.target.value)); handleReset(); }}
-=======
               <input type="number" min="2" max="48" value={numRequests}
-                aria-label={t('batching.requestsValueAria')}
-                title={t('batching.requestsValueAria') + ' — valid range 2–48; values outside it are clamped'}
-                onChange={commitClampedNumber(setNumRequests, 2, 48)}
->>>>>>> theirs
+                aria-labelledby="batching-label-requests"
+                onChange={(e) => { commitClampedNumber(setNumRequests, 2, 48); handleReset(); }}
                 style={{ width: '4rem' }} />
             </div>
           </div>
@@ -416,18 +409,11 @@ export default function BatchingVisualizer({
                 aria-labelledby="batching-label-prompt"
                 aria-valuenow={meanPromptTokens}
                 aria-valuetext={`${meanPromptTokens.toLocaleString()} tokens`}
-                onChange={(e) => { setMeanPromptTokens(Number(e.target.value)); handleReset(); }}
+                onChange={(e) => { commitClampedNumber(setMeanPromptTokens, 128, 32768); handleReset(); }}
                 style={{ flex: 1 }} />
-<<<<<<< ours
-              <input type="number" value={meanPromptTokens}
-                aria-labelledby="batching-label-prompt"
-                onChange={(e) => { setMeanPromptTokens(Number(e.target.value)); handleReset(); }}
-=======
               <input type="number" min="128" max="32768" value={meanPromptTokens}
-                aria-label={t('batching.meanPromptValueAria')}
-                title={t('batching.meanPromptValueAria') + ' — valid range 128–32,768; values outside it are clamped'}
-                onChange={commitClampedNumber(setMeanPromptTokens, 128, 32768)}
->>>>>>> theirs
+                aria-labelledby="batching-label-prompt"
+                onChange={(e) => { commitClampedNumber(setMeanPromptTokens, 128, 32768); handleReset(); }}
                 style={{ width: '5rem' }} />
             </div>
           </div>
@@ -443,18 +429,11 @@ export default function BatchingVisualizer({
                 aria-labelledby="batching-label-output"
                 aria-valuenow={meanOutputTokens}
                 aria-valuetext={`${meanOutputTokens.toLocaleString()} tokens`}
-                onChange={(e) => { setMeanOutputTokens(Number(e.target.value)); handleReset(); }}
+                onChange={(e) => { commitClampedNumber(setMeanOutputTokens, 32, 4096); handleReset(); }}
                 style={{ flex: 1 }} />
-<<<<<<< ours
-              <input type="number" value={meanOutputTokens}
-                aria-labelledby="batching-label-output"
-                onChange={(e) => { setMeanOutputTokens(Number(e.target.value)); handleReset(); }}
-=======
               <input type="number" min="32" max="4096" value={meanOutputTokens}
-                aria-label={t('batching.meanOutputValueAria')}
-                title={t('batching.meanOutputValueAria') + ' — valid range 32–4,096; values outside it are clamped'}
-                onChange={commitClampedNumber(setMeanOutputTokens, 32, 4096)}
->>>>>>> theirs
+                aria-labelledby="batching-label-output"
+                onChange={(e) => { commitClampedNumber(setMeanOutputTokens, 32, 4096); handleReset(); }}
                 style={{ width: '5rem' }} />
             </div>
           </div>
@@ -469,18 +448,11 @@ export default function BatchingVisualizer({
               <input type="range" min="1" max="32" step="1" value={maxBatchSize}
                 aria-labelledby="batching-label-maxbatch"
                 aria-valuetext={`batch size ${maxBatchSize}`}
-                onChange={(e) => { setMaxBatchSize(Number(e.target.value)); handleReset(); }}
+                onChange={(e) => { commitClampedNumber(setMaxBatchSize, 1, 32); handleReset(); }}
                 style={{ flex: 1 }} />
-<<<<<<< ours
-              <input type="number" value={maxBatchSize}
-                aria-labelledby="batching-label-maxbatch"
-                onChange={(e) => { setMaxBatchSize(Number(e.target.value)); handleReset(); }}
-=======
               <input type="number" min="1" max="32" value={maxBatchSize}
-                aria-label={t('batching.maxBatchValueAria')}
-                title={t('batching.maxBatchValueAria') + ' — valid range 1–32; values outside it are clamped'}
-                onChange={commitClampedNumber(setMaxBatchSize, 1, 32)}
->>>>>>> theirs
+                aria-labelledby="batching-label-maxbatch"
+                onChange={(e) => { commitClampedNumber(setMaxBatchSize, 1, 32); handleReset(); }}
                 style={{ width: '4rem' }} />
             </div>
           </div>
@@ -525,18 +497,11 @@ export default function BatchingVisualizer({
                 aria-labelledby="batching-label-arrival"
                 aria-valuenow={arrivalIntervalMs}
                 aria-valuetext={`${arrivalIntervalMs} milliseconds between arrivals`}
-                onChange={(e) => { setArrivalIntervalMs(Number(e.target.value)); handleReset(); }}
+                onChange={(e) => { commitClampedNumber(setArrivalIntervalMs, 0, 2000); handleReset(); }}
                 style={{ flex: 1 }} />
-<<<<<<< ours
-              <input type="number" value={arrivalIntervalMs}
-                aria-labelledby="batching-label-arrival"
-                onChange={(e) => { setArrivalIntervalMs(Number(e.target.value)); handleReset(); }}
-=======
               <input type="number" min="0" max="2000" value={arrivalIntervalMs}
-                aria-label={t('batching.arrivalValueAria')}
-                title={t('batching.arrivalValueAria') + ' — valid range 0–2,000 ms; values outside it are clamped'}
-                onChange={commitClampedNumber(setArrivalIntervalMs, 0, 2000)}
->>>>>>> theirs
+                aria-labelledby="batching-label-arrival"
+                onChange={(e) => { commitClampedNumber(setArrivalIntervalMs, 0, 2000); handleReset(); }}
                 style={{ width: '4rem' }} />
             </div>
           </div>
@@ -861,7 +826,7 @@ export default function BatchingVisualizer({
               max {maxBatchSize}
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1px', height: '44px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1px', height: '44px' }} role="img" aria-label={occupancyChartLabel(occupancyBars)}>
             {occupancyBars.map((size, i) => (
               <div
                 key={i}
@@ -892,7 +857,7 @@ export default function BatchingVisualizer({
             <p className="hint-text" style={{ fontSize: '0.68rem', margin: '0 0 10px' }}>
               {t('batching.itlSub')}
             </p>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1px', height: '56px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1px', height: '56px' }} role="img" aria-label={itlChartLabel(selectedRequest.itls)}>
               {selectedRequest.itls.map((itl, i) => {
                 const spike = itl > (1 / decodeSpeed) * 1.5;
                 return (

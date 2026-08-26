@@ -18,6 +18,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { PERSISTENCE_REGISTRY } from '../src/utils/sessionState.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'public', 'llms.txt');
@@ -147,10 +148,32 @@ export function renderMetaBlock(tabs = TABS) {
     `Tabs: ${ids}`,
     'Tab-URL-Template: {Base-URL}/?tab={id}',
     'Tab-Section-Header-Format: ### Tab: {id} — {label}',
+    `Persisted-State-Keys: ${PERSISTENCE_REGISTRY.map(e => e.key).join(',')}`,
     `Repo: ${REPO_URL}`,
     META_END,
     '',
   ].join('\n');
+}
+
+/**
+ * Documented inventory of every browser-localStorage key the app persists
+ * (#751): share links carry URL params only, so this agent-relevant state is
+ * invisible to links unless spelled out here. Single source of truth is
+ * PERSISTENCE_REGISTRY in src/utils/sessionState.js.
+ */
+export function renderPersistenceSection() {
+  const lines = [
+    '## Persisted client state',
+    '',
+    'These browser-localStorage keys hold state that share links do NOT carry.',
+    'Checkpoint/restore a whole session with serializeSessionState()/restoreSessionState()',
+    'in src/utils/sessionState.js ({ schemaVersion, capturedAt, state: { [key]: rawStorageString } }).',
+    '',
+  ];
+  for (const e of PERSISTENCE_REGISTRY) {
+    lines.push(`- \`${e.key}\` — owner ${e.owner} — shape ${e.shape} — affects rendered output for the same URL: ${e.affectsOutput ? 'YES' : 'no'} — ${e.description}`);
+  }
+  return lines.join('\n');
 }
 
 /** Render one stable per-tab section. Keyed by `### Tab: <id>` for parsing. */
@@ -268,7 +291,13 @@ function main() {
   const anchors = [INTERACTIVE_HEADING, '## App tabs (interactive page)'];
   const idx = anchors.map(a => doc.indexOf(a)).filter(i => i !== -1).sort((a, b) => a - b)[0];
   if (idx === undefined) throw new Error('Interactive page / App tabs section not found in llms.txt');
-  doc = doc.slice(0, idx) + renderTabsTail();
+  // The persistence inventory (#751) sits between the tab sections and the
+  // Source footer; on re-runs it is inside the regenerated tail anyway.
+  let tail = renderTabsTail();
+  const footer = `Source: ${REPO_URL}`;
+  const footIdx = tail.indexOf(footer);
+  tail = tail.slice(0, footIdx) + renderPersistenceSection() + '\n\n' + tail.slice(footIdx);
+  doc = doc.slice(0, idx) + tail;
 
   writeFileSync(OUT, doc);
   console.log(`[llms-txt] wrote ${TABS.length} tab sections + agent meta -> ${OUT}`);

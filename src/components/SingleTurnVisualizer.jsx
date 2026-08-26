@@ -1,20 +1,18 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Play, Pause, Zap, Gauge, FileText, RotateCcw, Image as ImageIcon, FileDown, Copy, FileJson } from 'lucide-react';
 import { formatTime, formatTokens, SCENARIO_PRESETS } from '../utils/presets';
+import { resolveActiveScenario } from '../utils/scenarioIdentity';
 import {
   IMAGE_RESOLUTION_PRESETS,
   TOKENS_PER_TILE,
   estimateImageTiles,
   estimateImageTokens
 } from '../utils/multimodal';
-<<<<<<< ours
 import { readParamNum, readParam, readParamBool, consumeAutoplay, writeParams } from '../utils/urlState';
+import { readTokenCount } from '../utils/urlState';
 import { shouldCompleteInstantly } from '../utils/simPlayback';
 import { phaseToRunState, runStateToBusy } from '../utils/viewState';
 import { buildDecayCurveSamples } from '../utils/ctxDecayCurve';
-=======
-import { readParamNum, readParam, readParamBool, readTokenCount, writeParams } from '../utils/urlState';
->>>>>>> theirs
 import { throughputAnchor, ttftAnchor, tpotAnchor, walltimeAnchor } from '../utils/readingAnchors';
 import ChartDataTable from './ChartDataTable';
 import { DEFAULT_DRAFT_COST, breakevenAcceptance, suggestPairs, pairAcceptance } from '../utils/specDecode';
@@ -73,12 +71,11 @@ export default function SingleTurnVisualizer({
   engineFlags,
   lmxProvenance: lmxProvenanceBlock
 }) {
-<<<<<<< ours
   const [localPromptTokens, setLocalPromptTokens] = useState(
-    () => clampNum(readParamNum('prompt', 2048), PROMPT_TOKENS_RANGE.min, PROMPT_TOKENS_RANGE.max)
+    () => clampNum(readTokenCount('prompt', 2048), PROMPT_TOKENS_RANGE.min, PROMPT_TOKENS_RANGE.max)
   );
   const [localOutputTokens, setLocalOutputTokens] = useState(
-    () => clampNum(readParamNum('output', 512), OUTPUT_TOKENS_RANGE.min, OUTPUT_TOKENS_RANGE.max)
+    () => clampNum(readTokenCount('output', 512), OUTPUT_TOKENS_RANGE.min, OUTPUT_TOKENS_RANGE.max)
   );
   const promptTokens = promptTokensProp ?? localPromptTokens;
   const setPromptTokens = setPromptTokensProp ?? setLocalPromptTokens;
@@ -90,7 +87,8 @@ export default function SingleTurnVisualizer({
   // the current value (standard controlled-input behaviour).
   const commitTokenNumber = (setter, { min, max }) => (e) => {
     if (e.target.value === '') return;
-    const n = Number(e.target.value);
+    // Tokens are discrete (#386): floor fractional input.
+    const n = Math.floor(Number(e.target.value));
     if (!Number.isFinite(n)) return;
     setter(clampNum(n, min, max));
     handleReset();
@@ -110,10 +108,6 @@ export default function SingleTurnVisualizer({
     setCtxHalf(nearestHalfSpeedContext(n));
     handleReset();
   };
-=======
-  const [promptTokens, setPromptTokens] = useState(() => readTokenCount('prompt', 2048));
-  const [outputTokens, setOutputTokens] = useState(() => readTokenCount('output', 512));
->>>>>>> theirs
   // Speculative decoding: draft model proposes k tokens per step, target verifies.
   // Effective tok/s ≈ decodeSpeed × (k+1) × acceptance / (1 + k × acceptance × draftCost)
   // where draftCost is draft-model TPOT as a fraction of target TPOT (~0.15-0.3 typical).
@@ -183,6 +177,7 @@ export default function SingleTurnVisualizer({
   });
 
   const applyScenario = (scenario) => {
+    setAppliedScenarioId(scenario.id);
     setPromptTokens(scenario.promptTokens);
     setOutputTokens(scenario.outputTokens);
     handleReset();
@@ -1155,17 +1150,8 @@ export default function SingleTurnVisualizer({
                 step={PROMPT_TOKENS_RANGE.step}
                 value={promptTokens}
                 aria-label={t('singleTurn.promptValueAria')}
-<<<<<<< ours
                 title={`Valid range ${PROMPT_TOKENS_RANGE.min}–${PROMPT_TOKENS_RANGE.max} tokens; values outside it are clamped`}
                 onChange={commitTokenNumber(setPromptTokens, PROMPT_TOKENS_RANGE)}
-=======
-                onChange={(e) => {
-                  // Tokens are discrete (#386): floor fractional input.
-                  const n = Math.floor(Number(e.target.value));
-                  if (Number.isFinite(n) && n > 0) setPromptTokens(n);
-                  handleReset();
-                }}
->>>>>>> theirs
                 style={{ width: '5rem' }}
               />
             </div>
@@ -1206,17 +1192,8 @@ export default function SingleTurnVisualizer({
                 step={OUTPUT_TOKENS_RANGE.step}
                 value={outputTokens}
                 aria-label={t('singleTurn.outputValueAria')}
-<<<<<<< ours
                 title={`Valid range ${OUTPUT_TOKENS_RANGE.min}–${OUTPUT_TOKENS_RANGE.max} tokens; values outside it are clamped`}
                 onChange={commitTokenNumber(setOutputTokens, OUTPUT_TOKENS_RANGE)}
-=======
-                onChange={(e) => {
-                  // Tokens are discrete (#386): floor fractional input.
-                  const n = Math.floor(Number(e.target.value));
-                  if (Number.isFinite(n) && n > 0) setOutputTokens(n);
-                  handleReset();
-                }}
->>>>>>> theirs
                 style={{ width: '5rem' }}
               />
             </div>

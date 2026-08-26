@@ -26,14 +26,23 @@ export function useSloBudgets() {
     saveSloBudgets(clean); // storage failures are non-fatal (private mode)
     writeParams(budgetUrlParams(clean));
   };
-  return [budgets, update];
+  return [budgets, update, persisted];
+}
+
+/** Did budgets load from storage (true) or fall back to defaults? */
+function loadSloBudgetsPersisted() {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('llmpdv.slo-budgets-v1') != null;
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Compact budget editor. Empty or zero input disables that metric's check —
  * its badges disappear and it never counts as failing.
  */
-export default function SloBudgetsPanel({ budgets, onChange }) {
+export default function SloBudgetsPanel({ budgets, onChange, persisted = true }) {
   const [open, setOpen] = useState(false);
   // Invalid budget input surfaces an error instead of silently disabling the
   // check (#639) — 0 / negative / garbage used to coerce to null = "Off" with
@@ -63,6 +72,11 @@ export default function SloBudgetsPanel({ budgets, onChange }) {
 
   return (
     <section className="panel" aria-label={t('slo.panelAria')}>
+      {!persisted && (
+        <p role="status" className="hint-text" style={{ margin: '0 0 8px', fontSize: '0.72rem', color: 'var(--danger)' }}>
+          Browser storage unavailable (private mode or quota full) — these budgets will NOT survive a reload; verdict badges will revert to defaults.
+        </p>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <button
           onClick={() => setOpen(!open)}
