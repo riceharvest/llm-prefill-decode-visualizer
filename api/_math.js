@@ -70,6 +70,30 @@ export function sanityWarnings({ promptTokens = null, outputTokens = null, prefi
   return warnings;
 }
 
+// Non-blocking sanity checks for zero/negative SPEED inputs (#444): the
+// roofline checks above only catch implausibly FAST inputs, but the most
+// common bad input class — 0 or negative tok/s — sailed through with
+// warnings:[] while every metric that divides by the speed came back
+// null/∞ or sign-flipped. Callers pass their RESOLVED speeds (omit a key
+// when the model has no such concept); each non-positive value yields one
+// {code,message} warning. Never alters the math.
+export function nonPositiveSpeedWarnings({ prefillSpeed, decodeSpeed } = {}) {
+  const warnings = [];
+  if (prefillSpeed !== undefined && !(prefillSpeed > 0)) {
+    warnings.push({
+      code: 'prefill_speed_nonpositive',
+      message: `Prefill speed ${prefillSpeed} tok/s is zero or negative — TTFT and any metric divided by prefill throughput are null/meaningless. Pass a positive measured tok/s.`
+    });
+  }
+  if (decodeSpeed !== undefined && !(decodeSpeed > 0)) {
+    warnings.push({
+      code: 'decode_speed_nonpositive',
+      message: `Decode speed ${decodeSpeed} tok/s is zero or negative — TPOT/decode-time/effective-throughput metrics are null, ∞ or sign-flipped. Pass a positive measured tok/s.`
+    });
+  }
+  return warnings;
+}
+
 export function singleTurn({ promptTokens = 2048, outputTokens = 512, prefillSpeed = 3800, decodeSpeed = 105 } = {}) {
   // Zero-prompt guard (#846): promptTokens=0 with prefillSpeed=0 is 0/0=NaN,
   // which poisoned totalWalltimeSeconds even though the decode phase was fully
@@ -79,7 +103,10 @@ export function singleTurn({ promptTokens = 2048, outputTokens = 512, prefillSpe
   const ttft = promptTokens > 0
     ? (prefillSpeed > 0 ? promptTokens / prefillSpeed : Infinity)
     : 0;
-  const warnings = sanityWarnings({ promptTokens, prefillSpeed, decodeSpeed });
+  const warnings = [
+    ...sanityWarnings({ promptTokens, outputTokens, prefillSpeed, decodeSpeed }),
+    ...nonPositiveSpeedWarnings({ prefillSpeed, decodeSpeed })
+  ];
   if (promptTokens <= 0 && prefillSpeed <= 0) {
     warnings.push({
       code: 'degenerate_zero_prompt_ttft',
@@ -107,9 +134,22 @@ export function speculative({ baseDecodeSpeed = 105, draftTokens = 4, acceptance
   const tokensPerStep = 1 + k * alpha;
   const stepsPerSecond = baseDecodeSpeed / (1 + k * draftCostFraction);
   const effective = stepsPerSecond * tokensPerStep;
+  const warnings = [
+    ...sanityWarnings({ decodeSpeed: baseDecodeSpeed }),
+    // A non-positive base speed makes effective throughput negative while the
+    // ratio-based speedupVsVanilla still prints > 1 — flag the contradiction
+    // instead of shipping a ">2× speedup" on a negative tok/s (#444).
+    ...nonPositiveSpeedWarnings({ decodeSpeed: baseDecodeSpeed })
+  ];
+  if (draftTokens < 1) {
+    warnings.push({
+      code: 'draft_tokens_clamped_to_minimum',
+      message: `draftTokens=${draftTokens} is below the minimum of 1 — clamped to 1 (requested value echoed nowhere else).`
+    });
+  }
   return {
     inputs: { baseDecodeSpeed, draftTokens: k, acceptanceRate: alpha, draftCostFraction },
-    warnings: sanityWarnings({ decodeSpeed: baseDecodeSpeed }),
+    warnings,
     effectiveDecodeTokPerSec: round(effective),
     speedupVsVanilla: round(effective / baseDecodeSpeed),
     tokensPerVerifyStep: round(tokensPerStep),
@@ -127,7 +167,10 @@ export function batched({ prefillSpeed = 3800, decodeSpeed = 105, batchSize = 1,
   const decodeTime = outputTokens / perUserDecode;
   return {
     inputs: { prefillSpeed, decodeSpeed, batchSize: b, promptTokens, outputTokens, decodeDecayExponent },
-    warnings: sanityWarnings({ promptTokens, outputTokens, prefillSpeed, decodeSpeed }),
+    warnings: [
+      ...sanityWarnings({ promptTokens, outputTokens, prefillSpeed, decodeSpeed }),
+      ...nonPositiveSpeedWarnings({ prefillSpeed, decodeSpeed })
+    ],
     perUserDecodeTokPerSec: round(perUserDecode),
     aggregateDecodeTokPerSec: round(b * perUserDecode),
     ttftSeconds: round(ttft),
@@ -179,7 +222,10 @@ export function agentic(options = {}) {
 
   return {
     inputs: options,
-    warnings: sanityWarnings({ promptTokens: basePromptTokens, prefillSpeed, decodeSpeed }),
+    warnings: [
+      ...sanityWarnings({ promptTokens: basePromptTokens, prefillSpeed, decodeSpeed }),
+      ...nonPositiveSpeedWarnings({ prefillSpeed, decodeSpeed })
+    ],
     turns,
     // Time-to-first-token for the loop: turn 1 has a cold cache, so its
     // prefill time IS the first-token latency an agent waits on (#473).

@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://llm-prefill-decode-visualizer.vercel.app/agents.v1.schema.json",
+  "title": "agents.json v1 — agent-facing capability manifest",
+  "description": "Schema for the /agents.json manifest served by llm-prefill-decode-visualizer. The former $schema target (spec.agentproviders.dev) has no DNS record (#469), so the site now hosts its own schema and points $schema here.",
+  "type": "object",
+  "required": ["name", "url", "endpoints"],
+  "properties": {
+    "$schema": { "type": "string", "format": "uri" },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "url": { "type": "string", "format": "uri" },
+    "baseURL": { "type": "string", "format": "uri" },
+    "servers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["url"],
+        "properties": { "url": { "type": "string", "format": "uri" } }
+      }
+    },
+    "docs": { "type": "string" },
+    "auth": { "type": "string" },
+    "cors": { "type": "boolean" },
+    "endpointIndex": { "type": "string" },
+    "endpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "method", "description"],
+        "properties": {
+          "path": { "type": "string" },
+          "method": { "type": "string", "description": "HTTP verb, e.g. GET/POST; may be a combined list like 'GET, POST'" },
+          "description": { "type": "string" },
+          "returns": { "type": "string", "description": "Prose summary of the response shape" },
+          "sinceVersion": { "type": "string", "description": "API release version that introduced the endpoint" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

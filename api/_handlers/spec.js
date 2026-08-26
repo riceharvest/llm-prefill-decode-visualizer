@@ -489,6 +489,8 @@ const RUN_LIST_ENVELOPE = {
     contextBand: { type: ['string', 'null'], enum: ['lt1k', '1k-8k', '8k-32k', '32k+', null], description: 'Echoed ?context_band= filter (null when unset)' },
     total: { type: 'integer', description: 'Total matching runs across all pages' },
     caveats: { type: 'array', items: { $ref: '#/components/schemas/Caveat' } },
+    mode: { type: ['string', 'null'], description: 'Echoed ?mode= filter (null when unset)' },
+    warnings: { type: 'array', items: { $ref: '#/components/schemas/Caveat' }, description: 'Non-blocking implausibility or filter-substitution warnings' },
     items: { type: 'array', items: { $ref: '#/components/schemas/Run' } },
     has_more: { type: 'boolean' },
     next_cursor: { type: ['string', 'null'], description: 'Opaque keyset cursor; pass back as ?cursor=' },

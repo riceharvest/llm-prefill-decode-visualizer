@@ -13,6 +13,7 @@ import { filterByMaxAge, parseMaxAgeParam } from '../_freshness.js';
 import { parseContextBandParam, filterByContextBand } from '../_contextbands.js';
 import { slugify } from '../../src/utils/compareSlug.js';
 import { parseBool, boolWarnings } from '../_params.js';
+import { GROUP_BY_VALUES, enumParamWarning, positiveNumberParamWarning } from '../_param_validation.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -175,6 +176,14 @@ export default async function handler(req, res) {
     warnings.push(...groups.filter(g => g.mixedContextBands)
       .map(g => `${g.key} mixes context-length bands (${(g.contextBands?.bands || []).map(b => b.label).join(', ')}) — measured tok/s depends on context; treat delta with caution or filter with ?context_band=`));
     warnings.push(...boolWarnings([['crossEngine', q.crossEngine], ['include_outliers', includeOutliersRaw]]));
+
+    // Silent param-ignore signals (#443): a typo'd groupBy / non-numeric
+    // max_age / invalid limit must not look like a successful default query.
+    warnings.push(...[
+      enumParamWarning('groupBy', q.groupBy, GROUP_BY_VALUES, groupBy),
+      positiveNumberParamWarning('max_age', q.max_age ?? q.maxAge, maxAgeDays || null),
+      positiveNumberParamWarning('limit', q.limit, limit, `used the default of ${limit}`)
+    ].filter(Boolean));
 
     return json(res, {
       description: 'Aggregated community benchmark speeds (median + IQR + 95% bootstrap CI per group). Filter with ?hardware=&model=&quant=&hwClass=&engine=&context_band=lt1k|1k-8k|8k-32k|32k+; regroup with ?groupBy=hardware|model|quant|hardwareModel; exclude old measurements with ?max_age=<days>. Filter params accept both snake_case and camelCase spellings (e.g. group_by/groupBy, cross_engine/crossEngine, outlier_iqrs/outlierIqrs, include_outliers/includeOutliers, max_age/maxAge, context_band/contextBand). Default cohorts are same-engine; pass ?crossEngine=true to merge across engine builds. Cursor pagination: follow next_cursor until has_more is false. Each group carries a confidence block (run count, IQR spread %, outlier count, recency, grade) and a cross_check comparing multi-GPU rigs against the single-GPU baseline on the same model/quant. With ?groupBy=hardware every item also carries slug + hardwareLabel — combine any two as /compare/<slugA>-vs-<slugB>; pairs whose slugs are not in this response return HTTP 404.',
