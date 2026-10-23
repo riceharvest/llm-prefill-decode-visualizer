@@ -20,7 +20,7 @@ const DESCRIPTION =
   'POST { model?, hardware?, quant?, webhookUrl?, includeExisting? } to create a watch — at least one of model/hardware is required; webhookUrl (https) adds webhook delivery on top of the RSS feed; includeExisting=true opts into receiving matching runs dated before the watch was created (backfilled/imported data) on the first dispatch (#699). ' +
   'The response carries watchId + secret (save the secret: it is shown once and is required to DELETE) and a ready-made rssUrl. ' +
   'RSS: GET /api/watch/rss.xml?model=&hardware=&quant=&page=&perPage= — poll it like any feed; it supports ETag/If-None-Match (304), Last-Modified, and cursor pagination (#696). ' +
-  'Webhooks: POST /api/watch/dispatch (cron-friendly) delivers unseen matching runs to each registered webhook with an X-Watch-Secret header; failed deliveries are retried with capped exponential backoff and dead-lettered after repeated failures instead of losing the runs (#694). ' +
+  'Webhooks: POST /api/watch/dispatch (also runs automatically after each dataset refresh) delivers unseen matching runs to each registered webhook with an X-Watch-Secret header; failed deliveries are retried with capped exponential backoff and dead-lettered after repeated failures instead of losing the runs (#694). ' +
   'DELETE /api/watch?id=&secret= to unsubscribe. Storage is per-instance JSONL (WATCHES_DIR), same durability model as run submissions.';
 
 /**

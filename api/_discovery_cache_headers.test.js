@@ -37,5 +37,6 @@ test('#594: the discovery files actually exist in public/ so the rules apply', (
 
 test('#594: rewrites and crons are untouched by the headers block', () => {
   assert.ok(Array.isArray(vercelJson.rewrites) && vercelJson.rewrites.length >= 10);
-  assert.deepEqual(vercelJson.crons.map(c => c.path), ['/api/watch/dispatch']);
+  // No crons: webhook delivery runs after dataset refreshes instead.
+  assert.equal(vercelJson.crons, undefined);
 });
