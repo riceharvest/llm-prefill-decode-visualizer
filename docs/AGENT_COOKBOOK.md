@@ -420,7 +420,7 @@ curl -s "$BASE/api/watch/rss.xml?model=qwen3&hardware=4090"
 
 ## `GET /api/watch/dispatch`
 
-Deliver unseen matching runs to registered webhooks (cron-friendly). Optional
+Deliver unseen matching runs to registered webhooks (on demand; it also runs automatically after each upstream dataset refresh, no scheduler). Optional
 auth: if the `WATCH_DISPATCH_SECRET` env var is set, pass `?secret=` or the
 `x-dispatch-secret` header — otherwise the call returns `401`.
 

@@ -1,6 +1,8 @@
 // POST|GET /api/watch/dispatch — deliver unseen matching runs to registered
-// webhooks (#109). Designed to be called by a scheduler (Vercel Cron sends
-// GET) or manually; RSS subscribers need nothing from this endpoint.
+// webhooks (#109). There is no scheduler: the same pass runs in the
+// background whenever a request refreshes the dataset from upstream
+// (_localmaxxing.js), so webhooks fire when traffic brings in new runs. This
+// endpoint runs it on demand; RSS subscribers need nothing from it.
 //
 // Per watch: find matching unseen runs (respecting the #699 includeExisting
 // backfill opt-in), POST a watch.new_runs payload signed with the watch's
@@ -65,59 +67,7 @@ export default async function handler(req, res) {
 
     const allRuns = await getAllRuns(); // cached dataset (10 min TTL)
     const now = Date.now();
-    const results = [];
-    let totalNew = 0;
-
-    for (const watch of webhookWatches) {
-      // Dead-lettered / backing-off watches are skipped this pass so a dead
-      // endpoint is neither hammered nor silently re-marked seen (#694).
-      if (!retryDue(watch, now)) {
-        results.push({
-          watchId: watch.watchId,
-          newRuns: 0,
-          delivered: false,
-          ...(watch.deadLettered
-            ? { deadLettered: true, error: watch.lastDeliveryError ?? 'dead-lettered after repeated delivery failures' }
-            : { retryScheduledAt: watch.nextRetryAt })
-        });
-        continue;
-      }
-
-      const fresh = unseenRunsForWatch(allRuns, watch, now);
-      if (!fresh.length) {
-        results.push({ watchId: watch.watchId, newRuns: 0, delivered: false });
-        continue;
-      }
-
-      const delivery = await deliverWebhook(watch, fresh);
-      if (delivery.ok) {
-        // Success only now: mark seen + clear any failure state (#694).
-        markRunsSeen(watch, fresh, now);
-        recordDeliverySuccess(watch);
-      } else {
-        // Failure leaves lastSeenRunIds untouched — the runs stay unseen and
-        // are retried with backoff until delivered or dead-lettered (#694).
-        recordDeliveryFailure(watch, {
-          error: delivery.error ?? null,
-          status: delivery.status ?? null,
-          now
-        });
-      }
-      await updateWatch(watch);
-      if (delivery.ok) totalNew += fresh.length;
-      results.push({
-        watchId: watch.watchId,
-        newRuns: fresh.length,
-        delivered: delivery.ok,
-        ...(delivery.ok ? {} : {
-          willRetry: !watch.deadLettered,
-          consecutiveFailures: watch.consecutiveFailures,
-          ...(watch.deadLettered ? { deadLettered: true } : { retryScheduledAt: watch.nextRetryAt })
-        }),
-        ...(delivery.status != null ? { httpStatus: delivery.status } : {}),
-        ...(!delivery.ok && delivery.error ? { error: delivery.error } : {})
-      });
-    }
+    const { results, totalNew } = await deliverPass(webhookWatches, allRuns, now);
 
     return sendJson(res, {
       description: 'Dispatch pass complete. Each result is one webhook watch: newRuns counts unseen matching runs at dispatch time. Failed deliveries are retried with capped exponential backoff and dead-lettered after repeated failures; their runs stay unseen (#694).',
@@ -129,5 +79,72 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     return sendProblemFromError(res, req, err);
+  }
+}
+
+async function deliverPass(webhookWatches, allRuns, now) {
+  const results = [];
+  let totalNew = 0;
+
+  for (const watch of webhookWatches) {
+    // Dead-lettered / backing-off watches are skipped this pass so a dead
+    // endpoint is neither hammered nor silently re-marked seen (#694).
+    if (!retryDue(watch, now)) {
+      results.push({
+        watchId: watch.watchId,
+        newRuns: 0,
+        delivered: false,
+        ...(watch.deadLettered
+          ? { deadLettered: true, error: watch.lastDeliveryError ?? 'dead-lettered after repeated delivery failures' }
+          : { retryScheduledAt: watch.nextRetryAt })
+      });
+      continue;
+    }
+
+    const fresh = unseenRunsForWatch(allRuns, watch, now);
+    if (!fresh.length) {
+      results.push({ watchId: watch.watchId, newRuns: 0, delivered: false });
+      continue;
+    }
+
+    const delivery = await deliverWebhook(watch, fresh);
+    if (delivery.ok) {
+      // Success only now: mark seen + clear any failure state (#694).
+      markRunsSeen(watch, fresh, now);
+      recordDeliverySuccess(watch);
+    } else {
+      // Failure leaves lastSeenRunIds untouched — the runs stay unseen and
+      // are retried with backoff until delivered or dead-lettered (#694).
+      recordDeliveryFailure(watch, {
+        error: delivery.error ?? null,
+        status: delivery.status ?? null,
+        now
+      });
+    }
+    await updateWatch(watch);
+    if (delivery.ok) totalNew += fresh.length;
+    results.push({
+      watchId: watch.watchId,
+      newRuns: fresh.length,
+      delivered: delivery.ok,
+      ...(delivery.ok ? {} : {
+        willRetry: !watch.deadLettered,
+        consecutiveFailures: watch.consecutiveFailures,
+        ...(watch.deadLettered ? { deadLettered: true } : { retryScheduledAt: watch.nextRetryAt })
+      }),
+      ...(delivery.status != null ? { httpStatus: delivery.status } : {}),
+      ...(!delivery.ok && delivery.error ? { error: delivery.error } : {})
+    });
+  }
+  return { results, totalNew };
+}
+
+/** Background pass after a dataset refresh; never throws. */
+export async function dispatchAfterRefresh(allRuns, now = Date.now()) {
+  try {
+    const webhookWatches = (await listWatches()).filter(w => w.webhookUrl);
+    if (webhookWatches.length) await deliverPass(webhookWatches, allRuns, now);
+  } catch (err) {
+    console.error('watch_dispatch_after_refresh_failed', err?.message);
   }
 }

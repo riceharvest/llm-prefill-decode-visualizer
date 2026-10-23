@@ -263,11 +263,5 @@
         }
       ]
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/watch/dispatch",
-      "schedule": "0 6 * * *"
-    }
   ]
 }

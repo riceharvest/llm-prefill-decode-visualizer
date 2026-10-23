@@ -132,12 +132,22 @@ export async function getDataset() {
     // promise in place made the `if (cache.promise)` branch short-circuit
     // every post-TTL call, freezing the dataset at its first load forever.
     cache.promise = null;
+    afterRefresh(rows);
     return { rows, fetchedAt: cache.fetchedAt };
   } catch (err) {
     cache.promise = null; // allow retry; serve stale if we have it
     if (cache.rows) return { rows: cache.rows, fetchedAt: cache.fetchedAt };
     throw err;
   }
+}
+
+// Webhook watches are delivered here, after a request pulled fresh runs from
+// upstream, instead of by a cron: no traffic means nothing runs. The pass
+// keeps going after the response via Vercel's request context (what
+// waitUntil() from @vercel/functions reads); elsewhere it just runs.
+function afterRefresh(rows) {
+  const pass = import('./_handlers/dispatch.js').then(m => m.dispatchAfterRefresh(rows)).catch(() => {});
+  globalThis[Symbol.for('@vercel/request-context')]?.get?.()?.waitUntil?.(pass);
 }
 
 // Exported for tests (#593): the exact-speed fields must mirror the raw

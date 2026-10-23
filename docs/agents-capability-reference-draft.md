@@ -374,7 +374,7 @@ delivery on top of RSS. Response carries `watchId`, a **one-time `secret`**
 - `GET /api/watch` — describes the feature, lists registered combos (no secrets).
 - `DELETE /api/watch?id=&secret=` — unsubscribe.
 - `GET /api/watch/rss.xml?model=&hardware=&quant=` — poll matching new runs in any feed reader.
-- `POST /api/watch/dispatch` — cron-friendly fan-out: delivers unseen matching runs to each registered webhook with an `X-Watch-Secret` header.
+- `POST /api/watch/dispatch` — fan-out (also runs after each dataset refresh): delivers unseen matching runs to each registered webhook with an `X-Watch-Secret` header.
 
 ---
 
