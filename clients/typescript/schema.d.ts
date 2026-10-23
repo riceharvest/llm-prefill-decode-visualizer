@@ -175,7 +175,7 @@ export interface paths {
         };
         /**
          * Deliver unseen matching runs to registered webhooks (#109)
-         * @description Cron-friendly (Vercel Cron sends GET). For each watch with a webhookUrl: POST a watch.new_runs payload (X-Watch-Secret header) with unseen matching runs (runs dated before the watch are included only when the watch was created with includeExisting=true — #699), then persist the seen-set. Set WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret. Delivery failures are reported per watch, never thrown, and do NOT mark runs seen (#694): the watch backs off exponentially (1min → 24h cap) and is retried on later passes; after 5 consecutive failures it is dead-lettered (no more attempts) but stays visible in GET /api/watch with its failure state. A successful delivery resets the failure state.
+         * @description On demand; the same pass also runs automatically after each upstream dataset refresh (no scheduler). For each watch with a webhookUrl: POST a watch.new_runs payload (X-Watch-Secret header) with unseen matching runs (runs dated before the watch are included only when the watch was created with includeExisting=true — #699), then persist the seen-set. Set WATCH_DISPATCH_SECRET to require ?secret= / x-dispatch-secret. Delivery failures are reported per watch, never thrown, and do NOT mark runs seen (#694): the watch backs off exponentially (1min → 24h cap) and is retried on later passes; after 5 consecutive failures it is dead-lettered (no more attempts) but stays visible in GET /api/watch with its failure state. A successful delivery resets the failure state.
          */
         get: operations["dispatchWatchWebhooks"];
         put?: never;
